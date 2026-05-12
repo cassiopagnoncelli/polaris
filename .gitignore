@@ -1,1 +1,28 @@
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+.vitest/
+
+# OS / editor
+.DS_Store
+*.swp
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude Code internal state (worktrees, session metadata)
+.claude/
+
+# Project-specific
 resources/maxmind
