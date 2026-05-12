@@ -178,6 +178,20 @@ export class PolarisNodeSdk {
     }
   }
 
+  /**
+   * Snapshot of the SDK's current identity state.
+   *
+   * Returned as a frozen copy so callers can attach `anonymous_id` /
+   * `session_id` / `customer_id` / `device_id` to their own application
+   * log lines, propagate them into trace contexts, or correlate Polaris
+   * events with other systems — without firing a Polaris event just to
+   * inspect the values. This is an identity helper, not a state store:
+   * read-only on a single SDK instance, never aggregated across users.
+   */
+  public getIdentity(): Readonly<PersistentIdentity> {
+    return Object.freeze({ ...this.identity });
+  }
+
   public async track(
     event: string,
     properties?: Record<string, unknown>,

@@ -101,16 +101,19 @@ describe("PolarisNodeSdk constructor", () => {
     ).toThrowError(/flushIntervalMs/);
   });
 
-  it("seeds default identity with anon_/sess_ identifiers", async () => {
-    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
-    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
-    await sdk.track("page.viewed", {});
-    await sdk.flush();
-    const event = transport.sends[0]?.[0];
-    expect(event?.identity.anonymous_id).toMatch(/^anon_/);
-    expect(event?.identity.session_id).toMatch(/^sess_/);
-    expect(event?.identity.customer_id).toBeNull();
-    expect(event?.identity.device_id).toBeNull();
+  it("seeds default identity with anon_/sess_ identifiers", () => {
+    const sdk = new PolarisNodeSdk(baseOptions());
+    const id = sdk.getIdentity();
+    expect(id.anonymous_id).toMatch(/^anon_/);
+    expect(id.session_id).toMatch(/^sess_/);
+    expect(id.customer_id).toBeNull();
+    expect(id.device_id).toBeNull();
+  });
+
+  it("getIdentity returns a frozen snapshot (callers cannot mutate SDK state)", () => {
+    const sdk = new PolarisNodeSdk(baseOptions());
+    const id = sdk.getIdentity();
+    expect(Object.isFrozen(id)).toBe(true);
   });
 });
 
