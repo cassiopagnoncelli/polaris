@@ -164,6 +164,42 @@ properties
 
 Normal events must be registered and validated by code-backed Zod schemas. `experimental.*` events may be looser but must not feed durable production semantics without promotion.
 
+## SDKs
+
+Build `packages/web-sdk` and `packages/node-sdk` first. Defer React, Ruby, and mobile SDKs.
+
+SDK v1 exposes:
+
+```ts
+track(event, properties, options?)
+identify(customerId, traits?)
+reset(options?)
+flush()
+```
+
+Rules:
+
+- SDKs are transport and identity/session helpers only.
+- No automatic page tracking by default.
+- Page views are explicit `track("page.viewed", ...)` calls.
+- Browser SDK supports layered identity persistence: first-party cookie, localStorage mirror, sessionStorage fallback, memory fallback.
+- Browser SDK must not use third-party cookies or fingerprinting.
+- WebView/in-app browser support is important but best-effort.
+- Browser sessions rotate after 30 minutes of inactivity.
+- Campaign/click changes are captured in context, not used to rotate sessions.
+- Web SDK uses offline-first lifecycle-aware queueing.
+- Web queue prefers IndexedDB, then localStorage, then memory.
+- First 15 seconds after SDK init use eager flush mode.
+- Steady mode flushes every 5 seconds by default.
+- Queue priorities are `low`, `normal`, `high`; default is `normal`.
+- Queue overflow drops oldest low-priority events first, then normal, then high.
+- `reset()` clears customer identity, rotates session, and rotates anonymous identity by default.
+- `reset({ anonymous: false })` keeps anonymous identity.
+- Node SDK uses memory queue by default with pluggable durable queue adapters.
+- Node SDK exposes explicit `flush()` and `close()` lifecycle.
+- SDKs validate only basic envelope/client constraints; ingester remains authoritative for event schemas.
+- SDK diagnostics use optional callbacks and debug logging, not automatic diagnostic events in v1.
+
 ## Ingestion
 
 The ingester should:

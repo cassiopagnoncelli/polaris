@@ -28,8 +28,10 @@ SDKs / producers
 - [ClickHouse](./architecture/07-clickhouse.md)
 - [Observability and Operations](./architecture/08-observability-and-operations.md)
 - [Engineering Standards](./architecture/09-engineering-standards.md)
+- [SDK Standards](./architecture/10-sdk-standards.md)
 - [Architecture Decision Ledger](./adr/0001-architecture-decisions.md)
 - [Engineering Decision Ledger](./adr/0002-engineering-decisions.md)
+- [SDK Decision Ledger](./adr/0003-sdk-decisions.md)
 - [Codex Instructions](./instructions/codex.md)
 
 ## Non-Negotiable Rules

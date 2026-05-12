@@ -133,13 +133,14 @@ Browser SDKs should capture conservative context:
 - user agent
 - campaign params where configured
 
-Browser persistence starts with:
+Browser identity and queue persistence are defined in the SDK standards:
 
 ```text
-localStorage + in-memory queue
+identity: first-party cookie + localStorage mirror + sessionStorage + memory fallback
+queue: IndexedDB + localStorage + memory fallback
 ```
 
-IndexedDB may be introduced later for offline-heavy use cases.
+The Web SDK is offline-first and lifecycle-aware. It starts in eager flush mode for short visits, then switches to steady batching.
 
 ## Node SDK
 
@@ -152,4 +153,3 @@ The Node SDK is server-oriented:
 - explicit identity values provided by caller
 
 The Node SDK must not infer attribution or identity relationships.
-
