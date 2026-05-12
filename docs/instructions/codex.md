@@ -114,6 +114,32 @@ sql/
 docs/
 ```
 
+## Engineering Defaults
+
+Use these defaults unless a task explicitly changes them:
+
+- strict TypeScript
+- current Active LTS Node.js pinned at scaffold time
+- ESM-first packages/services
+- pnpm workspaces
+- package scripts first, no Turborepo/Nx in v1
+- Kysely for PostgreSQL queries
+- SQL-first PostgreSQL migrations, defaulting to dbmate after implementation-time review
+- Vitest for tests
+- UUIDv7 for platform-generated IDs
+- UTC timestamps everywhere
+- RFC 7807 Problem Details for request-level HTTP errors
+- Pino for JSON logs
+- shared Zod-validated runtime config
+- KafkaJS through a thin `shared-kafka` package
+- ClickHouse SQL files plus official ClickHouse JavaScript client
+- OpenAPI generated from Fastify/Zod route schemas
+- Biome for formatting/linting
+- compiled JavaScript in slim Node production containers
+- Fastify with a thin shared service bootstrap package
+
+Keep dependencies boring and minimal. Prefer already chosen libraries before introducing alternatives.
+
 ## Event Contract
 
 Use a rigid canonical envelope. Reject unknown top-level fields. Stamp trusted metadata from API keys.

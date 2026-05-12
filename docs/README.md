@@ -27,7 +27,9 @@ SDKs / producers
 - [Destinations](./architecture/06-destinations.md)
 - [ClickHouse](./architecture/07-clickhouse.md)
 - [Observability and Operations](./architecture/08-observability-and-operations.md)
+- [Engineering Standards](./architecture/09-engineering-standards.md)
 - [Architecture Decision Ledger](./adr/0001-architecture-decisions.md)
+- [Engineering Decision Ledger](./adr/0002-engineering-decisions.md)
 - [Codex Instructions](./instructions/codex.md)
 
 ## Non-Negotiable Rules
@@ -44,4 +46,3 @@ SDKs / producers
 - Destination consumers are protocol translators.
 - ClickHouse consumes `analytics.events` through Kafka Engine and persists rows before querying.
 - Replayability is a primary architectural constraint.
-
