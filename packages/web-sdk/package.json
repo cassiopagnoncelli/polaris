@@ -1,0 +1,43 @@
+{
+  "name": "@polaris/web-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris Web SDK — thin transport and identity helpers for browser producers. Layered first-party identity persistence (cookie / localStorage / sessionStorage / memory) with no third-party cookies or fingerprinting.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./identity": {
+      "types": "./dist/identity/index.d.ts",
+      "import": "./dist/identity/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-schemas": "workspace:*",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.11.7"
+  }
+}
