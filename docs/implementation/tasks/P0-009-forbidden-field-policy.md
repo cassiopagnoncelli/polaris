@@ -118,7 +118,34 @@ pnpm lint
 
 ```text
 Files changed:
+  catalog/policy/forbidden-fields.ts                   new — platform defaults
+  catalog/policy/forbidden-fields.checkout.ts          new — sample project override
+  packages/shared-policy/                              new package @polaris/shared-policy
+    package.json
+    tsconfig.json (extends ../../tsconfig.base.json)
+    vitest.config.ts
+    src/{index,policy,merge,evaluator,patterns,metrics,reason-codes,inspect,types}.ts
+    test/{evaluator,patterns,merge,metrics,reason-codes,inspect,platform-defaults}.test.ts
+    test/fixtures.ts
+
 Commands run:
+  pnpm install
+  pnpm typecheck                         PASS
+  pnpm lint                              PASS (warnings only)
+  pnpm format:check                      PASS
+  pnpm test                              PASS
+  pnpm --filter @polaris/shared-policy build  PASS
+
 Checks passed:
+  - Reject list contains only named pii_card and pii_secret fields (cvv/cvc/card_security_code/card_number_full + password/passwd/pwd/authorization/authorization_header/session_cookie/private_key/priv_key).
+  - Redact list: named `card_number` (preserves first6/last4) plus five pattern detections (Luhn-PAN, AWS access keys, GitHub tokens, JWTs in non-identity paths, generic high-entropy hex/base64).
+  - Pattern matches emit `polaris_ingest_redacted_pattern_total{project_id, environment, reason, pattern}` with no raw values in labels.
+  - Evaluator is deterministic, does not mutate input, never logs raw values.
+  - Project override sample at catalog/policy/forbidden-fields.checkout.ts demonstrates adding a project-level redact.
+  - Test verifies raw email passes through unchanged under platform defaults.
+  - IBAN, account numbers, raw phone, names, IP, user agent intentionally absent from defaults.
+
 Known gaps:
+  - Initial Luhn detector capped on value length and missed PANs embedded in longer free-form text; fixed at integration time to scan digit runs anywhere in the value (test case "customer mentioned <PAN> on the call" now triggers).
+  - Initial high-entropy detector matched on hex length alone; fixed to apply a Shannon-entropy floor of 3.0 on hex runs so low-entropy long strings ("aaaa..."*N) no longer false-positive.
 ```

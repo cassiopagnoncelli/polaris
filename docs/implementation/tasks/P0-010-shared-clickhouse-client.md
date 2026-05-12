@@ -131,7 +131,34 @@ pnpm lint
 
 ```text
 Files changed:
+  packages/shared-clickhouse/                       new package @polaris/shared-clickhouse
+    README.md
+    package.json (zod aligned to ^4.4.3 at integration)
+    tsconfig.json (extends ../../tsconfig.base.json)
+    src/{index,client,config,health,errors,types,ingest-log,raw,replay}.ts
+    src/projections/{index,event-daily-counts}.ts
+    src/internal/{exec,sql}.ts
+    test/{client-profile,config,projection-sql,replay-sql}.test.ts
+
 Commands run:
+  pnpm install
+  pnpm typecheck                              PASS
+  pnpm lint                                   PASS (warnings only)
+  pnpm format:check                           PASS
+  pnpm test                                   PASS
+  pnpm --filter @polaris/shared-clickhouse build  PASS
+
 Checks passed:
+  - Wraps the official @clickhouse/client; the only workspace package that imports it directly.
+  - Two connection profiles (service / operator) chosen at config time. Constructor refuses to build without a declared role.
+  - Service profile has no method returning rows from analytics_raw. Only projection tables + analytics_ingest_log.
+  - Operator profile exposes replay.argMaxByEventKey / replay.countDistinctEvents over analytics_raw and an operator.raw.query escape hatch that emits a metric + structured log line per call.
+  - FINAL keyword does not appear in any method on either profile.
+  - Composes config schema from @polaris/shared-config (CLICKHOUSE_ROLE enforces service vs operator).
+
 Known gaps:
+  - Worker branched from a stale main HEAD (912b544) and did not follow the EXPECTED_BASE_COMMITS rebase preamble despite explicit instructions. Root-level pollution (self-contained tsconfig.base.json, biome.json, vitest.config.ts, package.json devDeps, .gitignore) was dropped at integration; only the package directory was kept.
+  - Source used Zod 3 API patterns (errorMap, error.errors) which collided with the workspace Zod 4 baseline. Fixed at integration: errorMap removed in favor of the v4 `message` shape, .errors swapped to .issues.
+  - Source used dot access on Record<string, unknown> params which violated noPropertyAccessFromIndexSignature; switched to bracket access at integration.
+  - Live ClickHouse smoke test not exercised (no Docker daemon in the agent sandbox); covered by unit tests that mock the underlying client.
 ```

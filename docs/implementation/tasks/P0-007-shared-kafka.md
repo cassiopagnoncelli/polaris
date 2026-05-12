@@ -66,8 +66,32 @@ pnpm lint
 
 ```text
 Files changed:
+  packages/shared-kafka/                                  new package @polaris/shared-kafka
+    package.json
+    tsconfig.json (extends ../../tsconfig.base.json)
+    vitest.config.ts
+    src/{index,client,producer,consumer,topics,topic-family,partition-key,headers,serialization,dlq,hooks}.ts
+    test/{client,producer,headers,hooks,partition-key,serialization,topic-family,topics,dlq}.test.ts
+
 Commands run:
+  pnpm install
+  pnpm typecheck                       PASS
+  pnpm lint                            PASS (warnings only)
+  pnpm format:check                    PASS
+  pnpm test                            PASS
+  pnpm --filter @polaris/shared-kafka build  PASS
+
 Checks passed:
+  - Thin KafkaJS wrapper. Producer/consumer factories, retry defaults, metrics + logging hooks.
+  - Partition-key generator follows 03-redpanda-topics.md: project_id:environment:identity with customer_id > anonymous_id > session_id > event_id fallback.
+  - Topic-family resolver returns the concrete topic name from a logical family (shared topics default; per-project dedicated topics via topic_isolations lookup handle).
+  - DLQ publishing helper preserves source-event metadata, error class, attempts, and timestamps.
+  - Header constants for POLARIS_HEADER_EVENT_ID, POLARIS_HEADER_PROJECT_ID, POLARIS_HEADER_ENVIRONMENT, POLARIS_HEADER_TOPIC_FAMILY.
+  - Hooks fan out via composeHooks; emit failures never crash the producer/consumer hot path.
+
 Known gaps:
+  - Workspace tooling rebase was needed at agent start (worktree branched from pre-P0-002 main); EXPECTED_BASE_COMMITS preamble caught it.
+  - Initial submission referenced an undefined `baseHookPayload` helper; added at integration time (consumer.ts) to keep the per-message hook emit working.
+  - Topic-isolations PostgreSQL lookup integration is left to P11-008; this package accepts a resolver callback so the wiring is decoupled.
 ```
 

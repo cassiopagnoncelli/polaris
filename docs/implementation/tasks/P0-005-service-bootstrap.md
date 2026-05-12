@@ -62,8 +62,35 @@ pnpm lint
 
 ```text
 Files changed:
+  packages/shared-service/                                      new package @polaris/shared-service-bootstrap
+    README.md
+    package.json
+    tsconfig.json (extends ../../tsconfig.base.json)
+    vitest.config.ts
+    src/index.ts
+    src/bootstrap/{index,service,health,metrics,error-handler,request-id,request-id-hook,shutdown,openapi}.ts
+    src/problem/{index,problem,types,error}.ts
+    test/{bootstrap,problem,request-id}.test.ts
+
 Commands run:
+  pnpm install
+  pnpm typecheck                            PASS
+  pnpm lint                                 PASS (warnings only, no errors)
+  pnpm format:check                         PASS
+  pnpm test                                 PASS (48 tests)
+  pnpm --filter @polaris/shared-service-bootstrap build  PASS
+
 Checks passed:
+  - Thin Fastify bootstrap composed from @polaris/shared-config and @polaris/shared-logger via workspace:* deps.
+  - Request-ID hook generates UUIDv7 per request and attaches it to the child logger.
+  - RFC 7807 Problem Details error handler with stable `code` and `request_id` fields.
+  - /health and /ready route helpers; /metrics endpoint stub registered.
+  - OpenAPI generation hook via Fastify route schemas.
+  - Graceful shutdown helper with signal hook + timeout.
+
 Known gaps:
+  - Background agent stalled on the stream watchdog while finalizing this handoff; work was complete and clean (all checks green).
+  - Package directory `packages/shared-service/` does not match the package name `@polaris/shared-service-bootstrap`; renamed at follow-up integration to keep them consistent.
+  - Prometheus metric format hook is a stub; actual metric content comes in P10-002.
 ```
 
