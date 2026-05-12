@@ -19,6 +19,13 @@ Assigned task:
 - TASK_ID: <replace>
 - TASK_TITLE: <replace>
 - TASK_FILE: <replace>
+- EXPECTED_BASE_COMMITS: <replace with the most recent merged task IDs the orchestrator says you should branch from, in order; e.g. "P0-001, P0-002, P1-001, P1-003">
+
+Verify your base before working:
+1. Run `git log --oneline -10` and confirm each EXPECTED_BASE_COMMITS entry is present.
+2. If any expected commit is missing, your worktree branched from a stale base. Run `git rebase main` to bring your worktree branch up to date. `main` is a peer branch inside the worktree; the rebase brings in any commits you are missing.
+3. Re-run `git log --oneline -10` to confirm the rebase succeeded. Report the result in your final summary so the integration step has visibility.
+4. After a rebase, re-check that the workspace `.gitignore` covers `node_modules/`, `dist/`, `coverage/`, `*.tsbuildinfo`. These should be ignored by repo policy; if they are not, stop and report the missing patterns.
 
 Hard rules:
 - Polaris is the platform; Redpanda is only the streaming backbone.
@@ -34,18 +41,20 @@ Hard rules:
 - If the task conflicts with docs, stop and explain the conflict.
 
 Workflow:
-1. Inspect the repo.
-2. Restate the task ID and write scope.
-3. Implement the task.
-4. Run the task's requested checks where possible.
-5. Update the task handoff section if instructed.
-6. Return a final summary with:
-   - files changed
+1. Verify your base (above), rebasing onto main if needed.
+2. Inspect the repo.
+3. Restate the task ID and write scope.
+4. Implement the task.
+5. Run the task's requested checks where possible.
+6. Update the task handoff section if instructed.
+7. Return a final summary with:
+   - whether a rebase was needed and what it brought in
+   - files changed (source files only; not node_modules, dist, coverage, .vitest, *.tsbuildinfo)
    - commands run
    - checks passed/failed
    - gaps or follow-up tasks
 
-Do not commit unless explicitly asked.
+Do not commit unless explicitly asked. The orchestrator stages and commits your work explicitly at integration time; never run `git add -A` or `git commit` from your worktree.
 ```
 
 ## Review Prompt
