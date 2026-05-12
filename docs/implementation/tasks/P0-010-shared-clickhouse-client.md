@@ -11,7 +11,7 @@ Create the workspace package that owns all ClickHouse access for services and th
 - [ClickHouse / Query Patterns](../../architecture/07-clickhouse.md)
 - [ClickHouse / Access Control](../../architecture/07-clickhouse.md)
 - [Engineering Standards / ClickHouse Access](../../architecture/09-engineering-standards.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

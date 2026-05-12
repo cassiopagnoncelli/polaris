@@ -1,4 +1,4 @@
-# Codex Instructions for Polaris
+# Claude Instructions for Polaris
 
 Use these instructions when generating or modifying Polaris code.
 

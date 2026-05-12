@@ -8,7 +8,7 @@ Describe the desired result in one paragraph.
 
 ## Required Reading
 
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 - Add task-specific docs here.
 
 ## Dependencies

@@ -9,7 +9,7 @@ Use it with Claude or any other coding worker. The worker should not make archit
 Every worker must read:
 
 - [Project README](../README.md)
-- [Codex Instructions](../instructions/codex.md)
+- [Claude Instructions](../instructions/claude.md)
 - The task-specific architecture docs listed on its task card
 - The assigned task card
 

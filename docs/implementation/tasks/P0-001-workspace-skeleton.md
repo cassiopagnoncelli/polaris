@@ -8,7 +8,7 @@ Create the initial monorepo directory skeleton and workspace metadata without im
 
 ## Required Reading
 
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
 - [Architecture Overview](../../architecture/00-overview.md)
 

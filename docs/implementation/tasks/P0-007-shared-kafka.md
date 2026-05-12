@@ -10,7 +10,7 @@ Create a thin `shared-kafka` package around KafkaJS for standard producers, cons
 
 - [Redpanda Topics](../../architecture/03-redpanda-topics.md)
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

@@ -9,7 +9,7 @@ Create the workspace package that provides vendor-agnostic normalization primiti
 ## Required Reading
 
 - [Destinations / Three Stages](../../architecture/06-destinations.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

@@ -9,7 +9,7 @@ Create the file-backed event catalog and code-backed Zod schemas for the first s
 ## Required Reading
 
 - [Event Contract](../../architecture/01-event-contract.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 - [SDK Standards](../../architecture/10-sdk-standards.md)
 
 ## Dependencies

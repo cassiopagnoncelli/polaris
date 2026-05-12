@@ -9,7 +9,7 @@ Define the two-tier (reject vs redact) forbidden-field policy in code, with clos
 ## Required Reading
 
 - [Event Contract / Forbidden-Field Policy](../../architecture/01-event-contract.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

@@ -10,7 +10,7 @@ Create the Fastify ingester service shell with config, logging, health/readiness
 
 - [Ingestion and SDKs](../../architecture/04-ingestion-and-sdks.md)
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

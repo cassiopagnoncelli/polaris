@@ -10,7 +10,7 @@ Add production Dockerfiles for Node services that run compiled JavaScript in sli
 
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
 - [Observability and Operations](../../architecture/08-observability-and-operations.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

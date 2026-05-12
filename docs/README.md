@@ -38,7 +38,7 @@ SDKs / producers
 - [Implementation Kanban](./implementation/kanban.md)
 - [Delivery Roadmap](./implementation/delivery-roadmap.md)
 - [Coverage Matrix](./implementation/coverage-matrix.md)
-- [Codex Instructions](./instructions/codex.md)
+- [Claude Instructions](./instructions/claude.md)
 
 ## Non-Negotiable Rules
 

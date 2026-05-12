@@ -10,7 +10,7 @@ Implement CLI commands for runtime destination instances without moving mapping 
 
 - [Destinations](../../architecture/06-destinations.md)
 - [Control Plane](../../architecture/02-control-plane.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

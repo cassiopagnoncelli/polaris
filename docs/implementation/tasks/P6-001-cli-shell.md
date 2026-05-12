@@ -10,7 +10,7 @@ Create the `polaris` CLI shell with command structure, shared config, logger, da
 
 - [Control Plane](../../architecture/02-control-plane.md)
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 

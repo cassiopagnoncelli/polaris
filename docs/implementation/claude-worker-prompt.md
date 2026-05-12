@@ -7,7 +7,7 @@ You are implementing Polaris, an internal event infrastructure platform.
 
 Before coding, read:
 - /Users/cassio/src/polaris/docs/README.md
-- /Users/cassio/src/polaris/docs/instructions/codex.md
+- /Users/cassio/src/polaris/docs/instructions/claude.md
 - /Users/cassio/src/polaris/docs/implementation/README.md
 - /Users/cassio/src/polaris/docs/implementation/kanban.md
 - /Users/cassio/src/polaris/docs/implementation/delivery-roadmap.md

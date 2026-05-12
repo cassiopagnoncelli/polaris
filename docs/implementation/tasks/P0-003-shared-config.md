@@ -10,7 +10,7 @@ Create a shared Zod-validated runtime configuration package.
 
 - [Engineering Standards](../../architecture/09-engineering-standards.md)
 - [Control Plane](../../architecture/02-control-plane.md)
-- [Codex Instructions](../../instructions/codex.md)
+- [Claude Instructions](../../instructions/claude.md)
 
 ## Dependencies
 
