@@ -1,6 +1,6 @@
 # P6-002: Projects and Sources CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

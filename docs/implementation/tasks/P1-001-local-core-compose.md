@@ -1,6 +1,6 @@
 # P1-001: Local Core Compose
 
-Status: Ready
+Status: Done
 
 ## Goal
 

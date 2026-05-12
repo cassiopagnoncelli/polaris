@@ -1,6 +1,6 @@
 # P0-010: Shared ClickHouse Client Package
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

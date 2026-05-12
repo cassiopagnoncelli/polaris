@@ -12,38 +12,20 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P0-001 Workspace Skeleton](./tasks/P0-001-workspace-skeleton.md)
-- [P1-001 Local Core Compose](./tasks/P1-001-local-core-compose.md)
-- [P1-003 ClickHouse DDL Skeleton](./tasks/P1-003-clickhouse-ddl-skeleton.md)
+- [P2-002 Ingester API Key Auth](./tasks/P2-002-ingester-api-key-auth.md)
+- [P3-002 Web SDK Identity Persistence](./tasks/P3-002-web-sdk-identity-persistence.md)
+- [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md)
+- [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md)
+- [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md)
 
 ## Backlog
 
-### P0 Foundation
-
-- [P0-002 TypeScript Tooling Baseline](./tasks/P0-002-typescript-tooling.md)
-- [P0-003 Shared Config Package](./tasks/P0-003-shared-config.md)
-- [P0-004 Shared Logger Package](./tasks/P0-004-shared-logger.md)
-- [P0-005 Shared Errors and Service Bootstrap](./tasks/P0-005-service-bootstrap.md)
-- [P0-006 Shared Schemas and Event Catalog](./tasks/P0-006-shared-schemas-catalog.md)
-- [P0-007 Shared Kafka Package](./tasks/P0-007-shared-kafka.md)
-- [P0-008 Shared Secrets Package](./tasks/P0-008-shared-secrets.md)
-- [P0-009 Forbidden-Field Policy](./tasks/P0-009-forbidden-field-policy.md)
-- [P0-010 Shared ClickHouse Client Package](./tasks/P0-010-shared-clickhouse-client.md)
-
-### P1 Local Infrastructure
-
-- [P1-002 PostgreSQL Migration Scaffold](./tasks/P1-002-postgres-migrations.md)
-
 ### P2 Ingester
 
-- [P2-001 Ingester API Shell](./tasks/P2-001-ingester-api-shell.md)
-- [P2-002 Ingester API Key Auth](./tasks/P2-002-ingester-api-key-auth.md)
 - [P2-003 Ingester Batch Validation and Raw Publish](./tasks/P2-003-ingester-batch-raw-publish.md)
 
 ### P3 SDKs
 
-- [P3-001 Node SDK Core](./tasks/P3-001-node-sdk-core.md)
-- [P3-002 Web SDK Identity Persistence](./tasks/P3-002-web-sdk-identity-persistence.md)
 - [P3-003 Web SDK Queue and Transport](./tasks/P3-003-web-sdk-queue-transport.md)
 
 ### P4 Processing and ClickHouse
@@ -59,10 +41,7 @@ This board is the coordination surface for implementation work.
 ### P6 Control-Plane CLI
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
-- [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md)
-- [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md)
 - [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md)
-- [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md)
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
@@ -107,7 +86,6 @@ This board is the coordination surface for implementation work.
 ### P11 Deployment, Security, and Data Lifecycle
 
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
-- [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md)
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
@@ -137,4 +115,33 @@ No blocked cards.
 
 ## Done
 
-No completed cards.
+### P0 Foundation
+
+- [P0-001 Workspace Skeleton](./tasks/P0-001-workspace-skeleton.md) — merged in `207d4b9`
+- [P0-002 TypeScript Tooling Baseline](./tasks/P0-002-typescript-tooling.md) — merged in `3590b97`
+- [P0-003 Shared Config Package](./tasks/P0-003-shared-config.md) — merged in `a97a61d`
+- [P0-004 Shared Logger Package](./tasks/P0-004-shared-logger.md) — merged in `2bd5a1f`
+- [P0-005 Shared Errors and Service Bootstrap](./tasks/P0-005-service-bootstrap.md) — merged in `b3d2b90`
+- [P0-006 Shared Schemas and Event Catalog](./tasks/P0-006-shared-schemas-catalog.md) — merged in `28ed3ed`
+- [P0-007 Shared Kafka Package](./tasks/P0-007-shared-kafka.md) — merged in `e5129a8`
+- [P0-008 Shared Secrets Package](./tasks/P0-008-shared-secrets.md) — merged in `e553de9`
+- [P0-009 Forbidden-Field Policy](./tasks/P0-009-forbidden-field-policy.md) — merged in `c72263c`
+- [P0-010 Shared ClickHouse Client Package](./tasks/P0-010-shared-clickhouse-client.md) — merged in `4cc726d`
+
+### P1 Local Infrastructure
+
+- [P1-001 Local Core Compose](./tasks/P1-001-local-core-compose.md) — merged in `912b544`
+- [P1-002 PostgreSQL Migration Scaffold](./tasks/P1-002-postgres-migrations.md) — merged in `1af792a`
+- [P1-003 ClickHouse DDL Skeleton](./tasks/P1-003-clickhouse-ddl-skeleton.md) — merged in `0742f4a`
+
+### P2 Ingester
+
+- [P2-001 Ingester API Shell](./tasks/P2-001-ingester-api-shell.md) — merged in `8f6982e`
+
+### P3 SDKs
+
+- [P3-001 Node SDK Core](./tasks/P3-001-node-sdk-core.md) — merged in `98a3eb2` (cleanup `de6dea4`, identity restore `fd54203`)
+
+### P6 Control-Plane CLI
+
+- [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`

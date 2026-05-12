@@ -1,6 +1,6 @@
 # P2-001: Ingester API Shell
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

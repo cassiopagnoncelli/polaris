@@ -1,6 +1,6 @@
 # P6-001: Control-Plane CLI Shell
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

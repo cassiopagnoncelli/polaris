@@ -1,6 +1,6 @@
 # P0-001: Workspace Skeleton
 
-Status: Ready
+Status: Done
 
 ## Goal
 

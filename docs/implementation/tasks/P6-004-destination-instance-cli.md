@@ -1,6 +1,6 @@
 # P6-004: Destination Instance CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

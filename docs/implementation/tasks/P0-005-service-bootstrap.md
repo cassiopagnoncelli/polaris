@@ -1,6 +1,6 @@
 # P0-005: Shared Errors and Service Bootstrap
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

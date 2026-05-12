@@ -1,6 +1,6 @@
 # P0-007: Shared Kafka Package
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

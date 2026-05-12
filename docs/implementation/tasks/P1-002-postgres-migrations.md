@@ -1,6 +1,6 @@
 # P1-002: PostgreSQL Migration Scaffold
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

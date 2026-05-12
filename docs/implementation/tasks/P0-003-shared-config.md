@@ -1,6 +1,6 @@
 # P0-003: Shared Config Package
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

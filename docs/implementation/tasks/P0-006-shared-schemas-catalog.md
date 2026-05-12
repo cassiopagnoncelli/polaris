@@ -1,6 +1,6 @@
 # P0-006: Shared Schemas and Event Catalog
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

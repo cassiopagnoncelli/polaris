@@ -1,6 +1,6 @@
 # P0-009: Forbidden-Field Policy
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

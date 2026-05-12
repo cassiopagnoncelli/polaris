@@ -1,6 +1,6 @@
 # P0-008: Shared Secrets Package
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

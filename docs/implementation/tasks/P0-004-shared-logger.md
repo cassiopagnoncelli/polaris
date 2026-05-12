@@ -1,6 +1,6 @@
 # P0-004: Shared Logger Package
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

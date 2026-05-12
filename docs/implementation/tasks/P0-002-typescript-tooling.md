@@ -1,6 +1,6 @@
 # P0-002: TypeScript Tooling Baseline
 
-Status: Backlog
+Status: Done
 
 ## Goal
 

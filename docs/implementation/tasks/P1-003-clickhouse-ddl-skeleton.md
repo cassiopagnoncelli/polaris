@@ -1,6 +1,6 @@
 # P1-003: ClickHouse DDL Skeleton
 
-Status: Ready
+Status: Done
 
 ## Goal
 
