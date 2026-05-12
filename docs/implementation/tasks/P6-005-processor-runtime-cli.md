@@ -1,6 +1,6 @@
 # P6-005: Processor Runtime CLI
 
-Status: Review
+Status: Done (merged in `6b919cb`)
 
 ## Goal
 

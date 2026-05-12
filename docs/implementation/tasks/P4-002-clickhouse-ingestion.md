@@ -1,6 +1,6 @@
 # P4-002: ClickHouse Ingestion Integration
 
-Status: Review
+Status: Done (merged in `2795a31`)
 
 ## Goal
 

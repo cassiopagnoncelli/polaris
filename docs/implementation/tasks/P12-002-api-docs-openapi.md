@@ -1,6 +1,6 @@
 # P12-002: API Docs and OpenAPI Publishing
 
-Status: Review
+Status: Done (merged in `b27d15e`)
 
 ## Goal
 

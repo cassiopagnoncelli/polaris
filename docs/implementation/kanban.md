@@ -12,13 +12,10 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P4-002 ClickHouse Ingestion Integration](./tasks/P4-002-clickhouse-ingestion.md)
 - [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md)
-- [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md)
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
-- [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md)
 
 ## Backlog
 
@@ -132,6 +129,7 @@ No blocked cards.
 ### P4 Processing and ClickHouse
 
 - [P4-001 Analytics Processor Skeleton](./tasks/P4-001-analytics-processor.md) — merged in `5bbf133`
+- [P4-002 ClickHouse Ingestion Integration](./tasks/P4-002-clickhouse-ingestion.md) — merged in `2795a31`
 
 ### P6 Control-Plane CLI
 
@@ -139,6 +137,7 @@ No blocked cards.
 - [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md) — merged in `6756c72`
 - [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md) — merged in `ac639f0`
 - [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md) — merged in `2f8679f`
+- [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md) — merged in `6b919cb`
 
 ### P11 Deployment, Security, and Data Lifecycle
 
@@ -147,3 +146,4 @@ No blocked cards.
 ### P12 Release Readiness
 
 - [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md) — merged in `9d80fb7`
+- [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md) — merged in `b27d15e`
