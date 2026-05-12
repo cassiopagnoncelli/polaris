@@ -1,0 +1,14 @@
+# Catalog entry: source `payments-api` in project `storefront`.
+project_id: storefront
+source_id: payments-api
+source_type: backend
+owner: payments-platform
+description: >-
+  Server-side payment events from the checkout service. Secret server-side
+  key, no origin check, higher rate ceiling.
+runtime: active
+allowed_environments:
+  - development
+  - staging
+  - production
+status: active

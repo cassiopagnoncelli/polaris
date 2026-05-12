@@ -1,0 +1,12 @@
+# Catalog entry: project `storefront`.
+#
+# Projects are file-backed declarations materialized into PostgreSQL via
+# `polaris projects sync`. Semantic membership stays in this file; the
+# database row exists so FKs (sources, api_keys, audit records) can hang off
+# a stable `project_id`.
+project_id: storefront
+display_name: Storefront
+owner: storefront-platform
+description: >-
+  Customer-facing storefront across web, mobile, and backend services.
+status: active

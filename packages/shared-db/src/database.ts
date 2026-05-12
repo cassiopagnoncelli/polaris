@@ -6,14 +6,40 @@
  * source of truth; this file is a hand-maintained typed view that lets
  * Kysely produce typed queries over the real schema.
  *
- * Until each owning task lands its migration, the corresponding table
- * declaration here stays absent. When a new table is added by a later task,
- * extend this interface in the same change that ships the migration.
+ * When a new table is added by a later task, extend this interface in the
+ * same change that ships the migration.
  *
  * @see packages/shared-db/README.md "Extending the schema"
  */
 
 import type { ColumnType, Generated } from "kysely";
+
+/**
+ * Fixed runtime environments. Future ephemeral environments may exist but are
+ * out of scope until they're explicitly added to this union.
+ *
+ * Mirrors the closed set baked into the `sources_allowed_environments_members`
+ * CHECK constraint in `db/migrations/20260512000003_create_sources.sql`.
+ */
+export type Environment = "development" | "staging" | "production";
+
+/**
+ * Closed set of source types. Mirrors the
+ * `sources_source_type_allowed` CHECK constraint. Adding a new variant requires
+ * a follow-up migration to widen the CHECK, plus updates to the catalog Zod
+ * schema in `apps/polaris-cli/src/catalog/`.
+ */
+export type SourceType = "web" | "backend" | "mobile" | "webhook" | "job";
+
+/**
+ * Runtime toggle for sources. `active` lets the ingester resolve the source;
+ * `paused` keeps the materialized row but rejects traffic at the gate.
+ */
+export type SourceRuntime = "active" | "paused";
+
+/** Visibility status mirrored on both projects and sources. */
+export type ProjectStatus = "active" | "disabled";
+export type SourceStatus = "active" | "disabled";
 
 /**
  * `api_keys`: source-scoped write credentials.
@@ -67,12 +93,53 @@ export interface ApiKeyTable {
   last_used_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null>;
 }
 
+/**
+ * `projects` table.
+ *
+ * Materialized from `catalog/projects/<project_id>.yaml`. Semantic membership
+ * is file-backed; this row exists so PostgreSQL FK relationships (sources,
+ * api_keys, audit records) can hang off a stable `project_id`.
+ */
+export interface ProjectsTable {
+  project_id: string;
+  display_name: string;
+  owner: string;
+  description: string;
+  status: ColumnType<ProjectStatus, ProjectStatus | undefined, ProjectStatus>;
+  created_at: Generated<Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
+/**
+ * `sources` table.
+ *
+ * Materialized from `catalog/sources/<project_id>/<source_id>.yaml`. The
+ * ingester reads this row through an in-memory or Redis cache to resolve
+ * `project_id + environment + source_id` against the active runtime state.
+ */
+export interface SourcesTable {
+  project_id: string;
+  source_id: string;
+  source_type: SourceType;
+  owner: string;
+  description: string;
+  runtime: ColumnType<SourceRuntime, SourceRuntime | undefined, SourceRuntime>;
+  allowed_environments: Environment[];
+  status: ColumnType<SourceStatus, SourceStatus | undefined, SourceStatus>;
+  created_at: Generated<Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
 //   declare module "@polaris/shared-db" {
-//     interface Database { sources: SourcesTable }
+//     interface Database { audit_records: AuditRecordsTable }
 //   }
+//
+// As migrations land, add a new property here in the same change.
 export interface Database {
   api_keys: ApiKeyTable;
+  projects: ProjectsTable;
+  sources: SourcesTable;
 }

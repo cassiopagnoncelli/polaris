@@ -1,0 +1,17 @@
+# Catalog entry: source `storefront-web` in project `storefront`.
+#
+# Sources are explicit platform objects. Declarations live here; the runtime
+# row in PostgreSQL is materialized by `polaris sources sync`.
+project_id: storefront
+source_id: storefront-web
+source_type: web
+owner: storefront-platform
+description: >-
+  Browser SDK calls from the public storefront. Publishable write key, origin
+  checked, rate limited.
+runtime: active
+allowed_environments:
+  - development
+  - staging
+  - production
+status: active

@@ -28,3 +28,12 @@
 
 export { createDb, closeDb } from "./client.js";
 export type { Database, CreateDbOptions } from "./client.js";
+export type {
+  Environment,
+  ProjectsTable,
+  ProjectStatus,
+  SourceRuntime,
+  SourcesTable,
+  SourceStatus,
+  SourceType,
+} from "./database.js";

@@ -12,13 +12,16 @@
  *     secret redaction)
  *   - output streams and `human` / `json` rendering
  *   - the `polaris version` built-in command
+ *   - `polaris projects` / `polaris sources` (P6-002) — file-backed
+ *     declarations materialized into PostgreSQL
  *   - the command-registration surface that future P6-002+ tasks plug into
  *
- * Business commands (keys, sources, destinations, replays, operators) are
- * intentionally NOT implemented here — each lands in its own task card.
+ * Other business commands (keys, destinations, processors, replays,
+ * operators) land in their own task cards.
  *
- * @see docs/architecture/02-control-plane.md "Access model"
+ * @see docs/architecture/02-control-plane.md "Access model", "Projects and Environments", "Sources"
  * @see docs/implementation/tasks/P6-001-cli-shell.md
+ * @see docs/implementation/tasks/P6-002-projects-sources-cli.md
  */
 
 export type {
@@ -40,7 +43,59 @@ export {
   type ProfileEntry,
   readConfigFile,
 } from "./config.js";
-export { BUILTIN_COMMANDS, versionCommand } from "./commands/index.js";
+export {
+  BUILTIN_COMMANDS,
+  projectsCommand,
+  sourcesCommand,
+  versionCommand,
+} from "./commands/index.js";
+export {
+  projectsListCommand,
+  projectsShowCommand,
+  projectsSyncCommand,
+} from "./commands/projects/index.js";
+export {
+  sourcesListCommand,
+  sourcesShowCommand,
+  sourcesSyncCommand,
+} from "./commands/sources/index.js";
+export {
+  ENVIRONMENTS,
+  environmentSchema,
+  idSchema,
+  loadCatalog,
+  type LoadCatalogOptions,
+  type LoadedCatalog,
+  planProjectsSync,
+  planSourcesSync,
+  PROJECT_STATUSES,
+  type ProjectDiffRow,
+  type ProjectFile,
+  projectFileSchema,
+  type ProjectRow,
+  type ProjectStatus,
+  projectStatusSchema,
+  type ProjectsSyncPlan,
+  resolveCatalogRoot,
+  type ResolveCatalogRootOptions,
+  SOURCE_RUNTIMES,
+  SOURCE_STATUSES,
+  SOURCE_TYPES,
+  type SourceDiffRow,
+  type SourceFile,
+  sourceFileSchema,
+  type SourceRow,
+  type SourceRuntime,
+  sourceRuntimeSchema,
+  type SourcesSyncPlan,
+  type SourceStatus,
+  sourceStatusSchema,
+  type SourceType,
+  sourceTypeSchema,
+  type SyncAction,
+  type Environment,
+} from "./catalog/index.js";
+export { connectDb, type ConnectDbOptions, type DbHandle } from "./db/index.js";
 export {
   AuthError,
   CliError,
