@@ -1,0 +1,185 @@
+# Polaris local core data-path stack.
+#
+# This compose file is intentionally lean. It runs only the four services that
+# sit on the canonical event path:
+#
+#   - Redpanda     event transport backbone (single broker, RF=1)
+#   - PostgreSQL   mutable runtime/control state
+#   - Redis        short-lived dedupe, rate-limit, processor cache
+#   - ClickHouse   analytical storage (single node, no Keeper)
+#
+# Optional observability and destination mocks live in separate compose files
+# under future tasks (P10-001 observability compose, etc.). They are not part
+# of this file by design.
+#
+# See:
+#   docs/architecture/08-observability-and-operations.md  (local stack contract)
+#   docs/architecture/03-redpanda-topics.md               (broker/topic defaults)
+#   docs/architecture/07-clickhouse.md                    (engine families)
+#   docs/architecture/11-production-readiness.md          (local vs production)
+#
+# Conventions:
+#   - Host ports default to upstream defaults so local tools just work.
+#   - Override host ports with the *_HOST_PORT env vars below if they clash.
+#   - All persistent state lives in named volumes so `docker compose down`
+#     keeps data and `docker compose down -v` wipes it.
+
+name: polaris
+
+services:
+  redpanda:
+    # Single-broker Redpanda for local/dev. Replication factor 1, 1-3
+    # partitions per topic, no tiered storage. Production uses a 3-broker
+    # cluster with RF=3 and lives in its own deployment, not this compose.
+    image: redpandadata/redpanda:v24.3.1
+    container_name: polaris-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      # Address advertised to clients. `redpanda` works for in-cluster
+      # services (other compose containers); `localhost:19092` works for
+      # host-side tools (rpk, KafkaJS running on the developer machine).
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --default-log-level=info
+    ports:
+      # Kafka API (external listener) — host tools and apps running outside
+      # the compose network connect here.
+      - "${REDPANDA_KAFKA_HOST_PORT:-19092}:19092"
+      # Admin API — `rpk cluster ...`, health checks.
+      - "${REDPANDA_ADMIN_HOST_PORT:-9644}:9644"
+      # Schema Registry (HTTP) — reserved for future use (P0-007+).
+      - "${REDPANDA_SCHEMA_REGISTRY_HOST_PORT:-18081}:18081"
+      # Pandaproxy (HTTP) — not used by Polaris services but exposed for
+      # operator convenience.
+      - "${REDPANDA_PROXY_HOST_PORT:-18082}:18082"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - polaris
+
+  postgres:
+    # Local PostgreSQL for runtime/control state (api_keys, sources,
+    # destination instances, processor runs, replay jobs, delivery records,
+    # audit records). Schema is owned by P1-002 migrations.
+    image: postgres:16.6-alpine
+    container_name: polaris-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-polaris}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-polaris}
+      POSTGRES_DB: ${POSTGRES_DB:-polaris}
+      # Stable UTC default so `now()` matches the rest of the platform.
+      PGTZ: UTC
+      TZ: UTC
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    networks:
+      - polaris
+
+  redis:
+    # Local Redis for short-lived state only: 15-minute ingest dedupe,
+    # rate-limit counters, processor ephemeral caches. No persistence is
+    # required — losing Redis is acceptable, the platform tolerates it.
+    image: redis:7.4-alpine
+    container_name: polaris-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+    networks:
+      - polaris
+
+  clickhouse:
+    # Single-node ClickHouse for local/dev — plain MergeTree / ReplacingMergeTree,
+    # no Keeper. Macros in infra/clickhouse/config.d/macros.xml expand the
+    # {replicated}, {cluster}, {shard}, {replica} placeholders to local-safe
+    # values so the same SQL DDL that runs in production (Replicated* engines
+    # + Keeper) works here unchanged.
+    image: clickhouse/clickhouse-server:24.8
+    container_name: polaris-clickhouse
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-polaris}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-polaris}
+      # Required to let the polaris user run grants/role DDL when P1-003
+      # applies the roles SQL. Local-only convenience.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      # HTTP interface — used by `@clickhouse/client` over HTTP, the
+      # ClickHouse Play UI, and `clickhouse-client --port 8123`.
+      - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      # Native TCP interface — `clickhouse-client` default, faster bulk loads.
+      - "${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      # Selective read-only overlays. Mounting individual files (not the whole
+      # config.d/ directory) keeps production-only configs (macros-production.xml,
+      # keeper.xml) out of the local container even though they share the same
+      # source directory on disk. ClickHouse loads every *.xml in its config.d/,
+      # so directory-level mounting would pick up the production macros and
+      # break local engine selection.
+      - ./infra/clickhouse/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./infra/clickhouse/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./infra/clickhouse/users.d:/etc/clickhouse-server/users.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks:
+      - polaris
+
+volumes:
+  redpanda-data:
+  postgres-data:
+  clickhouse-data:
+  clickhouse-logs:
+
+networks:
+  polaris:
+    name: polaris
+    driver: bridge

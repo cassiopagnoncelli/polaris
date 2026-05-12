@@ -1,0 +1,21 @@
+<!--
+  Single-node "cluster" definition for local/dev so DDL written with
+  `ON CLUSTER '{cluster}'` does not fail. The macros file sets {cluster}
+  to `polaris_local`; this file declares that cluster as a single
+  internal-replication shard pointing at this node.
+
+  Production overrides this with a real multi-replica cluster definition.
+-->
+<clickhouse>
+  <remote_servers>
+    <polaris_local>
+      <shard>
+        <internal_replication>false</internal_replication>
+        <replica>
+          <host>clickhouse</host>
+          <port>9000</port>
+        </replica>
+      </shard>
+    </polaris_local>
+  </remote_servers>
+</clickhouse>

@@ -1,0 +1,22 @@
+<!--
+  Local/dev macros for Polaris ClickHouse.
+
+  Production runs Replicated* engines with ClickHouse Keeper and uses non-empty
+  values for these macros (see docs/architecture/07-clickhouse.md and
+  docs/architecture/11-production-readiness.md). Local/dev is single-node and
+  does not run Keeper, so the macros expand to empty strings and DDL written
+  as `{replicated}MergeTree` reduces to plain `MergeTree`, and
+  `ON CLUSTER '{cluster}'` becomes a no-op cluster reference that ClickHouse
+  treats as the default cluster.
+
+  Keeping the macros defined (even as empty) means the same SQL files work in
+  both modes without templating.
+-->
+<clickhouse>
+  <macros>
+    <replicated></replicated>
+    <cluster>polaris_local</cluster>
+    <shard>01</shard>
+    <replica>local</replica>
+  </macros>
+</clickhouse>
