@@ -300,11 +300,18 @@ describe("uuidv7", () => {
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
-  it("returns monotonically-ordered ids within the same process tick", () => {
+  it("returns time-ordered ids across different milliseconds", async () => {
     const a = v7();
+    // Wait long enough that the 48-bit timestamp prefix differs.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const b = v7();
-    // Time-ordered: lexicographic comparison reflects creation order.
-    // Tolerate equality (same ms; random tail decides the order).
-    expect(a.localeCompare(b)).toBeLessThanOrEqual(0);
+    // The first 48 bits encode the Unix ms; when they differ, lexicographic
+    // comparison of the full string reflects creation order. We compare the
+    // timestamp prefix (first 12 hex chars + the two dashes) rather than the
+    // whole string because the random tail is, by design, not monotonic
+    // within the same ms.
+    const prefixA = a.slice(0, 13);
+    const prefixB = b.slice(0, 13);
+    expect(prefixA.localeCompare(prefixB)).toBeLessThan(0);
   });
 });
