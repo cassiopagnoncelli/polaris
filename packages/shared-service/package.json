@@ -1,0 +1,46 @@
+{
+  "name": "@polaris/shared-service-bootstrap",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Thin Fastify service bootstrap for Polaris: config loading, request IDs, Pino logger wiring, RFC 7807 Problem Details, health/ready/metrics hooks, OpenAPI setup, and graceful shutdown.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./problem": {
+      "types": "./dist/problem/index.d.ts",
+      "import": "./dist/problem/index.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap/index.d.ts",
+      "import": "./dist/bootstrap/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "fastify": "^5.8.5",
+    "uuid": "^14.0.0"
+  }
+}
