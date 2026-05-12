@@ -20,6 +20,8 @@ The architecture docs are authoritative. If a task conflicts with them, stop and
 The implementation board lives at:
 
 - [Implementation Kanban](./kanban.md)
+- [Delivery Roadmap](./delivery-roadmap.md)
+- [Coverage Matrix](./coverage-matrix.md)
 
 The kanban is intentionally Markdown-based so a human coordinator or a single active worker can update it without a separate tool.
 
@@ -108,4 +110,18 @@ smoke test proves the path
 ```
 
 After that, grow breadth: stronger SDK persistence, replay jobs, destination consumers, observability dashboards, and control-plane ergonomics.
+
+For product delivery, continue through:
+
+```text
+P6  Control-plane CLI
+P7  Replay system
+P8  Production processors
+P9  Destination consumers
+P10 Observability and operations
+P11 Deployment, security, and data lifecycle
+P12 Release readiness
+```
+
+See [Delivery Roadmap](./delivery-roadmap.md) for exit criteria.
 

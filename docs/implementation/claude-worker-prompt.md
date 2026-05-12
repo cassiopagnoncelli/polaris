@@ -10,6 +10,8 @@ Before coding, read:
 - /Users/cassio/src/polaris/docs/instructions/codex.md
 - /Users/cassio/src/polaris/docs/implementation/README.md
 - /Users/cassio/src/polaris/docs/implementation/kanban.md
+- /Users/cassio/src/polaris/docs/implementation/delivery-roadmap.md
+- /Users/cassio/src/polaris/docs/implementation/coverage-matrix.md
 - the task card assigned below
 - the architecture docs listed in that task card
 
@@ -64,4 +66,3 @@ Prioritize:
 
 Return findings first, with file/line references where possible.
 ```
-

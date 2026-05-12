@@ -34,6 +34,8 @@ SDKs / producers
 - [SDK Decision Ledger](./adr/0003-sdk-decisions.md)
 - [Implementation Playbook](./implementation/README.md)
 - [Implementation Kanban](./implementation/kanban.md)
+- [Delivery Roadmap](./implementation/delivery-roadmap.md)
+- [Coverage Matrix](./implementation/coverage-matrix.md)
 - [Codex Instructions](./instructions/codex.md)
 
 ## Non-Negotiable Rules
