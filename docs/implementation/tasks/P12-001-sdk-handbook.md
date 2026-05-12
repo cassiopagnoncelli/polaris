@@ -1,6 +1,6 @@
 # P12-001: SDK Handbook
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

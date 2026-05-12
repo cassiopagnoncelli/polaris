@@ -1,6 +1,6 @@
 # P3-003: Web SDK Queue and Transport
 
-Status: Ready
+Status: Done (merged in `889bb9f`)
 
 ## Goal
 

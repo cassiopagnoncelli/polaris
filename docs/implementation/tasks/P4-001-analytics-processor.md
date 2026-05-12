@@ -1,6 +1,6 @@
 # P4-001: Analytics Processor Skeleton
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

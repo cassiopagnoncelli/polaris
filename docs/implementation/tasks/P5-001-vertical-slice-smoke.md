@@ -1,6 +1,6 @@
 # P5-001: Vertical Slice Smoke Test
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

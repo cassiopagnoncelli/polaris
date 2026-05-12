@@ -1,6 +1,6 @@
 # P6-003: API Key Lifecycle CLI
 
-Status: Ready
+Status: Done (merged in `ac639f0`)
 
 ## Goal
 

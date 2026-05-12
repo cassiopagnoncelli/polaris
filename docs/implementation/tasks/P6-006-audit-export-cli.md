@@ -1,6 +1,6 @@
 # P6-006: Audit and Export CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
