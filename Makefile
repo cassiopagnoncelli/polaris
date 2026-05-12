@@ -15,6 +15,7 @@
 # apps/, packages/, processors/, consumers/ hold runtime code; catalog/ holds
 # the file-backed event catalog and policy; sql/ + db/migrations hold DDL.
 LOC_DIRS = apps packages processors consumers catalog sql db/migrations
+LOC_PRUNE = \( -name node_modules -o -name dist -o -name build -o -name .next -o -name out -o -name coverage \) -prune
 LOC_FIND_TYPES = \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' \)
 LOC_GIT_PATHS = \
 	':(glob)apps/**/*.ts' \
@@ -69,7 +70,7 @@ tests: test ## Alias for test
 ci: lint typecheck test ## Run the CI flow: lint, typecheck, tests
 
 stats: ## Show project LOC (current tree + historical churn)
-	@current_loc=$$(find $(LOC_DIRS) -type f $(LOC_FIND_TYPES) -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l | tr -d ' ') && \
+	@current_loc=$$(find $(LOC_DIRS) $(LOC_PRUNE) -o -type f $(LOC_FIND_TYPES) -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l | tr -d ' ') && \
 	printf "LOC\n  Current: %s\n" "$$current_loc"
 	@historical_loc=$$(git log --numstat --format=tformat: -- $(LOC_GIT_PATHS) | \
 		awk '($$1 ~ /^[0-9]+$$/ && $$2 ~ /^[0-9]+$$/) { total += $$1 + $$2 } END { print total + 0 }') && \
