@@ -1,6 +1,6 @@
 # P8-001: Processor Runtime Helpers
 
-Status: Review
+Status: Done (merged in `3d4e09b`)
 
 ## Goal
 

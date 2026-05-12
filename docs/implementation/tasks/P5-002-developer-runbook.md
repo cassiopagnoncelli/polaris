@@ -1,6 +1,6 @@
 # P5-002: Developer Runbook
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

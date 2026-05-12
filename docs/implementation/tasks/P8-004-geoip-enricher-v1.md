@@ -1,6 +1,6 @@
 # P8-004: GeoIP Enricher v1
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

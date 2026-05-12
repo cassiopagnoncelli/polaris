@@ -12,21 +12,18 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md)
-- [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
-- [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md)
+- [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md)
+- [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
+- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md)
+- [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
+- [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
 
 ## Backlog
 
-### P5 Vertical Slice
-
-- [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md)
-
 ### P6 Control-Plane CLI
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
-- [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
 
 ### P7 Replay System
 
@@ -38,9 +35,6 @@ This board is the coordination surface for implementation work.
 
 ### P8 Production Processors
 
-- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md)
-- [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
-- [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P8-006 Processor Manifests and Golden Fixtures](./tasks/P8-006-processor-manifests-fixtures.md)
 
@@ -131,6 +125,10 @@ No blocked cards.
 - [P4-001 Analytics Processor Skeleton](./tasks/P4-001-analytics-processor.md) — merged in `5bbf133`
 - [P4-002 ClickHouse Ingestion Integration](./tasks/P4-002-clickhouse-ingestion.md) — merged in `2795a31`
 
+### P5 Vertical Slice
+
+- [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md) — merged in `e9c7651`
+
 ### P6 Control-Plane CLI
 
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`
@@ -138,6 +136,11 @@ No blocked cards.
 - [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md) — merged in `ac639f0`
 - [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md) — merged in `2f8679f`
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md) — merged in `6b919cb`
+- [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md) — merged in `29bcbef`
+
+### P8 Production Processors
+
+- [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
 
 ### P11 Deployment, Security, and Data Lifecycle
 

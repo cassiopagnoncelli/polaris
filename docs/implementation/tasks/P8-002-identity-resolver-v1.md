@@ -1,6 +1,6 @@
 # P8-002: Identity Resolver v1
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

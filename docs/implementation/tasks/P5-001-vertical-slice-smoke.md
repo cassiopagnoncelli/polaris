@@ -1,6 +1,6 @@
 # P5-001: Vertical Slice Smoke Test
 
-Status: Review
+Status: Done (merged in `e9c7651`)
 
 ## Goal
 

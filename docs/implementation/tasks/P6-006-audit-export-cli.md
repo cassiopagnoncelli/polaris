@@ -1,6 +1,6 @@
 # P6-006: Audit and Export CLI
 
-Status: Review
+Status: Done (merged in `29bcbef`)
 
 ## Goal
 

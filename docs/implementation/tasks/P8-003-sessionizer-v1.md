@@ -1,6 +1,6 @@
 # P8-003: Sessionizer v1
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

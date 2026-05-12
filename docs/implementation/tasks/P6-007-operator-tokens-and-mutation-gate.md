@@ -1,6 +1,6 @@
 # P6-007: Operator Tokens and Production Mutation Gate
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
