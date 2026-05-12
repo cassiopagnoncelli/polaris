@@ -1,6 +1,6 @@
 # P6-000: Control-Plane API Shell
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

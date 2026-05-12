@@ -1,6 +1,6 @@
 # P9-000: Shared Destination Normalization Package
 
-Status: Review
+Status: Done (merged in `318afc0`)
 
 ## Goal
 

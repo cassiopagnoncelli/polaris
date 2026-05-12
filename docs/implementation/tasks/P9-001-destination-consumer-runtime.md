@@ -1,6 +1,6 @@
 # P9-001: Destination Consumer Runtime
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

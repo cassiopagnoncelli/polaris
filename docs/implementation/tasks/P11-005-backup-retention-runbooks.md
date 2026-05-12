@@ -1,6 +1,6 @@
 # P11-005: Backup and Retention Runbooks
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

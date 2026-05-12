@@ -1,6 +1,6 @@
 # P7-001: Replay Job Model and CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

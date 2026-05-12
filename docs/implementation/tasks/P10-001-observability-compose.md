@@ -1,6 +1,6 @@
 # P10-001: Observability Compose
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

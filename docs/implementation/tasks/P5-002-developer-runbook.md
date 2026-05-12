@@ -1,6 +1,6 @@
 # P5-002: Developer Runbook
 
-Status: Ready
+Status: Done (merged in `ef21797`)
 
 ## Goal
 

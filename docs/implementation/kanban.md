@@ -12,22 +12,24 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md)
-- [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
+- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
+- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md)
 - [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md)
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
-- [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
+- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md)
+- [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md)
+- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
+- [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
 
 ## Backlog
 
 ### P6 Control-Plane CLI
 
-- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
+_(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P7 Replay System
 
-- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md)
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-003 Processor Replay Executor](./tasks/P7-003-processor-replay-executor.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
@@ -40,7 +42,6 @@ This board is the coordination surface for implementation work.
 
 ### P9 Destination Consumers
 
-- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md)
 - [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md)
 - [P9-004 GA4 Consumer v1](./tasks/P9-004-ga4-consumer-v1.md)
@@ -50,7 +51,6 @@ This board is the coordination surface for implementation work.
 
 ### P10 Observability and Operations
 
-- [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md)
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
 - [P10-004 Loki Logging Pipeline](./tasks/P10-004-loki-logging-pipeline.md)
@@ -62,8 +62,6 @@ This board is the coordination surface for implementation work.
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
-- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
-- [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
 - [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
 
@@ -128,6 +126,7 @@ No blocked cards.
 ### P5 Vertical Slice
 
 - [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md) — merged in `e9c7651`
+- [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md) — merged in `ef21797`
 
 ### P6 Control-Plane CLI
 
@@ -137,10 +136,15 @@ No blocked cards.
 - [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md) — merged in `2f8679f`
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md) — merged in `6b919cb`
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md) — merged in `29bcbef`
+- [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md) — merged in `964f14a`
 
 ### P8 Production Processors
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
+
+### P9 Destination Consumers
+
+- [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
 
 ### P11 Deployment, Security, and Data Lifecycle
 

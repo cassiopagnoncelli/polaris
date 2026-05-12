@@ -1,6 +1,6 @@
 # P11-006: Security Hardening: Origins, Rate Limits, and Forbidden Fields
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
