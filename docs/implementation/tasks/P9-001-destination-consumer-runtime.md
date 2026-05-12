@@ -53,6 +53,7 @@ packages/shared-destination-normalize/
 - PostgreSQL stores destination instance state and delivery records.
 - Destination sends during replay are disabled by default.
 - Secrets must never appear in logs, DLQs, or delivery records.
+- Every per-vendor consumer that builds on this runtime (P9-002 through P9-006) ships a `SPEC.md` at `consumers/<vendor>/v<N>/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). The runtime exposes a CLI command (`polaris destinations spec <consumer> <version>`) that surfaces each consumer's SPEC for operator inspection.
 
 ## Acceptance Criteria
 

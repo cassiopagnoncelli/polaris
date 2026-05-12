@@ -42,6 +42,7 @@ processors/
 - Mapping remains code-only.
 - Support delivery records, retries, and DLQs.
 - Use a mock destination endpoint in tests where practical.
+- Ship `consumers/webhook-sink/v1/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). Webhook-sink is the canonical exemplar — this SPEC also serves as a worked example for vendor consumers landing later.
 
 ## Acceptance Criteria
 
@@ -50,6 +51,7 @@ processors/
 - [ ] Consumer sends HTTP webhook payloads.
 - [ ] Delivery records are written.
 - [ ] Retry and DLQ behavior are tested.
+- [ ] `SPEC.md` filled from the consumer SPEC template covers field mapping, error class table, rate limit profile, and test-fixture references for at least one canonical event.
 
 ## Checks
 

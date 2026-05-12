@@ -42,10 +42,12 @@ processors/
 - Use stable Polaris delivery IDs as vendor event IDs where supported.
 - Do not place TikTok semantics upstream.
 - Use mock transport if live TikTok credentials are unavailable.
+- Ship `consumers/tiktok/v1/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). Document the TikTok Events API version targeted, the hashed identifier mapping (email, phone, external_id — TikTok rules mirror Meta closely), and `event_id` dedupe behavior.
 
 ## Acceptance Criteria
 
 - [ ] Versioned consumer exists with manifest/changelog.
+- [ ] `SPEC.md` filled from the consumer SPEC template documents at least one canonical event end-to-end with TikTok-specific normalization rules.
 - [ ] At least one mapping is implemented in code.
 - [ ] Vendor dedupe field handling is tested.
 - [ ] Delivery records are written.

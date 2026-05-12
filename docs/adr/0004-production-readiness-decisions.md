@@ -9,7 +9,7 @@ This is a light decision ledger for production-facing Polaris defaults.
 3. Development may use Docker or bare metal.
 4. Production services must not assume Kubernetes-only runtime behavior.
 5. Production secrets use provider-based references; plaintext secrets are never stored in PostgreSQL.
-6. Vault is the preferred production secret-manager candidate, but not fully locked.
+6. Production secret manager is HashiCorp Vault. Local/dev uses the `env` provider. The provider interface stays open for cloud-native adapters if needed later.
 7. v1 control-plane permissions use a minimal trusted-operator model.
 8. Operator identity has three sources: `cli_oidc` (authenticated through Keycloak), `cli_token` (long-lived personal token), `declared` (display only).
 9. v1 implements `cli_token` only. `cli_oidc` (Keycloak integration) is a P11+ stretch goal.

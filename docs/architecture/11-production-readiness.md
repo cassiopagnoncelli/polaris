@@ -285,22 +285,27 @@ Rules:
 
 ## Open Production Decisions
 
-These are intentionally not fully locked yet:
+These are wait-for-data items. Each has a structural decision locked and a numeric/inventory tail that gets revisited after observed production traffic. Re-review after the first project's first production month.
 
-- exact production secret manager (Vault preferred but not locked)
-- Redpanda retention byte caps and tiered storage
-- ClickHouse projection table engines per query shape (chosen per-projection as projections land)
-- first real event catalog inventory
-- destination-specific mapping specifications and normalization rules per vendor
-- production alert thresholds tuned to observed traffic (initial defaults locked in [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md))
-- per-project ingress dedupe window overrides
-- topic isolation activation thresholds tuned to observed traffic
+- **Redpanda retention byte caps and tiered storage.** Time-based retention is locked (90 days for `raw.events`). Byte caps as a backstop and tiered storage offload are evaluated when first-project disk usage data exists.
+- **Per-project ingress dedupe window overrides.** Default 15 min is locked. Per-project opt-ins up to 24h are evaluated when a project demonstrates a producer-side reliability need.
+- **Topic isolation activation thresholds.** Triggers are locked structurally (volume share, retention divergence, lag isolation, schema risk, operational quarantine — see [Redpanda Topics](./03-redpanda-topics.md)). The `>25%` threshold and similar numbers are revisited after observed traffic.
+- **Alert thresholds and SLOs.** Initial defaults are locked in [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md); tightened after observed traffic.
 
-These should be reviewed before real production traffic, but they do not block the first vertical slice.
+## Methodology Decisions (No Single Lock)
 
-Locked decisions that previously sat here:
+These are not single decisions — they are processes that produce decisions per artifact.
 
+- **ClickHouse projection table engines:** chosen per projection in the PR that ships it. See [ClickHouse / Engine Selection Methodology](./07-clickhouse.md).
+- **Event catalog inventory:** the platform does not pre-define business events. Projects bring their own event lists; the platform ships only processor-output events (identity, sessionizer, attribution, diagnostics) defined in their respective processor tasks.
+- **Per-vendor mapping specifications and normalization rules:** decided per consumer task (P9-003 Meta CAPI, P9-004 GA4, etc.) as part of each task's acceptance criteria.
+
+## Locked Decisions That Previously Sat Here
+
+- Production secret manager: **HashiCorp Vault** (see [P11-004](../implementation/tasks/P11-004-production-secret-provider.md)).
 - ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
 - Identity graph schema: file-flexible (see [P8-002](../implementation/tasks/P8-002-identity-resolver-v1.md)).
 - Regional posture: single-region in v1; PII residency not a v1 constraint.
 - OIDC IdP for `cli_oidc`: Keycloak when implemented (P11+ stretch).
+- GeoIP backend: MaxMind GeoLite2 with operator-provided files.
+- CLI access model: thin client + control-plane API service, env-var auth.

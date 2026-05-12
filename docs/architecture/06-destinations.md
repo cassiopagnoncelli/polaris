@@ -130,6 +130,27 @@ Rules:
 - Consumer versions define supported mappings through code/tests.
 - A CLI may inspect/export mapping capabilities from code, but mappings are not mutable runtime data.
 
+## SPEC.md per consumer version
+
+Every per-vendor consumer ships a `SPEC.md` at `consumers/<vendor>/v<N>/SPEC.md`, filled from [the consumer SPEC template](../implementation/templates/consumer-spec-template.md). The SPEC is the durable artifact that survives across versions and is the starting point for any future redesign.
+
+The SPEC covers:
+
+- vendor name, API version targeted, auth scheme, base URL
+- supported canonical events (and explicitly unsupported ones)
+- per-event field mapping table with the normalization primitive per field
+- vendor dedupe key
+- consent slot mapping with absent-as-true default
+- error class table (vendor signal → retry / DLQ / permanent classification)
+- rate limit profile (vendor-published + consumer defaults)
+- identity field mapping detail
+- test fixture references
+- known divergences from canonical
+- vendor API changelog pointer
+- migration notes (for `v(N>1)`)
+
+When `v2` is created, `v1/SPEC.md` stays in place. The migration-notes section in `v2/SPEC.md` documents the breaking changes from `v1`.
+
 ## Destination Instances
 
 PostgreSQL stores destination instance state and non-semantic operational settings.

@@ -62,6 +62,9 @@ This is a light decision ledger for the first Polaris architecture pass. The han
 56. Customer deletion is deferred. The designed pattern uses `customer.deletion_requested` tombstone events plus a deletion-list service consumed by processors and destination consumers.
 57. Property-level conventions inside `properties` are event-owner discretion. The platform enforces envelope rules only.
 58. Backup/recovery targets per store are documented v1 defaults: PostgreSQL RPO 5 min / RTO 1 h, ClickHouse `analytics_raw` RPO 24 h / RTO 4 h, projection tables rebuilt from `analytics_raw`, Redpanda RPO 0 via RF=3, Redis no backup.
+59. Production secret manager is HashiCorp Vault, with Kubernetes auth in production and an env provider for local/dev. The provider interface stays open for cloud-native adapters.
+60. ClickHouse projection table engines are chosen per projection in the PR that ships them (methodology, not a single decision). Default guidance: MergeTree for fact rows, SummingMergeTree for pre-summed counters, AggregatingMergeTree for complex aggregate states.
+61. Event catalog inventory is not pre-defined by the platform. Projects bring their own event lists; the platform ships only processor-output events (identity, sessionizer, attribution, diagnostics).
 
 ## Superseded Direction
 

@@ -43,10 +43,12 @@ processors/
 - Do not promise universal GA4 event dedupe.
 - Use mock transport if live GA4 credentials are unavailable.
 - Mapping semantics remain code-only.
+- Ship `consumers/ga4/v1/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). Document the GA4 Measurement Protocol version targeted, the `client_id`/`user_id` mapping from canonical identity, and the timestamp shape (GA4 uses microseconds since epoch via `timestamp_micros`).
 
 ## Acceptance Criteria
 
 - [ ] Versioned consumer exists with manifest/changelog.
+- [ ] `SPEC.md` filled from the consumer SPEC template documents the GA4 mapping including purchase dedupe via `transaction_id` and the client/user identity mapping.
 - [ ] At least one mapping is implemented in code.
 - [ ] Purchase/transaction dedupe behavior is documented and tested.
 - [ ] Delivery records are written.

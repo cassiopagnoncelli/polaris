@@ -40,14 +40,17 @@ db schema changes not needed for this consumer
 
 ## Implementation Notes
 
-- Use stable Polaris delivery IDs as vendor dedupe IDs where supported.
+- Use stable Polaris delivery IDs as vendor dedupe IDs where supported (Meta accepts `event_id` for cross-channel dedupe).
 - Do not place Meta semantics upstream.
 - Do not store access tokens in PostgreSQL.
 - If live Meta API access is unavailable, implement against an interface and test with a mock transport.
+- Ship `consumers/meta-capi/v1/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). The SPEC documents field mapping per canonical event, normalization rules (Meta requires sha256(lowercase(trim(email))) for `em`, similar for `ph`, `external_id`), error class table, rate-limit profile, and the Meta API version the consumer targets.
+- Normalization composes from `packages/shared-destination-normalize/`; Meta-specific rules (action_source inference, fbp/fbc cookie passthrough) live in `consumers/meta-capi/v1/normalize/`.
 
 ## Acceptance Criteria
 
 - [ ] Versioned consumer exists with manifest/changelog.
+- [ ] `SPEC.md` filled from the consumer SPEC template documents at least one canonical event end-to-end (mapping table, normalization, dedupe, error classes, fixtures).
 - [ ] At least one mapping is implemented in code.
 - [ ] Vendor dedupe field handling is tested.
 - [ ] Delivery records are written.

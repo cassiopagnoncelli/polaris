@@ -43,10 +43,12 @@ processors/
 - Enforce Polaris delivery idempotency before sending.
 - Mapping semantics remain code-only.
 - Use mock transport if live Braze credentials are unavailable.
+- Ship `consumers/braze/v1/SPEC.md` filled from [the consumer SPEC template](../templates/consumer-spec-template.md). The SPEC must include an explicit "Known divergences from canonical" entry noting that vendor dedupe is weak and that Polaris-side delivery-key idempotency is the canonical guard against double-delivery.
 
 ## Acceptance Criteria
 
 - [ ] Versioned consumer exists with manifest/changelog.
+- [ ] `SPEC.md` filled from the consumer SPEC template documents the Braze mapping, the dedupe-weakness divergence, and the Polaris-side idempotency contract.
 - [ ] At least one mapping is implemented in code.
 - [ ] Polaris delivery idempotency is tested.
 - [ ] Delivery records are written.

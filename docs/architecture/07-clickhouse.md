@@ -324,6 +324,27 @@ consumer_delivery_metrics
 
 Materialized views transform inserts from raw analytical tables into projection tables. They are continuous incremental transformations, not ad hoc query views.
 
+### Engine selection methodology
+
+Projection tables pick the right ClickHouse engine for their query shape. There is no global default — each projection's PR includes the engine choice with rationale in the SQL file comment.
+
+Default guidance:
+
+```text
+MergeTree              fact-shaped projections (denormalized rows, append-after-dedupe)
+SummingMergeTree       pre-summed counters keyed by a group key
+AggregatingMergeTree   complex aggregate states (uniq, quantile, custom states)
+ReplacingMergeTree     projections that need their own dedupe layer (rare; analytics_raw upstream usually handles it)
+```
+
+In production these become `ReplicatedMergeTree`, `ReplicatedSummingMergeTree`, etc., via the `{replicated}` macro.
+
+Rules:
+
+- The PR introducing a projection table documents the engine choice and the query patterns it serves.
+- Changing a projection's engine after it ships is a rebuild operation (P7-005), not a migration.
+- Ad-hoc operator queries against projection tables use plain `SELECT`; the MV has already deduped.
+
 ## Replay and Rebuild
 
 ClickHouse projection rebuilds are replay/rebuild workflows.
