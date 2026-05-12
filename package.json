@@ -27,7 +27,11 @@
     "db:migrate": "pnpm --filter @polaris/shared-db db:migrate",
     "db:rollback": "pnpm --filter @polaris/shared-db db:rollback",
     "db:status": "pnpm --filter @polaris/shared-db db:status",
-    "db:create": "pnpm --filter @polaris/shared-db db:create"
+    "db:create": "pnpm --filter @polaris/shared-db db:create",
+    "clickhouse:migrate": "node scripts/clickhouse-migrate.mjs",
+    "clickhouse:migrate:dry-run": "node scripts/clickhouse-migrate.mjs --dry-run",
+    "clickhouse:bootstrap-local": "node scripts/clickhouse-bootstrap-local.mjs",
+    "clickhouse:query": "node scripts/clickhouse-query.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

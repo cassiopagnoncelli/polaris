@@ -12,11 +12,15 @@ for the architecture rationale.
 ```text
 infra/clickhouse/
   config.d/
-    macros-local.xml          local/dev macros: {replicated} = ''
-    macros-production.xml     production macros: {replicated} = 'Replicated'
+    macros.xml                local/dev macros: {replicated} = '', {cluster} = polaris_local
+    macros-production.xml     production macros: {replicated} = 'Replicated', {cluster} = polaris
+    cluster.xml               local single-node `polaris_local` cluster definition
     keeper.xml                embedded ClickHouse Keeper config (production only)
   compose/
     docker-compose.production.yml   production-mode compose snippet (ClickHouse + embedded Keeper)
+  init/
+    01_local_users.sql        local/dev users tied to polaris_service / polaris_operator roles
+  users.d/                    optional XML user overrides (empty by default)
   README.md                   this file
 ```
 
@@ -95,7 +99,8 @@ runtime.
 ## How SQL files are applied
 
 Both environments apply
-[`sql/clickhouse/`](../../sql/clickhouse/) in lexical order:
+[`sql/clickhouse/`](../../sql/clickhouse/) in lexical order via
+[`scripts/clickhouse-migrate.mjs`](../../scripts/clickhouse-migrate.mjs):
 
 ```text
 00_database.sql
@@ -110,7 +115,34 @@ roles/00_roles.sql
 roles/01_grants.sql
 ```
 
-The migration runner is the responsibility of
-[P4-002](../../docs/implementation/tasks/P4-002-clickhouse-ingestion.md);
-this task only ships the SQL and the macro/Keeper configuration
-that makes it valid in both modes.
+The runner is idempotent: SQL files use `CREATE ... IF NOT EXISTS`
+everywhere and grants are additive, so re-running the runner converges.
+Invoke it as:
+
+```bash
+pnpm clickhouse:migrate              # apply (uses CLICKHOUSE_* env vars)
+pnpm clickhouse:migrate:dry-run      # plan only, no I/O
+```
+
+For local/dev, an additional bootstrap step provisions concrete
+users tied to the `polaris_service` and `polaris_operator` roles so
+the workspace SDK + CLI can authenticate non-default profiles:
+
+```bash
+pnpm clickhouse:bootstrap-local      # migrate, then apply infra/clickhouse/init/*.sql
+```
+
+Production never applies `infra/clickhouse/init/` — those users are
+provisioned by the secret provider
+([P11-004](../../docs/implementation/tasks/P11-004-production-secret-provider.md)).
+
+After migrations apply, a thin smoke-query helper exists for quick
+inspection:
+
+```bash
+pnpm clickhouse:query ping                       # GET /ping
+pnpm clickhouse:query schema                     # list polaris.* objects
+pnpm clickhouse:query ingest-log --limit=20      # tail analytics_ingest_log
+pnpm clickhouse:query raw-count                  # count(DISTINCT event_id)
+pnpm clickhouse:query event-daily-counts         # tail the example projection
+```
