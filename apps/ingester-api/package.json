@@ -1,0 +1,34 @@
+{
+  "name": "@polaris/ingester-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris ingester API: thin Fastify ingress service for SDK and trusted producer events. Owns API key auth, project/environment resolution, schema validation, forbidden-field policy, short-window dedupe, and Redpanda publish.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "fastify": "^5.8.5"
+  }
+}
