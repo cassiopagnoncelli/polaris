@@ -11,7 +11,7 @@
   "packageManager": "pnpm@10.30.0",
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && pnpm -r --if-present run typecheck",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && pnpm -r --if-present run typecheck",
     "lint": "biome lint . && pnpm lint:clickhouse-imports",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
@@ -33,7 +33,9 @@
     "clickhouse:bootstrap-local": "node scripts/clickhouse-bootstrap-local.mjs",
     "clickhouse:query": "node scripts/clickhouse-query.mjs",
     "openapi": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs",
-    "openapi:check": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs --check"
+    "openapi:check": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs --check",
+    "smoke:vertical-slice": "node scripts/smoke/vertical-slice.mjs",
+    "test:smoke": "POLARIS_SMOKE_DOCKER=1 vitest run --root . tests/smoke"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

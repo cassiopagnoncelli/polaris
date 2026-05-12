@@ -16,6 +16,7 @@
     "apps",
     "packages",
     "processors",
-    "consumers"
+    "consumers",
+    "tests"
   ]
 }

@@ -2,15 +2,18 @@
 #
 # Per docs/architecture/09-engineering-standards.md "CI Quality Gates",
 # integration checks against PostgreSQL, Redis, Redpanda, and ClickHouse
-# (plus the vertical-slice smoke test once it exists) run scheduled,
-# manually, or on PRs that opt in via the `integration` label — not on
-# every PR — until the test suite stabilises.
+# (plus the vertical-slice smoke test) run scheduled, manually, or on PRs
+# that opt in via the `integration` label — not on every PR — until the
+# test suite stabilises.
 #
-# Today the integration tier still has very little to run; this workflow
-# is the entrypoint that later tasks (P4-002 ClickHouse ingestion,
-# P5-001 vertical-slice smoke) wire their tests into. Until then the
-# job is intentionally a no-op that proves the trigger and service
-# matrix work.
+# v1 of the integration suite runs the P5-001 vertical-slice smoke against
+# the same `docker-compose.yml` developers use locally. Using compose
+# (rather than GitHub's `services:` containers) keeps the network shape
+# identical between CI and local: ClickHouse's Kafka Engine table is
+# wired to `redpanda:9092` inside the compose `polaris` bridge network,
+# and that resolution path only exists when every service shares that
+# network. P9-* destination consumer tests will plug into this same
+# compose-backed setup.
 
 name: Integration
 
@@ -36,8 +39,8 @@ env:
   PNPM_VERSION: "10.30.0"
 
 jobs:
-  integration:
-    name: Docker-backed integration suite
+  vertical-slice-smoke:
+    name: P5-001 vertical-slice smoke
     runs-on: ubuntu-latest
     # Skip the heavy services unless the PR was explicitly labelled
     # `integration`, or the workflow was triggered manually / on a schedule.
@@ -46,50 +49,20 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration'))
     timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: polaris
-          POSTGRES_PASSWORD: polaris
-          POSTGRES_DB: polaris
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U polaris -d polaris"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-      clickhouse:
-        # Single-node ClickHouse without Keeper is the documented local/dev
-        # shape (docs/architecture/07-clickhouse.md "Cluster Posture").
-        image: clickhouse/clickhouse-server:25.1-alpine
-        env:
-          CLICKHOUSE_USER: polaris
-          CLICKHOUSE_PASSWORD: polaris
-          CLICKHOUSE_DB: polaris
-          # Listen on the standard ports; the helper uses HTTP 8123.
-          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
-        ports: ["8123:8123", "9000:9000"]
-        options: >-
-          --health-cmd "wget -q --spider http://localhost:8123/ping || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 30
-      # Redpanda runs as a standalone container rather than a service so
-      # we can pass the long Redpanda CLI arguments needed for single-node
-      # operation. Pulled in by the step below.
     env:
+      # Same env vars the smoke runner reads (see
+      # scripts/smoke/vertical-slice.mjs). The host ports default to the
+      # compose defaults; the smoke runner reaches each service on
+      # localhost because the compose `ports:` declarations expose them.
       DATABASE_URL: postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable
-      POLARIS_REDPANDA_BROKERS: localhost:9092
-      POLARIS_CLICKHOUSE_URL: http://localhost:8123
+      CLICKHOUSE_URL: http://localhost:8123
+      CLICKHOUSE_USER: polaris
+      CLICKHOUSE_PASSWORD: polaris
+      POLARIS_INGESTER_URL: http://localhost:8080
+      POLARIS_SMOKE_PROJECT_ID: storefront
+      POLARIS_SMOKE_ENVIRONMENT: development
+      POLARIS_SMOKE_SOURCE_ID: payments-api
+      POLARIS_SMOKE_SOURCE_TYPE: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -111,47 +84,94 @@ jobs:
       - name: Build (tsc emit)
         run: pnpm build
 
-      # Redpanda single-node container. Started here (instead of as a GitHub
-      # `services:` entry) because Redpanda's startup arguments need to be
-      # explicit and a healthcheck needs a separate wait loop.
-      - name: Start Redpanda
-        run: |
-          docker run -d --name redpanda \
-            --network host \
-            -e REDPANDA_AUTO_CREATE_TOPICS_ENABLED=true \
-            redpandadata/redpanda:v25.1.1 \
-            redpanda start \
-              --overprovisioned \
-              --smp 1 \
-              --memory 1G \
-              --reserve-memory 0M \
-              --node-id 0 \
-              --check=false \
-              --kafka-addr PLAINTEXT://0.0.0.0:9092 \
-              --advertise-kafka-addr PLAINTEXT://localhost:9092
-          # Wait until the Kafka API answers.
-          for i in $(seq 1 30); do
-            if docker exec redpanda rpk cluster info >/dev/null 2>&1; then
-              echo "Redpanda ready"; exit 0
-            fi
-            sleep 2
-          done
-          echo "Redpanda did not become ready"; docker logs redpanda; exit 1
+      # Bring up Redpanda + PostgreSQL + Redis + ClickHouse in the same
+      # compose network the local-dev stack uses. The smoke runner then
+      # reaches each service through the published host ports.
+      - name: Start local stack
+        run: docker compose up -d --wait
 
       - name: Apply PostgreSQL migrations
         run: pnpm db:migrate
 
-      # Placeholder: real integration tests land in P4-002, P5-001, and
-      # P9-* tasks. Until then we record the wiring and keep the job
-      # green so the trigger surface is real.
-      - name: Integration suite (placeholder)
-        run: |
-          echo "Integration test suite not yet implemented."
-          echo "Owning tasks: P4-002 (ClickHouse ingestion), P5-001 (vertical-slice smoke)."
-          # When real tests exist, replace this block with e.g.
-          #   pnpm test:integration
-          # gated behind --testPathPattern or a separate vitest config.
+      - name: Apply ClickHouse schema (incl. local users)
+        run: pnpm clickhouse:bootstrap-local
 
-      - name: Show Redpanda logs on failure
+      # The ingester + analytics-projector are workspace services. We run
+      # them in the background and capture pid + logs so a smoke failure
+      # has the upstream logs immediately available.
+      - name: Start ingester
+        run: |
+          mkdir -p /tmp/polaris-logs
+          pnpm --filter @polaris/ingester-api run start \
+            > /tmp/polaris-logs/ingester.log 2>&1 &
+          echo $! > /tmp/polaris-logs/ingester.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-ingester
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8080"
+          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_REDIS_HOST: localhost
+          POLARIS_REDIS_PORT: "6379"
+
+      - name: Start analytics-projector
+        run: |
+          pnpm --filter @polaris/processor-analytics-projector-v1 run start \
+            > /tmp/polaris-logs/analytics-projector.log 2>&1 &
+          echo $! > /tmp/polaris-logs/analytics-projector.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-analytics-projector
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8081"
+          POLARIS_REDPANDA_BROKERS: localhost:19092
+
+      # Wait for the ingester to expose /ready before running the smoke.
+      - name: Wait for ingester readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/ready >/dev/null; then
+              echo "ingester ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "ingester did not become ready"
+          exit 1
+
+      - name: Run vertical-slice smoke (P5-001)
+        run: pnpm smoke:vertical-slice
+
+      - name: Run smoke as a vitest job
+        # Reruns the runner under vitest so the test reporter produces a
+        # standard pass/fail line. Useful for matrix dashboards.
+        run: pnpm test:smoke
+
+      - name: Dump logs on failure
         if: failure()
-        run: docker logs redpanda || true
+        run: |
+          echo "=== docker compose ps ==="
+          docker compose ps || true
+          echo "=== ingester ==="
+          tail -n 200 /tmp/polaris-logs/ingester.log || true
+          echo "=== analytics-projector ==="
+          tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== docker compose logs (last 200 lines) ==="
+          docker compose logs --tail=200 || true
+
+      - name: Tear down local stack
+        if: always()
+        run: |
+          if [ -f /tmp/polaris-logs/ingester.pid ]; then
+            kill "$(cat /tmp/polaris-logs/ingester.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
+            kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          fi
+          docker compose down -v || true
