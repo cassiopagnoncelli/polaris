@@ -21,11 +21,15 @@ Assigned task:
 - TASK_FILE: <replace>
 - EXPECTED_BASE_COMMITS: <replace with the most recent merged task IDs the orchestrator says you should branch from, in order; e.g. "P0-001, P0-002, P1-001, P1-003">
 
-Verify your base before working:
+Verify your base before working — THIS IS STEP ZERO, NON-OPTIONAL:
 1. Run `git log --oneline -10` and confirm each EXPECTED_BASE_COMMITS entry is present.
 2. If any expected commit is missing, your worktree branched from a stale base. Run `git rebase main` to bring your worktree branch up to date. `main` is a peer branch inside the worktree; the rebase brings in any commits you are missing.
 3. Re-run `git log --oneline -10` to confirm the rebase succeeded. Report the result in your final summary so the integration step has visibility.
 4. After a rebase, re-check that the workspace `.gitignore` covers `node_modules/`, `dist/`, `coverage/`, `*.tsbuildinfo`. These should be ignored by repo policy; if they are not, stop and report the missing patterns.
+
+If you skip the verify-your-base step and silently work against a stale base, the orchestrator will detect it at integration (the worktree HEAD will diverge from main) and have to redo your work. Do not skip. State in your final summary: `Rebase: not needed` OR `Rebase: applied, brought in <list of commits>`.
+
+Orchestrator-side check: before any `git merge --squash <worktree-branch>`, the orchestrator runs `git -C <worktree-path> log --oneline -1` and confirms the HEAD matches the latest main commit. Worktrees that diverge are flagged loudly so the worker output can be cleaned up (root pollution dropped, package directory kept, missing rebase noted in the integration commit). Workers that DO follow the verify-your-base step save the orchestrator that cleanup pass.
 
 Hard rules:
 - Polaris is the platform; Redpanda is only the streaming backbone.
