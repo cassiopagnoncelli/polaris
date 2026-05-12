@@ -1,0 +1,59 @@
+/**
+ * `@polaris/shared-secrets` — provider-based secret reference resolver.
+ *
+ * Polaris stores `(secret_provider, secret_ref)` pairs in PostgreSQL and
+ * resolves them through pluggable provider adapters. v1 ships the `env`
+ * adapter; the Vault adapter lands in P11-004 through the same interface.
+ *
+ * Hard rules baked in:
+ *
+ *   - PostgreSQL stores references, never plaintext.
+ *   - Adapters implement exactly one method: `getSecret(ref) -> Promise<string>`.
+ *   - Resolved secret values must never appear in logs, audit records, DLQ
+ *     payloads, delivery records, error messages, or exports.
+ *   - Provider slots for future adapters (`vault`, `aws-secrets-manager`,
+ *     `gcp-secret-manager`, `azure-keyvault`) are reserved in the type so
+ *     PostgreSQL columns and CLI flags accept them on day one. References to
+ *     an unwired slot throw `SecretProviderNotConfiguredError`.
+ *
+ * Typical usage:
+ *
+ * ```ts
+ * import { loadEnv } from "@polaris/shared-config";
+ * import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
+ *
+ * const source = loadEnv();
+ * const resolver = new SecretResolver({
+ *   adapters: { env: new EnvSecretProvider({ source }) },
+ * });
+ *
+ * const token = await resolver.resolve({
+ *   provider: "env",
+ *   ref: "META_CAPI_TOKEN_STOREFRONT_PROD",
+ * });
+ * // hand `token` straight to the destination client; do not log it.
+ * ```
+ *
+ * @see docs/architecture/02-control-plane.md "Secrets"
+ * @see docs/architecture/11-production-readiness.md "Secret Management"
+ * @see docs/implementation/tasks/P11-004-production-secret-provider.md
+ */
+
+export {
+  SecretError,
+  SecretNotFoundError,
+  SecretProviderError,
+  SecretProviderNotConfiguredError,
+  SecretReferenceParseError,
+} from "./errors.js";
+export { EnvSecretProvider, type EnvSecretProviderOptions } from "./providers/index.js";
+export { formatSecretReference, parseSecretReference } from "./reference.js";
+export { SecretResolver, type SecretResolverOptions } from "./resolver.js";
+export {
+  SECRET_PROVIDERS,
+  type SecretProvider,
+  type SecretProviderAdapter,
+  type SecretReference,
+  type SecretReferenceInput,
+  isSecretProvider,
+} from "./types.js";

@@ -1,0 +1,39 @@
+{
+  "name": "@polaris/shared-secrets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris provider-based secret reference resolver. Ships the env provider; Vault and cloud KMS adapters land later through the same interface.",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-logger": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "6.0.1"
+  }
+}
