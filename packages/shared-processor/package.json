@@ -1,0 +1,70 @@
+{
+  "name": "@polaris/shared-processor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polaris processor runtime helpers: processor identity, metadata stamping, run registration (PostgreSQL), retry classification, in-memory metrics, DLQ publish helper, and manifest loading. Intentionally thin — the helpers wrap glue around PolarisConsumer/PolarisProducer, they do not hide Kafka behind a framework.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./metadata": {
+      "types": "./dist/metadata.d.ts",
+      "import": "./dist/metadata.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js"
+    },
+    "./runs": {
+      "types": "./dist/runs.d.ts",
+      "import": "./dist/runs.js"
+    },
+    "./metrics": {
+      "types": "./dist/metrics.d.ts",
+      "import": "./dist/metrics.js"
+    },
+    "./classify": {
+      "types": "./dist/classify.d.ts",
+      "import": "./dist/classify.js"
+    },
+    "./dlq": {
+      "types": "./dist/dlq.d.ts",
+      "import": "./dist/dlq.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "import": "./dist/identity.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*",
+    "kafkajs": "^2.2.4",
+    "kysely": "^0.29.0",
+    "uuid": "^14.0.0",
+    "yaml": "2.9.0",
+    "zod": "^4.4.3"
+  }
+}

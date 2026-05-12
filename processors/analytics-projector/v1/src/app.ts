@@ -29,7 +29,8 @@ import {
   type PolarisProducer,
   type SyncIsolationLookup,
 } from "@polaris/shared-kafka";
-import { createLogger, withProcessor, type Logger } from "@polaris/shared-logger";
+import { createLogger, type Logger } from "@polaris/shared-logger";
+import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
   bootstrapService,
   NOOP_OPENAPI_SETUP,
@@ -39,7 +40,7 @@ import {
 } from "@polaris/shared-service-bootstrap";
 
 import type { AnalyticsProjectorRuntimeConfig } from "./config.js";
-import { PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
+import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 import { createRuntime, type AnalyticsProjectorRuntime } from "./runtime.js";
 
 /**
@@ -104,6 +105,12 @@ export interface BuiltAnalyticsProjectorApp {
   readonly producer: PolarisProducer;
   readonly consumer: PolarisConsumer;
   /**
+   * Shared in-process metrics registry the runtime is wired to. Callers
+   * (mostly tests and the `/metrics` endpoint extension that lands with
+   * P10-002) read counters and gauges from it.
+   */
+  readonly metrics: ProcessorMetrics;
+  /**
    * `true` when the app owns the producer lifecycle (built from config),
    * `false` when a pre-built producer was injected by the caller.
    */
@@ -126,12 +133,19 @@ export async function buildAnalyticsProjectorApp(
     env: config.service.environment,
   });
 
-  const processorLogger = logger.child(
-    withProcessor({
-      processor_name: PROCESSOR_NAME,
-      processor_version: PROCESSOR_VERSION,
-    }),
-  );
+  // The processor-scoped child logger binds the canonical
+  // `processor_name` / `processor_version` fields through
+  // `@polaris/shared-processor`'s `processorLogContext`. Every Polaris
+  // processor uses the same helper, so log pivots across processors stay
+  // consistent.
+  const processorLogger = logger.child(processorLogContext({ identity: PROCESSOR_IDENTITY }));
+
+  // Shared in-process metrics registry. The runtime increments its
+  // counters and gauges; the `/metrics` endpoint exposed by the
+  // service-bootstrap can later be extended to expose the registry's
+  // samples. The Prometheus migration (P10-002) replaces this class
+  // without touching the call sites.
+  const metrics = new ProcessorMetrics();
 
   // ---- consumer + producer --------------------------------------------
   const { producer, ownsProducer } = buildProducer(config, options.producer, processorLogger);
@@ -166,6 +180,7 @@ export async function buildAnalyticsProjectorApp(
     consumer,
     producer,
     logger: processorLogger,
+    metrics,
     ...(options.isolation !== undefined ? { isolation: options.isolation } : {}),
     ...(options.isolatedProjects !== undefined
       ? { isolatedProjects: options.isolatedProjects }
@@ -257,7 +272,7 @@ export async function buildAnalyticsProjectorApp(
     });
   }
 
-  return { bootstrap, runtime, producer, consumer, ownsProducer, ownsConsumer };
+  return { bootstrap, runtime, producer, consumer, metrics, ownsProducer, ownsConsumer };
 }
 
 function buildProducer(

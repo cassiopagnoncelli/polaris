@@ -36,6 +36,8 @@ export type {
   Environment,
   ProcessorActivationState,
   ProcessorActivationsTable,
+  ProcessorRunsTable,
+  ProcessorRunStatus,
   ProjectsTable,
   ProjectStatus,
   SourceRuntime,

@@ -30,6 +30,7 @@ export {
   type AnalyticsProjectorRuntimeDeps,
 } from "./runtime.js";
 export {
+  PROCESSOR_IDENTITY,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
   transformToAnalyticsEvent,

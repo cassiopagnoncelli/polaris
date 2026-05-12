@@ -20,15 +20,24 @@
  *      both shapes coexist cleanly: ClickHouse picks up the flat columns
  *      and ignores the nested object.
  *
- * The transform is exported as a pure function with no side effects so it
- * can be unit-tested with golden fixtures and reused by the replay
- * executor (P7-003) without instantiating the streaming runtime.
+ * The stamping is delegated to `@polaris/shared-processor`'s
+ * `stampProcessorMetadata` so the dual-shape envelope stays consistent
+ * across every Polaris processor. The transform exported here remains a
+ * pure function: no side effects, no I/O, no schema validation. Tests
+ * (golden fixture + structural) and the replay executor (P7-003) can call
+ * it without setup.
  *
  * Versioning rule: any change to this function's output shape requires a
  * new processor version directory (`processors/analytics-projector/v2/`)
  * with its own manifest. See `docs/architecture/05-processors-and-replay.md`
  * "Processor Versioning".
  */
+
+import {
+  type ProcessorIdentity,
+  type ProcessorStamp as SharedProcessorStamp,
+  stampProcessorMetadata,
+} from "@polaris/shared-processor";
 
 /**
  * Static processor identity for v1. Held as a frozen object so callers
@@ -42,6 +51,16 @@
  */
 export const PROCESSOR_NAME = "analytics-projector" as const;
 export const PROCESSOR_VERSION = "v1" as const;
+
+/**
+ * Frozen identity literal reused by the runtime helpers. Exporting the
+ * narrowed-type version lets external callers (tests, replay) reference
+ * the same `(name, version)` constant the runtime uses.
+ */
+export const PROCESSOR_IDENTITY: ProcessorIdentity = Object.freeze({
+  name: PROCESSOR_NAME,
+  version: PROCESSOR_VERSION,
+});
 
 /**
  * Identity layer the transform passes through unchanged. The shape is
@@ -97,11 +116,15 @@ export interface RawEventEnvelope {
  * emitted envelope. `ran_at` is an ISO 8601 UTC timestamp recording when
  * this specific transform invocation produced the output — useful for
  * staleness inspection and replay lineage diff.
+ *
+ * Locked to the v1 `(name, version)` literals so the local type contract
+ * stays narrower than the shared helper's `string` shape.
  */
 export interface ProcessorStamp {
   readonly name: typeof PROCESSOR_NAME;
   readonly version: typeof PROCESSOR_VERSION;
   readonly ran_at: string;
+  readonly run_id?: string | undefined;
 }
 
 /**
@@ -136,72 +159,53 @@ export interface AnalyticsEventEnvelope {
 /**
  * Options for `transformToAnalyticsEvent`. The runtime supplies `now` so
  * tests can pin `ran_at` deterministically; production uses the default.
+ * `run_id` is forwarded through to the nested processor stamp when the
+ * runtime has registered a run (production); golden-fixture tests omit it.
  */
 export interface TransformOptions {
   readonly now?: () => Date;
+  readonly run_id?: string | undefined;
 }
 
 /**
  * Produce an `analytics.events` envelope from a `raw.events` envelope.
  *
- * Implementation notes:
+ * Delegates to `@polaris/shared-processor`'s `stampProcessorMetadata`
+ * helper so the dual-shape envelope (nested `processor` + flat columns)
+ * stays consistent with every other Polaris processor. The helper:
  *
- *   - Every envelope field is copied by reading the named property
- *     explicitly rather than spreading the input. The explicit copy
- *     guards against the transform silently propagating any *additional*
- *     fields a future raw event might carry — the analytics envelope
- *     stays a known, audited shape.
- *
- *   - `consent` and `privacy` are only included on the output when the
- *     input actually had them. Emitting `consent: undefined` would clutter
- *     ClickHouse's `consent` text column with the literal string
- *     `"undefined"` during JSON serialisation.
- *
- *   - The transform is intentionally synchronous and free of I/O so it can
- *     be invoked from streaming runtime, replay executor, and golden-fixture
- *     tests without setup.
+ *   - reads each envelope field explicitly (no spread) so the analytics
+ *     envelope stays a known, audited shape,
+ *   - omits `consent` / `privacy` from the output when the input did not
+ *     carry them (avoids ClickHouse `JSONEachRow` flagging
+ *     `"undefined"` strings),
+ *   - returns a value typed as `StampedEnvelope<RawEventEnvelope>`. The
+ *     cast below narrows the helper's general `string` typing for
+ *     `processor.name` / `processor.version` back to the v1-pinned
+ *     literals declared on `ProcessorStamp` and `AnalyticsEventEnvelope`.
  */
 export function transformToAnalyticsEvent(
   raw: RawEventEnvelope,
   options: TransformOptions = {},
 ): AnalyticsEventEnvelope {
-  const now = options.now ?? (() => new Date());
-  const ranAt = now().toISOString();
+  const stamped = stampProcessorMetadata(raw, {
+    identity: PROCESSOR_IDENTITY,
+    ...(options.now !== undefined ? { now: options.now } : {}),
+    ...(options.run_id !== undefined ? { run_id: options.run_id } : {}),
+  });
 
-  const processor: ProcessorStamp = {
-    name: PROCESSOR_NAME,
-    version: PROCESSOR_VERSION,
-    ran_at: ranAt,
-  };
-
-  const base = {
-    event_id: raw.event_id,
-    event: raw.event,
-    schema_version: raw.schema_version,
-    project_id: raw.project_id,
-    environment: raw.environment,
-    occurred_at: raw.occurred_at,
-    ingested_at: raw.ingested_at,
-    source: raw.source,
-    identity: raw.identity,
-    context: raw.context,
-    properties: raw.properties,
-    processor,
-    processor_name: PROCESSOR_NAME,
-    processor_version: PROCESSOR_VERSION,
-  } as const;
-
-  // exactOptionalPropertyTypes forbids re-emitting `consent: undefined`
-  // when the input did not carry it. Branch so the output never has
-  // those keys with undefined values.
-  if (raw.consent !== undefined && raw.privacy !== undefined) {
-    return { ...base, consent: raw.consent, privacy: raw.privacy };
+  // The helper returns the dual shape with `string`-typed processor name
+  // and version. Locally we re-declare those as the v1 literals so the
+  // analytics envelope's TS contract stays as strict as before this
+  // refactor. The runtime values are identical.
+  const narrowed: AnalyticsEventEnvelope = stamped as unknown as AnalyticsEventEnvelope;
+  // Belt-and-suspenders: assert the value matches the local pin. This
+  // executes once per call but is O(1).
+  const procStamp = narrowed.processor as SharedProcessorStamp;
+  if (procStamp.name !== PROCESSOR_NAME || procStamp.version !== PROCESSOR_VERSION) {
+    throw new Error(
+      `analytics-projector v1 produced unexpected processor stamp: ${JSON.stringify(procStamp)}`,
+    );
   }
-  if (raw.consent !== undefined) {
-    return { ...base, consent: raw.consent };
-  }
-  if (raw.privacy !== undefined) {
-    return { ...base, privacy: raw.privacy };
-  }
-  return base;
+  return narrowed;
 }

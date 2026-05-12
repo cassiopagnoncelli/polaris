@@ -298,6 +298,85 @@ export interface ProcessorActivationsTable {
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 }
 
+/**
+ * Closed set of `processor_runs.status` values. Mirrors the
+ * `processor_runs_status_allowed` CHECK constraint in
+ * `db/migrations/20260512000007_create_processor_runs.sql`.
+ *
+ * Transitions:
+ *   - `running` -> `completed` (graceful stop, no fatal error)
+ *   - `running` -> `failed`    (fatal error caught by the runtime)
+ *   - `running` -> `cancelled` (operator-issued stop)
+ *
+ * Terminal states are immutable in the runtime helpers — see
+ * `@polaris/shared-processor`'s `InvalidRunTransitionError`.
+ */
+export type ProcessorRunStatus = "running" | "completed" | "failed" | "cancelled";
+
+/**
+ * `processor_runs` table.
+ *
+ * One row per processor execution. The semantic definition of every
+ * processor (inputs, outputs, mode, transform code) lives in
+ * `processors/<name>/v<n>/processor.manifest.yaml`. This table records ONLY
+ * runtime state: which run happened, when, with what outcome and counters.
+ *
+ * The Kafka consumer-group committed offset remains the authoritative
+ * checkpoint for resumption — `last_offset` here is informational, used by
+ * operators to see the latest position the run observed without consulting
+ * the broker.
+ *
+ * Schema reference:
+ *   db/migrations/20260512000007_create_processor_runs.sql
+ */
+export interface ProcessorRunsTable {
+  /** Platform-generated UUIDv7. Primary key. */
+  run_id: string;
+  /** Processor catalog name (matches the directory under `processors/`). */
+  processor_name: string;
+  /**
+   * Immutable version directory under `processors/<name>/`. Free-form text
+   * (e.g. `v1`, `v2`, `v1.2.3`); the manifest on disk is the source of
+   * truth for which versions actually exist.
+   */
+  processor_version: string;
+  /** Optional project scope. NULL for cross-project processors. */
+  project_id: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * Optional environment scope. Closed set:
+   * `development | staging | production`. NULL when the run is not
+   * environment-scoped (e.g. one-off operator job).
+   */
+  environment: ColumnType<string | null, string | null | undefined, string | null>;
+  /** When the run started. Defaults to `now()` server-side. */
+  started_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  /** When the run reached a terminal status. NULL while still running. */
+  finished_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /** Lifecycle status. See {@link ProcessorRunStatus}. */
+  status: ColumnType<ProcessorRunStatus, ProcessorRunStatus | undefined, ProcessorRunStatus>;
+  /** Count of input events the run consumed. Monotonic. */
+  events_consumed: ColumnType<number, number | undefined, number>;
+  /** Count of derived events the run emitted. Monotonic. */
+  events_emitted: ColumnType<number, number | undefined, number>;
+  /** Count of events the run failed on (after classification). Monotonic. */
+  events_failed: ColumnType<number, number | undefined, number>;
+  /**
+   * Latest Redpanda offset observed by the run. INFORMATIONAL — the Kafka
+   * committed offset is the authoritative resume point. `bigint` because
+   * KafkaJS surfaces offsets as strings of arbitrary integer width; we
+   * cast in the application layer.
+   */
+  last_offset: ColumnType<
+    bigint | number | string | null,
+    bigint | number | string | null | undefined,
+    bigint | number | string | null
+  >;
+  /** Pod / hostname stamped at run registration. NULL on bare runs. */
+  host: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Short failure summary. Long stack traces belong in logs. */
+  error_summary: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -310,6 +389,7 @@ export interface Database {
   api_keys: ApiKeyTable;
   destinations: DestinationsTable;
   processor_activations: ProcessorActivationsTable;
+  processor_runs: ProcessorRunsTable;
   projects: ProjectsTable;
   sources: SourcesTable;
 }

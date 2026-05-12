@@ -2,17 +2,29 @@
  * Streaming runtime: wires the KafkaJS consumer to the pure transform and
  * the KafkaJS producer.
  *
- * The runtime is intentionally thin:
+ * The runtime is intentionally thin and intentionally exposes the
+ * underlying KafkaJS plumbing per the architecture's "no full
+ * stream-processing framework" rule. It only standardises the glue every
+ * processor needs:
  *
  *   1. Subscribe a `PolarisConsumer` to the `raw.events` topic family
  *      (with whatever isolated per-project topics the shared-kafka
  *      resolver knows about — empty list in the skeleton).
- *   2. For each message, decode the canonical envelope, validate the
- *      minimum fields the partition-key + producer wrapper need, run the
- *      pure transform, and call `PolarisProducer.publishEvent` with
- *      `family: analytics.events`.
- *   3. Throw on failures so KafkaJS retries via its own backoff. DLQ
- *      orchestration is a follow-up concern (P8-001 helpers).
+ *   2. For each message:
+ *        - decode the canonical envelope,
+ *        - validate the minimum fields the partition-key + producer
+ *          wrapper need,
+ *        - run the pure transform,
+ *        - call `PolarisProducer.publishEvent` with `family:
+ *          analytics.events`,
+ *        - record consume / emit / failure counters on
+ *          `@polaris/shared-processor`'s `ProcessorMetrics`,
+ *        - on error: run the shared `classifyError` so the per-message
+ *          log line carries the canonical reason code; re-throw so
+ *          KafkaJS still applies its own retry semantics.
+ *   3. Caller-owned DLQ orchestration: the runtime does not auto-route to
+ *      DLQ. Hosts that want DLQ routing wrap the handler with
+ *      `publishToDlq` from `@polaris/shared-processor`.
  *
  * The pure transform is exported from `./transform.ts` so the same
  * function is callable by tests, replay tooling (P7-003), and the
@@ -33,8 +45,15 @@ import {
   TOPIC_FAMILY_RAW_EVENTS,
   consumerTopicsForFamily,
 } from "@polaris/shared-kafka";
+import {
+  type ProcessorMetricLabels,
+  type ProcessorRetryClassification,
+  ProcessorMetrics,
+  classifyError,
+} from "@polaris/shared-processor";
 
 import { type RawEventEnvelope, transformToAnalyticsEvent } from "./transform.js";
+import { PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 
 /**
  * Dependencies for the runtime. The factory accepts already-built
@@ -69,6 +88,21 @@ export interface AnalyticsProjectorRuntimeDeps {
    * KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`.
    */
   readonly partitionsConsumedConcurrently?: number;
+  /**
+   * `ProcessorMetrics` registry. The runtime increments consume / emit /
+   * failure counters here. Defaults to a fresh in-process registry so the
+   * processor still observes its own metrics in tests; production wires
+   * the registry through `app.ts` so the `/metrics` endpoint can expose
+   * the samples.
+   */
+  readonly metrics?: ProcessorMetrics;
+  /**
+   * Per-run identifier (UUIDv7). Forwarded into the processor stamp on
+   * every emitted event. The runtime accepts the id rather than
+   * registering the run itself so the boot layer owns the
+   * `ProcessorRunRepository` lifecycle.
+   */
+  readonly run_id?: string | undefined;
 }
 
 /**
@@ -87,6 +121,11 @@ export interface AnalyticsProjectorRuntime {
    * `EachMessagePayload`-shaped objects.
    */
   readonly handler: PolarisEachMessageHandler;
+  /**
+   * The `ProcessorMetrics` registry the runtime is wired to. Callers
+   * (`app.ts`, tests) can read counters and gauges from it.
+   */
+  readonly metrics: ProcessorMetrics;
 }
 
 /**
@@ -98,6 +137,7 @@ export interface AnalyticsProjectorRuntime {
 export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsProjectorRuntime {
   const isolation = deps.isolation ?? sharedOnlyIsolationLookup;
   const isolatedProjects = deps.isolatedProjects ?? [];
+  const metrics = deps.metrics ?? new ProcessorMetrics();
 
   const handler: PolarisEachMessageHandler = async (payload, context) => {
     await handleMessage({
@@ -106,7 +146,9 @@ export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsPro
       producer: deps.producer,
       logger: deps.logger,
       isolation,
+      metrics,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
+      ...(deps.run_id !== undefined ? { run_id: deps.run_id } : {}),
     });
   };
 
@@ -137,7 +179,7 @@ export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsPro
     await deps.consumer.disconnect();
   }
 
-  return { start, stop, handler };
+  return { start, stop, handler, metrics };
 }
 
 // ---------------------------------------------------------------------------
@@ -150,11 +192,13 @@ interface HandleMessageInput {
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   readonly isolation: SyncIsolationLookup;
+  readonly metrics: ProcessorMetrics;
   readonly now?: () => Date;
+  readonly run_id?: string | undefined;
 }
 
 async function handleMessage(input: HandleMessageInput): Promise<void> {
-  const { payload, context, producer, logger, isolation, now } = input;
+  const { payload, context, producer, logger, isolation, metrics, now, run_id } = input;
   const value = payload.message.value;
   if (value === null || value.length === 0) {
     // Tombstone-style empty payload. The skeleton drops it with a
@@ -179,15 +223,27 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     decoded = decodeEvent(value);
   } catch (err) {
     // Per shared-kafka, decode errors are JSON-parse failures, not
-    // schema-level errors. Re-throw so KafkaJS surfaces it through the
-    // consumer's failure metrics; an operator should investigate
-    // (DLQ wiring is a follow-up).
+    // schema-level errors. The classifier names the reason
+    // (`decode_failed`); we record the metric, log the structured line,
+    // and re-throw so KafkaJS surfaces the failure through its own retry
+    // path. The host wires DLQ routing via `publishToDlq` if it wants
+    // bytes routed to `<processor>.dlq`.
+    const classification = classifyError(err);
+    metrics.incrementFailed({
+      processor_name: PROCESSOR_NAME,
+      processor_version: PROCESSOR_VERSION,
+      ...(context.project_id !== undefined ? { project_id: context.project_id } : {}),
+      ...(context.environment !== undefined ? { environment: context.environment } : {}),
+      reason: classification.reason,
+    });
     logger.error(
       {
         component: "analytics-projector.handler",
         topic: payload.topic,
         partition: payload.partition,
         offset: payload.message.offset,
+        retry_reason: classification.reason,
+        retryable: classification.retryable,
         err: errSummary(err),
       },
       "failed to decode raw.events payload",
@@ -197,20 +253,47 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   const raw = assertEnvelope(decoded);
   if (raw === undefined) {
+    const fail = new Error(
+      "analytics-projector: raw.events payload missing required envelope fields",
+    );
+    const classification = classifyError(fail);
+    metrics.incrementFailed({
+      processor_name: PROCESSOR_NAME,
+      processor_version: PROCESSOR_VERSION,
+      ...(context.project_id !== undefined ? { project_id: context.project_id } : {}),
+      ...(context.environment !== undefined ? { environment: context.environment } : {}),
+      reason: classification.reason,
+    });
     logger.error(
       {
         component: "analytics-projector.handler",
         topic: payload.topic,
         partition: payload.partition,
         offset: payload.message.offset,
+        retry_reason: classification.reason,
+        retryable: classification.retryable,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
       },
       "raw.events payload missing required envelope fields",
     );
-    throw new Error("analytics-projector: raw.events payload missing required envelope fields");
+    throw fail;
   }
 
-  const out = transformToAnalyticsEvent(raw, now !== undefined ? { now } : {});
+  // Now we know the project/env from the envelope itself — better labels
+  // than `context` (which is derived from headers and may be absent).
+  const labels: ProcessorMetricLabels = {
+    processor_name: PROCESSOR_NAME,
+    processor_version: PROCESSOR_VERSION,
+    project_id: raw.project_id,
+    environment: raw.environment,
+  };
+
+  metrics.incrementConsumed(labels);
+
+  const out = transformToAnalyticsEvent(raw, {
+    ...(now !== undefined ? { now } : {}),
+    ...(run_id !== undefined ? { run_id } : {}),
+  });
 
   // Use the SAME canonical partition key as the source raw.events
   // record so per-identity ordering is preserved end to end. The
@@ -225,17 +308,42 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     identity: out.identity,
   });
 
-  await producer.publishEvent({
-    family: TOPIC_FAMILY_ANALYTICS_EVENTS,
-    // `PublishableEvent` carries a `[extra: string]: unknown` index
-    // signature so producers may attach additional headers/fields. The
-    // analytics envelope is a CLOSED shape on purpose (every field is
-    // audited), so we widen at the publish boundary rather than
-    // polluting the public type.
-    event: out as unknown as Parameters<typeof producer.publishEvent>[0]["event"],
-    isolation,
-    partitionKey,
-  });
+  const startedAt = Date.now();
+  try {
+    await producer.publishEvent({
+      family: TOPIC_FAMILY_ANALYTICS_EVENTS,
+      // `PublishableEvent` carries a `[extra: string]: unknown` index
+      // signature so producers may attach additional headers/fields. The
+      // analytics envelope is a CLOSED shape on purpose (every field is
+      // audited), so we widen at the publish boundary rather than
+      // polluting the public type.
+      event: out as unknown as Parameters<typeof producer.publishEvent>[0]["event"],
+      isolation,
+      partitionKey,
+    });
+  } catch (err) {
+    const classification: ProcessorRetryClassification = classifyError(err);
+    metrics.incrementFailed({ ...labels, reason: classification.reason });
+    logger.error(
+      {
+        component: "analytics-projector.handler",
+        project_id: out.project_id,
+        environment: out.environment,
+        event_id: out.event_id,
+        source_topic: payload.topic,
+        source_partition: payload.partition,
+        source_offset: payload.message.offset,
+        retry_reason: classification.reason,
+        retryable: classification.retryable,
+        err: errSummary(err),
+      },
+      "failed to publish analytics event",
+    );
+    throw err;
+  }
+
+  metrics.incrementEmitted(labels);
+  metrics.observeHandlerDurationMs(labels, Date.now() - startedAt);
 
   logger.debug(
     {
@@ -247,6 +355,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       schema_version: out.schema_version,
       processor_name: out.processor_name,
       processor_version: out.processor_version,
+      ...(run_id !== undefined ? { processor_run_id: run_id } : {}),
       source_topic: payload.topic,
       source_partition: payload.partition,
       source_offset: payload.message.offset,

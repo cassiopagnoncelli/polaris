@@ -1,0 +1,112 @@
+/**
+ * `@polaris/shared-processor` — processor runtime helpers.
+ *
+ * Polaris processors are independent, versioned TypeScript services per
+ * `docs/architecture/05-processors-and-replay.md`. This package
+ * standardises the small set of glue every processor needs without
+ * hiding the underlying KafkaJS / PolarisConsumer / PolarisProducer
+ * surface — that's a hard architectural rule from
+ * `docs/architecture/09-engineering-standards.md` "Redpanda Client Usage":
+ *
+ *   > Do not build a full stream-processing framework in v1. Keep wrappers
+ *   > thin and preserve escape hatches for advanced KafkaJS behavior.
+ *
+ * The helpers in this package WRAP that glue:
+ *
+ *   - processor identity types and structured log context (`./identity`)
+ *   - dual-shape metadata stamping (`./metadata`)
+ *   - PostgreSQL processor-run registration (`./runs`)
+ *   - retry/DLQ error classification (`./classify`)
+ *   - DLQ publish helper on top of `@polaris/shared-kafka` (`./dlq`)
+ *   - in-memory metrics counters (`./metrics`)
+ *   - manifest loader (`./manifest`)
+ *
+ * What this package does NOT do:
+ *
+ *   - own the consumer/producer lifecycle (that stays in `app.ts`
+ *     bootstrap code per processor),
+ *   - hide `kafka.consume(...)` or `transform(...)` behind a single
+ *     `Polaris.run(...)` entry point,
+ *   - decide between retry-vs-DLQ for the caller (the classifier names
+ *     the decision; the runtime branches),
+ *   - expose a Prometheus exposition format (P10-002 swaps the
+ *     `ProcessorMetrics` backend without touching the call sites).
+ *
+ * @see processors/analytics-projector/v1/src/ — first consumer of the helpers
+ */
+
+export {
+  type ProcessorIdentity,
+  type ProcessorLogContextInput,
+  processorLogContext,
+} from "./identity.js";
+
+export {
+  type CanonicalEnvelopeInput,
+  type ProcessorStamp,
+  type StampedEnvelope,
+  type StampProcessorMetadataOptions,
+  stampProcessorMetadata,
+} from "./metadata.js";
+
+export {
+  type CancelRunInput,
+  type CompleteRunInput,
+  type FailRunInput,
+  type InMemoryProcessorRunRepositoryOptions,
+  type KyselyProcessorRunRepositoryOptions,
+  type ProcessorRunCounters,
+  type ProcessorRunRecord,
+  type ProcessorRunRepository,
+  type ProcessorRunStatus,
+  type RegisterRunInput,
+  type UpdateRunInput,
+  InMemoryProcessorRunRepository,
+  InvalidRunTransitionError,
+  PROCESSOR_RUN_STATUSES,
+  createKyselyProcessorRunRepository,
+} from "./runs.js";
+
+export {
+  type ProcessorRetryClassification,
+  type ProcessorRetryReason,
+  PROCESSOR_RETRY_REASONS,
+  classifyError,
+} from "./classify.js";
+
+export { type PublishToDlqInput, publishToDlq } from "./dlq.js";
+
+export {
+  type MetricSample,
+  type ProcessorFailureLabels,
+  type ProcessorMetricLabels,
+  METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_DLQ_TOTAL,
+  METRIC_PROCESSOR_EVENTS_EMITTED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_FAILED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_RETRY_TOTAL,
+  METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST,
+  METRIC_PROCESSOR_LAG_MS_LAST,
+  ProcessorMetrics,
+} from "./metrics.js";
+
+export {
+  type LoadProcessorManifestOptions,
+  type LoadedProcessorManifest,
+  type ProcessorDefaults,
+  type ProcessorManifest,
+  type ProcessorMode,
+  type ProcessorReplay,
+  type ProcessorTopicSpec,
+  PROCESSOR_MODES,
+  ProcessorManifestError,
+  loadProcessorManifest,
+  processorDefaultsSchema,
+  processorManifestSchema,
+  processorModeSchema,
+  processorNameSchema,
+  processorReplaySchema,
+  processorTopicSpecSchema,
+  processorVersionSchema,
+  tryLoadProcessorManifest,
+} from "./manifest.js";
