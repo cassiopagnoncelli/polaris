@@ -23,7 +23,7 @@ Allowed:
 
 ```text
 packages/shared-metrics/
-packages/shared-service/
+packages/shared-service-bootstrap/
 packages/shared-processor/
 packages/shared-destinations/
 ```

@@ -123,7 +123,7 @@ importers:
         specifier: 6.0.1
         version: 6.0.1
 
-  packages/shared-service:
+  packages/shared-service-bootstrap:
     dependencies:
       '@polaris/shared-config':
         specifier: workspace:*

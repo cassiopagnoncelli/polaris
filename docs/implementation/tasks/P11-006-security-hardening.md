@@ -25,7 +25,7 @@ Allowed:
 ```text
 apps/ingester-api/
 packages/shared-config/
-packages/shared-service/
+packages/shared-service-bootstrap/
 db/
 migrations/
 docs/operations/
