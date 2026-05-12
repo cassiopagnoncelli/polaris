@@ -238,6 +238,24 @@ importers:
         specifier: ^15.11.7
         version: 15.11.7
 
+  processors/analytics-projector/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../packages/shared-config
+      '@polaris/shared-kafka':
+        specifier: workspace:*
+        version: link:../../../packages/shared-kafka
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../packages/shared-logger
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../packages/shared-service-bootstrap
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
 packages:
 
   '@babel/helper-string-parser@7.27.1':
