@@ -32,7 +32,13 @@
         "noNonNullAssertion": "warn",
         "useImportType": "error",
         "useExportType": "error",
-        "useNodejsImportProtocol": "error"
+        "useNodejsImportProtocol": "error",
+        "useTemplate": "off"
+      },
+      "complexity": {
+        "useLiteralKeys": "off",
+        "noUselessConstructor": "off",
+        "noBannedTypes": "warn"
       },
       "correctness": {
         "noUnusedImports": "error",

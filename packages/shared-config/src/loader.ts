@@ -138,7 +138,6 @@ export function loadConfigWithDefaults<Schema extends ZodType>(
   options: Omit<LoadConfigOptions<Schema>, "files">,
 ): Schema["_output"] {
   const env = options.processEnv ?? process.env;
-  // biome-ignore lint/complexity/useLiteralKeys: strict TS forbids dot access on NodeJS.ProcessEnv's index signature.
   const polarisEnv: string | undefined = env["POLARIS_ENV"];
   const files: string[] = [];
   if (polarisEnv) files.push(`.env.${polarisEnv}.local`);
