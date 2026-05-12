@@ -12,21 +12,12 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P2-002 Ingester API Key Auth](./tasks/P2-002-ingester-api-key-auth.md)
-- [P3-002 Web SDK Identity Persistence](./tasks/P3-002-web-sdk-identity-persistence.md)
-- [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md)
+- [P2-003 Ingester Batch Validation and Raw Publish](./tasks/P2-003-ingester-batch-raw-publish.md)
+- [P3-003 Web SDK Queue and Transport](./tasks/P3-003-web-sdk-queue-transport.md)
+- [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md)
 - [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md)
-- [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md)
 
 ## Backlog
-
-### P2 Ingester
-
-- [P2-003 Ingester Batch Validation and Raw Publish](./tasks/P2-003-ingester-batch-raw-publish.md)
-
-### P3 SDKs
-
-- [P3-003 Web SDK Queue and Transport](./tasks/P3-003-web-sdk-queue-transport.md)
 
 ### P4 Processing and ClickHouse
 
@@ -41,7 +32,6 @@ This board is the coordination surface for implementation work.
 ### P6 Control-Plane CLI
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
-- [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md)
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
@@ -93,6 +83,8 @@ This board is the coordination surface for implementation work.
 - [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
 
+(P11-002 CI Workflow moved to Done.)
+
 ### P12 Release Readiness
 
 - [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md)
@@ -137,11 +129,18 @@ No blocked cards.
 ### P2 Ingester
 
 - [P2-001 Ingester API Shell](./tasks/P2-001-ingester-api-shell.md) — merged in `8f6982e`
+- [P2-002 Ingester API Key Auth](./tasks/P2-002-ingester-api-key-auth.md) — merged in `0ff8fde`
 
 ### P3 SDKs
 
 - [P3-001 Node SDK Core](./tasks/P3-001-node-sdk-core.md) — merged in `98a3eb2` (cleanup `de6dea4`, identity restore `fd54203`)
+- [P3-002 Web SDK Identity Persistence](./tasks/P3-002-web-sdk-identity-persistence.md) — merged in `bd7b477`
 
 ### P6 Control-Plane CLI
 
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`
+- [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md) — merged in `6756c72`
+
+### P11 Deployment, Security, and Data Lifecycle
+
+- [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md) — merged in `28d6105`

@@ -1,6 +1,6 @@
 # P11-002: CI Workflow
 
-Status: Ready
+Status: Done
 
 ## Goal
 

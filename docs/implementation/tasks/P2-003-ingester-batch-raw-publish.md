@@ -1,6 +1,6 @@
 # P2-003: Ingester Batch Validation and Raw Publish
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

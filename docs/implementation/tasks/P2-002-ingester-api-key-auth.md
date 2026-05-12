@@ -1,6 +1,6 @@
 # P2-002: Ingester API Key Auth
 
-Status: Ready
+Status: Done
 
 ## Goal
 

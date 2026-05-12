@@ -1,6 +1,6 @@
 # P3-003: Web SDK Queue and Transport
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

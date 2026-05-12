@@ -1,6 +1,6 @@
 # P3-002: Web SDK Identity Persistence
 
-Status: Ready
+Status: Done
 
 ## Goal
 

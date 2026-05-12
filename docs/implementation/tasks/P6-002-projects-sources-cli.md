@@ -1,6 +1,6 @@
 # P6-002: Projects and Sources CLI
 
-Status: Ready
+Status: Done
 
 ## Goal
 

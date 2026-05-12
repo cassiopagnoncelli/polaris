@@ -1,6 +1,6 @@
 # P6-003: API Key Lifecycle CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
