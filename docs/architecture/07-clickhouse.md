@@ -78,6 +78,91 @@ event
 schema_version
 ```
 
+## V1 Physical Defaults
+
+These defaults are configurable, but they define the initial physical model.
+
+### Kafka Engine Table
+
+The Kafka Engine table is transient and must not be queried directly.
+
+Example:
+
+```text
+analytics_events_queue
+ENGINE = Kafka
+FORMAT = JSONEachRow
+```
+
+### Append-Only Ingest Log
+
+Use `MergeTree`.
+
+Purpose:
+
+- record what ClickHouse consumed
+- preserve visibility into duplicates
+- support ingestion debugging
+
+Suggested physical shape:
+
+```text
+analytics_ingest_log
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(ingested_at)
+ORDER BY (project_id, environment, ingested_at, event_id)
+TTL ingested_at + INTERVAL 30 DAY
+```
+
+### Deduped Analytical Raw Table
+
+Use `ReplacingMergeTree`.
+
+Purpose:
+
+- provide cleaner analytical facts
+- reduce accidental overcounting
+- keep stable raw analytical base for projections
+
+Suggested physical shape:
+
+```text
+analytics_raw
+ENGINE = ReplacingMergeTree(_version)
+PARTITION BY toYYYYMM(occurred_at)
+ORDER BY (project_id, environment, event, event_id)
+TTL occurred_at + INTERVAL 400 DAY
+```
+
+Expected columns include:
+
+```text
+event_id
+event
+schema_version
+project_id
+environment
+occurred_at
+ingested_at
+source_id
+source_type
+anonymous_id
+session_id
+customer_id
+properties_json
+context_json
+processor metadata
+_version
+```
+
+`ReplacingMergeTree` deduplication is merge-time behavior. Queries and projections that require strict dedupe must be designed around stable event keys. Do not use `FINAL` broadly by default because it can be expensive.
+
+## Cluster Posture
+
+Single-node ClickHouse is acceptable for local development and the first vertical slice.
+
+Production design should remain compatible with replicated/distributed ClickHouse later, but the first implementation should not require cluster complexity.
+
 ## Projection Tables
 
 Projection tables are denormalized OLAP tables for dashboards and APIs.
@@ -105,4 +190,3 @@ Rules:
 - Rebuild jobs should record source range, target tables, reason, requester, and outcome.
 - `analytics_ingest_log` helps diagnose duplicate or repeated ingestion.
 - `analytics_raw` should be the normal base for analytical projections.
-

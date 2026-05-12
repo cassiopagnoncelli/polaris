@@ -162,17 +162,93 @@ node memory queue        process lifetime only unless durable adapter is configu
 
 Object-storage raw archive is a future extension. Until it exists, Redpanda `raw.events` retention defines the practical raw replay window.
 
+## Redpanda Production Defaults
+
+Redpanda sizing is configurable per environment. Start with boring high-availability defaults in production.
+
+Production:
+
+```text
+brokers                         3
+replication_factor              3
+min_in_sync_replicas            2
+raw.events partitions           24
+analytics.events partitions     24
+identity.events partitions      12
+enriched.events partitions      12
+attribution.events partitions   12
+retry topic partitions           6
+dlq topic partitions             6
+```
+
+Local/development:
+
+```text
+brokers                         1
+replication_factor              1
+topic partitions                 1-3
+```
+
+Staging/test:
+
+```text
+brokers                         1 for cheap test environments
+brokers                         3 for production-like pre-prod
+replication_factor              1 or 3 depending on environment purpose
+```
+
+Rules:
+
+- Topic partition counts are defaults, not permanent constants.
+- Increase partitions when throughput or consumer parallelism requires it.
+- Avoid decreasing partition counts as a normal operation.
+- Use time-based retention first.
+- Add retention byte caps after observing real event volume.
+- Tiered storage/object archive remains future work for long-term raw replay.
+
+## ClickHouse Physical Defaults
+
+ClickHouse starts with a simple, SQL-native physical model:
+
+```text
+Kafka Engine table     transient ingestion interface
+analytics_ingest_log   MergeTree append-only log
+analytics_raw          ReplacingMergeTree deduped analytical facts
+projection tables      MergeTree/SummingMergeTree depending on purpose
+```
+
+Defaults:
+
+```text
+analytics_ingest_log partitioning    toYYYYMM(ingested_at)
+analytics_ingest_log ordering        project_id, environment, ingested_at, event_id
+analytics_ingest_log TTL             30 days
+analytics_raw partitioning           toYYYYMM(occurred_at)
+analytics_raw ordering               project_id, environment, event, event_id
+analytics_raw TTL                    400 days
+```
+
+Rules:
+
+- Kafka Engine tables are never queried directly.
+- Persist Kafka Engine rows before querying.
+- Use `ReplacingMergeTree(_version)` for deduped analytical raw facts.
+- Treat `ReplacingMergeTree` dedupe as eventual merge-time behavior.
+- Avoid broad default use of `FINAL`.
+- Projection table engines are chosen per query pattern.
+- Single-node ClickHouse is acceptable for local/dev and first vertical slice.
+- Production design must remain compatible with replicated/distributed ClickHouse later.
+
 ## Open Production Decisions
 
 These are intentionally not fully locked yet:
 
 - exact production secret manager
-- Redpanda broker count, partition counts, replication factor, retention bytes, and tiered storage
-- ClickHouse physical table engines, ordering keys, partitioning, TTL implementation, and cluster shape
+- Redpanda retention byte caps and tiered storage
+- ClickHouse projection table engines and production cluster shape
 - first real event catalog inventory
 - destination-specific mapping specifications
 - identity graph schema and conflict policy
 - production alert thresholds and SLOs
 
 These should be decided before real production traffic, but they do not block the first vertical slice.
-
