@@ -1,0 +1,157 @@
+# Polaris Integration CI — Docker-backed checks against real services.
+#
+# Per docs/architecture/09-engineering-standards.md "CI Quality Gates",
+# integration checks against PostgreSQL, Redis, Redpanda, and ClickHouse
+# (plus the vertical-slice smoke test once it exists) run scheduled,
+# manually, or on PRs that opt in via the `integration` label — not on
+# every PR — until the test suite stabilises.
+#
+# Today the integration tier still has very little to run; this workflow
+# is the entrypoint that later tasks (P4-002 ClickHouse ingestion,
+# P5-001 vertical-slice smoke) wire their tests into. Until then the
+# job is intentionally a no-op that proves the trigger and service
+# matrix work.
+
+name: Integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:00 UTC every day — early enough that failures land before
+    # the engineering day starts in the host timezone.
+    - cron: "0 6 * * *"
+  pull_request:
+    types: [labeled, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.30.0"
+
+jobs:
+  integration:
+    name: Docker-backed integration suite
+    runs-on: ubuntu-latest
+    # Skip the heavy services unless the PR was explicitly labelled
+    # `integration`, or the workflow was triggered manually / on a schedule.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration'))
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: polaris
+          POSTGRES_PASSWORD: polaris
+          POSTGRES_DB: polaris
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U polaris -d polaris"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      clickhouse:
+        # Single-node ClickHouse without Keeper is the documented local/dev
+        # shape (docs/architecture/07-clickhouse.md "Cluster Posture").
+        image: clickhouse/clickhouse-server:25.1-alpine
+        env:
+          CLICKHOUSE_USER: polaris
+          CLICKHOUSE_PASSWORD: polaris
+          CLICKHOUSE_DB: polaris
+          # Listen on the standard ports; the helper uses HTTP 8123.
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+        ports: ["8123:8123", "9000:9000"]
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:8123/ping || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+      # Redpanda runs as a standalone container rather than a service so
+      # we can pass the long Redpanda CLI arguments needed for single-node
+      # operation. Pulled in by the step below.
+    env:
+      DATABASE_URL: postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable
+      POLARIS_REDPANDA_BROKERS: localhost:9092
+      POLARIS_CLICKHOUSE_URL: http://localhost:8123
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tsc emit)
+        run: pnpm build
+
+      # Redpanda single-node container. Started here (instead of as a GitHub
+      # `services:` entry) because Redpanda's startup arguments need to be
+      # explicit and a healthcheck needs a separate wait loop.
+      - name: Start Redpanda
+        run: |
+          docker run -d --name redpanda \
+            --network host \
+            -e REDPANDA_AUTO_CREATE_TOPICS_ENABLED=true \
+            redpandadata/redpanda:v25.1.1 \
+            redpanda start \
+              --overprovisioned \
+              --smp 1 \
+              --memory 1G \
+              --reserve-memory 0M \
+              --node-id 0 \
+              --check=false \
+              --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+              --advertise-kafka-addr PLAINTEXT://localhost:9092
+          # Wait until the Kafka API answers.
+          for i in $(seq 1 30); do
+            if docker exec redpanda rpk cluster info >/dev/null 2>&1; then
+              echo "Redpanda ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Redpanda did not become ready"; docker logs redpanda; exit 1
+
+      - name: Apply PostgreSQL migrations
+        run: pnpm db:migrate
+
+      # Placeholder: real integration tests land in P4-002, P5-001, and
+      # P9-* tasks. Until then we record the wiring and keep the job
+      # green so the trigger surface is real.
+      - name: Integration suite (placeholder)
+        run: |
+          echo "Integration test suite not yet implemented."
+          echo "Owning tasks: P4-002 (ClickHouse ingestion), P5-001 (vertical-slice smoke)."
+          # When real tests exist, replace this block with e.g.
+          #   pnpm test:integration
+          # gated behind --testPathPattern or a separate vitest config.
+
+      - name: Show Redpanda logs on failure
+        if: failure()
+        run: docker logs redpanda || true
