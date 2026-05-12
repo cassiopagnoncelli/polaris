@@ -48,10 +48,20 @@ unit tests
 contract/schema tests
 event catalog validation
 SQL migration validation
+import-restriction check (blocks @clickhouse/client outside shared-clickhouse)
 build all packages/services
 ```
 
 Docker-backed integration/e2e checks may be scheduled or manually triggered until stable.
+
+### ClickHouse access enforcement
+
+ClickHouse query patterns are enforced at the database level through `polaris_service` and `polaris_operator` roles (see P1-003) and at the workspace level through the shared client package (P0-010). The CI surface is small:
+
+- An import-restriction rule (Biome or equivalent) blocks direct `@clickhouse/client` imports anywhere except `packages/shared-clickhouse/`. Violations fail the build.
+- The role grants applied by P1-003 prevent `polaris_service`-authenticated code from reading `analytics_raw` at all.
+
+No regex SQL lint is required. Regex-based SQL linting was considered and rejected — it false-positives on CTEs and dynamic SQL, false-negatives on aliased table references, and the escape-hatch comments decay. See [07-clickhouse.md / Access Control](../../architecture/07-clickhouse.md) for the full rationale.
 
 ## Acceptance Criteria
 
@@ -60,6 +70,7 @@ Docker-backed integration/e2e checks may be scheduled or manually triggered unti
 - [ ] Integration workflow is separate or optional if heavy.
 - [ ] Cache usage is reasonable for pnpm.
 - [ ] CI docs explain local equivalents.
+- [ ] Import-restriction check blocks `@clickhouse/client` outside `shared-clickhouse` and is verified by a failing-case test.
 
 ## Checks
 

@@ -42,15 +42,15 @@ SDKs / producers
 
 ## Non-Negotiable Rules
 
-- Polaris is internal infrastructure, not an external multi-tenant SaaS product.
+- Polaris is internal infrastructure, not an external multi-tenant SaaS product. Cross-project visibility within the organization is allowed; project boundaries are an operational scoping device, not a security perimeter.
 - `project_id` is first-class and required.
 - `environment` is stamped by the ingester from the API key, not accepted from producers.
-- Raw events are immutable, append-only, and replayable.
+- Raw events are immutable, append-only, and replayable within the operational retention window.
 - Ingestion stays thin.
 - Event schemas and destination mappings are semantic code, not mutable database data.
 - PostgreSQL stores mutable runtime/control state, not semantic platform truth.
 - SDKs are transport and identity helpers, not analytics engines.
 - Processors and consumers are independent and versioned.
-- Destination consumers are protocol translators.
-- ClickHouse consumes `analytics.events` through Kafka Engine and persists rows before querying.
-- Replayability is a primary architectural constraint.
+- Destination consumers are vendor adapters: normalize, map, deliver. Mapping is the only stage that is purely protocol translation.
+- ClickHouse consumes `analytics.events` through Kafka Engine and persists rows before querying. `analytics_raw` is never queried without explicit dedupe.
+- Replayability within the operational retention window is a primary architectural constraint.

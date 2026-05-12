@@ -30,10 +30,11 @@ SDKs/producers
 - Keep SDKs thin.
 - Keep raw events immutable.
 - Keep processors and consumers independent and versioned.
-- Treat destination consumers as protocol translators.
+- Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `packages/shared-destination-normalize/`.
 - Feed ClickHouse through Kafka Engine from `analytics.events`.
 - Persist Kafka Engine rows before querying.
-- Preserve replayability as a primary architectural constraint.
+- `analytics_raw` is never queried without explicit dedupe (`argMax(_version)`, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
+- Preserve replayability within the operational retention window as a primary architectural constraint.
 
 ## File-Heavy, DB-Light
 
@@ -164,6 +165,16 @@ properties
 
 Normal events must be registered and validated by code-backed Zod schemas. `experimental.*` events may be looser but must not feed durable production semantics without promotion.
 
+### Schema evolution
+
+`schema_version` is a per-event integer. Multiple versions of an event coexist in the catalog. In-place changes are permitted only when every previously-valid event remains valid (additive optionals, widening ranges, etc.). Anything that breaks validation, meaning, or downstream interpretation requires a new version. Old versions are marked `deprecated` with a `sunset_at`; after sunset, ingestion rejects them with `schema_version_sunset`.
+
+### Forbidden-field policy
+
+Two-tier code-backed policy in `catalog/policy/forbidden-fields.ts`. Default is **default-capture, narrow-reject**: only named-field `pii_card` and `pii_secret` rules block capture. Pattern-based detections (PAN-in-unexpected-field, AWS key shape, GitHub token shape, JWT shape, generic high-entropy) redact-with-metric — they replace the value and continue the event, emitting `polaris_ingest_redacted_pattern_total` so leaks are observable without dropping events on regex false positives.
+
+Reject list: event rejected with `forbidden_field_rejected`. Redact list: field value replaced with `"[REDACTED:<reason>]"` and the event continues. Reason codes are a closed set: `pii_card`, `pii_account`, `pii_secret`, `policy`, `length`, `pattern_match`. Project overrides may not downgrade platform rejects without a documented exception.
+
 ## SDKs
 
 Build `packages/web-sdk` and `packages/node-sdk` first. Defer React, Ruby, and mobile SDKs.
@@ -206,9 +217,10 @@ The ingester should:
 
 - authenticate API keys
 - resolve project/environment/source
-- validate envelopes and properties
-- enforce forbidden-field guardrails
-- perform 24-hour event ID dedupe where cheap
+- validate envelopes and properties against the declared `schema_version`
+- enforce the two-tier forbidden-field policy (reject vs redact, from `catalog/policy/forbidden-fields.ts`) before any logging
+- perform 15-minute event ID dedupe as a retry-storm absorber (per-project override up to 24h is opt-in)
+- emit reason codes `unsupported_schema_version` and `schema_version_sunset` when applicable
 - publish valid events to Redpanda
 - return per-event batch results
 
@@ -219,6 +231,7 @@ It should not:
 - attribute
 - call vendors
 - aggregate analytics
+- treat ingress dedupe as the canonical idempotency layer (downstream consumers must remain idempotent)
 
 ## Processors
 
@@ -243,17 +256,21 @@ metrics
 
 ## Destinations
 
-Destination mappings are code-only. PostgreSQL may store destination instances and operational knobs, but not event-to-vendor mapping semantics.
+Destination consumers run a three-stage pipeline:
+
+1. **Normalize** — hash PII, lowercase/trim, format timestamps, currency units, map consent signals into vendor slots. Pure, stateless, no network. Composes from `packages/shared-destination-normalize/` plus consumer-specific rules.
+2. **Map** — pure function from normalized intermediate to vendor payload. One mapper per (canonical event, consumer version). Mappers cannot read raw canonical PII; they only see the normalized intermediate.
+3. **Deliver** — the only stage that talks to the network. Owns auth, batching, rate limits, retries, DLQs, idempotency, vendor dedupe fields, delivery records.
+
+Each stage is independently versioned so a hashing-rule fix does not force a v2 of every mapper.
+
+Mappings are code-only. PostgreSQL may store destination instances and operational knobs, but not event-to-vendor mapping semantics.
 
 Consumers must implement:
 
-- batching
-- retries
-- DLQs
-- rate limits
-- delivery records
-- idempotency
-- vendor dedupe fields where supported
+- normalization (composing from the shared package plus vendor-specific rules)
+- mapping per canonical event
+- delivery with batching, retries, DLQs, rate limits, delivery records, idempotency, vendor dedupe fields where supported
 
 Destination sends during replay are disabled by default.
 
@@ -272,6 +289,23 @@ Kafka Engine table
 ```
 
 `analytics_ingest_log` is append-only. `analytics_raw` is the deduped analytical fact table.
+
+`analytics_raw` is never queried without explicit dedupe. MVs feeding projection tables use `argMax(col, _version)` per `(project_id, environment, event, event_id)`. Projection tables store already-deduped rows and are the read surface for dashboards.
+
+### Access model
+
+Services and CLI code never import `@clickhouse/client` directly. Always go through `packages/shared-clickhouse/`. The helper exposes two profiles:
+
+- `service` profile authenticates as `polaris_service` (SELECT on projection tables and `analytics_ingest_log` only). Used by ingester, processors, consumers, future dashboard API, and CLI inspection commands.
+- `operator` profile authenticates as `polaris_operator` (broader access including `analytics_raw`). Used by replay/rebuild jobs and operator-issued investigation commands.
+
+`analytics_raw` reads go through the helper's `replay.argMaxByEventKey(...)` and `replay.countDistinctEvents(...)` methods, which generate the correct `argMax` SQL. `operator.raw.query(sql, params)` is the escape hatch and emits a metric on every call.
+
+`FINAL` is not the default. The escape hatch is the only place it appears, and only by the caller's deliberate choice.
+
+### Engine families
+
+Production uses `Replicated*` engines and ClickHouse Keeper from day one, even on a single replica. Local/dev uses plain `MergeTree`/`ReplacingMergeTree` without Keeper. DDL is parameterized through a `{replicated}` macro so the same SQL works in both modes.
 
 ## Observability
 

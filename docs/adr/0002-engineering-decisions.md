@@ -26,7 +26,7 @@ This is a light decision ledger for Polaris implementation standards. The engine
 20. Avoid direct ad hoc `process.env` reads outside the config package.
 21. Use KafkaJS through a thin `shared-kafka` package.
 22. Use SQL files for ClickHouse DDL and migrations.
-23. Use the official ClickHouse JavaScript client for application/CLI queries.
+23. Use `packages/shared-clickhouse/` (wrapping the official `@clickhouse/client`) for application/CLI queries. Direct imports of the official client outside that package are blocked by an import-restriction rule.
 24. Generate OpenAPI from Fastify/Zod route schemas.
 25. Use Biome for formatting and linting in v1.
 26. Package services as compiled JavaScript in slim Node containers.

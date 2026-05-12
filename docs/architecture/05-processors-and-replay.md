@@ -145,7 +145,7 @@ Heuristic linking is controlled by a dedicated config file and can be enabled/di
 
 ## Replay Control Plane
 
-Replay is a first-class platform capability.
+Replay is a first-class platform capability, bounded by the operational retention window.
 
 Rules:
 
@@ -160,7 +160,16 @@ Rules:
 - Replay jobs support approval gates for risky targets.
 - Replay jobs preserve lineage between source events, processor versions, output topics, and derived events.
 - ClickHouse projection rebuilds are replay/rebuild workflows, not manual one-off SQL.
-- Archive restore is part of the long-term design once object-storage raw archive exists.
+
+### Replay Window
+
+The practical replay window equals the retention of the source topic in Redpanda. With the v1 defaults, that is **90 days for `raw.events`** and shorter for derived topics.
+
+Polaris does not promise replay beyond the operational retention window. Any incident requiring older replay is out of scope until object-storage raw archive exists. The principle is "replayability within the operational retention window" — not unbounded replay.
+
+Replay job creation must reject targets older than the source topic's retention with reason `outside_retention_window`. The CLI surfaces the effective window when planning a replay.
+
+Archive restore is future work. When it lands, it extends the same replay control plane rather than introducing a separate workflow.
 
 The UI/admin API can come later, but the data model must not block it.
 

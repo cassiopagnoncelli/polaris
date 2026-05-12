@@ -2,9 +2,15 @@
 
 ## Role
 
-Destination consumers are protocol translators.
+Destination consumers are vendor adapters. They turn canonical Polaris events into vendor-specific deliveries. They do not own canonical business semantics.
 
-They map canonical Polaris events into destination-specific payloads. They do not own canonical business semantics.
+Calling them "protocol translators" understates the work. Vendor adapters do three distinct things in v1:
+
+1. **Normalize** canonical fields into the shape the vendor requires: hashing PII, lowercasing email, normalizing phone, formatting timestamps, converting currency units.
+2. **Map** the normalized event into the vendor's payload schema. This is the pure protocol-translation stage.
+3. **Deliver** the payload to the vendor API: auth, batching, retry, idempotency, rate limits, vendor dedupe fields, DLQs.
+
+Each stage is independently versioned so a hashing-rule fix does not force a v2 of every mapper, and a mapping refresh does not force a redeploy of the delivery layer.
 
 Examples:
 
@@ -25,6 +31,9 @@ Destination consumers are independent and versioned:
 consumers/
   meta-capi/
     v1/
+      normalize/
+      mappers/
+      deliver/
     v2/
   ga4/
     v1/
@@ -36,9 +45,82 @@ consumers/
     v1/
 ```
 
+A shared normalization package owns vendor-agnostic primitives that several consumers need:
+
+```text
+packages/shared-destination-normalize/
+  email.ts          lowercase + trim + sha256
+  phone.ts          E.164 + sha256
+  external-id.ts    trim + sha256
+  currency.ts       minor-unit conversion
+  timestamp.ts      epoch seconds, iso-8601 helpers
+  hashing.ts        sha256 wrapper
+```
+
+Each consumer's `normalize/` directory composes from the shared package and adds vendor-specific rules (Meta's `em`/`ph`/`external_id` field requirements, TikTok's similar but distinct rules, GA4's measurement-protocol-specific shape).
+
+## Three Stages
+
+### Normalization
+
+Normalization runs first. It takes the canonical event and produces a vendor-shaped intermediate that is safe to map.
+
+Responsibilities:
+
+- hashing PII per vendor rules
+- trimming, casing, country/currency normalization
+- timestamp formatting (epoch seconds vs ISO 8601)
+- consent-signal mapping into the vendor's slot when the vendor requires one
+- vendor-specific length caps and character restrictions
+
+Rules:
+
+- Normalization is **deterministic and stateless**. The same canonical event always produces the same normalized intermediate within a consumer version.
+- Normalization runs **before logging**. No structured log line emits the un-normalized PII.
+- Normalization is **independently versioned** from mappers. Bumping a hashing rule is `normalize/v1 -> normalize/v2`, not the whole consumer version.
+- Normalization **never calls external services**. It is pure data transform.
+
+### Mapping
+
+Mapping takes the normalized intermediate and produces the vendor's payload schema for a specific event name and consumer version.
+
+```text
+consumers/meta-capi/v1/mappers/payment-approved.ts
+consumers/meta-capi/v1/mappers/checkout-started.ts
+consumers/ga4/v1/mappers/payment-approved.ts
+```
+
+Rules:
+
+- One mapper per (canonical event name, consumer version).
+- Mappers are pure functions from normalized intermediate to vendor payload.
+- Mappers do not perform hashing or normalization. If a mapper needs hashed data, it reads it from the normalized intermediate.
+- A mapper that wants to read raw PII is a bug.
+- Mappers carry golden fixtures: canonical event in, vendor payload out.
+
+### Delivery
+
+Delivery takes vendor payloads and gets them to the vendor's API.
+
+Responsibilities:
+
+- vendor auth and token refresh
+- batching, rate limits, retries
+- idempotency: Polaris-side delivery key plus vendor dedupe field where supported
+- DLQ routing on permanent failures
+- delivery record writes
+- vendor SDK lifecycle and error class mapping
+
+Rules:
+
+- Delivery is the **only stage** that talks to the network.
+- Delivery uses a **vendor client adapter** per consumer that wraps auth and base-URL concerns. The adapter is also versioned independently when needed.
+- Delivery never sees raw canonical events; it only sees vendor payloads from the mapper.
+- Replay sends through delivery are disabled by default and require explicit opt-in.
+
 ## Mapping Semantics
 
-Destination mappings are code-only semantic logic.
+Mapping semantics live in versioned consumer code.
 
 Rules:
 
@@ -47,14 +129,6 @@ Rules:
 - Mapping changes require code review, tests, and deploy.
 - Consumer versions define supported mappings through code/tests.
 - A CLI may inspect/export mapping capabilities from code, but mappings are not mutable runtime data.
-
-Example:
-
-```text
-consumers/meta-capi/v1/mappers/payment-approved.ts
-consumers/meta-capi/v1/mappers/checkout-started.ts
-consumers/ga4/v1/mappers/payment-approved.ts
-```
 
 ## Destination Instances
 

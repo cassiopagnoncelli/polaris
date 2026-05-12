@@ -71,6 +71,64 @@ polaris destinations disable ...
 
 The CLI should use libraries/services that a future admin API or UI can reuse. No admin UI is required in v1.
 
+## Operator Identity and Audit Actor
+
+Polaris's operator gate is intentionally minimal: one property per command, one rule, one audit record per command.
+
+### Actor sources
+
+```text
+cli_oidc    authenticated through the organization IdP   (P11+ stretch goal, not v1)
+cli_token   long-lived operator token, scoped per environment   (v1 authenticated source)
+declared    --actor flag, env var, OS user, git identity   (display only)
+```
+
+### The rule
+
+Each CLI command declares `mutates: boolean` as part of its definition. The dispatcher applies one rule before executing:
+
+```text
+if command.mutates && environment === 'production' && actorSource === 'declared':
+    reject with "production mutation requires an authenticated operator"
+else:
+    allow
+```
+
+That is the entire gate. No risk tiers, no per-command lists, no separate gate-decision records.
+
+Read-only commands (list, inspect, plan, dry-run) carry `mutates: false` and bypass the gate. Mutating commands in non-production environments bypass the gate so dev and staging stay friction-free.
+
+### v1 implementation
+
+- `cli_token` is the only authenticated source in v1.
+- Each operator has a personal token, bound to environment and actor identity. Tokens are hashed in PostgreSQL alongside API keys, never stored plaintext.
+- Tokens can be issued and revoked through the CLI. Rotation issues a new token and immediately revokes the old one with no grace period. If overlap is needed, the operator issues a second token first, uses it, then revokes the original later.
+- `--actor` is a display label only. When the source is `cli_token`, `--actor` overrides `actor_display` in the audit record but cannot change `actor_id`. When the source is `declared`, `--actor` sets the display name but does not upgrade the source.
+
+### Audit record contents
+
+Every mutating command writes one audit record:
+
+```text
+audit_id
+occurred_at
+command
+arguments_redacted
+mutates
+actor_id
+actor_source
+actor_display
+project_id
+environment
+result            allowed | denied
+denied_reason     null | "production_requires_authenticated_actor" | ...
+correlation_id
+```
+
+Denied gate decisions land on the same record (`result = denied`, `denied_reason` set). A separate gate-decision record was considered and rejected — it doubled audit volume without adding information.
+
+Audit records never store credentials, secrets, or full request bodies that may include them.
+
 ## Projects and Environments
 
 Polaris supports multiple internal projects.

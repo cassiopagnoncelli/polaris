@@ -6,6 +6,8 @@ Polaris is an internal multi-project event infrastructure platform. It is not de
 
 The platform must support multiple internal projects, products, applications, and business domains. `project_id` is first-class across events, schemas, sources, destinations, analytics, replay, and operations.
 
+`project_id` is an operational scoping device, not a security perimeter. Cross-project read access within the organization is allowed by design. Project boundaries shape partition keys, retention defaults, runtime configuration, audit context, and destination instances; they do not enforce isolation against insider access. Anyone with operator access to Polaris can read any project's events. Producer-side access (write keys) is scoped per project/environment/source. Consumer-side access is trusted-operator until a future RBAC layer exists.
+
 ## Platform Responsibilities
 
 Polaris provides:
@@ -68,9 +70,10 @@ OpenTelemetry             tracing hooks
 - Semantic contracts live in files and code.
 - PostgreSQL is database-light: it stores mutable runtime/control state only.
 - Delivery is at-least-once.
-- Consumers and processors must be idempotent.
+- Consumers and processors must be idempotent. Ingress dedupe absorbs retry storms; it is not the canonical idempotency layer.
 - Vendor semantics must never leak into canonical internal events.
-- Everything important must be reconstructible or explainable from raw events, versioned code, run metadata, and replay records.
+- Replayability within the operational retention window is a primary architectural constraint. The window is bounded by `raw.events` retention until an object-storage raw archive exists.
+- Everything important must be reconstructible or explainable from raw events, versioned code, run metadata, and replay records, within the operational retention window.
 
 ## MVP Build Sequence
 

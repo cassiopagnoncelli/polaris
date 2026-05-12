@@ -78,22 +78,30 @@ Example response:
 
 ## Deduplication
 
-Polaris uses short-window ingress idempotency plus mandatory downstream idempotency.
+Polaris uses short-window ingress idempotency plus mandatory downstream idempotency. Ingress dedupe is a retry-storm absorber, not the canonical idempotency layer.
 
-Ingress:
+### Ingress (retry-storm absorber)
 
-- dedupe by `event_id`
-- initial window: 24 hours
-- Redis is the expected store
-- intended to absorb SDK/backend retry storms
+- Dedupe by `event_id` within a short window.
+- Default window: **15 minutes**.
+- Redis is the expected store.
+- Sized for retry storms (SDK reconnect, backend outbox replay), not for edge idempotency.
+- Operational budget at 10k events/sec: roughly 9M keys live, manageable on a small Redis instance.
+- Per-project window overrides are allowed via runtime config when a project documents a specific need.
 
-Downstream:
+### Idempotency-at-edge (opt-in extension)
 
-- processors must be idempotent
-- destination consumers must be idempotent
-- ClickHouse stores enough identifiers to support analytical dedupe
+A project may opt in to a longer dedupe window (up to 24 hours) when its producers cannot reliably deduplicate at the source. This is opt-in, not the default. Opt-in records the increased Redis footprint as an explicit operational cost and is reviewed alongside Redis sizing.
 
-No downstream component may assume the ingester removed all duplicates.
+### Downstream (canonical)
+
+Downstream idempotency is mandatory and remains the authoritative dedupe layer:
+
+- Processor consumers must be idempotent, keyed on `event_id` plus processor version.
+- Destination consumers must be idempotent, keyed on a stable destination delivery key.
+- ClickHouse stores enough identifiers to support analytical dedupe through `ReplacingMergeTree` plus `argMax` query patterns.
+
+No downstream component may assume the ingester removed all duplicates. Ingress dedupe shrinks the duplicate count under a retry storm; it does not promise uniqueness.
 
 ## SDK Responsibility
 

@@ -17,6 +17,7 @@ Create shared destination consumer runtime helpers for batching, retries, delive
 - P0-007
 - P1-002
 - P6-004
+- P9-000
 
 ## Write Scope
 
@@ -36,12 +37,19 @@ apps/ingester-api/
 packages/web-sdk/
 packages/node-sdk/
 processors/
+packages/shared-destination-normalize/
 ```
 
 ## Implementation Notes
 
 - Keep the runtime thin.
-- Mapping semantics remain in consumer code.
+- Implement the three-stage model from [Destinations](../../architecture/06-destinations.md): normalize, map, deliver.
+- The runtime owns delivery (auth wrapper, batching, retries, rate limits, DLQs, delivery records, replay suppression).
+- The runtime exposes interfaces for normalize and map; each consumer implements those interfaces.
+- Normalization composes from `packages/shared-destination-normalize/` (P9-000), with consumer-specific additions in `consumers/<name>/v1/normalize/`.
+- Mapper interface: pure function from normalized intermediate to vendor payload. Mappers are not allowed to call out to the network or read raw canonical PII.
+- Delivery is the only stage that talks to the network.
+- Each stage is independently versioned. The runtime carries each stage's version in delivery records and DLQ metadata so a normalize/v1 → normalize/v2 transition is auditable.
 - PostgreSQL stores destination instance state and delivery records.
 - Destination sends during replay are disabled by default.
 - Secrets must never appear in logs, DLQs, or delivery records.
@@ -49,10 +57,12 @@ processors/
 ## Acceptance Criteria
 
 - [ ] Shared destination package exists.
-- [ ] Delivery record helper exists.
-- [ ] Retry/DLQ helper exists.
+- [ ] Three-stage interface (normalize, map, deliver) is exposed and documented.
+- [ ] Delivery record helper exists and records stage versions.
+- [ ] Retry/DLQ helper exists and preserves stage version metadata.
 - [ ] Replay suppression helper exists.
 - [ ] Tests cover idempotent delivery key generation and secret redaction.
+- [ ] Tests verify a mapper that attempts to read raw PII is rejected by the type system or runtime check.
 
 ## Checks
 

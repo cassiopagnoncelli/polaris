@@ -153,13 +153,16 @@ Do not build a full stream-processing framework in v1. Keep wrappers thin and pr
 
 ## ClickHouse Access
 
-Use SQL files for ClickHouse DDL/migrations and the official ClickHouse JavaScript client for application/CLI queries.
+Use SQL files for ClickHouse DDL/migrations and the shared ClickHouse client package for application/CLI queries.
 
 Rules:
 
 - ClickHouse table definitions, Kafka Engine tables, materialized views, and projections live as SQL files.
 - Do not use an ORM for ClickHouse.
-- Use the official ClickHouse JavaScript client when services or CLI code need to query ClickHouse.
+- Use `packages/shared-clickhouse/` (which wraps the official `@clickhouse/client`) when services or CLI code need to query ClickHouse.
+- Direct imports of `@clickhouse/client` outside `shared-clickhouse` are blocked by a workspace import rule.
+- Services connect through the `polaris_service` role (SELECT on projection tables and `analytics_ingest_log` only). Operator workflows use the `polaris_operator` role.
+- `analytics_raw` reads happen only through the helper's `replay` namespace, which generates `argMax`-based SQL. The `operator.raw.query` escape hatch exists for genuinely ad-hoc operator SQL and emits a metric on every call.
 - Keep ClickHouse-specific behavior visible and SQL-native.
 
 ## OpenAPI

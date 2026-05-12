@@ -27,6 +27,8 @@ This board is the coordination surface for implementation work.
 - [P0-006 Shared Schemas and Event Catalog](./tasks/P0-006-shared-schemas-catalog.md)
 - [P0-007 Shared Kafka Package](./tasks/P0-007-shared-kafka.md)
 - [P0-008 Shared Secrets Package](./tasks/P0-008-shared-secrets.md)
+- [P0-009 Forbidden-Field Policy](./tasks/P0-009-forbidden-field-policy.md)
+- [P0-010 Shared ClickHouse Client Package](./tasks/P0-010-shared-clickhouse-client.md)
 
 ### P1 Local Infrastructure
 
@@ -62,6 +64,7 @@ This board is the coordination surface for implementation work.
 - [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md)
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
+- [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
 
 ### P7 Replay System
 
@@ -82,6 +85,7 @@ This board is the coordination surface for implementation work.
 
 ### P9 Destination Consumers
 
+- [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
 - [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md)
 - [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md)
@@ -108,6 +112,7 @@ This board is the coordination surface for implementation work.
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
 - [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
 - [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
+- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
 
 ### P12 Release Readiness
 
