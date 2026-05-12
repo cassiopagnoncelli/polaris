@@ -38,7 +38,7 @@
       "complexity": {
         "useLiteralKeys": "off",
         "noUselessConstructor": "off",
-        "noBannedTypes": "warn"
+        "noBannedTypes": "off"
       },
       "correctness": {
         "noUnusedImports": "error",
@@ -46,7 +46,8 @@
       },
       "suspicious": {
         "noExplicitAny": "warn",
-        "noConsole": "off"
+        "noConsole": "off",
+        "noEmptyInterface": "off"
       }
     }
   },

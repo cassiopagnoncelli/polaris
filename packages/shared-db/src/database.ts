@@ -29,6 +29,12 @@
  * Until then, the empty interface keeps `Kysely<Database>` typeable while
  * making it impossible to query a table that does not exist.
  */
-export type Database = {
-  // Intentionally empty. See file header.
-};
+// Declared as an interface (not a type alias) so future tasks can extend it
+// via declaration merging from their own packages, e.g.
+//
+//   declare module "@polaris/shared-db" {
+//     interface Database { api_keys: ApiKeysTable }
+//   }
+//
+// Intentionally empty until a migration introduces the first table.
+export interface Database {}
