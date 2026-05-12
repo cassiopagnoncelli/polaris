@@ -45,11 +45,59 @@ export {
 } from "./config.js";
 export {
   BUILTIN_COMMANDS,
+  destinationsCommand,
   keysCommand,
   projectsCommand,
   sourcesCommand,
   versionCommand,
 } from "./commands/index.js";
+export {
+  destinationsCreateCommand,
+  destinationsDisableCommand,
+  destinationsEnableCommand,
+  destinationsListCommand,
+  destinationsShowCommand,
+  destinationsUpdateOpsCommand,
+} from "./commands/destinations/index.js";
+export {
+  buildDestinationsCreateRunner,
+  type DestinationsCreateHooks,
+  type DestinationsCreateStore,
+} from "./commands/destinations/create.js";
+export {
+  buildDestinationsDisableRunner,
+  type DestinationsDisableHooks,
+  type DestinationsDisableStore,
+} from "./commands/destinations/disable.js";
+export {
+  buildDestinationsEnableRunner,
+  type DestinationsEnableHooks,
+  type DestinationsEnableStore,
+} from "./commands/destinations/enable.js";
+export {
+  buildDestinationsListRunner,
+  type DestinationsListHooks,
+  type DestinationsListStore,
+} from "./commands/destinations/list.js";
+export {
+  buildDestinationsShowRunner,
+  type DestinationsShowHooks,
+  type DestinationsShowStore,
+} from "./commands/destinations/show.js";
+export {
+  buildDestinationsUpdateOpsRunner,
+  type DestinationsUpdateOpsHooks,
+  type DestinationsUpdateOpsStore,
+} from "./commands/destinations/update-ops.js";
+export {
+  DESTINATION_ID_PREFIX,
+  generateDestinationId,
+} from "./commands/destinations/id.js";
+export {
+  FORBIDDEN_MAPPING_FLAG_TOKENS,
+  rejectMappingArguments,
+  validateSecretRef,
+} from "./commands/destinations/validation.js";
 export {
   keysCreateCommand,
   keysListCommand,
@@ -133,11 +181,21 @@ export {
   connectDb,
   type ConnectDbOptions,
   type DbHandle,
+  disableDestination,
+  enableDestination,
+  type DestinationRow,
   findApiKeyById,
+  findDestinationById,
   insertApiKey,
+  insertDestination,
   type InsertApiKeyInput,
+  type InsertDestinationInput,
+  listAllDestinations,
   listApiKeysByProjectEnv,
+  listDestinationsByProjectEnv,
   revokeApiKey,
+  updateDestinationOps,
+  type UpdateDestinationOpsInput,
 } from "./db/index.js";
 export {
   AuthError,

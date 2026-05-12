@@ -12,6 +12,18 @@ export {
 } from "./api-keys.js";
 export { type ConnectDbOptions, type DbHandle, connectDb } from "./connect.js";
 export {
+  disableDestination,
+  enableDestination,
+  type DestinationRow,
+  findDestinationById,
+  insertDestination,
+  type InsertDestinationInput,
+  listAllDestinations,
+  listDestinationsByProjectEnv,
+  updateDestinationOps,
+  type UpdateDestinationOpsInput,
+} from "./destinations.js";
+export {
   fetchAllProjects,
   fetchAllSources,
   fetchSourcesById,

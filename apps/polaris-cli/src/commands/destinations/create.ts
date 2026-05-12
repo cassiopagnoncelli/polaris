@@ -1,0 +1,335 @@
+/**
+ * `polaris destinations create --project <id> --env <env> --vendor <vendor>
+ *   --instance-label <label> --secret-ref <provider:ref>
+ *   [--mode <live|sandbox|test>] [--max-concurrency <n>] [--max-rps <n>]
+ *   [--retry-policy <profile>] [--dead-letter-threshold <n>]`
+ *
+ * Mutating: inserts one destination row scoped to a
+ * `(project_id, environment, vendor, instance_label)` tuple. The
+ * `destination_id` is platform-issued as `polaris_dst_<uuidv7>` so operators
+ * never pass it in.
+ *
+ * **Mapping rule:** the CLI MUST NOT accept any flag/argument that resembles
+ * mapping semantics. Mapping semantics (event-to-vendor field maps) live in
+ * versioned consumer code under `consumers/<vendor>/v<n>/mappers/`. The
+ * argument validator rejects mapping-shaped flags BEFORE any DB write.
+ *
+ * `mutates: true` so the P6-007 production gate picks this command up
+ * automatically.
+ */
+import type { DestinationMode, DestinationRetryPolicy } from "@polaris/shared-db";
+import type { CommandContext, CommandDefinition } from "../../command.js";
+import { connectDb, insertDestination, type InsertDestinationInput } from "../../db/index.js";
+import { UsageError } from "../../errors.js";
+import { renderAccordingTo } from "../../output.js";
+import { generateDestinationId } from "./id.js";
+import { rejectMappingArguments, validateSecretRef } from "./validation.js";
+
+const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
+
+const SUPPORTED_MODES: readonly DestinationMode[] = ["live", "sandbox", "test"] as const;
+const SUPPORTED_RETRY_POLICIES: readonly DestinationRetryPolicy[] = [
+  "standard",
+  "aggressive",
+  "conservative",
+] as const;
+
+const VENDOR_FORMAT = /^[a-z][a-z0-9_-]{1,62}[a-z0-9]$/;
+const INSTANCE_LABEL_FORMAT = /^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$/;
+
+export interface DestinationsCreateStore {
+  insert(input: InsertDestinationInput): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface DestinationsCreateHooks {
+  readonly issueId?: () => string;
+  readonly openStore?: () => DestinationsCreateStore;
+}
+
+interface DestinationsCreateArgs {
+  readonly project?: string;
+  readonly env?: string;
+  readonly vendor?: string;
+  readonly instanceLabel?: string;
+  readonly secretRef?: string;
+  readonly mode?: string;
+  readonly maxConcurrency?: string;
+  readonly maxRps?: string;
+  readonly retryPolicy?: string;
+  readonly deadLetterThreshold?: string;
+}
+
+export const destinationsCreateCommand: CommandDefinition = {
+  id: "destinations.create",
+  mutates: true,
+  register: (parent, deps) => {
+    parent
+      .command("create")
+      .description(
+        [
+          "Create a destination instance. Stores runtime state only.",
+          "Mapping semantics (event-to-vendor maps) live in code under consumers/<vendor>/v<n>/mappers/,",
+          "NEVER in PostgreSQL — this CLI refuses any flag that resembles a mapping field.",
+        ].join("\n"),
+      )
+      .requiredOption("--project <project_id>", "Project this destination belongs to.")
+      .requiredOption("--env <environment>", "Environment: development | staging | production.")
+      .requiredOption("--vendor <vendor>", "Vendor adapter (e.g. meta-capi, ga4, webhook-sink).")
+      .requiredOption("--instance-label <label>", "Operator-supplied short label.")
+      .requiredOption(
+        "--secret-ref <provider:ref>",
+        "Provider-namespaced secret reference (e.g. env:META_CAPI_TOKEN_STOREFRONT_PROD). " +
+          "Plaintext is never accepted.",
+      )
+      .option("--mode <mode>", `Delivery mode: ${SUPPORTED_MODES.join(" | ")} (default: live).`)
+      .option(
+        "--max-concurrency <n>",
+        "Per-instance worker concurrency (operational tuning, default: 4).",
+      )
+      .option("--max-rps <n>", "Outbound rate cap (operational tuning, default: 50).")
+      .option(
+        "--retry-policy <profile>",
+        `Retry profile: ${SUPPORTED_RETRY_POLICIES.join(" | ")} (default: standard).`,
+      )
+      .option(
+        "--dead-letter-threshold <n>",
+        "Attempts after which a message is routed to the DLQ (default: 5).",
+      )
+      .action(deps.runCommand({ id: "destinations.create", mutates: true }, runDestinationsCreate));
+  },
+};
+
+export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {}) {
+  const issueId = hooks.issueId ?? generateDestinationId;
+  const openStore = hooks.openStore ?? defaultStore;
+
+  return async function runner(
+    args: DestinationsCreateArgs,
+    ctx: CommandContext,
+  ): Promise<undefined> {
+    // Refuse mapping-shaped flags BEFORE any validation or DB work. This is
+    // the acceptance-criteria gate: even though the option surface above
+    // doesn't declare such flags, commander accepts trailing positional
+    // values and runtime spread; this defense-in-depth check guarantees
+    // mapping semantics cannot reach the DB.
+    rejectMappingArguments(args as unknown as Record<string, unknown>);
+
+    const validated = validate(args);
+    const destinationId = issueId();
+    const insertInput: InsertDestinationInput = {
+      destination_id: destinationId,
+      project_id: validated.project,
+      environment: validated.env,
+      vendor: validated.vendor,
+      instance_label: validated.instanceLabel,
+      secret_ref: validated.secretRef,
+      mode: validated.mode,
+      ...(validated.maxConcurrency !== undefined
+        ? { max_concurrency: validated.maxConcurrency }
+        : {}),
+      ...(validated.maxRps !== undefined ? { max_rps: validated.maxRps } : {}),
+      ...(validated.retryPolicy !== undefined ? { retry_policy: validated.retryPolicy } : {}),
+      ...(validated.deadLetterThreshold !== undefined
+        ? { dead_letter_threshold: validated.deadLetterThreshold }
+        : {}),
+    };
+
+    const store = openStore();
+    try {
+      await store.insert(insertInput);
+      emit(ctx, { ...validated, destinationId, secretProvider: validated.secretProvider });
+    } finally {
+      await store.close();
+    }
+    return undefined;
+  };
+}
+
+const runDestinationsCreate = buildDestinationsCreateRunner();
+
+function defaultStore(): DestinationsCreateStore {
+  const handle = connectDb({ env: process.env });
+  return {
+    insert: (input) => insertDestination(handle.db, input),
+    close: () => handle.close(),
+  };
+}
+
+interface ValidatedArgs {
+  readonly project: string;
+  readonly env: SupportedEnvironment;
+  readonly vendor: string;
+  readonly instanceLabel: string;
+  readonly secretRef: string;
+  readonly secretProvider: string;
+  readonly mode: DestinationMode;
+  readonly maxConcurrency: number | undefined;
+  readonly maxRps: number | undefined;
+  readonly retryPolicy: DestinationRetryPolicy | undefined;
+  readonly deadLetterThreshold: number | undefined;
+}
+
+function validate(args: DestinationsCreateArgs): ValidatedArgs {
+  const project = requireTrim(args.project, "--project");
+  const env = requireTrim(args.env, "--env");
+  const vendor = requireTrim(args.vendor, "--vendor");
+  const instanceLabel = requireTrim(args.instanceLabel, "--instance-label");
+  const secretRef = requireTrim(args.secretRef, "--secret-ref");
+
+  if (!(SUPPORTED_ENVIRONMENTS as readonly string[]).includes(env)) {
+    throw new UsageError(
+      `--env must be one of: ${SUPPORTED_ENVIRONMENTS.join(", ")} (got "${env}")`,
+    );
+  }
+  if (!VENDOR_FORMAT.test(vendor)) {
+    throw new UsageError(
+      `--vendor "${vendor}" is invalid. ` +
+        "Allowed shape: lowercase alphanumeric with underscores or hyphens, 3-64 chars.",
+    );
+  }
+  if (!INSTANCE_LABEL_FORMAT.test(instanceLabel)) {
+    throw new UsageError(
+      `--instance-label "${instanceLabel}" is invalid. ` +
+        "Allowed shape: lowercase alphanumeric with underscores or hyphens, 2-64 chars.",
+    );
+  }
+  const parsedSecret = validateSecretRef(secretRef);
+
+  const mode = parseMode(args.mode);
+  const maxConcurrency = parsePositiveInt(args.maxConcurrency, "--max-concurrency", 1, 1024);
+  const maxRps = parsePositiveInt(args.maxRps, "--max-rps", 1, 100_000);
+  const retryPolicy = parseRetryPolicy(args.retryPolicy);
+  const deadLetterThreshold = parsePositiveInt(
+    args.deadLetterThreshold,
+    "--dead-letter-threshold",
+    1,
+    1000,
+  );
+
+  return {
+    project,
+    env: env as SupportedEnvironment,
+    vendor,
+    instanceLabel,
+    secretRef,
+    secretProvider: parsedSecret.provider,
+    mode,
+    maxConcurrency,
+    maxRps,
+    retryPolicy,
+    deadLetterThreshold,
+  };
+}
+
+function parseMode(raw: string | undefined): DestinationMode {
+  if (raw === undefined) return "live";
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return "live";
+  if (!(SUPPORTED_MODES as readonly string[]).includes(trimmed)) {
+    throw new UsageError(`--mode must be one of: ${SUPPORTED_MODES.join(", ")} (got "${trimmed}")`);
+  }
+  return trimmed as DestinationMode;
+}
+
+function parseRetryPolicy(raw: string | undefined): DestinationRetryPolicy | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  if (!(SUPPORTED_RETRY_POLICIES as readonly string[]).includes(trimmed)) {
+    throw new UsageError(
+      `--retry-policy must be one of: ${SUPPORTED_RETRY_POLICIES.join(", ")} (got "${trimmed}")`,
+    );
+  }
+  return trimmed as DestinationRetryPolicy;
+}
+
+function parsePositiveInt(
+  raw: string | undefined,
+  flag: string,
+  min: number,
+  max: number,
+): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  if (!/^[1-9][0-9]*$/.test(trimmed)) {
+    throw new UsageError(`${flag} must be a positive integer (got "${trimmed}")`);
+  }
+  const value = Number.parseInt(trimmed, 10);
+  if (value < min || value > max) {
+    throw new UsageError(`${flag} must be between ${min} and ${max} (got ${value})`);
+  }
+  return value;
+}
+
+function requireTrim(value: string | undefined, flag: string): string {
+  if (value === undefined) throw new UsageError(`${flag} is required`);
+  const trimmed = value.trim();
+  if (trimmed.length === 0) throw new UsageError(`${flag} is required`);
+  return trimmed;
+}
+
+interface EmitInput {
+  readonly destinationId: string;
+  readonly project: string;
+  readonly env: string;
+  readonly vendor: string;
+  readonly instanceLabel: string;
+  readonly secretRef: string;
+  readonly secretProvider: string;
+  readonly mode: DestinationMode;
+  readonly maxConcurrency: number | undefined;
+  readonly maxRps: number | undefined;
+  readonly retryPolicy: DestinationRetryPolicy | undefined;
+  readonly deadLetterThreshold: number | undefined;
+}
+
+function emit(ctx: CommandContext, input: EmitInput): void {
+  ctx.output.writeOut(
+    renderAccordingTo(ctx.config.output, {
+      human: renderHuman(input),
+      json: {
+        destination_id: input.destinationId,
+        project_id: input.project,
+        environment: input.env,
+        vendor: input.vendor,
+        instance_label: input.instanceLabel,
+        secret_ref: input.secretRef,
+        secret_provider: input.secretProvider,
+        mode: input.mode,
+        max_concurrency: input.maxConcurrency ?? null,
+        max_rps: input.maxRps ?? null,
+        retry_policy: input.retryPolicy ?? null,
+        dead_letter_threshold: input.deadLetterThreshold ?? null,
+      },
+    }),
+  );
+}
+
+function renderHuman(input: EmitInput): string {
+  const lines = [
+    `polaris destination created`,
+    `  destination_id  ${input.destinationId}`,
+    `  project_id      ${input.project}`,
+    `  environment     ${input.env}`,
+    `  vendor          ${input.vendor}`,
+    `  instance_label  ${input.instanceLabel}`,
+    `  secret_ref      ${input.secretRef}`,
+    `  mode            ${input.mode}`,
+  ];
+  if (input.maxConcurrency !== undefined) {
+    lines.push(`  max_concurrency ${input.maxConcurrency}`);
+  }
+  if (input.maxRps !== undefined) {
+    lines.push(`  max_rps         ${input.maxRps}`);
+  }
+  if (input.retryPolicy !== undefined) {
+    lines.push(`  retry_policy    ${input.retryPolicy}`);
+  }
+  if (input.deadLetterThreshold !== undefined) {
+    lines.push(`  dlq_threshold   ${input.deadLetterThreshold}`);
+  }
+  return lines.join("\n");
+}

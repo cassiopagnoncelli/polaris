@@ -130,6 +130,104 @@ export interface SourcesTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+/**
+ * Runtime status of a destination instance. The destination consumer treats
+ * anything other than `'active'` as not-deliverable; `paused` keeps the row
+ * but stops dispatch, `disabled` is the terminal state for retired instances.
+ */
+export type DestinationStatus = "active" | "paused" | "disabled";
+
+/**
+ * Delivery mode for a destination instance. Non-semantic operational dial:
+ *   - `live`     production delivery to the vendor
+ *   - `sandbox`  vendor-side sandbox endpoint (where supported)
+ *   - `test`     no network delivery; used by smoke tests and replay dry runs
+ *
+ * Modes do not change event-to-vendor mapping behavior. Mapping semantics
+ * live in `consumers/<vendor>/v<n>/mappers/`, never here.
+ */
+export type DestinationMode = "live" | "sandbox" | "test";
+
+/**
+ * Retry-policy profile. Operational tuning only — never alters event meaning.
+ * Mirrors the closed set baked into the
+ * `destinations_retry_policy_allowed` CHECK constraint.
+ */
+export type DestinationRetryPolicy = "standard" | "aggressive" | "conservative";
+
+/**
+ * `destinations` table.
+ *
+ * Runtime instances of vendor-adapter consumers (Meta CAPI, GA4, TikTok,
+ * Braze, webhook-sink, reverse-etl). One row per deployed destination per
+ * `(project, environment)`. The row stores runtime state and operational
+ * knobs only.
+ *
+ * **PostgreSQL DOES NOT store mapping semantics.** Mapping semantics
+ * (event-to-vendor field maps) live in versioned consumer code under
+ * `consumers/<vendor>/v<n>/mappers/`. This interface intentionally has NO
+ * column resembling `field_map`, `mapping`, `event_map`, `target_field`, or
+ * any other field-translation surface. The CLI cannot define mappings
+ * because the typed schema gives it nowhere to store them, and the
+ * migration's column set matches this contract.
+ *
+ * Schema reference: `db/migrations/20260512000005_create_destinations.sql`.
+ */
+export interface DestinationsTable {
+  /** Platform-issued public id, e.g. `polaris_dst_<uuidv7>`. */
+  destination_id: string;
+  /** Project that owns this destination. References `projects(project_id)`. */
+  project_id: string;
+  /** Deployment environment. Closed set: development | staging | production. */
+  environment: string;
+  /**
+   * Vendor adapter name (e.g. `meta-capi`, `ga4`, `tiktok`, `braze`,
+   * `webhook-sink`, `reverse-etl`). Free-form-with-CHECK rather than a TS
+   * union because the consumer codebase grows independently of this
+   * package; the migration's regex enforces shape, not membership.
+   */
+  vendor: string;
+  /**
+   * Operator-supplied short label, unique within
+   * `(project, environment, vendor)`. Used in CLI output and audit logs.
+   */
+  instance_label: string;
+  /**
+   * Provider-namespaced secret reference (e.g.
+   * `env:META_CAPI_TOKEN_STOREFRONT_PROD`,
+   * `secret_manager:polaris/production/storefront/meta-capi`). The runtime
+   * resolves this through `@polaris/shared-secrets`; the resolved value is
+   * never persisted here.
+   */
+  secret_ref: string;
+  /** Lifecycle status (`active` | `paused` | `disabled`). */
+  status: ColumnType<DestinationStatus, DestinationStatus | undefined, DestinationStatus>;
+  /** Delivery mode (`live` | `sandbox` | `test`). */
+  mode: ColumnType<DestinationMode, DestinationMode | undefined, DestinationMode>;
+  /** Operational knob: per-instance worker concurrency. */
+  max_concurrency: ColumnType<number, number | undefined, number>;
+  /** Operational knob: outbound vendor request rate cap. */
+  max_rps: ColumnType<number, number | undefined, number>;
+  /** Operational knob: retry-policy profile (closed set). */
+  retry_policy: ColumnType<
+    DestinationRetryPolicy,
+    DestinationRetryPolicy | undefined,
+    DestinationRetryPolicy
+  >;
+  /** Operational knob: attempts after which a message is routed to the DLQ. */
+  dead_letter_threshold: ColumnType<number, number | undefined, number>;
+  /**
+   * Free-text rationale stamped by `polaris destinations disable --reason
+   * <reason>`. NULL when the destination is not disabled. Cleared on
+   * `enable` so the column always reflects the most recent disable.
+   */
+  disabled_reason: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Issuance time, in UTC. */
+  created_at: Generated<Date>;
+  /** Last mutation time, in UTC. Stamped on every UPDATE. */
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -140,6 +238,7 @@ export interface SourcesTable {
 // As migrations land, add a new property here in the same change.
 export interface Database {
   api_keys: ApiKeyTable;
+  destinations: DestinationsTable;
   projects: ProjectsTable;
   sources: SourcesTable;
 }

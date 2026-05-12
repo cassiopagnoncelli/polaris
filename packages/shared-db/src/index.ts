@@ -29,6 +29,10 @@
 export { createDb, closeDb } from "./client.js";
 export type { Database, CreateDbOptions } from "./client.js";
 export type {
+  DestinationMode,
+  DestinationRetryPolicy,
+  DestinationStatus,
+  DestinationsTable,
   Environment,
   ProjectsTable,
   ProjectStatus,

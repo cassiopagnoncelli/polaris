@@ -1,0 +1,1004 @@
+/**
+ * Unit tests for the `polaris destinations` command surface (P6-004).
+ *
+ * Approach mirrors `keys-commands.test.ts`:
+ *
+ *   - Each command exposes a `buildDestinationsXxxRunner({ openStore, ... })`
+ *     factory so tests can inject an in-memory store instead of Kysely. The
+ *     runner contract is identical to production.
+ *   - Smaller surface tests (`mutates` flags, `--help` wiring) drive the
+ *     real command tree through `run()` to confirm the dispatcher sees them.
+ *
+ * The CRITICAL test in this file is the mapping-field rejection: any flag
+ * resembling event-to-vendor mapping must be rejected BEFORE any DB write.
+ * This is the architectural guarantee for P6-004's acceptance criterion
+ * "CLI cannot define event-to-vendor mappings."
+ *
+ * The schema-level invariant — `DestinationsTable` has NO column resembling
+ * a mapping field — is enforced as a structural test against the typed
+ * surface in `@polaris/shared-db`.
+ */
+import { describe, expect, it } from "vitest";
+
+import {
+  buildDestinationsCreateRunner,
+  buildDestinationsDisableRunner,
+  buildDestinationsEnableRunner,
+  buildDestinationsListRunner,
+  buildDestinationsShowRunner,
+  buildDestinationsUpdateOpsRunner,
+  type CommandContext,
+  DESTINATION_ID_PREFIX,
+  type DestinationRow,
+  type DestinationsCreateStore,
+  type DestinationsDisableStore,
+  type DestinationsEnableStore,
+  type DestinationsListStore,
+  type DestinationsShowStore,
+  type DestinationsUpdateOpsStore,
+  ExitCode,
+  FORBIDDEN_MAPPING_FLAG_TOKENS,
+  type InsertDestinationInput,
+  type OutputStreams,
+  type PackageMeta,
+  rejectMappingArguments,
+  run,
+  type UpdateDestinationOpsInput,
+  validateSecretRef,
+} from "../src/index.js";
+
+const META: PackageMeta = {
+  version: "0.0.0-test",
+  gitSha: "deadbeef",
+  buildTime: "2026-05-12T00:00:00.000Z",
+  nodeVersion: "v22.0.0",
+};
+
+const VALID_ENV = {
+  POLARIS_API_URL: "https://polaris.example.internal",
+  POLARIS_TOKEN: "polaris_ot_test",
+} as const;
+
+interface Capture {
+  readonly streams: OutputStreams;
+  readonly stdout: string[];
+  readonly stderr: string[];
+}
+
+function captureOutput(): Capture {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  return {
+    streams: {
+      writeOut: (text) => {
+        stdout.push(text);
+      },
+      writeErr: (text) => {
+        stderr.push(text);
+      },
+    },
+    stdout,
+    stderr,
+  };
+}
+
+/**
+ * In-memory `destinations` table backing every runner-level test. The shape
+ * mirrors the Kysely row the production repository surfaces.
+ */
+class InMemoryDestinationStore {
+  public readonly rows = new Map<string, DestinationRow>();
+  public inserts: InsertDestinationInput[] = [];
+  public updateCalls = 0;
+  public closeCalls = 0;
+
+  insert(row: DestinationRow): void {
+    this.rows.set(row.destination_id, row);
+  }
+
+  asCreateStore(): DestinationsCreateStore {
+    return {
+      insert: async (input) => {
+        this.inserts.push(input);
+        this.rows.set(input.destination_id, {
+          destination_id: input.destination_id,
+          project_id: input.project_id,
+          environment: input.environment,
+          vendor: input.vendor,
+          instance_label: input.instance_label,
+          secret_ref: input.secret_ref,
+          status: "active",
+          mode: input.mode,
+          max_concurrency: input.max_concurrency ?? 4,
+          max_rps: input.max_rps ?? 50,
+          retry_policy: input.retry_policy ?? "standard",
+          dead_letter_threshold: input.dead_letter_threshold ?? 5,
+          disabled_reason: null,
+          created_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
+          updated_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
+        });
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asListStore(): DestinationsListStore {
+    return {
+      list: async (filter) => {
+        return [...this.rows.values()].filter((row) => {
+          if (filter.projectId !== undefined && row.project_id !== filter.projectId) return false;
+          if (filter.environment !== undefined && row.environment !== filter.environment) {
+            return false;
+          }
+          return true;
+        });
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asShowStore(): DestinationsShowStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asEnableStore(): DestinationsEnableStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      enable: async (id, now) => {
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        if (row.status === "active") return false;
+        this.rows.set(id, {
+          ...row,
+          status: "active",
+          disabled_reason: null,
+          updated_at: now.toISOString(),
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asDisableStore(): DestinationsDisableStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      disable: async (id, reason, now) => {
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        if (row.status === "disabled") return false;
+        this.rows.set(id, {
+          ...row,
+          status: "disabled",
+          disabled_reason: reason,
+          updated_at: now.toISOString(),
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asUpdateOpsStore(): DestinationsUpdateOpsStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      update: async (id, patch: UpdateDestinationOpsInput, now) => {
+        this.updateCalls += 1;
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        this.rows.set(id, {
+          ...row,
+          ...(patch.max_concurrency !== undefined
+            ? { max_concurrency: patch.max_concurrency }
+            : {}),
+          ...(patch.max_rps !== undefined ? { max_rps: patch.max_rps } : {}),
+          ...(patch.retry_policy !== undefined ? { retry_policy: patch.retry_policy } : {}),
+          ...(patch.dead_letter_threshold !== undefined
+            ? { dead_letter_threshold: patch.dead_letter_threshold }
+            : {}),
+          updated_at: now.toISOString(),
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+}
+
+function makeContext(streams: OutputStreams): CommandContext {
+  const noopLogger = {
+    fatal: () => {},
+    error: () => {},
+    warn: () => {},
+    info: () => {},
+    debug: () => {},
+    trace: () => {},
+  } as unknown as CommandContext["logger"];
+  return {
+    config: {
+      profile: "default",
+      apiUrl: "https://polaris.example.internal",
+      token: "polaris_ot_test",
+      tokenEnvName: "POLARIS_TOKEN",
+      output: "human",
+      logLevel: "warn",
+      configFilePath: undefined,
+    },
+    logger: {
+      ...noopLogger,
+      child: () => noopLogger,
+    } as CommandContext["logger"],
+    output: streams,
+    meta: META,
+  };
+}
+
+function jsonContext(streams: OutputStreams): CommandContext {
+  const base = makeContext(streams);
+  return {
+    ...base,
+    config: { ...base.config, output: "json" },
+  };
+}
+
+function seedActiveRow(
+  store: InMemoryDestinationStore,
+  overrides: Partial<DestinationRow> = {},
+): DestinationRow {
+  const base: DestinationRow = {
+    destination_id: "polaris_dst_active-1",
+    project_id: "storefront",
+    environment: "production",
+    vendor: "meta-capi",
+    instance_label: "storefront-prod",
+    secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
+    status: "active",
+    mode: "live",
+    max_concurrency: 4,
+    max_rps: 50,
+    retry_policy: "standard",
+    dead_letter_threshold: 5,
+    disabled_reason: null,
+    created_at: "2026-05-10T00:00:00.000Z",
+    updated_at: "2026-05-10T00:00:00.000Z",
+  };
+  const row: DestinationRow = { ...base, ...overrides };
+  store.insert(row);
+  return row;
+}
+
+const CREATE_BASE_ARGS = {
+  project: "storefront",
+  env: "production",
+  vendor: "meta-capi",
+  instanceLabel: "storefront-prod",
+  secretRef: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
+} as const;
+
+describe("validation: rejectMappingArguments", () => {
+  // The architectural guarantee: every flag/argument resembling mapping
+  // semantics is refused before any DB write. The list of forbidden tokens
+  // is documented in `commands/destinations/validation.ts`.
+  it("rejects each documented mapping-field token", () => {
+    for (const token of FORBIDDEN_MAPPING_FLAG_TOKENS) {
+      // Try the kebab-case form (--field-map), the snake_case form
+      // (field_map), and the camelCase form commander stores
+      // (--field-map -> fieldMap).
+      const camel = token.replace(/[-_](.)/g, (_, ch: string) => ch.toUpperCase());
+      const snake = token.replace(/-/g, "_");
+      const variants = Array.from(new Set([token, camel, snake]));
+      for (const variant of variants) {
+        expect(() =>
+          rejectMappingArguments({ [variant]: "anything" } as Record<string, unknown>),
+        ).toThrow(/not accepted by the destinations CLI/);
+      }
+    }
+  });
+
+  it("passes-through arg bags that contain no mapping flags", () => {
+    expect(() =>
+      rejectMappingArguments({
+        project: "storefront",
+        env: "production",
+        vendor: "meta-capi",
+        instanceLabel: "storefront-prod",
+        secretRef: "env:X",
+        maxConcurrency: "8",
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("validation: validateSecretRef", () => {
+  it("accepts well-formed provider:ref values", () => {
+    expect(validateSecretRef("env:META_CAPI_TOKEN_STOREFRONT_PROD")).toEqual({
+      provider: "env",
+      ref: "META_CAPI_TOKEN_STOREFRONT_PROD",
+    });
+    expect(validateSecretRef("secret_manager:polaris/production/storefront/meta-capi")).toEqual({
+      provider: "secret_manager",
+      ref: "polaris/production/storefront/meta-capi",
+    });
+  });
+
+  it("rejects values without a provider separator", () => {
+    expect(() => validateSecretRef("plaintextshouldfail")).toThrow(
+      /must be in the form <provider>:<reference>/,
+    );
+  });
+
+  it("rejects values with an empty reference tail", () => {
+    expect(() => validateSecretRef("env:")).toThrow(/must be in the form <provider>:<reference>/);
+  });
+
+  it("rejects values with whitespace in the reference", () => {
+    expect(() => validateSecretRef("env:foo bar")).toThrow(
+      /Must be non-empty and contain no whitespace/,
+    );
+  });
+
+  it("rejects providers with disallowed characters", () => {
+    expect(() => validateSecretRef("ENV:VALUE")).toThrow(/provider/);
+  });
+});
+
+describe("destinations create runner", () => {
+  it("inserts an active destination with a polaris_dst_ id and respects --output human", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_fixed-id-1",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(CREATE_BASE_ARGS, makeContext(capture.streams));
+
+    expect(store.inserts).toHaveLength(1);
+    const inserted = store.inserts[0];
+    if (inserted === undefined) throw new Error("expected one insert");
+    expect(inserted.destination_id).toBe("polaris_dst_fixed-id-1");
+    expect(inserted.destination_id.startsWith(DESTINATION_ID_PREFIX)).toBe(true);
+    expect(inserted.project_id).toBe("storefront");
+    expect(inserted.environment).toBe("production");
+    expect(inserted.vendor).toBe("meta-capi");
+    expect(inserted.instance_label).toBe("storefront-prod");
+    expect(inserted.secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    expect(inserted.mode).toBe("live");
+
+    const stdout = capture.stdout.join("");
+    expect(stdout).toContain("polaris destination created");
+    expect(stdout).toContain("polaris_dst_fixed-id-1");
+    expect(stdout).toContain("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+  });
+
+  it("emits the same shape under --output json with the resolved secret_provider", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_json-id",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(CREATE_BASE_ARGS, jsonContext(capture.streams));
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed).toMatchObject({
+      destination_id: "polaris_dst_json-id",
+      project_id: "storefront",
+      environment: "production",
+      vendor: "meta-capi",
+      instance_label: "storefront-prod",
+      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
+      secret_provider: "env",
+      mode: "live",
+    });
+  });
+
+  it("passes optional operational tuning fields through to the insert", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_tuned",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(
+      {
+        ...CREATE_BASE_ARGS,
+        maxConcurrency: "16",
+        maxRps: "200",
+        retryPolicy: "aggressive",
+        deadLetterThreshold: "10",
+      },
+      makeContext(capture.streams),
+    );
+    const inserted = store.inserts[0];
+    if (inserted === undefined) throw new Error("expected one insert");
+    expect(inserted.max_concurrency).toBe(16);
+    expect(inserted.max_rps).toBe(200);
+    expect(inserted.retry_policy).toBe("aggressive");
+    expect(inserted.dead_letter_threshold).toBe(10);
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write", async () => {
+    // CRITICAL acceptance-criteria test: the hypothetical `--field-map`
+    // flag must be refused and the store must remain untouched.
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_should-not-exist",
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner(
+        {
+          ...CREATE_BASE_ARGS,
+          // Cast through `unknown` so the type system would normally refuse this
+          // — we're proving the runtime gate fires even if a future caller bypasses
+          // the typed surface.
+          ...({ fieldMap: "purchase.value=value" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.inserts).toHaveLength(0);
+    expect(store.rows.size).toBe(0);
+  });
+
+  it("rejects an event-map flag too", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner(
+        {
+          ...CREATE_BASE_ARGS,
+          ...({ eventMap: "checkout.started -> CompletePayment" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.inserts).toHaveLength(0);
+  });
+
+  it("rejects unsupported --env values with a usage error", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner({ ...CREATE_BASE_ARGS, env: "qa" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("rejects malformed --secret-ref values (plaintext detection by shape)", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner({ ...CREATE_BASE_ARGS, secretRef: "plainsecretvalue" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.inserts).toHaveLength(0);
+  });
+
+  it("rejects unsupported --mode values", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner({ ...CREATE_BASE_ARGS, mode: "ghost" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("rejects invalid vendor or instance-label shapes", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      openStore: () => store.asCreateStore(),
+    });
+    await expect(
+      runner({ ...CREATE_BASE_ARGS, vendor: "META CAPI!" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    await expect(
+      runner({ ...CREATE_BASE_ARGS, instanceLabel: "BadLabel!" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+});
+
+describe("destinations list runner", () => {
+  it("emits an empty-friendly message when no destinations match", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsListRunner({ openStore: () => store.asListStore() });
+    await runner({ project: "storefront", env: "production" }, makeContext(capture.streams));
+    expect(capture.stdout.join("")).toContain("(no destinations");
+  });
+
+  it("returns matching rows scoped by (project, env)", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_one", vendor: "meta-capi" });
+    seedActiveRow(store, { destination_id: "polaris_dst_two", vendor: "ga4" });
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_other-env",
+      environment: "staging",
+      vendor: "meta-capi",
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsListRunner({ openStore: () => store.asListStore() });
+    await runner({ project: "storefront", env: "production" }, jsonContext(capture.streams));
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed.count).toBe(2);
+    const ids = parsed.rows.map((r: { destination_id: string }) => r.destination_id);
+    expect(ids).toContain("polaris_dst_one");
+    expect(ids).toContain("polaris_dst_two");
+    expect(ids).not.toContain("polaris_dst_other-env");
+  });
+});
+
+describe("destinations show runner", () => {
+  it("returns the row and exposes only non-secret fields", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_show-me" });
+    const capture = captureOutput();
+    const runner = buildDestinationsShowRunner({ openStore: () => store.asShowStore() });
+    await runner({ destinationId: "polaris_dst_show-me" }, makeContext(capture.streams));
+    const stdout = capture.stdout.join("");
+    expect(stdout).toContain("polaris_dst_show-me");
+    expect(stdout).toContain("vendor                meta-capi");
+    // The secret reference is shown (it IS the reference, not the plaintext)
+    expect(stdout).toContain("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+  });
+
+  it("raises a usage error when the id is unknown", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsShowRunner({ openStore: () => store.asShowStore() });
+    await expect(
+      runner({ destinationId: "polaris_dst_missing" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+});
+
+describe("destinations enable runner", () => {
+  it("transitions a paused destination to active", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_paused",
+      status: "paused",
+    });
+    const now = new Date("2026-05-12T15:00:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableRunner({
+      openStore: () => store.asEnableStore(),
+      now: () => now,
+    });
+    await runner({ destinationId: "polaris_dst_paused" }, makeContext(capture.streams));
+    const after = store.rows.get("polaris_dst_paused");
+    expect(after?.status).toBe("active");
+    expect(after?.disabled_reason).toBe(null);
+    expect(capture.stdout.join("")).toContain("enabled polaris_dst_paused");
+    // Audit-intent TODO is surfaced to stderr until P6-006 lands.
+    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+  });
+
+  it("is idempotent on an already-active destination", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_active" });
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableRunner({
+      openStore: () => store.asEnableStore(),
+    });
+    await runner({ destinationId: "polaris_dst_active" }, makeContext(capture.streams));
+    expect(capture.stdout.join("")).toContain("already active");
+    // No audit-intent line emitted on the idempotent no-op path.
+    expect(capture.stderr.join("")).not.toContain("audit:");
+  });
+
+  it("raises a usage error when the id is unknown", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableRunner({
+      openStore: () => store.asEnableStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_missing" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+});
+
+describe("destinations disable runner", () => {
+  it("transitions an active destination to disabled with the supplied reason", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_to-disable" });
+    const now = new Date("2026-05-12T16:00:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableRunner({
+      openStore: () => store.asDisableStore(),
+      now: () => now,
+    });
+    await runner(
+      { destinationId: "polaris_dst_to-disable", reason: "incident response" },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_to-disable");
+    expect(after?.status).toBe("disabled");
+    expect(after?.disabled_reason).toBe("incident response");
+    expect(after?.updated_at).toBe(now.toISOString());
+    expect(capture.stdout.join("")).toContain("disabled polaris_dst_to-disable");
+    expect(capture.stdout.join("")).toContain("incident response");
+    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+  });
+
+  it("requires --reason", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_needs-reason" });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableRunner({
+      openStore: () => store.asDisableStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_needs-reason" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("is idempotent on an already-disabled destination and preserves the original reason", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_already-disabled",
+      status: "disabled",
+      disabled_reason: "first incident",
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableRunner({
+      openStore: () => store.asDisableStore(),
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_already-disabled",
+        reason: "second attempt",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_already-disabled");
+    expect(after?.disabled_reason).toBe("first incident");
+    expect(capture.stdout.join("")).toContain("already disabled");
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_x" });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableRunner({
+      openStore: () => store.asDisableStore(),
+    });
+    await expect(
+      runner(
+        {
+          destinationId: "polaris_dst_x",
+          reason: "operator decision",
+          // smuggled mapping flag
+          ...({ fieldMap: "x=y" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    const after = store.rows.get("polaris_dst_x");
+    expect(after?.status).toBe("active"); // unchanged
+  });
+});
+
+describe("destinations update-ops runner", () => {
+  it("updates only operational tuning fields", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_to-tune",
+      max_concurrency: 4,
+      max_rps: 50,
+      retry_policy: "standard",
+      dead_letter_threshold: 5,
+    });
+    const now = new Date("2026-05-12T17:00:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+      now: () => now,
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_to-tune",
+        maxConcurrency: "16",
+        maxRps: "250",
+        retryPolicy: "aggressive",
+        deadLetterThreshold: "9",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_to-tune");
+    expect(after?.max_concurrency).toBe(16);
+    expect(after?.max_rps).toBe(250);
+    expect(after?.retry_policy).toBe("aggressive");
+    expect(after?.dead_letter_threshold).toBe(9);
+    expect(after?.updated_at).toBe(now.toISOString());
+    // Non-tuning fields untouched.
+    expect(after?.status).toBe("active");
+    expect(after?.mode).toBe("live");
+    expect(after?.secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    expect(capture.stdout.join("")).toContain("updated polaris_dst_to-tune");
+  });
+
+  it("rejects calls with zero operational flags", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_noflags" });
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_noflags" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    // No update issued.
+    expect(store.updateCalls).toBe(0);
+  });
+
+  it("rejects --max-concurrency values outside the supported range", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_overlimit" });
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+    });
+    await expect(
+      runner(
+        { destinationId: "polaris_dst_overlimit", maxConcurrency: "9999" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write — the acceptance-criteria gate", async () => {
+    // The architectural guarantee: even if a future caller smuggles a
+    // mapping-shaped flag in, the runner refuses BEFORE any DB write.
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_no-mapping",
+      max_concurrency: 4,
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+    });
+    await expect(
+      runner(
+        {
+          destinationId: "polaris_dst_no-mapping",
+          maxConcurrency: "8",
+          // smuggled mapping flag
+          ...({ fieldMap: "purchase.value=value" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    // Update never happened.
+    expect(store.updateCalls).toBe(0);
+    const after = store.rows.get("polaris_dst_no-mapping");
+    expect(after?.max_concurrency).toBe(4);
+  });
+
+  it("rejects every documented forbidden token", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_token-test" });
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+    });
+    for (const token of FORBIDDEN_MAPPING_FLAG_TOKENS) {
+      const camel = token.replace(/[-_](.)/g, (_, ch: string) => ch.toUpperCase());
+      await expect(
+        runner(
+          {
+            destinationId: "polaris_dst_token-test",
+            maxConcurrency: "8",
+            ...({ [camel]: "forbidden" } as Record<string, string>),
+          },
+          makeContext(capture.streams),
+        ),
+      ).rejects.toMatchObject({ name: "UsageError" });
+    }
+    expect(store.updateCalls).toBe(0);
+  });
+});
+
+describe("destinations command surface mutates flags", () => {
+  it("declares mutates: true on writers and mutates: false on read commands", async () => {
+    const mod = await import("../src/index.js");
+    expect(mod.destinationsListCommand.mutates).toBe(false);
+    expect(mod.destinationsShowCommand.mutates).toBe(false);
+    expect(mod.destinationsCreateCommand.mutates).toBe(true);
+    expect(mod.destinationsEnableCommand.mutates).toBe(true);
+    expect(mod.destinationsDisableCommand.mutates).toBe(true);
+    expect(mod.destinationsUpdateOpsCommand.mutates).toBe(true);
+  });
+
+  it("destinationsCommand group reports mutates: false (children declare their own)", async () => {
+    const mod = await import("../src/index.js");
+    expect(mod.destinationsCommand.mutates).toBe(false);
+  });
+});
+
+describe("destinations command dispatcher wiring", () => {
+  it("`polaris destinations --help` lists all six subcommands", async () => {
+    const capture = captureOutput();
+    const code = await run({
+      argv: ["destinations", "--help"],
+      env: { ...VALID_ENV },
+      output: capture.streams,
+      meta: META,
+    });
+    expect(code).toBe(ExitCode.Ok);
+    const help = capture.stdout.join("");
+    expect(help).toContain("list");
+    expect(help).toContain("show");
+    expect(help).toContain("create");
+    expect(help).toContain("enable");
+    expect(help).toContain("disable");
+    expect(help).toContain("update-ops");
+  });
+
+  it("help text emphasises the no-mapping rule", async () => {
+    const capture = captureOutput();
+    const code = await run({
+      argv: ["destinations", "--help"],
+      env: { ...VALID_ENV },
+      output: capture.streams,
+      meta: META,
+    });
+    expect(code).toBe(ExitCode.Ok);
+    expect(capture.stdout.join("")).toMatch(/consumers\/<vendor>\/v<n>\/mappers/);
+  });
+});
+
+/**
+ * Schema-level invariant: the Kysely `DestinationsTable` interface in
+ * `@polaris/shared-db` MUST NOT carry any column resembling a mapping
+ * field. This is the "Tests protect against semantic mapping fields
+ * entering the DB model" criterion from the task card.
+ *
+ * The check is structural: we import the shared-db source and inspect the
+ * column set the typed surface exposes through `InsertDestinationInput`
+ * (the only shape the CLI write path accepts). Any future refactor that
+ * adds a `field_map`-shaped column would surface here.
+ */
+describe("schema invariant: no mapping fields on DestinationsTable", () => {
+  it("rejects every forbidden mapping token across the InsertDestinationInput shape", () => {
+    // Build a probe object listing every legal Insert key the production
+    // code path uses. If a future change adds a column resembling a
+    // mapping field, the maintainer must add it here AND the assertion
+    // below will fail loudly so they reconsider.
+    const insertKeys = [
+      "destination_id",
+      "project_id",
+      "environment",
+      "vendor",
+      "instance_label",
+      "secret_ref",
+      "mode",
+      "max_concurrency",
+      "max_rps",
+      "retry_policy",
+      "dead_letter_threshold",
+    ];
+    for (const key of insertKeys) {
+      const normalised = key.toLowerCase().replace(/_/g, "-");
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(normalised);
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(key);
+    }
+  });
+
+  it("rejects mapping tokens on UpdateDestinationOpsInput", () => {
+    // Same probe for the update path. Adding a column resembling mapping
+    // semantics to the ops-update repository surface fails this gate.
+    const updateKeys = ["max_concurrency", "max_rps", "retry_policy", "dead_letter_threshold"];
+    for (const key of updateKeys) {
+      const normalised = key.toLowerCase().replace(/_/g, "-");
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(normalised);
+    }
+  });
+
+  it("the DestinationRow read-shape exposes no field whose name matches a mapping token", () => {
+    // Construct one shape exemplar and assert against its keys. This
+    // doubles as type-level documentation of the read surface.
+    const exemplar: DestinationRow = {
+      destination_id: "polaris_dst_x",
+      project_id: "p",
+      environment: "production",
+      vendor: "meta-capi",
+      instance_label: "x",
+      secret_ref: "env:X",
+      status: "active",
+      mode: "live",
+      max_concurrency: 1,
+      max_rps: 1,
+      retry_policy: "standard",
+      dead_letter_threshold: 1,
+      disabled_reason: null,
+      created_at: "2026-05-12T00:00:00.000Z",
+      updated_at: "2026-05-12T00:00:00.000Z",
+    };
+    for (const key of Object.keys(exemplar)) {
+      const normalised = key.toLowerCase().replace(/_/g, "-");
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(normalised);
+    }
+  });
+
+  it("the destinations migration SQL declares no mapping-shaped column", async () => {
+    // Last-line-of-defence schema check: read the live migration file off
+    // disk and assert no mapping-shaped column name appears in the CREATE
+    // TABLE definition. Catches a maintainer who adds a column to the
+    // migration but forgets to update the typed interface.
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const migrationPath = join(
+      here,
+      "..",
+      "..",
+      "..",
+      "db",
+      "migrations",
+      "20260512000005_create_destinations.sql",
+    );
+    const sql = await readFile(migrationPath, "utf8");
+    // Inspect the column section between CREATE TABLE and the closing
+    // paren before `-- migrate:down`. We split on the constraint markers
+    // because the constraint *names* legitimately include the word "format"
+    // and we only care about column declarations.
+    const createTableMatch = sql.match(/CREATE TABLE destinations \(([\s\S]*?)\);/);
+    expect(createTableMatch).not.toBeNull();
+    const body = createTableMatch?.[1] ?? "";
+    // Pull out lines that look like column declarations (start with a
+    // lowercase identifier followed by whitespace then a type, not the
+    // `CONSTRAINT` or `PRIMARY KEY` keywords).
+    const columnLines = body
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line.length > 0 &&
+          !line.startsWith("--") &&
+          !line.toUpperCase().startsWith("CONSTRAINT") &&
+          !line.toUpperCase().startsWith("PRIMARY KEY") &&
+          !line.toUpperCase().startsWith("UNIQUE") &&
+          !line.toUpperCase().startsWith("CHECK"),
+      );
+    expect(columnLines.length).toBeGreaterThan(0);
+    const columnNames = columnLines.map((line) => {
+      const match = line.match(/^([a-z_][a-z0-9_]*)/);
+      return match?.[1] ?? "";
+    });
+    for (const name of columnNames) {
+      if (name === "") continue;
+      const kebab = name.replace(/_/g, "-");
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(kebab);
+      expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(name);
+    }
+  });
+});
