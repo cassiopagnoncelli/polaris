@@ -264,6 +264,7 @@ function makeContext(streams: OutputStreams): CommandContext {
     } as unknown as CommandContext["logger"],
     output: streams,
     meta: META,
+    actor: { source: "cli", label: "cli" },
   };
 }
 

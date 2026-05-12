@@ -30,6 +30,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type ApiKeyRow,
+  type AuditActorSource,
   type AuditEnvironment,
   connectDb,
   findApiKeyById,
@@ -74,6 +75,7 @@ export interface RotateStoreInput {
 export interface KeysRotateAuditPayload {
   readonly issueAuditId: string;
   readonly revokeAuditId: string;
+  readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
   readonly occurredAt: Date;
   readonly newKey: KeyAuditSnapshot;
@@ -129,7 +131,7 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
   // Tests can inject a deterministic id sequence; production uses uuidv7.
   // We need two distinct ids per rotation, so we generate per-call.
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
-  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
+  const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: KeysRotateArgs, ctx: CommandContext): Promise<undefined> {
     const id = args.apiKeyId.trim();
@@ -187,7 +189,8 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
         audit: {
           issueAuditId,
           revokeAuditId,
-          actorLabel: actorLabelFn(),
+          actorSource: ctx.actor.source,
+          actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
           occurredAt: now,
           newKey,
           oldKeyBefore,
@@ -252,7 +255,7 @@ function defaultStore(): KeysRotateStore {
         // Audit row for the newly-issued key (action: keys.rotate.issue).
         await insertAuditRecord(trx, {
           audit_id: input.audit.issueAuditId,
-          actor_source: "cli",
+          actor_source: input.audit.actorSource,
           actor_label: input.audit.actorLabel,
           action: "keys.rotate.issue",
           target_type: "api_key",
@@ -268,7 +271,7 @@ function defaultStore(): KeysRotateStore {
         // Audit row for the revoked old key (action: keys.rotate.revoke).
         await insertAuditRecord(trx, {
           audit_id: input.audit.revokeAuditId,
-          actor_source: "cli",
+          actor_source: input.audit.actorSource,
           actor_label: input.audit.actorLabel,
           action: "keys.rotate.revoke",
           target_type: "api_key",

@@ -48,6 +48,20 @@ export {
   type ProcessorActivationRow,
 } from "./processor-activations.js";
 export {
+  findOperatorTokenAuthRowById,
+  findOperatorTokenById,
+  insertOperatorToken,
+  type InsertOperatorTokenInput,
+  listOperatorTokens,
+  OPERATOR_TOKEN_STATUSES,
+  type OperatorTokenAuthRow,
+  type OperatorTokenRow,
+  type OperatorTokenStatus,
+  type OperatorTokensTable,
+  revokeOperatorToken,
+  touchOperatorTokenLastUsedAt,
+} from "./operator-tokens.js";
+export {
   fetchAllProjects,
   fetchAllSources,
   fetchSourcesById,

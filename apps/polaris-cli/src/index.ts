@@ -49,6 +49,7 @@ export {
   destinationsCommand,
   exportCommand,
   keysCommand,
+  operatorsCommand,
   processorsCommand,
   projectsCommand,
   sourcesCommand,
@@ -223,6 +224,34 @@ export {
   type IssuedKeyMaterial,
 } from "./commands/keys/token.js";
 export {
+  operatorsCreateCommand,
+  operatorsListCommand,
+  operatorsRevokeCommand,
+} from "./commands/operators/index.js";
+export {
+  buildOperatorsCreateRunner,
+  type OperatorsCreateAuditPayload,
+  type OperatorsCreateHooks,
+  type OperatorsCreateStore,
+  type OperatorTokenAuditSnapshot,
+} from "./commands/operators/create.js";
+export {
+  buildOperatorsListRunner,
+  type OperatorsListHooks,
+  type OperatorsListStore,
+} from "./commands/operators/list.js";
+export {
+  buildOperatorsRevokeRunner,
+  type OperatorsRevokeAuditPayload,
+  type OperatorsRevokeHooks,
+  type OperatorsRevokeStore,
+} from "./commands/operators/revoke.js";
+export {
+  generateOperatorTokenMaterial,
+  type IssuedOperatorTokenMaterial,
+} from "./operators/token-material.js";
+export { createKyselyOperatorTokenRepository } from "./operators/repository.js";
+export {
   projectsListCommand,
   projectsShowCommand,
   projectsSyncCommand,
@@ -323,9 +352,21 @@ export {
   listAuditRecords,
   listDestinationsByProjectEnv,
   type ListAuditRecordsFilter,
+  findOperatorTokenAuthRowById,
+  findOperatorTokenById,
+  insertOperatorToken,
+  type InsertOperatorTokenInput,
+  listOperatorTokens,
+  OPERATOR_TOKEN_STATUSES,
+  type OperatorTokenAuthRow,
+  type OperatorTokenRow,
+  type OperatorTokenStatus,
+  type OperatorTokensTable,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
   revokeApiKey,
+  revokeOperatorToken,
+  touchOperatorTokenLastUsedAt,
   updateDestinationOps,
   type UpdateDestinationOpsInput,
 } from "./db/index.js";

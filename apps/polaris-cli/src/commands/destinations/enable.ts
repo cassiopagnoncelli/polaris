@@ -20,6 +20,7 @@ import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
+  type AuditActorSource,
   type AuditEnvironment,
   type DestinationRow,
   connectDb,
@@ -55,6 +56,7 @@ export interface DestinationAuditSnapshot {
 
 export interface DestinationsEnableAuditPayload {
   readonly auditId: string;
+  readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
   readonly occurredAt: Date;
   readonly before: DestinationAuditSnapshot;
@@ -111,7 +113,7 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
-  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
+  const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(
     args: DestinationsEnableArgs,
@@ -138,7 +140,8 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
       const auditId = generateAuditId();
       const auditPayload: DestinationsEnableAuditPayload = {
         auditId,
-        actorLabel: actorLabelFn(),
+        actorSource: ctx.actor.source,
+        actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
         occurredAt: now,
         before: toSnapshot(existing),
         after: toSnapshot({
@@ -200,7 +203,7 @@ function defaultStore(): DestinationsEnableStore {
         if (!applied) return false;
         await insertAuditRecord(trx, {
           audit_id: audit.auditId,
-          actor_source: "cli",
+          actor_source: audit.actorSource,
           actor_label: audit.actorLabel,
           action: "destinations.enable",
           target_type: "destination",

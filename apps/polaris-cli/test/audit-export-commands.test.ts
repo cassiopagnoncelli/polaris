@@ -99,6 +99,7 @@ function makeContext(streams: OutputStreams, output: "human" | "json" = "human")
     } as CommandContext["logger"],
     output: streams,
     meta: META,
+    actor: { source: "cli", label: "cli" },
   };
 }
 

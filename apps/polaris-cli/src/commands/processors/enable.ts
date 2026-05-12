@@ -21,6 +21,7 @@ import type { Environment } from "@polaris/shared-db";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";
 import {
+  type AuditActorSource,
   type AuditEnvironment,
   type EnableProcessorActivationInput,
   type ProcessorActivationKey,
@@ -66,6 +67,7 @@ export interface ProcessorAuditSnapshot {
 
 export interface ProcessorsEnableAuditPayload {
   readonly auditId: string;
+  readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
   readonly occurredAt: Date;
   readonly before: ProcessorAuditSnapshot;
@@ -142,7 +144,7 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
   const resolveRoot =
     hooks.resolveRoot ??
     ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
-  const actorLabel = hooks.actorLabel ?? (() => "cli");
+  const actorLabelOverride = hooks.actorLabel;
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(
@@ -170,6 +172,7 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
 
       const now = nowFn();
       const auditId = generateAuditId();
+      const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
       const before: ProcessorAuditSnapshot =
         existing === null
           ? {
@@ -196,11 +199,12 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
         ...before,
         enabled_state: "enabled",
         enabled_at: now.toISOString(),
-        last_changed_by: actorLabel(),
+        last_changed_by: actorLabel,
       };
       const auditPayload: ProcessorsEnableAuditPayload = {
         auditId,
-        actorLabel: actorLabel(),
+        actorSource: ctx.actor.source,
+        actorLabel,
         occurredAt: now,
         before,
         after,
@@ -212,7 +216,7 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
         {
           ...key,
           enabledAt: now,
-          lastChangedBy: actorLabel(),
+          lastChangedBy: actorLabel,
         },
         auditPayload,
       );
@@ -261,7 +265,7 @@ function defaultStore(): ProcessorsEnableStore {
         if (!applied) return false;
         await insertAuditRecord(trx, {
           audit_id: audit.auditId,
-          actor_source: "cli",
+          actor_source: audit.actorSource,
           actor_label: audit.actorLabel,
           action: "processors.enable",
           target_type: "processor_activation",

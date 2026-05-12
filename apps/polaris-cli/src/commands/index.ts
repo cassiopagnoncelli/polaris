@@ -9,6 +9,7 @@
  *   - P6-004 adds `destinations` commands
  *   - P6-005 adds `processors` commands
  *   - P6-006 adds `audit` and `export` commands
+ *   - P6-007 adds `operators` commands
  *   - P7-001 adds `replays` commands
  *
  * Each future task only needs to import its own `CommandDefinition`s and add
@@ -21,6 +22,7 @@ import { auditCommand } from "./audit/index.js";
 import { destinationsCommand } from "./destinations/index.js";
 import { exportCommand } from "./export/index.js";
 import { keysCommand } from "./keys/index.js";
+import { operatorsCommand } from "./operators/index.js";
 import { processorsCommand } from "./processors/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { sourcesCommand } from "./sources/index.js";
@@ -33,6 +35,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   keysCommand,
   destinationsCommand,
   processorsCommand,
+  operatorsCommand,
   auditCommand,
   exportCommand,
 ];
@@ -42,6 +45,7 @@ export {
   destinationsCommand,
   exportCommand,
   keysCommand,
+  operatorsCommand,
   processorsCommand,
   projectsCommand,
   sourcesCommand,

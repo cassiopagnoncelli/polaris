@@ -125,7 +125,86 @@ pnpm lint
 
 ```text
 Files changed:
+  db/migrations/20260512000009_create_operator_tokens.sql        (NEW)
+
+  packages/shared-control-plane/package.json                     (NEW)
+  packages/shared-control-plane/tsconfig.json                    (NEW)
+  packages/shared-control-plane/vitest.config.ts                 (NEW)
+  packages/shared-control-plane/src/actor.ts                     (NEW)
+  packages/shared-control-plane/src/gate.ts                      (NEW)
+  packages/shared-control-plane/src/index.ts                     (NEW)
+  packages/shared-control-plane/src/resolver.ts                  (NEW)
+  packages/shared-control-plane/src/token-format.ts              (NEW)
+  packages/shared-control-plane/test/actor.test.ts               (NEW)
+  packages/shared-control-plane/test/gate.test.ts                (NEW)
+  packages/shared-control-plane/test/resolver.test.ts            (NEW)
+  packages/shared-control-plane/test/token-format.test.ts        (NEW)
+
+  apps/polaris-cli/package.json                                  (dep added)
+  apps/polaris-cli/src/command.ts                                (ctx.actor)
+  apps/polaris-cli/src/program.ts                                (dispatcher gate, resolveActor)
+  apps/polaris-cli/src/index.ts                                  (exports)
+  apps/polaris-cli/src/commands/index.ts                         (register operatorsCommand)
+  apps/polaris-cli/src/commands/keys/create.ts                   (thread ctx.actor)
+  apps/polaris-cli/src/commands/keys/revoke.ts                   (thread ctx.actor)
+  apps/polaris-cli/src/commands/keys/rotate.ts                   (thread ctx.actor)
+  apps/polaris-cli/src/commands/destinations/enable.ts           (thread ctx.actor)
+  apps/polaris-cli/src/commands/destinations/disable.ts          (thread ctx.actor)
+  apps/polaris-cli/src/commands/processors/enable.ts             (thread ctx.actor, last_changed_by)
+  apps/polaris-cli/src/commands/processors/disable.ts            (thread ctx.actor, last_changed_by)
+  apps/polaris-cli/src/commands/operators/create.ts              (NEW)
+  apps/polaris-cli/src/commands/operators/list.ts                (NEW)
+  apps/polaris-cli/src/commands/operators/revoke.ts              (NEW)
+  apps/polaris-cli/src/commands/operators/index.ts               (NEW)
+  apps/polaris-cli/src/db/index.ts                               (export operator-tokens)
+  apps/polaris-cli/src/db/operator-tokens.ts                     (NEW, module augmentation)
+  apps/polaris-cli/src/operators/repository.ts                   (NEW, Kysely adapter)
+  apps/polaris-cli/src/operators/token-material.ts               (NEW, wire-format issuer)
+  apps/polaris-cli/test/audit-recorder.test.ts                   (ctx.actor in makeContext)
+  apps/polaris-cli/test/audit-export-commands.test.ts            (ctx.actor in makeContext)
+  apps/polaris-cli/test/destinations-commands.test.ts            (ctx.actor in makeContext)
+  apps/polaris-cli/test/keys-commands.test.ts                    (ctx.actor in makeContext)
+  apps/polaris-cli/test/processors-commands.test.ts              (ctx.actor in makeContext)
+  apps/polaris-cli/test/dispatcher-gate.test.ts                  (NEW)
+  apps/polaris-cli/test/operators-commands.test.ts               (NEW)
+  apps/polaris-cli/test/operator-tokens-migration.test.ts        (NEW)
+
 Commands run:
+  pnpm install
+  pnpm -r build
+  pnpm -r typecheck
+  pnpm --filter @polaris/shared-control-plane test
+  pnpm --filter @polaris/polaris-cli test
+  pnpm --filter @polaris/polaris-cli lint
+  pnpm --filter @polaris/shared-control-plane lint
+  pnpm exec biome format apps/polaris-cli/src apps/polaris-cli/test packages/shared-control-plane/src packages/shared-control-plane/test
+
 Checks passed:
+  typecheck: all packages clean
+  shared-control-plane: 30 tests / 4 files
+  polaris-cli: 224 tests / 12 files
+  ingester-api: 101 tests / 11 files (untouched by this task; confirms no breakage)
+  lint: clean on shared-control-plane and polaris-cli
+  format: clean (after one auto-format pass)
+
 Known gaps:
+  - The dispatcher gate reads the environment from the parsed `--env` flag if
+    present, else POLARIS_ENV, else undefined. Commands that resolve their
+    environment from a DB row (destinations.disable <id>, keys.revoke <id>,
+    keys.rotate <id>) cannot trip the gate from args alone — operators must
+    set POLARIS_ENV=production (or a profile that pins it) to opt those
+    commands into the gate. This matches the architecture-doc rule that the
+    gate is the ONE rule and does not pre-fetch operative rows.
+  - v1 operator tokens are NOT scoped per environment. A single token
+    authorizes its operator across every (project, environment). Per the
+    task card and 02-control-plane.md, scoping is a future iteration.
+  - There is no `polaris operators rotate` command. The task card mentions
+    rotate, but the briefing collapsed it: rotation is `operators create`
+    + `operators revoke` run by the operator, matching the no-grace-period
+    contract from 11-production-readiness.md. The CLI ergonomics for an
+    explicit `rotate` can land in a follow-up.
+  - `cli_oidc` is reserved-but-not-implemented (out of scope for v1).
+  - `migration` and `system` actor sources are reserved in the closed set
+    but not yet produced by any command — they'll appear when P11+ scripted
+    runs need them.
 ```

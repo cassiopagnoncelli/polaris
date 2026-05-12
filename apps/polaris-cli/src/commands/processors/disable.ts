@@ -21,6 +21,7 @@ import type { Environment } from "@polaris/shared-db";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";
 import {
+  type AuditActorSource,
   type AuditEnvironment,
   type DisableProcessorActivationInput,
   type ProcessorActivationKey,
@@ -51,6 +52,7 @@ interface ProcessorsDisableArgs {
 
 export interface ProcessorsDisableAuditPayload {
   readonly auditId: string;
+  readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
   readonly occurredAt: Date;
   readonly before: ProcessorAuditSnapshot;
@@ -123,7 +125,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
   const resolveRoot =
     hooks.resolveRoot ??
     ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
-  const actorLabel = hooks.actorLabel ?? (() => "cli");
+  const actorLabelOverride = hooks.actorLabel;
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(
@@ -151,6 +153,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
 
       const now = nowFn();
       const auditId = generateAuditId();
+      const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
       const before: ProcessorAuditSnapshot =
         existing === null
           ? {
@@ -177,11 +180,12 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
         ...before,
         enabled_state: "disabled",
         disabled_at: now.toISOString(),
-        last_changed_by: actorLabel(),
+        last_changed_by: actorLabel,
       };
       const auditPayload: ProcessorsDisableAuditPayload = {
         auditId,
-        actorLabel: actorLabel(),
+        actorSource: ctx.actor.source,
+        actorLabel,
         occurredAt: now,
         before,
         after,
@@ -193,7 +197,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
         {
           ...key,
           disabledAt: now,
-          lastChangedBy: actorLabel(),
+          lastChangedBy: actorLabel,
         },
         auditPayload,
       );
@@ -242,7 +246,7 @@ function defaultStore(): ProcessorsDisableStore {
         if (!applied) return false;
         await insertAuditRecord(trx, {
           audit_id: audit.auditId,
-          actor_source: "cli",
+          actor_source: audit.actorSource,
           actor_label: audit.actorLabel,
           action: "processors.disable",
           target_type: "processor_activation",

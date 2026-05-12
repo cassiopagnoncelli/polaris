@@ -1,3 +1,13 @@
+import {
+  type GateEnvironment,
+  type OperatorTokenRepository,
+  type ResolvedActor,
+  enforceProductionMutationGate,
+  isGateEnvironment,
+  OPERATOR_TOKEN_ENV_VAR,
+  ProductionMutationRefusedError,
+  resolveActor,
+} from "@polaris/shared-control-plane";
 import { Command, Option } from "commander";
 import type {
   CommandContext,
@@ -13,8 +23,10 @@ import {
   OUTPUT_FORMATS,
 } from "./config.js";
 import { BUILTIN_COMMANDS } from "./commands/index.js";
+import { connectDb } from "./db/connect.js";
 import { CliError, ExitCode, isCliError, UsageError } from "./errors.js";
 import { createCliLogger } from "./logger.js";
+import { createKyselyOperatorTokenRepository } from "./operators/repository.js";
 import { createOutputStreams, type OutputStreams, renderJson } from "./output.js";
 import { type PackageMeta, resolvePackageMeta } from "./package-meta.js";
 
@@ -38,6 +50,30 @@ export interface RunOptions {
   readonly commands?: readonly CommandDefinition[];
   /** Override CLI package meta (tests pin git sha / build time). */
   readonly meta?: PackageMeta;
+  /**
+   * Test override: a pre-resolved actor. Production passes nothing and the
+   * dispatcher resolves the actor itself by consulting `POLARIS_OPERATOR_TOKEN`
+   * + the operator-tokens repository.
+   */
+  readonly actor?: ResolvedActor;
+  /**
+   * Test override: a synthetic operator-token repository. Production
+   * constructs a Kysely-backed one only when `POLARIS_OPERATOR_TOKEN` is
+   * set, so a typical CLI invocation pays no DB cost.
+   */
+  readonly operatorTokenRepository?: OperatorTokenRepository;
+  /**
+   * Test override: a deterministic secret-tail verifier. Production uses
+   * the platform's argon2id verifier from `@polaris/shared-secrets`; tests
+   * substitute a fast stub so the suite does not pay the ~30ms argon2
+   * cost per case. NEVER set this in production — every production CLI
+   * invocation uses argon2id.
+   */
+  readonly operatorTokenVerify?: (
+    plaintext: string,
+    hash: string,
+    algorithm: string,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -46,6 +82,20 @@ export interface RunOptions {
  * Never calls `process.exit` itself — the binary entry point in
  * `bin/polaris.ts` handles that. Returning a code keeps unit tests free of
  * `process.exit` mocking.
+ *
+ * Lifecycle:
+ *
+ *   1. Resolve the actor ONCE for this invocation. The result becomes
+ *      `ctx.actor` for every handler the dispatcher calls.
+ *   2. Build the commander program with the right hooks. Every mutating
+ *      command call goes through the production-mutation gate before the
+ *      handler runs.
+ *   3. Parse argv. Any refusal from the gate, or any other handler error,
+ *      lands in `handleTopLevelError` and is mapped to an exit code.
+ *
+ * The actor resolution opens a DB connection ONLY when
+ * `POLARIS_OPERATOR_TOKEN` is set and no repository was injected; the
+ * default CLI invocation (no env var) skips PostgreSQL entirely.
  */
 export async function run(options: RunOptions): Promise<ExitCode> {
   const env = options.env ?? process.env;
@@ -53,16 +103,54 @@ export async function run(options: RunOptions): Promise<ExitCode> {
   const meta = options.meta ?? resolvePackageMeta(env);
   const commands = options.commands ?? BUILTIN_COMMANDS;
 
-  const program = buildProgram({ env, output, meta, commands });
-  // commander reads `program.exitOverride()` to throw instead of `process.exit`
-  // on parse failures; we already do that in `buildProgram`. Wrap the parse
-  // call to map commander's exit-override errors to our `ExitCode` values.
+  let actor: ResolvedActor;
+  let closeRepository: (() => Promise<void>) | undefined;
   try {
-    await program.parseAsync(options.argv as string[], { from: "user" });
-    return ExitCode.Ok;
+    if (options.actor !== undefined) {
+      actor = options.actor;
+    } else if (options.operatorTokenRepository !== undefined) {
+      actor = await resolveActor({
+        env,
+        repository: options.operatorTokenRepository,
+        ...(options.operatorTokenVerify !== undefined
+          ? { verify: options.operatorTokenVerify }
+          : {}),
+      });
+    } else if (hasOperatorTokenEnvVar(env)) {
+      // Open a DB connection only when there's actually a token to verify.
+      const handle = connectDb({ env });
+      closeRepository = handle.close;
+      actor = await resolveActor({
+        env,
+        repository: createKyselyOperatorTokenRepository(handle.db),
+      });
+    } else {
+      actor = { source: "cli", label: "cli" };
+    }
   } catch (error: unknown) {
+    if (closeRepository !== undefined) await closeRepository();
     return handleTopLevelError(error, { output, env });
   }
+
+  try {
+    const program = buildProgram({ env, output, meta, commands, actor });
+    // commander reads `program.exitOverride()` to throw instead of `process.exit`
+    // on parse failures; we already do that in `buildProgram`. Wrap the parse
+    // call to map commander's exit-override errors to our `ExitCode` values.
+    try {
+      await program.parseAsync(options.argv as string[], { from: "user" });
+      return ExitCode.Ok;
+    } catch (error: unknown) {
+      return handleTopLevelError(error, { output, env });
+    }
+  } finally {
+    if (closeRepository !== undefined) await closeRepository();
+  }
+}
+
+function hasOperatorTokenEnvVar(env: NodeJS.ProcessEnv): boolean {
+  const raw = env[OPERATOR_TOKEN_ENV_VAR];
+  return typeof raw === "string" && raw.trim().length > 0;
 }
 
 interface BuildOptions {
@@ -70,6 +158,11 @@ interface BuildOptions {
   readonly output: OutputStreams;
   readonly meta: PackageMeta;
   readonly commands: readonly CommandDefinition[];
+  /**
+   * Resolved actor for this invocation. Pinned by `run(...)` so every
+   * handler sees the same identity and the gate consults the same source.
+   */
+  readonly actor: ResolvedActor;
 }
 
 /**
@@ -79,7 +172,7 @@ interface BuildOptions {
  * errors without going through `run`.
  */
 export function buildProgram(options: BuildOptions): Command {
-  const { env, output, meta, commands } = options;
+  const { env, output, meta, commands, actor } = options;
   const program = new Command();
 
   program
@@ -91,6 +184,10 @@ export function buildProgram(options: BuildOptions): Command {
         "Authentication: bash-invocable, no interactive login. Set two env vars:",
         "  POLARIS_API_URL  base URL of the control-plane API",
         "  POLARIS_TOKEN    bearer token issued by `polaris operators create`",
+        "",
+        "Production mutations require an authenticated operator token. Set",
+        "POLARIS_OPERATOR_TOKEN to a value issued via `polaris operators create`",
+        "before running any mutating command against a production environment.",
         "",
         "Profiles: keep multiple environments side-by-side in ~/.polaris/config.toml.",
         "The config file points each profile at the env var holding its token; the",
@@ -114,12 +211,14 @@ export function buildProgram(options: BuildOptions): Command {
       [
         "",
         "Environment variables:",
-        "  POLARIS_API_URL       Base URL of the control-plane API",
-        "  POLARIS_TOKEN         Bearer token (used when no profile is selected)",
-        "  POLARIS_PROFILE       Default profile name",
-        "  POLARIS_LOG_LEVEL     fatal|error|warn|info|debug|trace (default: warn)",
-        "  POLARIS_GIT_SHA       Optional build SHA shown by `polaris version`",
-        "  POLARIS_BUILD_TIME    Optional build timestamp shown by `polaris version`",
+        "  POLARIS_API_URL          Base URL of the control-plane API",
+        "  POLARIS_TOKEN            Bearer token (used when no profile is selected)",
+        "  POLARIS_PROFILE          Default profile name",
+        "  POLARIS_OPERATOR_TOKEN   Operator credential for production mutations",
+        "  POLARIS_ENV              Effective environment for the gate (development|staging|production)",
+        "  POLARIS_LOG_LEVEL        fatal|error|warn|info|debug|trace (default: warn)",
+        "  POLARIS_GIT_SHA          Optional build SHA shown by `polaris version`",
+        "  POLARIS_BUILD_TIME       Optional build timestamp shown by `polaris version`",
         "",
         "Exit codes:",
         "  0  success",
@@ -150,7 +249,27 @@ export function buildProgram(options: BuildOptions): Command {
       handler: CommandHandler<Args>,
     ) => {
       return async (args: Args, _command: Command): Promise<void> => {
-        const ctx = await buildContextForCommand({ env, output, meta, program, definition });
+        // Production-mutation gate. Applied for every command, ONCE,
+        // after argv has parsed (so `--env` is visible on `args`) and
+        // BEFORE the handler runs. Refusals throw
+        // `ProductionMutationRefusedError`, which `handleTopLevelError`
+        // maps to exit code 2 (usage error class — operator can fix it
+        // by setting POLARIS_OPERATOR_TOKEN).
+        const gateEnvironment = resolveGateEnvironment(args, env);
+        enforceProductionMutationGate({
+          command: { id: definition.id, mutates: definition.mutates },
+          environment: gateEnvironment,
+          actor,
+        });
+
+        const ctx = await buildContextForCommand({
+          env,
+          output,
+          meta,
+          program,
+          definition,
+          actor,
+        });
         const result = await handler(args, ctx);
         if (result !== undefined && result.exitCode !== ExitCode.Ok) {
           // Wrap a non-OK structured result in CliError so the top-level
@@ -171,6 +290,44 @@ export function buildProgram(options: BuildOptions): Command {
 }
 
 /**
+ * Determine the effective environment for the gate.
+ *
+ * Resolution order:
+ *
+ *   1. The command's parsed `--env` flag, if present and a recognised
+ *      value. Commands with their own `--env` carry the operator's
+ *      explicit intent (`polaris keys create --env production ...`).
+ *   2. `POLARIS_ENV` env var. Lets operators pin "this shell talks to
+ *      production" once, instead of repeating `--env` on each call.
+ *   3. `undefined` — the gate is a no-op when neither is set. For
+ *      commands where the operative environment lives in a DB row
+ *      (`destinations.disable <id>`), operators MUST set
+ *      `POLARIS_ENV=production` to opt the run into the gate; this
+ *      matches the architecture-doc contract that the gate is the
+ *      ONE rule and does not pre-fetch operative rows.
+ */
+function resolveGateEnvironment<Args>(
+  args: Args,
+  env: NodeJS.ProcessEnv,
+): GateEnvironment | undefined {
+  if (typeof args === "object" && args !== null) {
+    // commander parses `--env <value>` into `args.env` for option-based
+    // commands, but the same shape is used for any object with an `env`
+    // property; defensive index-access keeps the closure-property strict
+    // mode happy.
+    const candidate = (args as Record<string, unknown>)["env"];
+    if (typeof candidate === "string" && isGateEnvironment(candidate)) {
+      return candidate;
+    }
+  }
+  const fromEnv = env["POLARIS_ENV"];
+  if (typeof fromEnv === "string" && isGateEnvironment(fromEnv)) {
+    return fromEnv;
+  }
+  return undefined;
+}
+
+/**
  * Build the per-command context. Reads global flags from the program so each
  * command sees the same resolved values.
  */
@@ -180,6 +337,7 @@ async function buildContextForCommand(options: {
   readonly meta: PackageMeta;
   readonly program: Command;
   readonly definition: { readonly id: string; readonly mutates: boolean };
+  readonly actor: ResolvedActor;
 }): Promise<CommandContext> {
   const opts = options.program.opts<{
     profile?: string;
@@ -210,6 +368,8 @@ async function buildContextForCommand(options: {
       profile: config.profile,
       api_url: config.apiUrl,
       token_env: config.tokenEnvName,
+      actor_source: options.actor.source,
+      actor_label: options.actor.label,
     },
     "polaris command dispatched",
   );
@@ -219,6 +379,7 @@ async function buildContextForCommand(options: {
     logger,
     output: options.output,
     meta: options.meta,
+    actor: options.actor,
   };
 }
 
@@ -247,11 +408,12 @@ interface ErrorContext {
 
 /**
  * Translate whatever was thrown during command execution into an exit code
- * and a user-facing message. Handles three categories:
+ * and a user-facing message. Handles four categories:
  *
  *   1. commander's own `CommanderError` (parse errors, --help, --version)
  *   2. our `CliError` subclasses (config, auth, usage, not implemented)
- *   3. anything else (treated as `generic_failure`)
+ *   3. `ProductionMutationRefusedError` from the dispatcher gate
+ *   4. anything else (treated as `generic_failure`)
  */
 function handleTopLevelError(error: unknown, ctx: ErrorContext): ExitCode {
   // commander throws `CommanderError` with `code` and `exitCode` fields after
@@ -264,6 +426,14 @@ function handleTopLevelError(error: unknown, ctx: ErrorContext): ExitCode {
     if (error.message && error.message.length > 0 && error.code !== "commander.helpDisplayed") {
       ctx.output.writeErr(`polaris: ${error.message}`);
     }
+    return ExitCode.UsageError;
+  }
+
+  if (error instanceof ProductionMutationRefusedError) {
+    // Refusal surface: clean stderr message + exit code 2 (usage-error
+    // class). The operator's fix is to set POLARIS_OPERATOR_TOKEN or run
+    // against a non-production environment; both are operator-correctable.
+    ctx.output.writeErr(`polaris: ${error.message}`);
     return ExitCode.UsageError;
   }
 

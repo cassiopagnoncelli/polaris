@@ -21,6 +21,7 @@ import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
+  type AuditActorSource,
   type AuditEnvironment,
   connectDb,
   insertApiKey,
@@ -54,6 +55,7 @@ export interface KeyAuditSnapshot {
 
 export interface KeysCreateAuditPayload {
   readonly auditId: string;
+  readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
   readonly occurredAt: Date;
   readonly after: KeyAuditSnapshot;
@@ -111,7 +113,7 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
-  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
+  const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: KeysCreateArgs, ctx: CommandContext): Promise<undefined> {
     const validated = validate(args);
@@ -143,7 +145,8 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
       };
       const auditPayload: KeysCreateAuditPayload = {
         auditId,
-        actorLabel: actorLabelFn(),
+        actorSource: ctx.actor.source,
+        actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
         occurredAt: now,
         after,
         projectId: validated.project,
@@ -189,7 +192,7 @@ function defaultStore(): KeysCreateStore {
         await insertApiKey(trx, input);
         await insertAuditRecord(trx, {
           audit_id: audit.auditId,
-          actor_source: "cli",
+          actor_source: audit.actorSource,
           actor_label: audit.actorLabel,
           action: "keys.create",
           target_type: "api_key",

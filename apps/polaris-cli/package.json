@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-control-plane": "workspace:*",
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",

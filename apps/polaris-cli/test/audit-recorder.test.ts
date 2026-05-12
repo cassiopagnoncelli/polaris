@@ -79,6 +79,7 @@ function makeContext(streams: OutputStreams): CommandContext {
     } as CommandContext["logger"],
     output: streams,
     meta: META,
+    actor: { source: "cli", label: "cli" },
   };
 }
 

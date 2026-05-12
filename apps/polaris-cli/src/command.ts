@@ -1,3 +1,4 @@
+import type { ResolvedActor } from "@polaris/shared-control-plane";
 import type { Command } from "commander";
 import type { CliConfig } from "./config.js";
 import type { ExitCode } from "./errors.js";
@@ -10,14 +11,22 @@ import type { PackageMeta } from "./package-meta.js";
  *
  * The shell builds one context per CLI invocation and threads it through the
  * dispatcher. Handlers receive everything they need (config, logger, output
- * sinks, package meta) and never reach into `process.env` or `process.stdout`
- * directly, so tests can drive them deterministically.
+ * sinks, package meta, resolved actor) and never reach into `process.env` or
+ * `process.stdout` directly, so tests can drive them deterministically.
+ *
+ * `actor` is resolved once by the dispatcher (`resolveActor()` from
+ * `@polaris/shared-control-plane`) before any handler runs. Commands stamp
+ * `actor.source` and `actor.label` onto audit rows so the persisted row
+ * reflects the authenticated operator (when `POLARIS_OPERATOR_TOKEN` was
+ * set) or the `cli` fallback (when it was not). The same `actor` is what
+ * the dispatcher gate consulted to allow or refuse the run.
  */
 export interface CommandContext {
   readonly config: CliConfig;
   readonly logger: Logger;
   readonly output: OutputStreams;
   readonly meta: PackageMeta;
+  readonly actor: ResolvedActor;
 }
 
 /**
