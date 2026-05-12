@@ -1,0 +1,42 @@
+{
+  "name": "@polaris/polaris-cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polaris control-plane CLI — thin client that talks to apps/control-plane-api over HTTPS using env-var bearer auth.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "polaris": "./dist/bin/polaris.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "commander": "^14.0.2",
+    "smol-toml": "^1.5.0",
+    "zod": "4.4.3"
+  }
+}
