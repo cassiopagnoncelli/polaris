@@ -1,0 +1,44 @@
+{
+  "name": "@polaris/shared-clickhouse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris shared ClickHouse client. Wraps @clickhouse/client and is the only sanctioned ClickHouse access path in the workspace.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist .vitest *.tsbuildinfo",
+    "format": "biome format --write src test",
+    "format:check": "biome format src test",
+    "lint": "biome lint src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.10.1",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
