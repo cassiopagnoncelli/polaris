@@ -86,11 +86,24 @@ function captureOutput(): Capture {
  * In-memory `destinations` table backing every runner-level test. The shape
  * mirrors the Kysely row the production repository surfaces.
  */
+interface CapturedDestinationAudit {
+  readonly action: string;
+  readonly auditId: string;
+  readonly targetId: string;
+  readonly actorLabel: string;
+  readonly projectId: string;
+  readonly environment: string;
+  readonly before: unknown;
+  readonly after: unknown;
+  readonly reason: string | null;
+}
+
 class InMemoryDestinationStore {
   public readonly rows = new Map<string, DestinationRow>();
   public inserts: InsertDestinationInput[] = [];
   public updateCalls = 0;
   public closeCalls = 0;
+  public auditCalls: CapturedDestinationAudit[] = [];
 
   insert(row: DestinationRow): void {
     this.rows.set(row.destination_id, row);
@@ -153,7 +166,7 @@ class InMemoryDestinationStore {
   asEnableStore(): DestinationsEnableStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
-      enable: async (id, now) => {
+      enableWithAudit: async (id, now, audit) => {
         const row = this.rows.get(id);
         if (row === undefined) return false;
         if (row.status === "active") return false;
@@ -162,6 +175,17 @@ class InMemoryDestinationStore {
           status: "active",
           disabled_reason: null,
           updated_at: now.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.enable",
+          auditId: audit.auditId,
+          targetId: id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: null,
         });
         return true;
       },
@@ -174,7 +198,7 @@ class InMemoryDestinationStore {
   asDisableStore(): DestinationsDisableStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
-      disable: async (id, reason, now) => {
+      disableWithAudit: async (id, reason, now, audit) => {
         const row = this.rows.get(id);
         if (row === undefined) return false;
         if (row.status === "disabled") return false;
@@ -183,6 +207,17 @@ class InMemoryDestinationStore {
           status: "disabled",
           disabled_reason: reason,
           updated_at: now.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.disable",
+          auditId: audit.auditId,
+          targetId: id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
         });
         return true;
       },
@@ -595,8 +630,11 @@ describe("destinations enable runner", () => {
     expect(after?.status).toBe("active");
     expect(after?.disabled_reason).toBe(null);
     expect(capture.stdout.join("")).toContain("enabled polaris_dst_paused");
-    // Audit-intent TODO is surfaced to stderr until P6-006 lands.
-    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+    // P6-006: audit row persisted (no more stderr TODO marker).
+    expect(store.auditCalls).toHaveLength(1);
+    expect(store.auditCalls[0]?.action).toBe("destinations.enable");
+    expect(store.auditCalls[0]?.targetId).toBe("polaris_dst_paused");
+    expect(store.auditCalls[0]?.actorLabel).toBe("cli");
   });
 
   it("is idempotent on an already-active destination", async () => {
@@ -608,8 +646,8 @@ describe("destinations enable runner", () => {
     });
     await runner({ destinationId: "polaris_dst_active" }, makeContext(capture.streams));
     expect(capture.stdout.join("")).toContain("already active");
-    // No audit-intent line emitted on the idempotent no-op path.
-    expect(capture.stderr.join("")).not.toContain("audit:");
+    // No audit row on the idempotent no-op path.
+    expect(store.auditCalls).toHaveLength(0);
   });
 
   it("raises a usage error when the id is unknown", async () => {
@@ -644,7 +682,10 @@ describe("destinations disable runner", () => {
     expect(after?.updated_at).toBe(now.toISOString());
     expect(capture.stdout.join("")).toContain("disabled polaris_dst_to-disable");
     expect(capture.stdout.join("")).toContain("incident response");
-    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+    // P6-006: audit row persisted with the reason.
+    expect(store.auditCalls).toHaveLength(1);
+    expect(store.auditCalls[0]?.action).toBe("destinations.disable");
+    expect(store.auditCalls[0]?.reason).toBe("incident response");
   });
 
   it("requires --reason", async () => {

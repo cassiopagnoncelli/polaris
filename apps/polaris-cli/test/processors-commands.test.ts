@@ -131,9 +131,22 @@ function jsonContext(streams: OutputStreams): CommandContext {
  * helpers return `boolean` for "did a real transition happen?" to match
  * the production repository contract.
  */
+interface CapturedProcessorAudit {
+  readonly action: string;
+  readonly auditId: string;
+  readonly targetId: string;
+  readonly actorLabel: string;
+  readonly projectId: string;
+  readonly environment: string;
+  readonly before: unknown;
+  readonly after: unknown;
+  readonly reason: string | null;
+}
+
 class InMemoryActivationStore {
   public readonly rows: ProcessorActivationRow[] = [];
   public closeCalls = 0;
+  public auditCalls: CapturedProcessorAudit[] = [];
 
   insert(row: ProcessorActivationRow): void {
     this.rows.push({ ...row });
@@ -171,8 +184,9 @@ class InMemoryActivationStore {
         const row = this.find(key);
         return row === null ? null : { ...row };
       },
-      enable: async (input) => {
+      enableWithAudit: async (input, audit) => {
         const idx = this.indexOf(input);
+        let applied: boolean;
         if (idx < 0) {
           this.rows.push({
             processor_name: input.processor_name,
@@ -186,19 +200,34 @@ class InMemoryActivationStore {
             created_at: input.enabledAt.toISOString(),
             updated_at: input.enabledAt.toISOString(),
           });
-          return true;
+          applied = true;
+        } else {
+          const existing = this.rows[idx];
+          if (existing === undefined) return false;
+          if (existing.enabled_state === "enabled") return false;
+          this.rows[idx] = {
+            ...existing,
+            enabled_state: "enabled",
+            enabled_at: input.enabledAt.toISOString(),
+            last_changed_by: input.lastChangedBy,
+            updated_at: input.enabledAt.toISOString(),
+          };
+          applied = true;
         }
-        const existing = this.rows[idx];
-        if (existing === undefined) return false;
-        if (existing.enabled_state === "enabled") return false;
-        this.rows[idx] = {
-          ...existing,
-          enabled_state: "enabled",
-          enabled_at: input.enabledAt.toISOString(),
-          last_changed_by: input.lastChangedBy,
-          updated_at: input.enabledAt.toISOString(),
-        };
-        return true;
+        if (applied) {
+          this.auditCalls.push({
+            action: "processors.enable",
+            auditId: audit.auditId,
+            targetId: `${input.processor_name}:${input.processor_version}:${input.project_id}:${input.environment}`,
+            actorLabel: audit.actorLabel,
+            projectId: audit.projectId,
+            environment: audit.environment,
+            before: audit.before,
+            after: audit.after,
+            reason: null,
+          });
+        }
+        return applied;
       },
       close: async () => {
         this.closeCalls += 1;
@@ -212,8 +241,9 @@ class InMemoryActivationStore {
         const row = this.find(key);
         return row === null ? null : { ...row };
       },
-      disable: async (input) => {
+      disableWithAudit: async (input, audit) => {
         const idx = this.indexOf(input);
+        let applied: boolean;
         if (idx < 0) {
           this.rows.push({
             processor_name: input.processor_name,
@@ -227,19 +257,34 @@ class InMemoryActivationStore {
             created_at: input.disabledAt.toISOString(),
             updated_at: input.disabledAt.toISOString(),
           });
-          return true;
+          applied = true;
+        } else {
+          const existing = this.rows[idx];
+          if (existing === undefined) return false;
+          if (existing.enabled_state === "disabled") return false;
+          this.rows[idx] = {
+            ...existing,
+            enabled_state: "disabled",
+            disabled_at: input.disabledAt.toISOString(),
+            last_changed_by: input.lastChangedBy,
+            updated_at: input.disabledAt.toISOString(),
+          };
+          applied = true;
         }
-        const existing = this.rows[idx];
-        if (existing === undefined) return false;
-        if (existing.enabled_state === "disabled") return false;
-        this.rows[idx] = {
-          ...existing,
-          enabled_state: "disabled",
-          disabled_at: input.disabledAt.toISOString(),
-          last_changed_by: input.lastChangedBy,
-          updated_at: input.disabledAt.toISOString(),
-        };
-        return true;
+        if (applied) {
+          this.auditCalls.push({
+            action: "processors.disable",
+            auditId: audit.auditId,
+            targetId: `${input.processor_name}:${input.processor_version}:${input.project_id}:${input.environment}`,
+            actorLabel: audit.actorLabel,
+            projectId: audit.projectId,
+            environment: audit.environment,
+            before: audit.before,
+            after: audit.after,
+            reason: null,
+          });
+        }
+        return applied;
       },
       close: async () => {
         this.closeCalls += 1;
@@ -594,8 +639,13 @@ describe("processors enable runner", () => {
     expect(capture.stdout.join("")).toContain(
       `enabled ${KEY.processor_name} ${KEY.processor_version} for project=${KEY.project_id} env=${KEY.environment}`,
     );
-    // Audit-intent TODO is surfaced to stderr until P6-006 lands.
-    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+    // P6-006: audit row persisted (no more stderr TODO marker).
+    expect(store.auditCalls).toHaveLength(1);
+    expect(store.auditCalls[0]?.action).toBe("processors.enable");
+    expect(store.auditCalls[0]?.actorLabel).toBe("cli");
+    expect(store.auditCalls[0]?.targetId).toBe(
+      `${KEY.processor_name}:${KEY.processor_version}:${KEY.project_id}:${KEY.environment}`,
+    );
   });
 
   it("flips a disabled row to enabled", async () => {
@@ -658,7 +708,8 @@ describe("processors enable runner", () => {
       makeContext(capture.streams),
     );
     expect(capture.stdout.join("")).toContain("already enabled");
-    expect(capture.stderr.join("")).not.toContain("audit:");
+    // No audit row on the idempotent no-op path.
+    expect(store.auditCalls).toHaveLength(0);
   });
 
   it("rejects unknown manifest with a usage error before any DB work", async () => {
@@ -842,7 +893,9 @@ describe("processors disable runner", () => {
     expect(after?.enabled_state).toBe("disabled");
     expect(after?.disabled_at).toBe(now.toISOString());
     expect(capture.stdout.join("")).toContain(`disabled ${KEY.processor_name}`);
-    expect(capture.stderr.join("")).toContain("audit_records table is created by P6-006");
+    // P6-006: audit row persisted.
+    expect(store.auditCalls).toHaveLength(1);
+    expect(store.auditCalls[0]?.action).toBe("processors.disable");
   });
 
   it("is idempotent on an already-disabled row", async () => {
@@ -872,7 +925,8 @@ describe("processors disable runner", () => {
       makeContext(capture.streams),
     );
     expect(capture.stdout.join("")).toContain("already disabled");
-    expect(capture.stderr.join("")).not.toContain("audit:");
+    // No audit row on the idempotent no-op path.
+    expect(store.auditCalls).toHaveLength(0);
   });
 
   it("inserts a fresh disabled row when none exists", async () => {

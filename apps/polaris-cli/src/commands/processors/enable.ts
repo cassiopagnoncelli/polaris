@@ -8,32 +8,27 @@
  * on disk so operators get a clear error when they typo the version.
  *
  * Idempotent: running on an already-enabled tuple prints "already enabled"
- * and exits 0; the audit-intent log line is suppressed on the no-op path.
+ * and exits 0; no audit row is written on the no-op path.
  *
- * Audit trail: this command MUST emit an audit record. The audit table is
- * created by P6-006 and is not yet merged. For P6-005, the CLI logs a
- * structured INFO line describing the transition AND prints a stderr TODO
- * marker so operators (and the future P6-006 task) know the audit-table
- * write is pending. The structured-log line carries the canonical audit
- * fields so the post-P6-006 change is a one-line persistence shim.
- *
- * TODO(P6-006): replace the `logger.info(...)` audit-intent line with an
- * actual INSERT into the audit_records table inside the same transaction
- * as the activation upsert.
+ * Audit trail: when the transition lands, this command INSERTs a row into
+ * `audit_records` inside the SAME transaction as the activation upsert.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { Environment } from "@polaris/shared-db";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";
 import {
+  type AuditEnvironment,
   type EnableProcessorActivationInput,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
   connectDb,
   enableProcessorActivation,
   findActivationByKey,
+  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -53,9 +48,42 @@ interface ProcessorsEnableArgs {
   readonly catalogRoot?: string;
 }
 
+/**
+ * Snapshot of the operational columns the audit row stores. The
+ * activation row holds only runtime/operational data; transform rules
+ * live in versioned code, never here.
+ */
+export interface ProcessorAuditSnapshot {
+  readonly processor_name: string;
+  readonly processor_version: string;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly enabled_state: "enabled" | "disabled" | "(no row)";
+  readonly enabled_at: string | null;
+  readonly disabled_at: string | null;
+  readonly last_changed_by: string;
+}
+
+export interface ProcessorsEnableAuditPayload {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly before: ProcessorAuditSnapshot;
+  readonly after: ProcessorAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+}
+
 export interface ProcessorsEnableStore {
   findByKey(key: ProcessorActivationKey): Promise<ProcessorActivationRow | null>;
-  enable(input: EnableProcessorActivationInput): Promise<boolean>;
+  /**
+   * Upsert the activation row to `enabled` AND persist the audit row in
+   * the SAME transaction.
+   */
+  enableWithAudit(
+    input: EnableProcessorActivationInput,
+    audit: ProcessorsEnableAuditPayload,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -65,6 +93,7 @@ export interface ProcessorsEnableHooks {
   readonly verifyManifest?: (root: string, name: string, version: string) => boolean;
   readonly resolveRoot?: (explicit?: string) => string;
   readonly actorLabel?: () => string;
+  readonly generateAuditId?: () => string;
 }
 
 export const processorsEnableCommand: CommandDefinition = {
@@ -114,15 +143,12 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
     hooks.resolveRoot ??
     ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
   const actorLabel = hooks.actorLabel ?? (() => "cli");
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(
     args: ProcessorsEnableArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
-    // Defense-in-depth: reject any flag that resembles a transform-rule
-    // surface. Commander declares only --version / --project / --env /
-    // --catalog-root, but the runtime gate fires even if a programmatic
-    // caller smuggles a rule-shaped key through.
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
 
     const key = validate(args);
@@ -143,29 +169,66 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
       }
 
       const now = nowFn();
-      const applied = await store.enable({
-        ...key,
-        enabledAt: now,
-        lastChangedBy: actorLabel(),
-      });
+      const auditId = generateAuditId();
+      const before: ProcessorAuditSnapshot =
+        existing === null
+          ? {
+              processor_name: key.processor_name,
+              processor_version: key.processor_version,
+              project_id: key.project_id,
+              environment: key.environment,
+              enabled_state: "(no row)",
+              enabled_at: null,
+              disabled_at: null,
+              last_changed_by: "(none)",
+            }
+          : {
+              processor_name: existing.processor_name,
+              processor_version: existing.processor_version,
+              project_id: existing.project_id,
+              environment: existing.environment,
+              enabled_state: existing.enabled_state,
+              enabled_at: existing.enabled_at,
+              disabled_at: existing.disabled_at,
+              last_changed_by: existing.last_changed_by,
+            };
+      const after: ProcessorAuditSnapshot = {
+        ...before,
+        enabled_state: "enabled",
+        enabled_at: now.toISOString(),
+        last_changed_by: actorLabel(),
+      };
+      const auditPayload: ProcessorsEnableAuditPayload = {
+        auditId,
+        actorLabel: actorLabel(),
+        occurredAt: now,
+        before,
+        after,
+        projectId: key.project_id,
+        environment: key.environment as AuditEnvironment,
+      };
+
+      const applied = await store.enableWithAudit(
+        {
+          ...key,
+          enabledAt: now,
+          lastChangedBy: actorLabel(),
+        },
+        auditPayload,
+      );
       if (!applied) {
-        // The find/enable race-condition path: another writer landed between
-        // our find and our upsert. Re-fetch and surface whatever the DB
-        // ended up with.
-        const after = await store.findByKey(key);
+        const afterRow = await store.findByKey(key);
         emit(ctx, {
           ...key,
           applied: false,
-          enabled_state: after?.enabled_state ?? "enabled",
+          enabled_state: afterRow?.enabled_state ?? "enabled",
         });
         return undefined;
       }
 
-      // Audit-intent log line. TODO(P6-006): once audit_records exists,
-      // replace this with an INSERT inside the same transaction as the
-      // activation upsert.
       ctx.logger.info(
         {
+          audit_id: auditId,
           audit_action: "processors.enable",
           processor_name: key.processor_name,
           processor_version: key.processor_version,
@@ -174,12 +237,8 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
           previous_state: existing?.enabled_state ?? "(no row)",
           new_state: "enabled",
           occurred_at: now.toISOString(),
-          audit_table_pending: "P6-006",
         },
-        "processor enabled (audit-intent log; audit_records table lands in P6-006)",
-      );
-      ctx.output.writeErr(
-        `audit: processor ${key.processor_name} ${key.processor_version} enabled for project=${key.project_id} env=${key.environment} (audit_records table is created by P6-006; this command must be extended to insert into it after P6-006 lands)`,
+        "processor enabled (audit row persisted)",
       );
 
       emit(ctx, { ...key, applied: true, enabled_state: "enabled" });
@@ -196,7 +255,27 @@ function defaultStore(): ProcessorsEnableStore {
   const handle = connectDb({ env: process.env });
   return {
     findByKey: (key) => findActivationByKey(handle.db, key),
-    enable: (input) => enableProcessorActivation(handle.db, input),
+    enableWithAudit: async (input, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        const applied = await enableProcessorActivation(trx, input);
+        if (!applied) return false;
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: "cli",
+          actor_label: audit.actorLabel,
+          action: "processors.enable",
+          target_type: "processor_activation",
+          target_id: `${input.processor_name}:${input.processor_version}:${input.project_id}:${input.environment}`,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: null,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+        return true;
+      }),
     close: () => handle.close(),
   };
 }

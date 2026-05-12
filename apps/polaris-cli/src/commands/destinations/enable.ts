@@ -5,27 +5,27 @@
  * `disabled_reason`. Idempotent: running on an already-active destination
  * prints "already active" and exits 0.
  *
- * Audit trail: this command MUST emit an audit record. The audit table is
- * created by P6-006 (audit-export CLI) and is not yet merged. For P6-004,
- * the CLI logs a structured INFO line describing the transition AND prints
- * a stderr TODO marker so operators (and the future P6-006 task) know the
- * audit-table write is pending. The structured-log line carries the
- * canonical audit fields so the post-P6-006 change is a one-line
- * persistence shim.
+ * Audit trail: when the transition lands, this command INSERTs a row into
+ * `audit_records` inside the SAME transaction as the status UPDATE. The
+ * `before` snapshot is the row state pre-UPDATE; the `after` snapshot is
+ * the row state post-UPDATE. Neither contains a resolved secret value —
+ * the destination row stores `secret_ref` only.
  *
- * TODO(P6-006): replace the `logger.info(...)` audit-intent line with an
- * actual INSERT into the audit_records table inside the same transaction
- * as the status UPDATE.
+ * The structured INFO log line stays because operators may still want a
+ * local trail, but the persisted audit row is the source of truth.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
+  type AuditEnvironment,
   type DestinationRow,
   connectDb,
   enableDestination,
   findDestinationById,
+  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -35,15 +35,57 @@ interface DestinationsEnableArgs {
   readonly destinationId: string;
 }
 
+/**
+ * Snapshot the runner places into `audit_records.before` / `after`. The
+ * shape is the operational columns of the destination row, never anything
+ * secret-resolved. The persisted JSON is exactly what is shown to
+ * operators by `audit show`.
+ */
+export interface DestinationAuditSnapshot {
+  readonly destination_id: string;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly vendor: string;
+  readonly instance_label: string;
+  readonly secret_ref: string;
+  readonly status: string;
+  readonly mode: string;
+  readonly disabled_reason: string | null;
+}
+
+export interface DestinationsEnableAuditPayload {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly before: DestinationAuditSnapshot;
+  readonly after: DestinationAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+}
+
 export interface DestinationsEnableStore {
   findById(destinationId: string): Promise<DestinationRow | null>;
-  enable(destinationId: string, now: Date): Promise<boolean>;
+  /**
+   * Transition the row to `active` AND persist an audit row in the SAME
+   * transaction. Returns `true` when both writes landed (a real
+   * transition); `false` when the UPDATE updated zero rows (another
+   * caller transitioned the row first).
+   */
+  enableWithAudit(
+    destinationId: string,
+    now: Date,
+    audit: DestinationsEnableAuditPayload,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
 export interface DestinationsEnableHooks {
   readonly openStore?: () => DestinationsEnableStore;
   readonly now?: () => Date;
+  /** Test override for the audit_id generator. Defaults to `uuidv7`. */
+  readonly generateAuditId?: () => string;
+  /** Test override for the actor-label resolver. Defaults to `'cli'`. */
+  readonly actorLabel?: () => string;
 }
 
 export const destinationsEnableCommand: CommandDefinition = {
@@ -68,6 +110,8 @@ export const destinationsEnableCommand: CommandDefinition = {
 export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {}) {
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
 
   return async function runner(
     args: DestinationsEnableArgs,
@@ -91,7 +135,22 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
       }
 
       const now = nowFn();
-      const applied = await store.enable(id, now);
+      const auditId = generateAuditId();
+      const auditPayload: DestinationsEnableAuditPayload = {
+        auditId,
+        actorLabel: actorLabelFn(),
+        occurredAt: now,
+        before: toSnapshot(existing),
+        after: toSnapshot({
+          ...existing,
+          status: "active",
+          disabled_reason: null,
+        }),
+        projectId: existing.project_id,
+        environment: existing.environment as AuditEnvironment,
+      };
+
+      const applied = await store.enableWithAudit(id, now, auditPayload);
       if (!applied) {
         const after = await store.findById(id);
         emit(ctx, {
@@ -102,11 +161,12 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
         return undefined;
       }
 
-      // Audit-intent log line. TODO(P6-006): once audit_records exists,
-      // replace this with an INSERT inside the same transaction as the
-      // status UPDATE.
+      // Structured INFO log stays for local operator trail. The
+      // persisted `audit_records` row is now the source of truth — the
+      // log line is convenience only.
       ctx.logger.info(
         {
+          audit_id: auditId,
           audit_action: "destinations.enable",
           destination_id: id,
           project_id: existing.project_id,
@@ -116,12 +176,8 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
           previous_status: existing.status,
           new_status: "active",
           occurred_at: now.toISOString(),
-          audit_table_pending: "P6-006",
         },
-        "destination enabled (audit-intent log; audit_records table lands in P6-006)",
-      );
-      ctx.output.writeErr(
-        `audit: destination ${id} enabled (audit_records table is created by P6-006; this command must be extended to insert into it after P6-006 lands)`,
+        "destination enabled (audit row persisted)",
       );
 
       emit(ctx, { destinationId: id, applied: true, status: "active" });
@@ -138,8 +194,42 @@ function defaultStore(): DestinationsEnableStore {
   const handle = connectDb({ env: process.env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    enable: (id, now) => enableDestination(handle.db, id, now),
+    enableWithAudit: async (id, now, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        const applied = await enableDestination(trx, id, now);
+        if (!applied) return false;
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: "cli",
+          actor_label: audit.actorLabel,
+          action: "destinations.enable",
+          target_type: "destination",
+          target_id: id,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: null,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+        return true;
+      }),
     close: () => handle.close(),
+  };
+}
+
+function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
+  return {
+    destination_id: row.destination_id,
+    project_id: row.project_id,
+    environment: row.environment,
+    vendor: row.vendor,
+    instance_label: row.instance_label,
+    secret_ref: row.secret_ref,
+    status: row.status,
+    mode: row.mode,
+    disabled_reason: row.disabled_reason,
   };
 }
 

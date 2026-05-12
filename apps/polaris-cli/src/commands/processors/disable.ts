@@ -8,32 +8,31 @@
  * exists on disk so operators get a clear error when they typo the version.
  *
  * Idempotent: running on an already-disabled tuple prints "already disabled"
- * and exits 0; the audit-intent log line is suppressed on the no-op path.
+ * and exits 0; no audit row is written on the no-op path.
  *
- * Audit trail: same contract as `enable`. The audit_records table is created
- * by P6-006; this command logs an audit-intent line and prints a TODO marker
- * to stderr until that lands.
- *
- * TODO(P6-006): replace the `logger.info(...)` audit-intent line with an
- * actual INSERT into the audit_records table inside the same transaction as
- * the activation upsert.
+ * Audit trail: when the transition lands, this command INSERTs a row into
+ * `audit_records` inside the SAME transaction as the activation upsert.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { Environment } from "@polaris/shared-db";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";
 import {
+  type AuditEnvironment,
   type DisableProcessorActivationInput,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
   connectDb,
   disableProcessorActivation,
   findActivationByKey,
+  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import type { ProcessorAuditSnapshot } from "./enable.js";
 import { rejectProcessorRuleArguments } from "./validation.js";
 
 const SUPPORTED_ENVIRONMENTS: readonly Environment[] = [
@@ -50,9 +49,22 @@ interface ProcessorsDisableArgs {
   readonly catalogRoot?: string;
 }
 
+export interface ProcessorsDisableAuditPayload {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly before: ProcessorAuditSnapshot;
+  readonly after: ProcessorAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+}
+
 export interface ProcessorsDisableStore {
   findByKey(key: ProcessorActivationKey): Promise<ProcessorActivationRow | null>;
-  disable(input: DisableProcessorActivationInput): Promise<boolean>;
+  disableWithAudit(
+    input: DisableProcessorActivationInput,
+    audit: ProcessorsDisableAuditPayload,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -62,6 +74,7 @@ export interface ProcessorsDisableHooks {
   readonly verifyManifest?: (root: string, name: string, version: string) => boolean;
   readonly resolveRoot?: (explicit?: string) => string;
   readonly actorLabel?: () => string;
+  readonly generateAuditId?: () => string;
 }
 
 export const processorsDisableCommand: CommandDefinition = {
@@ -111,6 +124,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
     hooks.resolveRoot ??
     ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
   const actorLabel = hooks.actorLabel ?? (() => "cli");
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(
     args: ProcessorsDisableArgs,
@@ -136,25 +150,66 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
       }
 
       const now = nowFn();
-      const applied = await store.disable({
-        ...key,
-        disabledAt: now,
-        lastChangedBy: actorLabel(),
-      });
+      const auditId = generateAuditId();
+      const before: ProcessorAuditSnapshot =
+        existing === null
+          ? {
+              processor_name: key.processor_name,
+              processor_version: key.processor_version,
+              project_id: key.project_id,
+              environment: key.environment,
+              enabled_state: "(no row)",
+              enabled_at: null,
+              disabled_at: null,
+              last_changed_by: "(none)",
+            }
+          : {
+              processor_name: existing.processor_name,
+              processor_version: existing.processor_version,
+              project_id: existing.project_id,
+              environment: existing.environment,
+              enabled_state: existing.enabled_state,
+              enabled_at: existing.enabled_at,
+              disabled_at: existing.disabled_at,
+              last_changed_by: existing.last_changed_by,
+            };
+      const after: ProcessorAuditSnapshot = {
+        ...before,
+        enabled_state: "disabled",
+        disabled_at: now.toISOString(),
+        last_changed_by: actorLabel(),
+      };
+      const auditPayload: ProcessorsDisableAuditPayload = {
+        auditId,
+        actorLabel: actorLabel(),
+        occurredAt: now,
+        before,
+        after,
+        projectId: key.project_id,
+        environment: key.environment as AuditEnvironment,
+      };
+
+      const applied = await store.disableWithAudit(
+        {
+          ...key,
+          disabledAt: now,
+          lastChangedBy: actorLabel(),
+        },
+        auditPayload,
+      );
       if (!applied) {
-        const after = await store.findByKey(key);
+        const afterRow = await store.findByKey(key);
         emit(ctx, {
           ...key,
           applied: false,
-          enabled_state: after?.enabled_state ?? "disabled",
+          enabled_state: afterRow?.enabled_state ?? "disabled",
         });
         return undefined;
       }
 
-      // Audit-intent log line. TODO(P6-006): replace with INSERT into
-      // audit_records once the table lands.
       ctx.logger.info(
         {
+          audit_id: auditId,
           audit_action: "processors.disable",
           processor_name: key.processor_name,
           processor_version: key.processor_version,
@@ -163,12 +218,8 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
           previous_state: existing?.enabled_state ?? "(no row)",
           new_state: "disabled",
           occurred_at: now.toISOString(),
-          audit_table_pending: "P6-006",
         },
-        "processor disabled (audit-intent log; audit_records table lands in P6-006)",
-      );
-      ctx.output.writeErr(
-        `audit: processor ${key.processor_name} ${key.processor_version} disabled for project=${key.project_id} env=${key.environment} (audit_records table is created by P6-006; this command must be extended to insert into it after P6-006 lands)`,
+        "processor disabled (audit row persisted)",
       );
 
       emit(ctx, { ...key, applied: true, enabled_state: "disabled" });
@@ -185,7 +236,27 @@ function defaultStore(): ProcessorsDisableStore {
   const handle = connectDb({ env: process.env });
   return {
     findByKey: (key) => findActivationByKey(handle.db, key),
-    disable: (input) => disableProcessorActivation(handle.db, input),
+    disableWithAudit: async (input, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        const applied = await disableProcessorActivation(trx, input);
+        if (!applied) return false;
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: "cli",
+          actor_label: audit.actorLabel,
+          action: "processors.disable",
+          target_type: "processor_activation",
+          target_id: `${input.processor_name}:${input.processor_version}:${input.project_id}:${input.environment}`,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: null,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+        return true;
+      }),
     close: () => handle.close(),
   };
 }

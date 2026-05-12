@@ -79,12 +79,29 @@ function captureOutput(): Capture {
  * Tiny in-memory store used by every runner-level test. The shape mirrors a
  * Postgres `api_keys` row — the same surface area the ingester sees through
  * `apps/ingester-api/src/auth/repository.ts`, just keyed by `api_key_id`.
+ *
+ * Each store variant also captures the audit payload the runner sends
+ * through so tests can assert the row that would land in `audit_records`
+ * (P6-006).
  */
+interface CapturedKeyAuditCall {
+  readonly action: string;
+  readonly auditId: string;
+  readonly targetId: string;
+  readonly actorLabel: string;
+  readonly projectId: string;
+  readonly environment: string;
+  readonly before: unknown;
+  readonly after: unknown;
+  readonly reason: string | null;
+}
+
 class InMemoryApiKeyStore {
   public readonly rows = new Map<string, ApiKeyRow>();
   public inserts: ApiKeyRow[] = [];
   public revokeCalls = 0;
   public closeCalls = 0;
+  public auditCalls: CapturedKeyAuditCall[] = [];
 
   insert(row: ApiKeyRow): void {
     this.rows.set(row.api_key_id, row);
@@ -93,7 +110,7 @@ class InMemoryApiKeyStore {
 
   asCreateStore(): KeysCreateStore {
     return {
-      insert: async (input) => {
+      insertWithAudit: async (input, audit) => {
         this.insert({
           api_key_id: input.api_key_id,
           project_id: input.project_id,
@@ -105,6 +122,17 @@ class InMemoryApiKeyStore {
           created_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
           revoked_at: null,
           last_used_at: null,
+        });
+        this.auditCalls.push({
+          action: "keys.create",
+          auditId: audit.auditId,
+          targetId: input.api_key_id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: null,
+          after: audit.after,
+          reason: null,
         });
       },
       close: async () => {
@@ -128,7 +156,7 @@ class InMemoryApiKeyStore {
   asRevokeStore(now: Date): KeysRevokeStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
-      revoke: async (id, revokedAt) => {
+      revokeWithAudit: async (id, revokedAt, audit) => {
         this.revokeCalls += 1;
         const row = this.rows.get(id);
         if (row === undefined) return false;
@@ -139,6 +167,17 @@ class InMemoryApiKeyStore {
           revoked_at: revokedAt.toISOString(),
         });
         void now;
+        this.auditCalls.push({
+          action: "keys.revoke",
+          auditId: audit.auditId,
+          targetId: id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+        });
         return true;
       },
       close: async () => {
@@ -153,9 +192,8 @@ class InMemoryApiKeyStore {
       rotate: async (input: RotateStoreInput) => {
         const old = this.rows.get(input.oldApiKeyId);
         if (old === undefined || old.status !== "active") return false;
-        // Atomic semantics: both writes succeed or neither does. We perform
-        // them sequentially on the Map — a real Kysely transaction wraps the
-        // pair in `BEGIN; ...; COMMIT;`.
+        // Atomic semantics: all four writes succeed or none does. A real
+        // Kysely transaction wraps the writes in `BEGIN; ...; COMMIT;`.
         this.insert({
           api_key_id: input.newRow.api_key_id,
           project_id: input.newRow.project_id,
@@ -172,6 +210,28 @@ class InMemoryApiKeyStore {
           ...old,
           status: "revoked",
           revoked_at: input.revokedAt.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "keys.rotate.issue",
+          auditId: input.audit.issueAuditId,
+          targetId: input.newRow.api_key_id,
+          actorLabel: input.audit.actorLabel,
+          projectId: input.audit.projectId,
+          environment: input.audit.environment,
+          before: null,
+          after: input.audit.newKey,
+          reason: null,
+        });
+        this.auditCalls.push({
+          action: "keys.rotate.revoke",
+          auditId: input.audit.revokeAuditId,
+          targetId: input.oldApiKeyId,
+          actorLabel: input.audit.actorLabel,
+          projectId: input.audit.projectId,
+          environment: input.audit.environment,
+          before: input.audit.oldKeyBefore,
+          after: input.audit.oldKeyAfter,
+          reason: null,
         });
         return true;
       },

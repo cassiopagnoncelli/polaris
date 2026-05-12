@@ -14,7 +14,10 @@
  *   1. SELECT the existing row. Reject if missing.
  *   2. Generate fresh material (`<id>.<secret>`).
  *   3. argon2id-hash the new secret through `@polaris/shared-secrets`.
- *   4. In one transaction: INSERT the new row + UPDATE the old to revoked.
+ *   4. In one transaction: INSERT the new row + UPDATE the old to revoked
+ *      + INSERT two audit rows (one `keys.rotate.issue` for the new row,
+ *      one `keys.rotate.revoke` for the old row). All four writes go in
+ *      one atomic unit.
  *   5. Print the new on-wire token EXACTLY ONCE.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
@@ -23,31 +26,35 @@
  */
 import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type ApiKeyRow,
+  type AuditEnvironment,
   connectDb,
   findApiKeyById,
   insertApiKey,
+  insertAuditRecord,
   type InsertApiKeyInput,
   revokeApiKey,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import type { KeyAuditSnapshot } from "./create.js";
 import { generateKeyMaterial, type IssuedKeyMaterial } from "./token.js";
 
 /**
  * Persistence surface used by `keys rotate`. Production wires this to a
- * Kysely transaction that INSERTs the new row and UPDATEs the old one
- * atomically; tests inject an in-memory recorder that performs the same
- * INSERT+UPDATE on a Map.
+ * Kysely transaction that INSERTs the new row, UPDATEs the old one, and
+ * persists two audit rows atomically; tests inject an in-memory recorder
+ * that performs all four writes on Maps.
  */
 export interface KeysRotateStore {
   findById(apiKeyId: string): Promise<ApiKeyRow | null>;
   /**
-   * Atomically insert the new row and revoke the old. Implementations MUST
-   * ensure either both writes succeed or neither does — a partial failure
-   * would leave the system with both keys active or both revoked.
+   * Atomically insert the new row, revoke the old, and write both audit
+   * rows. Implementations MUST ensure all four writes succeed or none
+   * does.
    *
    * Returns `true` when the rotation transitioned the old row from
    * `'active'` to `'revoked'`. `false` signals a race (the old row was
@@ -61,6 +68,19 @@ export interface RotateStoreInput {
   readonly oldApiKeyId: string;
   readonly revokedAt: Date;
   readonly newRow: InsertApiKeyInput;
+  readonly audit: KeysRotateAuditPayload;
+}
+
+export interface KeysRotateAuditPayload {
+  readonly issueAuditId: string;
+  readonly revokeAuditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly newKey: KeyAuditSnapshot;
+  readonly oldKeyBefore: KeyAuditSnapshot;
+  readonly oldKeyAfter: KeyAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
 }
 
 /** Test hook surface (mirrors `keysCreateCommand`). */
@@ -69,6 +89,8 @@ export interface KeysRotateHooks {
   readonly hash?: (plaintext: string) => Promise<string>;
   readonly openStore?: () => KeysRotateStore;
   readonly now?: () => Date;
+  readonly generateAuditId?: () => string;
+  readonly actorLabel?: () => string;
 }
 
 interface KeysRotateArgs {
@@ -104,6 +126,10 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
   const hashFn = hooks.hash ?? hashSecret;
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
+  // Tests can inject a deterministic id sequence; production uses uuidv7.
+  // We need two distinct ids per rotation, so we generate per-call.
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
 
   return async function runner(args: KeysRotateArgs, ctx: CommandContext): Promise<undefined> {
     const id = args.apiKeyId.trim();
@@ -127,6 +153,24 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
       const material = issueMaterial();
       const hashed = await hashFn(material.rawSecret);
       const now = nowFn();
+      const issueAuditId = generateAuditId();
+      const revokeAuditId = generateAuditId();
+      const newKey: KeyAuditSnapshot = {
+        api_key_id: material.apiKeyId,
+        project_id: existing.project_id,
+        environment: existing.environment,
+        source_id: existing.source_id,
+        source_type: existing.source_type,
+        status: "active",
+        hash_algorithm: POLARIS_HASH_ALGORITHM,
+        revoked_at: null,
+      };
+      const oldKeyBefore = toSnapshot(existing);
+      const oldKeyAfter: KeyAuditSnapshot = {
+        ...oldKeyBefore,
+        status: "revoked",
+        revoked_at: now.toISOString(),
+      };
 
       const rotated = await store.rotate({
         oldApiKeyId: id,
@@ -140,17 +184,39 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
           hash: hashed,
           hash_algorithm: POLARIS_HASH_ALGORITHM,
         },
+        audit: {
+          issueAuditId,
+          revokeAuditId,
+          actorLabel: actorLabelFn(),
+          occurredAt: now,
+          newKey,
+          oldKeyBefore,
+          oldKeyAfter,
+          projectId: existing.project_id,
+          environment: existing.environment as AuditEnvironment,
+        },
       });
       if (!rotated) {
-        // The pre-check confirmed the row was active. If the rotation
-        // returned false, someone else revoked between our SELECT and the
-        // transaction's UPDATE — surface a usage error so the caller sees
-        // the race rather than silently issuing an orphan new key.
         throw new UsageError(
           `api key "${id}" was revoked by another caller during rotation. ` +
             "Retry `polaris keys rotate` after inspecting `polaris keys list`.",
         );
       }
+
+      ctx.logger.info(
+        {
+          audit_id_issue: issueAuditId,
+          audit_id_revoke: revokeAuditId,
+          audit_action: "keys.rotate",
+          old_api_key_id: id,
+          new_api_key_id: material.apiKeyId,
+          project_id: existing.project_id,
+          environment: existing.environment,
+          source_id: existing.source_id,
+          occurred_at: now.toISOString(),
+        },
+        "api key rotated (issue + revoke audit rows persisted)",
+      );
 
       emit(ctx, {
         oldApiKeyId: id,
@@ -177,12 +243,60 @@ function defaultStore(): KeysRotateStore {
     findById: (id) => findApiKeyById(handle.db, id),
     rotate: (input) =>
       handle.db.transaction().execute(async (trx) => {
-        // INSERT new + UPDATE old in one transaction so a partial failure
-        // cannot leave the system with both keys active or both revoked.
+        // INSERT new + UPDATE old + INSERT two audit rows. All four
+        // writes are in one transaction so a partial failure cannot
+        // leave the system half-rotated.
         await insertApiKey(trx, input.newRow);
-        return revokeApiKey(trx, input.oldApiKeyId, input.revokedAt);
+        const applied = await revokeApiKey(trx, input.oldApiKeyId, input.revokedAt);
+        if (!applied) return false;
+        // Audit row for the newly-issued key (action: keys.rotate.issue).
+        await insertAuditRecord(trx, {
+          audit_id: input.audit.issueAuditId,
+          actor_source: "cli",
+          actor_label: input.audit.actorLabel,
+          action: "keys.rotate.issue",
+          target_type: "api_key",
+          target_id: input.newRow.api_key_id,
+          project_id: input.audit.projectId,
+          environment: input.audit.environment,
+          before: null,
+          after: input.audit.newKey,
+          reason: null,
+          request_id: input.audit.issueAuditId,
+          created_at: input.audit.occurredAt,
+        });
+        // Audit row for the revoked old key (action: keys.rotate.revoke).
+        await insertAuditRecord(trx, {
+          audit_id: input.audit.revokeAuditId,
+          actor_source: "cli",
+          actor_label: input.audit.actorLabel,
+          action: "keys.rotate.revoke",
+          target_type: "api_key",
+          target_id: input.oldApiKeyId,
+          project_id: input.audit.projectId,
+          environment: input.audit.environment,
+          before: input.audit.oldKeyBefore,
+          after: input.audit.oldKeyAfter,
+          reason: null,
+          request_id: input.audit.revokeAuditId,
+          created_at: input.audit.occurredAt,
+        });
+        return true;
       }),
     close: () => handle.close(),
+  };
+}
+
+function toSnapshot(row: ApiKeyRow): KeyAuditSnapshot {
+  return {
+    api_key_id: row.api_key_id,
+    project_id: row.project_id,
+    environment: row.environment,
+    source_id: row.source_id,
+    source_type: row.source_type,
+    status: row.status,
+    hash_algorithm: row.hash_algorithm,
+    revoked_at: row.revoked_at,
   };
 }
 
@@ -209,8 +323,6 @@ function emit(ctx: CommandContext, input: EmitInput): void {
         environment: input.environment,
         source_id: input.sourceId,
         source_type: input.sourceType,
-        // Single write of the on-wire plaintext. Same one-time rule as
-        // `keys create`.
         token: input.token,
       },
     }),

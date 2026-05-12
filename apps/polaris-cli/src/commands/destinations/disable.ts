@@ -7,29 +7,30 @@
  * The original `disabled_reason` is preserved when the row is already
  * disabled — re-running does not overwrite the existing reason.
  *
- * The `--reason` flag is required so the audit record (P6-006) carries a
- * structured rationale, not just a free-text justification field.
+ * The `--reason` flag is required so the audit record carries a structured
+ * rationale, not just a free-text justification field.
  *
- * Audit trail: same contract as `enable`. The audit_records table lands in
- * P6-006; this command logs an audit-intent line and prints a TODO marker
- * to stderr.
- *
- * TODO(P6-006): replace the `logger.info(...)` audit-intent line with an
- * actual INSERT into the audit_records table inside the same transaction
- * as the status UPDATE.
+ * Audit trail: when the transition lands, this command INSERTs a row into
+ * `audit_records` inside the SAME transaction as the status UPDATE. The
+ * `reason` operator-supplied value is stored on the audit row. Neither
+ * `before` nor `after` carry a resolved secret value.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
+  type AuditEnvironment,
   type DestinationRow,
   connectDb,
   disableDestination,
   findDestinationById,
+  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import type { DestinationAuditSnapshot } from "./enable.js";
 import { rejectMappingArguments } from "./validation.js";
 
 interface DestinationsDisableArgs {
@@ -37,15 +38,33 @@ interface DestinationsDisableArgs {
   readonly reason?: string;
 }
 
+export interface DestinationsDisableAuditPayload {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly before: DestinationAuditSnapshot;
+  readonly after: DestinationAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+  readonly reason: string;
+}
+
 export interface DestinationsDisableStore {
   findById(destinationId: string): Promise<DestinationRow | null>;
-  disable(destinationId: string, reason: string, now: Date): Promise<boolean>;
+  disableWithAudit(
+    destinationId: string,
+    reason: string,
+    now: Date,
+    audit: DestinationsDisableAuditPayload,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
 export interface DestinationsDisableHooks {
   readonly openStore?: () => DestinationsDisableStore;
   readonly now?: () => Date;
+  readonly generateAuditId?: () => string;
+  readonly actorLabel?: () => string;
 }
 
 export const destinationsDisableCommand: CommandDefinition = {
@@ -78,6 +97,8 @@ export const destinationsDisableCommand: CommandDefinition = {
 export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks = {}) {
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
 
   return async function runner(
     args: DestinationsDisableArgs,
@@ -113,7 +134,23 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
       }
 
       const now = nowFn();
-      const applied = await store.disable(id, reason, now);
+      const auditId = generateAuditId();
+      const auditPayload: DestinationsDisableAuditPayload = {
+        auditId,
+        actorLabel: actorLabelFn(),
+        occurredAt: now,
+        before: toSnapshot(existing),
+        after: toSnapshot({
+          ...existing,
+          status: "disabled",
+          disabled_reason: reason,
+        }),
+        projectId: existing.project_id,
+        environment: existing.environment as AuditEnvironment,
+        reason,
+      };
+
+      const applied = await store.disableWithAudit(id, reason, now, auditPayload);
       if (!applied) {
         const after = await store.findById(id);
         emit(ctx, {
@@ -125,10 +162,9 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
         return undefined;
       }
 
-      // Audit-intent log line. TODO(P6-006): replace with INSERT into
-      // audit_records once the table lands.
       ctx.logger.info(
         {
+          audit_id: auditId,
           audit_action: "destinations.disable",
           destination_id: id,
           project_id: existing.project_id,
@@ -139,12 +175,8 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
           new_status: "disabled",
           reason,
           occurred_at: now.toISOString(),
-          audit_table_pending: "P6-006",
         },
-        "destination disabled (audit-intent log; audit_records table lands in P6-006)",
-      );
-      ctx.output.writeErr(
-        `audit: destination ${id} disabled (audit_records table is created by P6-006; this command must be extended to insert into it after P6-006 lands)`,
+        "destination disabled (audit row persisted)",
       );
 
       emit(ctx, { destinationId: id, applied: true, status: "disabled", reason });
@@ -161,8 +193,42 @@ function defaultStore(): DestinationsDisableStore {
   const handle = connectDb({ env: process.env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    disable: (id, reason, now) => disableDestination(handle.db, id, reason, now),
+    disableWithAudit: async (id, reason, now, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        const applied = await disableDestination(trx, id, reason, now);
+        if (!applied) return false;
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: "cli",
+          actor_label: audit.actorLabel,
+          action: "destinations.disable",
+          target_type: "destination",
+          target_id: id,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+        return true;
+      }),
     close: () => handle.close(),
+  };
+}
+
+function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
+  return {
+    destination_id: row.destination_id,
+    project_id: row.project_id,
+    environment: row.environment,
+    vendor: row.vendor,
+    instance_label: row.instance_label,
+    secret_ref: row.secret_ref,
+    status: row.status,
+    mode: row.mode,
+    disabled_reason: row.disabled_reason,
   };
 }
 

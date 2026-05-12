@@ -6,33 +6,31 @@
  *
  *   1. Generate a 32-byte CSPRNG secret and a `polaris_ak_<uuidv7>` public id.
  *   2. argon2id-hash the secret through `@polaris/shared-secrets`.
- *   3. Insert the row with `status='active'`.
+ *   3. INSERT the row with `status='active'` AND the audit row in one
+ *      transaction.
  *   4. Print the on-wire token (`<id>.<secret>`) on stdout EXACTLY ONCE.
  *
  * The token plaintext appears ONLY in that single stdout write. It is never
- * persisted, never logged, never re-emitted by `keys list`.
+ * persisted, never logged, never re-emitted by `keys list`. The audit row's
+ * `after` snapshot stores the row's metadata only (no hash, no plaintext).
  *
  * `mutates: true` so the production-mutation gate from P6-007 picks it up
  * automatically.
  */
 import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { connectDb, insertApiKey, type InsertApiKeyInput } from "../../db/index.js";
+import {
+  type AuditEnvironment,
+  connectDb,
+  insertApiKey,
+  insertAuditRecord,
+  type InsertApiKeyInput,
+} from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import { generateKeyMaterial, type IssuedKeyMaterial } from "./token.js";
 
-/**
- * Closed set of source types accepted by the `--type` flag.
- *
- * Mirrors the closed CHECK constraint on `sources.source_type` in the
- * migrations. The task card specifies `web|backend` for v1; `webhook` /
- * `job` / `mobile` are platform-recognised future slots — we accept the same
- * set the migration accepts so a future task can extend the CLI without
- * dropping data.
- *
- * @see packages/shared-db/src/database.ts SourceType
- */
 const SUPPORTED_SOURCE_TYPES = ["web", "backend", "mobile", "webhook", "job"] as const;
 type SupportedSourceType = (typeof SUPPORTED_SOURCE_TYPES)[number];
 
@@ -40,23 +38,41 @@ const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 /**
- * Persistence surface used by `keys create`. Production wires this to
- * `insertApiKey` over a Kysely client; tests inject an in-memory recorder.
+ * Snapshot persisted on the audit row's `after` column. Metadata only —
+ * never the `hash` or the on-wire token.
  */
+export interface KeyAuditSnapshot {
+  readonly api_key_id: string;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly source_id: string;
+  readonly source_type: string;
+  readonly status: string;
+  readonly hash_algorithm: string;
+  readonly revoked_at: string | null;
+}
+
+export interface KeysCreateAuditPayload {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly after: KeyAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+}
+
 export interface KeysCreateStore {
-  insert(input: InsertApiKeyInput): Promise<void>;
+  insertWithAudit(input: InsertApiKeyInput, audit: KeysCreateAuditPayload): Promise<void>;
   close(): Promise<void>;
 }
 
-/**
- * Hook surface used by tests to drive the issuance pipeline without
- * generating real entropy, computing a real hash, or touching PostgreSQL.
- * Production calls use the defaults.
- */
 export interface KeysCreateHooks {
   readonly issue?: () => IssuedKeyMaterial;
   readonly hash?: (plaintext: string) => Promise<string>;
   readonly openStore?: () => KeysCreateStore;
+  readonly now?: () => Date;
+  readonly generateAuditId?: () => string;
+  readonly actorLabel?: () => string;
 }
 
 interface KeysCreateArgs {
@@ -89,15 +105,13 @@ export const keysCreateCommand: CommandDefinition = {
   },
 };
 
-/**
- * Build a `keys create` runner with overridable hooks. Tests use this to
- * inject deterministic ids/secrets and a fake hash function so the suite
- * does not pay the argon2 cost.
- */
 export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
   const issueMaterial = hooks.issue ?? generateKeyMaterial;
   const hashFn = hooks.hash ?? hashSecret;
   const openStore = hooks.openStore ?? defaultStore;
+  const nowFn = hooks.now ?? (() => new Date());
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const actorLabelFn = hooks.actorLabel ?? (() => "cli");
 
   return async function runner(args: KeysCreateArgs, ctx: CommandContext): Promise<undefined> {
     const validated = validate(args);
@@ -106,7 +120,9 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
     try {
       const material = issueMaterial();
       const hashed = await hashFn(material.rawSecret);
-      await store.insert({
+      const now = nowFn();
+      const auditId = generateAuditId();
+      const insertInput: InsertApiKeyInput = {
         api_key_id: material.apiKeyId,
         project_id: validated.project,
         environment: validated.env,
@@ -114,7 +130,41 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
         source_type: validated.type,
         hash: hashed,
         hash_algorithm: POLARIS_HASH_ALGORITHM,
-      });
+      };
+      const after: KeyAuditSnapshot = {
+        api_key_id: material.apiKeyId,
+        project_id: validated.project,
+        environment: validated.env,
+        source_id: validated.source,
+        source_type: validated.type,
+        status: "active",
+        hash_algorithm: POLARIS_HASH_ALGORITHM,
+        revoked_at: null,
+      };
+      const auditPayload: KeysCreateAuditPayload = {
+        auditId,
+        actorLabel: actorLabelFn(),
+        occurredAt: now,
+        after,
+        projectId: validated.project,
+        environment: validated.env as AuditEnvironment,
+      };
+
+      await store.insertWithAudit(insertInput, auditPayload);
+
+      ctx.logger.info(
+        {
+          audit_id: auditId,
+          audit_action: "keys.create",
+          api_key_id: material.apiKeyId,
+          project_id: validated.project,
+          environment: validated.env,
+          source_id: validated.source,
+          source_type: validated.type,
+          occurred_at: now.toISOString(),
+        },
+        "api key issued (audit row persisted)",
+      );
 
       emit(ctx, {
         apiKeyId: material.apiKeyId,
@@ -134,7 +184,25 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
 function defaultStore(): KeysCreateStore {
   const handle = connectDb({ env: process.env });
   return {
-    insert: (input) => insertApiKey(handle.db, input),
+    insertWithAudit: async (input, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        await insertApiKey(trx, input);
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: "cli",
+          actor_label: audit.actorLabel,
+          action: "keys.create",
+          target_type: "api_key",
+          target_id: input.api_key_id,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: null,
+          after: audit.after,
+          reason: null,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+      }),
     close: () => handle.close(),
   };
 }
@@ -203,8 +271,6 @@ function emit(ctx: CommandContext, input: EmitInput): void {
         environment: input.environment,
         source_id: input.sourceId,
         source_type: input.sourceType,
-        // `token` is the on-wire string `<id>.<secret>`. It appears ONLY in
-        // this one stdout write; nothing else in the CLI surfaces it.
         token: input.token,
       },
     }),

@@ -44,14 +44,60 @@ export {
   readConfigFile,
 } from "./config.js";
 export {
+  auditCommand,
   BUILTIN_COMMANDS,
   destinationsCommand,
+  exportCommand,
   keysCommand,
   processorsCommand,
   projectsCommand,
   sourcesCommand,
   versionCommand,
 } from "./commands/index.js";
+export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
+export {
+  buildAuditListRunner,
+  type AuditListHooks,
+  type AuditListStore,
+} from "./commands/audit/list.js";
+export {
+  buildAuditShowRunner,
+  type AuditShowHooks,
+  type AuditShowStore,
+} from "./commands/audit/show.js";
+export {
+  exportApiKeysCommand,
+  exportAuditCommand,
+  exportDestinationsCommand,
+  exportSourcesCommand,
+} from "./commands/export/index.js";
+export {
+  buildExportApiKeysRunner,
+  type ExportApiKeysHooks,
+  type ExportApiKeysStore,
+} from "./commands/export/api-keys.js";
+export {
+  buildExportAuditRunner,
+  type ExportAuditHooks,
+  type ExportAuditStore,
+} from "./commands/export/audit.js";
+export {
+  buildExportDestinationsRunner,
+  type ExportDestinationsHooks,
+  type ExportDestinationsStore,
+} from "./commands/export/destinations.js";
+export {
+  buildExportSourcesRunner,
+  type ExportSourcesHooks,
+  type ExportSourcesStore,
+} from "./commands/export/sources.js";
+export {
+  type AuditRecorder,
+  type CreateRecorderOptions,
+  createAuditRecorder,
+  readAuditRecord,
+  type RecordAuditInput,
+} from "./audit/recorder.js";
 export {
   destinationsCreateCommand,
   destinationsDisableCommand,
@@ -244,6 +290,12 @@ export {
 } from "./catalog/index.js";
 export {
   type ApiKeyRow,
+  AUDIT_ACTOR_SOURCES,
+  AUDIT_ENVIRONMENTS,
+  type AuditActorSource,
+  type AuditEnvironment,
+  type AuditRecordRow,
+  type AuditRecordsTable,
   connectDb,
   type ConnectDbOptions,
   type DbHandle,
@@ -256,16 +308,21 @@ export {
   type DestinationRow,
   findActivationByKey,
   findApiKeyById,
+  findAuditRecordById,
   findDestinationById,
   insertApiKey,
+  insertAuditRecord,
   insertDestination,
   type InsertApiKeyInput,
+  type InsertAuditRecordInput,
   type InsertDestinationInput,
   listActivationsForProcessor,
   listAllActivations,
   listAllDestinations,
   listApiKeysByProjectEnv,
+  listAuditRecords,
   listDestinationsByProjectEnv,
+  type ListAuditRecordsFilter,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
   revokeApiKey,

@@ -10,6 +10,19 @@ export {
   listApiKeysByProjectEnv,
   revokeApiKey,
 } from "./api-keys.js";
+export {
+  AUDIT_ACTOR_SOURCES,
+  AUDIT_ENVIRONMENTS,
+  type AuditActorSource,
+  type AuditEnvironment,
+  type AuditRecordRow,
+  type AuditRecordsTable,
+  findAuditRecordById,
+  insertAuditRecord,
+  type InsertAuditRecordInput,
+  listAuditRecords,
+  type ListAuditRecordsFilter,
+} from "./audit-records.js";
 export { type ConnectDbOptions, type DbHandle, connectDb } from "./connect.js";
 export {
   disableDestination,
