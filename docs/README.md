@@ -32,6 +32,8 @@ SDKs / producers
 - [Architecture Decision Ledger](./adr/0001-architecture-decisions.md)
 - [Engineering Decision Ledger](./adr/0002-engineering-decisions.md)
 - [SDK Decision Ledger](./adr/0003-sdk-decisions.md)
+- [Implementation Playbook](./implementation/README.md)
+- [Implementation Kanban](./implementation/kanban.md)
 - [Codex Instructions](./instructions/codex.md)
 
 ## Non-Negotiable Rules
