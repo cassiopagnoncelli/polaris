@@ -67,19 +67,28 @@ Prefer this monorepo shape unless the user asks for a different layout:
 
 ```text
 apps/
-  ingester-api/
+  ingester-api/                    Fastify ingestion service
+  control-plane-api/               Fastify admin/control-plane API (target of the CLI)
+  polaris-cli/                     polaris CLI (thin client of control-plane-api)
 
 packages/
   web-sdk/
   node-sdk/
-  shared-schemas/
-  shared-kafka/
-  shared-logger/
-  shared-config/
-  shared-secrets/
+  shared-schemas/                  envelope + event Zod schemas
+  shared-kafka/                    KafkaJS wrapper + topic-family resolver
+  shared-logger/                   Pino setup
+  shared-config/                   Zod-validated runtime config
+  shared-secrets/                  secret provider interface + env / Vault adapters
+  shared-clickhouse/               wraps @clickhouse/client; only sanctioned ClickHouse access path
+  shared-destinations/             destination consumer runtime (normalize/map/deliver helpers)
+  shared-destination-normalize/    vendor-agnostic normalization primitives
+  shared-policy/                   forbidden-field policy evaluator
+  shared-control-plane/            CLI <-> control-plane-api shared types and helpers
+  shared-processor/                processor runtime helpers (manifests, run records)
 
 catalog/
-  events/
+  events/                          file-backed event catalog (yaml + Zod schemas in shared-schemas)
+  policy/                          forbidden-field policy and project overrides
 
 processors/
   identity-resolver/
@@ -92,6 +101,8 @@ processors/
     v1/
 
 consumers/
+  webhook-sink/
+    v1/                            simplest exemplar; canonical SPEC.md reference
   meta-capi/
     v1/
   ga4/
@@ -100,6 +111,16 @@ consumers/
     v1/
   braze/
     v1/
+  reverse-etl/
+    v1/
+
+  Each consumer/<vendor>/v<N>/ ships:
+    SPEC.md            filled from docs/implementation/templates/consumer-spec-template.md
+    normalize/         vendor-specific normalization on top of shared-destination-normalize
+    mappers/           per-canonical-event vendor payload mappers
+    deliver/           vendor client adapter (auth, batching, retry, rate limit)
+    manifest.json      versioning metadata
+    test/fixtures/     golden input/output pairs per canonical event
 
 infra/
   docker/
@@ -111,6 +132,13 @@ infra/
 
 sql/
   clickhouse/
+    roles/                         polaris_service / polaris_operator definitions + grants
+    projections/                   one .sql file per projection table
+    materialized-views/            MVs that feed projections (argMax pattern)
+    <ddl files>                    Kafka Engine table, analytics_ingest_log, analytics_raw
+
+db/
+migrations/                        SQL-first PostgreSQL migrations (dbmate by default)
 
 docs/
 ```
