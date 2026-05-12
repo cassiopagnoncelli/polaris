@@ -42,15 +42,29 @@ describe("retry policy", () => {
     expect(computeBackoffMs(policy, 5, () => 0)).toBe(5_000);
   });
 
-  it("applies jitter as a non-negative fraction", () => {
+  it("applies bidirectional jitter symmetrically around the base", () => {
     const policy = resolveRetryPolicy({
       jitterRatio: 0.5,
       initialDelayMs: 100,
       backoffMultiplier: 1,
       maxDelayMs: 1_000,
     });
-    // randomFn returns 1 → max jitter
-    expect(computeBackoffMs(policy, 1, () => 1)).toBe(150);
-    expect(computeBackoffMs(policy, 1, () => 0)).toBe(100);
+    // Bidirectional jitter spreads on both sides of the deterministic
+    // schedule so retries don't all cluster on the upper side.
+    expect(computeBackoffMs(policy, 1, () => 1)).toBe(150); // max +
+    expect(computeBackoffMs(policy, 1, () => 0.5)).toBe(100); // centered
+    expect(computeBackoffMs(policy, 1, () => 0)).toBe(50); // max -
+  });
+
+  it("clamps negative jitter to 0", () => {
+    // initialDelay is small enough that max negative jitter would go
+    // below zero; clamp guarantees we never sleep for a negative time.
+    const policy = resolveRetryPolicy({
+      jitterRatio: 2,
+      initialDelayMs: 100,
+      backoffMultiplier: 1,
+      maxDelayMs: 1_000,
+    });
+    expect(computeBackoffMs(policy, 1, () => 0)).toBe(0);
   });
 });

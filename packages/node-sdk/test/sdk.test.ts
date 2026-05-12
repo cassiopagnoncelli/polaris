@@ -101,13 +101,16 @@ describe("PolarisNodeSdk constructor", () => {
     ).toThrowError(/flushIntervalMs/);
   });
 
-  it("seeds default identity with anon_/sess_ identifiers", () => {
-    const sdk = new PolarisNodeSdk(baseOptions());
-    const id = sdk.getIdentity();
-    expect(id.anonymous_id).toMatch(/^anon_/);
-    expect(id.session_id).toMatch(/^sess_/);
-    expect(id.customer_id).toBeNull();
-    expect(id.device_id).toBeNull();
+  it("seeds default identity with anon_/sess_ identifiers", async () => {
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    await sdk.track("page.viewed", {});
+    await sdk.flush();
+    const event = transport.sends[0]?.[0];
+    expect(event?.identity.anonymous_id).toMatch(/^anon_/);
+    expect(event?.identity.session_id).toMatch(/^sess_/);
+    expect(event?.identity.customer_id).toBeNull();
+    expect(event?.identity.device_id).toBeNull();
   });
 });
 
@@ -216,28 +219,36 @@ describe("PolarisNodeSdk identify / reset", () => {
     const events = transport.sends[0] ?? [];
     expect(events[0]?.identity.customer_id).toBeNull();
     expect(events[1]?.identity.customer_id).toBe("cus_123");
-    expect(sdk.getTraits("cus_123")).toEqual({ tier: "gold" });
   });
 
-  it("reset rotates session and anonymous by default", () => {
-    const sdk = new PolarisNodeSdk(baseOptions());
+  it("reset rotates session and anonymous by default", async () => {
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
     sdk.identify("cus_123");
-    const before = sdk.getIdentity();
+    await sdk.track("page.viewed", {});
     sdk.reset();
-    const after = sdk.getIdentity();
-    expect(after.customer_id).toBeNull();
-    expect(after.session_id).not.toBe(before.session_id);
-    expect(after.anonymous_id).not.toBe(before.anonymous_id);
-    expect(sdk.getTraits("cus_123")).toBeUndefined();
+    await sdk.track("page.viewed", {});
+    await sdk.flush();
+    const events = transport.sends[0] ?? [];
+    const before = events[0];
+    const after = events[1];
+    expect(after?.identity.customer_id).toBeNull();
+    expect(after?.identity.session_id).not.toBe(before?.identity.session_id);
+    expect(after?.identity.anonymous_id).not.toBe(before?.identity.anonymous_id);
   });
 
-  it("reset({ anonymous: false }) keeps anonymous identity", () => {
-    const sdk = new PolarisNodeSdk(baseOptions());
-    const before = sdk.getIdentity();
+  it("reset({ anonymous: false }) keeps anonymous identity", async () => {
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    await sdk.track("page.viewed", {});
     sdk.reset({ anonymous: false });
-    const after = sdk.getIdentity();
-    expect(after.anonymous_id).toBe(before.anonymous_id);
-    expect(after.session_id).not.toBe(before.session_id);
+    await sdk.track("page.viewed", {});
+    await sdk.flush();
+    const events = transport.sends[0] ?? [];
+    const before = events[0];
+    const after = events[1];
+    expect(after?.identity.anonymous_id).toBe(before?.identity.anonymous_id);
+    expect(after?.identity.session_id).not.toBe(before?.identity.session_id);
   });
 
   it("identify rejects empty customer_id", () => {

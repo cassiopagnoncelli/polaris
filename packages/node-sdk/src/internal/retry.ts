@@ -44,6 +44,10 @@ export function resolveRetryPolicy(partial: Partial<RetryPolicy> | undefined): R
 /**
  * Compute the delay before `attempt` (1-indexed). `randomFn` is injectable
  * so tests can pin jitter deterministically.
+ *
+ * Jitter is bidirectional (`+/- jitterRatio * base`) so retries spread on
+ * both sides of the deterministic schedule rather than always clustering on
+ * the upper side. The total result is clamped to `[0, maxDelayMs]`.
  */
 export function computeBackoffMs(
   policy: RetryPolicy,
@@ -53,8 +57,12 @@ export function computeBackoffMs(
   const safeAttempt = Math.max(1, attempt);
   const base = policy.initialDelayMs * policy.backoffMultiplier ** (safeAttempt - 1);
   const capped = Math.min(base, policy.maxDelayMs);
-  const jitter = capped * policy.jitterRatio * randomFn();
-  return Math.min(capped + jitter, policy.maxDelayMs);
+  const jitterMagnitude = capped * policy.jitterRatio;
+  const jitter = jitterMagnitude * (randomFn() * 2 - 1);
+  const total = capped + jitter;
+  if (total < 0) return 0;
+  if (total > policy.maxDelayMs) return policy.maxDelayMs;
+  return total;
 }
 
 /**

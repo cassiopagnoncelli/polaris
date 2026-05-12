@@ -61,9 +61,13 @@ import type {
   Transport,
   TransportResult,
 } from "./types.js";
+import { SDK_VERSION } from "./internal/version.js";
 
-/** Default SDK version stamped into `source.sdk_version` if the caller omits it. */
-const DEFAULT_SDK_VERSION = "0.0.0";
+/**
+ * Default SDK version stamped into `source.sdk_version` if the caller omits it.
+ * Auto-read from the package.json this module is bundled with.
+ */
+const DEFAULT_SDK_VERSION = SDK_VERSION;
 
 interface PersistentIdentity {
   anonymous_id: string | null;
@@ -88,7 +92,6 @@ export class PolarisNodeSdk {
   private readonly flushIntervalMs: number;
   private readonly retryPolicy: RetryPolicy;
   private readonly diagnostics: DiagnosticCallbacks;
-  private readonly identityTraits: Map<string, IdentifyTraits> = new Map();
   private readonly shutdownTimeoutMs: number;
   private readonly identity: PersistentIdentity;
   private readonly intervalTimer: NodeJS.Timeout | undefined;
@@ -175,25 +178,6 @@ export class PolarisNodeSdk {
     }
   }
 
-  /**
-   * Snapshot of current persistent identity. Useful for diagnostics and
-   * for callers that want to attach identity to log lines outside the
-   * SDK. Returned object is a copy.
-   */
-  public getIdentity(): Readonly<PersistentIdentity> {
-    return { ...this.identity };
-  }
-
-  /**
-   * Get traits previously attached via `identify()` for a customer_id.
-   * The Node SDK does not invent identity links from traits; this is a
-   * pass-through helper for application code that wants to surface traits
-   * in subsequent `track()` properties.
-   */
-  public getTraits(customerId: string): IdentifyTraits | undefined {
-    return this.identityTraits.get(customerId);
-  }
-
   public async track(
     event: string,
     properties?: Record<string, unknown>,
@@ -248,21 +232,22 @@ export class PolarisNodeSdk {
   }
 
   /**
-   * Associate a `customer_id` (and optional traits) with subsequent
-   * events. Traits are stored locally so callers may read them back via
-   * `getTraits()`. The Node SDK does NOT auto-emit an identify event in
-   * v1 — emitting `identify`-style events is left to the caller via
-   * `track("user.identified", ...)` if they want it. This matches the
-   * SDK Standards principle of "transport + identity helpers, not
+   * Associate a `customer_id` with subsequent events. The Node SDK does
+   * NOT auto-emit an identify-style event in v1, and does NOT store
+   * traits — emitting an identify event with traits is the caller's job
+   * via `track("user.identified", ...)` if they want it. This matches
+   * the SDK Standards principle of "transport + identity helpers, not
    * analytics engine".
+   *
+   * The `traits` parameter is accepted to keep the signature compatible
+   * with the architecture-doc API surface, but currently ignored. Future
+   * versions may emit an identify event when an authoritative event
+   * exists in the catalog.
    */
-  public identify(customerId: string, traits?: IdentifyTraits): void {
+  public identify(customerId: string, _traits?: IdentifyTraits): void {
     this.assertOpen();
     assertValidCustomerId(customerId);
     this.identity.customer_id = customerId;
-    if (traits !== undefined) {
-      this.identityTraits.set(customerId, traits);
-    }
   }
 
   /**
@@ -278,7 +263,6 @@ export class PolarisNodeSdk {
     if (rotateAnonymous) {
       this.identity.anonymous_id = newIdentityId("anon");
     }
-    this.identityTraits.clear();
   }
 
   /**
