@@ -1,0 +1,65 @@
+# Polaris processor manifest — analytics-projector v1
+#
+# This manifest is the SEMANTIC definition for the analytics-projector
+# processor, version 1. Per docs/architecture/05-processors-and-replay.md
+# ("Processor Versioning"), the contents of this file for a given
+# (name, version) pair are immutable. Any change that affects emitted
+# event meaning, fields, identity links, attribution outcomes, filtering
+# behavior, or output schema requires a NEW version directory (v2/) with
+# its own manifest.
+#
+# PostgreSQL stores the runtime activation state (enabled/disabled,
+# project/environment scope, consumer group, batch size, ...) — never
+# semantic transformation rules. See docs/architecture/05-processors-and-replay.md
+# "Processor Configuration".
+
+name: analytics-projector
+version: v1
+owner: platform-data
+description: |
+  First Polaris processor in the workspace. Consumes the canonical
+  raw.events topic and republishes each event onto analytics.events
+  with processor metadata stamped on the envelope. The transform is a
+  passthrough in v1 — every envelope field (event_id, event,
+  schema_version, project_id, environment, occurred_at, ingested_at,
+  source, identity, context, consent, privacy, properties) is copied
+  verbatim from the input. Real enrichment lives in the P8 production
+  processors (identity-resolver, sessionizer, geoip-enricher,
+  attribution-engine).
+
+# Streaming mode: each input event maps 1:1 to one emitted event.
+# Batch mode would aggregate multiple inputs into one output and is
+# explicitly not used here.
+mode: streaming
+
+# Topic-family inputs/outputs. The shared-kafka topic-family resolver
+# turns these into concrete topic names per project isolation state at
+# runtime. Per-project activation lives in PostgreSQL (P6-005).
+inputs:
+  - family: raw.events
+    schema_versions: "*"   # passthrough; v1 does not gate on event schema version
+outputs:
+  - family: analytics.events
+    schema_versions: "*"
+
+# State stores this processor uses. v1 is stateless — no Redis windows,
+# no PostgreSQL lookups, no GeoIP database. The slot is here for shape
+# consistency with later processors that DO need state.
+state_stores: []
+
+# Operational defaults the runtime helpers fall back to when no
+# PostgreSQL activation row overrides them. These are non-semantic per
+# the architecture doc ("Processor Configuration"): the runtime may
+# override consumer group, batch size, max concurrency, etc., without
+# bumping the processor version.
+defaults:
+  consumer_group: polaris-analytics-projector-v1
+  partitions_consumed_concurrently: 1
+
+# Replay metadata. The replay control plane (P7) targets exact
+# processor versions and records lineage; this slot documents the
+# author's intent so operators have a single place to see whether the
+# version supports replay and any restrictions.
+replay:
+  supported: true
+  restrictions: []
