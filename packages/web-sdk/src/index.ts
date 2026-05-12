@@ -1,47 +1,49 @@
 /**
  * `@polaris/web-sdk` — browser SDK for Polaris.
  *
- * P3-002 ships the identity-persistence layer only:
+ * Public v1 surface per `docs/architecture/10-sdk-standards.md`:
  *
- *   - `IdentityStore` interface and four implementations: `CookieStore`,
- *     `LocalStorageStore`, `SessionStorageStore`, `MemoryStore`.
- *   - `LayeredIdentityStore` orchestrating the doctrinal fallback chain
- *     (cookie -> localStorage -> sessionStorage -> memory).
- *   - `IdentityManager` exposing get/set for `anonymous_id`, `session_id`,
- *     `customer_id`, plus 30-minute session inactivity rotation and the
- *     `reset()` semantics from the architecture doc.
- *   - `PolarisWebSdk` class as the public-surface stub. Identity methods
- *     are fully wired; `track()` and `flush()` are placeholders that
- *     land in P3-003.
+ *   - `track(event, properties, options?)` -> Promise<string>
+ *   - `identify(customerId, traits?)`
+ *   - `reset(options?)`
+ *   - `flush()` -> Promise<FlushResult>
  *
- * Hard rules baked in (per `docs/architecture/10-sdk-standards.md`):
+ * Hard rules baked in:
  *
  *   - No third-party cookies. No fingerprinting. No IP-based identity
  *     inference.
- *   - First-party cookie uses `SameSite=Lax` and adds `Secure` when the
- *     page is served over HTTPS. Cookie domain is configurable for
- *     subdomain sharing.
- *   - `anonymous_id` is mirrored into localStorage when available, so
- *     identity survives a Safari ITP cookie eviction.
- *   - Sessions rotate after 30 minutes of inactivity. Campaign / click
- *     changes do NOT rotate sessions — those are event context.
- *   - WebView / in-app browser environments are detected and surfaced
- *     as diagnostic context. Support is best-effort, not guaranteed.
- *   - SDK records the storage layer it landed on as diagnostic context
- *     so the downstream identity resolver can treat the layer as
- *     evidence quality.
+ *   - Identity persistence: first-party cookie -> localStorage mirror ->
+ *     sessionStorage -> memory.
+ *   - Event queue: IndexedDB preferred -> localStorage fallback ->
+ *     memory fallback. Cookies are NEVER used for event queues.
+ *   - First 15 seconds after construction use eager flush mode (100ms
+ *     debounce). After that, steady mode flushes every 5 seconds.
+ *   - pagehide / visibilitychange triggers an urgent flush via
+ *     `sendBeacon` (with `fetch` keepalive fallback). Page-exit
+ *     delivery is best-effort.
+ *   - `event_id` is preserved across retries.
+ *   - Queue priorities `low | normal | high`. Overflow drops oldest
+ *     `low` first, then oldest `normal`, then oldest `high`.
+ *   - Diagnostics are callback-only. The SDK does NOT emit automatic
+ *     diagnostic events to Polaris in v1.
  *
- * Out of scope (P3-003):
+ * Quickstart (async constructor, recommended):
  *
- *   - the queue (IndexedDB + localStorage + memory)
- *   - the HTTPS transport
- *   - batch flush, retry, eager-flush mode
- *   - `track()` semantics
- *   - the script-tag loader + IIFE bundle
+ *   ```ts
+ *   import { PolarisWebSdk } from "@polaris/web-sdk";
+ *
+ *   const sdk = await PolarisWebSdk.create({
+ *     endpoint: "https://ingest.polaris.internal/v1/events",
+ *     apiKey: process.env.POLARIS_API_KEY!,
+ *     source: { id: "checkout-app" },
+ *   });
+ *   await sdk.track("page.viewed", { path: location.pathname });
+ *   ```
  *
  * @see docs/architecture/04-ingestion-and-sdks.md
  * @see docs/architecture/10-sdk-standards.md
  * @see docs/implementation/tasks/P3-002-web-sdk-identity-persistence.md
+ * @see docs/implementation/tasks/P3-003-web-sdk-queue-transport.md
  */
 
 export {
@@ -55,17 +57,52 @@ export {
   WebStorageStore,
   type WebStorageStoreInputs,
 } from "./identity/index.js";
+export { ValidationError } from "./internal/validation.js";
+export {
+  drainLoaderQueue,
+  INLINE_LOADER_SNIPPET,
+  type DrainQueueOptions,
+  type LoaderCommand,
+  type LoaderQueue,
+} from "./loader.js";
+export {
+  IndexedDbQueue,
+  LayeredEventQueue,
+  type LayeredEventQueueOptions,
+  LocalStorageQueue,
+  MemoryQueue,
+  probeIndexedDb,
+} from "./queue/index.js";
 export { PolarisWebSdk } from "./sdk.js";
+export { HttpsTransport, type HttpsTransportOptions, TransportError } from "./transport/index.js";
 export type {
   CookieOptions,
+  Diagnostic,
+  DiagnosticCallbacks,
+  DiagnosticKind,
+  DropReason,
+  EnqueueOutcome,
   EnvelopeIdentity,
+  EventPriority,
+  EventQueue,
+  FlushResult,
   IdentifyTraits,
   IdentityCapability,
   IdentityDiagnostics,
   IdentityManagerOptions,
   IdentityStore,
   PersistedIdentity,
+  QueueEntry,
+  QueueLayer,
+  QueuedEventPayload,
   ResetOptions,
+  RetryPolicy,
   StorageLayer,
+  TrackOptions,
+  Transport,
+  TransportEventResult,
+  TransportMode,
+  TransportResult,
   WebSdkOptions,
+  WebSourceConfig,
 } from "./types.js";

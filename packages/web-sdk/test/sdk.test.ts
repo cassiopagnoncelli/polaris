@@ -1,17 +1,10 @@
 // @vitest-environment happy-dom
 /**
- * `PolarisWebSdk` — public-surface stub.
+ * `PolarisWebSdk` — public-surface tests for the identity layer.
  *
- * P3-002 ships identity only. This test verifies the public surface
- * matches `docs/architecture/10-sdk-standards.md`:
- *
- *   - `identify(customerId, traits?)`
- *   - `reset(options?)`
- *   - `track(event, properties)` exists but is not implemented (P3-003)
- *   - `flush()` exists but is not implemented (P3-003)
- *
- * The identity-side wiring delegates to `IdentityManager`, which has
- * its own exhaustive test suite. This file checks the surface contract.
+ * The track / flush / lifecycle tests for P3-003 live in
+ * `test/web-sdk.test.ts` (the larger suite that exercises the full
+ * queue + transport + retry + lifecycle path).
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,7 +25,11 @@ afterEach(() => {
 
 describe("PolarisWebSdk — identity surface", () => {
   it("exposes capability detection and a default identity", () => {
-    const sdk = new PolarisWebSdk();
+    const sdk = new PolarisWebSdk({
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
     const cap = sdk.getCapability();
     expect(cap.primary).toBeTypeOf("string");
     const env = sdk.getEnvelopeIdentity();
@@ -42,7 +39,11 @@ describe("PolarisWebSdk — identity surface", () => {
   });
 
   it("identify and reset flow through to the identity manager", () => {
-    const sdk = new PolarisWebSdk();
+    const sdk = new PolarisWebSdk({
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
     sdk.identify("cus_42");
     expect(sdk.getEnvelopeIdentity().customer_id).toBe("cus_42");
     sdk.reset();
@@ -50,26 +51,22 @@ describe("PolarisWebSdk — identity surface", () => {
   });
 
   it("getIdentityManager exposes the underlying manager for diagnostics", () => {
-    const sdk = new PolarisWebSdk();
+    const sdk = new PolarisWebSdk({
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
     const mgr = sdk.getIdentityManager();
     expect(mgr.getCapability().primary).toBe(sdk.getCapability().primary);
   });
 
   it("diagnostics surfaces the storage layer", () => {
-    const sdk = new PolarisWebSdk();
+    const sdk = new PolarisWebSdk({
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
     const diag = sdk.getDiagnostics();
     expect(diag.currentLayer).toBe(sdk.getCapability().primary);
-  });
-});
-
-describe("PolarisWebSdk — P3-003 placeholders", () => {
-  it("track() rejects with a descriptive error until P3-003 lands", async () => {
-    const sdk = new PolarisWebSdk();
-    await expect(sdk.track("page.viewed", {})).rejects.toThrowError(/P3-003/);
-  });
-
-  it("flush() rejects with a descriptive error until P3-003 lands", async () => {
-    const sdk = new PolarisWebSdk();
-    await expect(sdk.flush()).rejects.toThrowError(/P3-003/);
   });
 });

@@ -8,6 +8,9 @@
  *     call vendors, or own schema governance.
  *   - Browser identity persistence is layered: first-party cookie ->
  *     localStorage mirror -> sessionStorage fallback -> in-memory fallback.
+ *   - Browser queue persistence is layered: IndexedDB preferred ->
+ *     localStorage fallback -> in-memory fallback. Cookies are NEVER used
+ *     for event queues.
  *   - No third-party cookies. No fingerprinting. No IP-based identity
  *     inference.
  *   - Sessions rotate after 30 minutes of inactivity. Campaign / click
@@ -19,11 +22,15 @@
  *   - The SDK records the storage layer it landed on as diagnostic context
  *     so the downstream identity resolver can treat storage layer as
  *     evidence quality.
+ *   - Flush lifecycle:
+ *       0-15s after SDK init   -> eager flush mode (100ms debounce)
+ *       after 15s              -> steady batch mode (default 5s interval)
+ *       pagehide / manual flush -> urgent flush (sendBeacon / keepalive)
+ *   - Page-exit delivery is best-effort, NOT guaranteed.
  *
- * This task (P3-002) ships the identity-persistence layer only. The queue,
- * transport, batch flush, retry, and `track()` semantics are P3-003. A
- * minimal `WebSdkOptions` is defined here so the manager can be wired into
- * a public surface stub in P3-003 without rework.
+ * P3-003 ships the queue, transport, retry coordinator, lifecycle
+ * controller, and the real `track()` + `flush()` semantics on top of the
+ * P3-002 identity layer.
  */
 
 import type { Envelope } from "@polaris/shared-schemas";
@@ -209,21 +216,341 @@ export interface IdentityDiagnostics {
   readonly lastActivityAt: number;
 }
 
+// =====================================================================
+// Queue + transport + lifecycle types (P3-003)
+// =====================================================================
+
 /**
- * Web SDK constructor options surface — placeholder for P3-003.
+ * Queue persistence layers for events.
  *
- * P3-002 ships only the identity layer, so the SDK class itself is a
- * minimal stub that wires the identity manager and exposes the public
- * `track`/`identify`/`reset`/`flush` shape. The queue, transport, batch
- * flush, retry, and `track()` semantics land in P3-003 (Web SDK Queue and
- * Transport). Anything beyond identity here is a placeholder so that
- * P3-003 lands cleanly.
+ * Per `docs/architecture/10-sdk-standards.md` § Web SDK Queue Model:
+ *
+ *   IndexedDB preferred
+ *   localStorage fallback
+ *   memory fallback
+ *
+ * Cookies are NEVER used for event queues. Order in the array is the
+ * doctrinal fallback chain: IndexedDB first (large quota, async,
+ * structured), then localStorage (5-10 MB, sync, string-only), then
+ * memory (transient — events lost on navigation).
+ */
+export type QueueLayer = "indexeddb" | "localstorage" | "memory";
+
+/** Local delivery priority. Affects retention under overflow only. */
+export type EventPriority = "low" | "normal" | "high";
+
+/**
+ * The shape of an event as it leaves `track()` and enters the queue.
+ *
+ * Per `docs/architecture/01-event-contract.md`, `project_id`,
+ * `environment`, trusted `source.id`, and `ingested_at` are stamped by the
+ * ingester from the API key — producers do not supply them. The Web SDK
+ * keeps the produced envelope minimal so it survives a round-trip through
+ * IndexedDB / localStorage as plain JSON.
+ *
+ * `event_id` is generated SDK-side as UUIDv7 and preserved across retries.
+ */
+export interface QueuedEventPayload {
+  readonly event_id: string;
+  readonly event: string;
+  readonly schema_version: number;
+  readonly occurred_at: string;
+  readonly source: Envelope["source"];
+  readonly identity: Envelope["identity"];
+  readonly context: Envelope["context"];
+  readonly properties: Readonly<Record<string, unknown>>;
+  readonly consent?: Envelope["consent"];
+  readonly privacy?: Envelope["privacy"];
+}
+
+/**
+ * A queue entry combining the canonical event payload with local
+ * delivery-only metadata. Local metadata is NOT sent to the ingester — it
+ * exists only to support retry, priority overflow, and diagnostics.
+ */
+export interface QueueEntry {
+  readonly payload: QueuedEventPayload;
+  readonly priority: EventPriority;
+  readonly attempts: number;
+  /** Epoch millis when the SDK first enqueued the event. */
+  readonly enqueued_at: number;
+}
+
+/**
+ * Outcome of an `enqueue()` call.
+ *
+ *   - `accepted`: the entry landed in the queue.
+ *   - `accepted_with_drops`: the entry landed, but other entries were
+ *     evicted to make room (priority-overflow eviction). The `dropped`
+ *     array lists the evicted entries so the SDK can emit `onDrop`
+ *     diagnostics.
+ *   - `rejected`: the queue is full and the new entry could not displace
+ *     anything (e.g. priority too low, queue full of higher priorities).
+ *     `track()` does NOT throw on rejection — the caller emits `onDrop`
+ *     with reason `queue_overflow` and continues.
+ */
+export type EnqueueOutcome =
+  | { readonly status: "accepted" }
+  | { readonly status: "accepted_with_drops"; readonly dropped: readonly QueueEntry[] }
+  | { readonly status: "rejected" };
+
+/**
+ * Queue adapter interface for the Web SDK.
+ *
+ * Implementations may use IndexedDB (the preferred async layer),
+ * localStorage (the fallback synchronous layer), or memory (the last
+ * resort).
+ *
+ * Ordering rules:
+ *
+ *   - `drain(max)` returns up to `max` entries from the head (oldest first
+ *     within a priority bucket, but the layered queue always drains in
+ *     enqueue order).
+ *   - On overflow, the queue drops oldest `low` first, then oldest
+ *     `normal`, then oldest `high`. The new entry is admitted only if a
+ *     lower-or-equal-priority entry exists to evict.
+ *
+ * Async-only API: the IndexedDB-backed implementation is inherently async,
+ * so the interface unifies on Promises even when the underlying layer
+ * (memory, localStorage) is synchronous. This keeps the SDK core simple.
+ */
+export interface EventQueue {
+  /** Layer label, e.g. `"indexeddb"`, used for diagnostics. */
+  readonly layer: QueueLayer;
+  /**
+   * Append an event to the tail of the queue. Returns an outcome that
+   * describes whether the event was accepted and what (if anything) was
+   * evicted under priority overflow.
+   */
+  enqueue(entry: QueueEntry): Promise<EnqueueOutcome>;
+  /** Number of events currently in the queue. */
+  size(): Promise<number>;
+  /**
+   * Remove and return up to `max` events from the head. Returned events
+   * stay owned by the caller until the caller either commits delivery (and
+   * discards them) or returns them via `requeue` after a transient failure.
+   */
+  drain(max: number): Promise<QueueEntry[]>;
+  /**
+   * Return events back to the head of the queue (used after a retryable
+   * transport failure so `event_id` is preserved across retries). The
+   * supplied entries should be the same `event_id`s previously drained;
+   * implementations may increment `attempts` here or accept pre-incremented
+   * entries from the caller.
+   */
+  requeue(entries: readonly QueueEntry[]): Promise<void>;
+  /** Drain everything for sendBeacon-style urgent flushes. */
+  drainAll(): Promise<QueueEntry[]>;
+  /** Optional hook called when the SDK shuts down. */
+  close?(): Promise<void>;
+}
+
+/**
+ * Per-event ingester response entry. The ingester returns partial-batch
+ * acceptance — some events accepted, some rejected by `event_id` — and the
+ * retry coordinator decides retry vs drop based on `retryable`.
+ */
+export interface TransportEventResult {
+  readonly event_id: string;
+  readonly status: "accepted" | "rejected";
+  /** Machine-readable reason code when `status === "rejected"`. */
+  readonly reason?: string;
+  /** Whether this rejection is retryable (transient) per the transport layer. */
+  readonly retryable?: boolean;
+}
+
+export interface TransportResult {
+  readonly accepted: readonly TransportEventResult[];
+  readonly rejected: readonly TransportEventResult[];
+}
+
+/**
+ * Transport mode hint. Steady-state uses `fetch` (or `fetch` with
+ * keepalive). Page-exit uses `sendBeacon` when available with a `fetch`
+ * keepalive fallback. The transport layer picks based on the mode the
+ * lifecycle controller passes in.
+ */
+export type TransportMode = "steady" | "urgent";
+
+/**
+ * Transport interface. The SDK ships an HTTPS POST transport
+ * (`src/transport/https.ts`) that uses `fetch` for steady-state and
+ * `navigator.sendBeacon` (with `fetch` keepalive fallback) for urgent
+ * page-exit flushes.
+ *
+ * Implementations should throw a `TransportError`-shaped exception for
+ * transport-layer failures (network errors, 5xx, timeouts) — the retry
+ * coordinator decides whether to retry based on the thrown error class.
+ */
+export interface Transport {
+  /**
+   * Send a batch of events to the ingester. Returns a `TransportResult`
+   * describing per-event acceptance. Throws only for transport-layer
+   * failures (network errors, 5xx, timeouts).
+   */
+  send(events: readonly QueuedEventPayload[], mode: TransportMode): Promise<TransportResult>;
+  /** Optional teardown hook. */
+  close?(): Promise<void>;
+}
+
+/** Retry policy for transient transport failures. */
+export interface RetryPolicy {
+  readonly maxRetries: number;
+  readonly initialDelayMs: number;
+  readonly maxDelayMs: number;
+  /** Multiplier applied per attempt (e.g. 2 -> exponential doubling). */
+  readonly backoffMultiplier: number;
+  /** Maximum jitter ratio (0..1). Per-attempt jitter ∈ [-jitterRatio, +jitterRatio]. */
+  readonly jitterRatio: number;
+}
+
+/** Reasons surfaced via `onDrop`. */
+export type DropReason =
+  | "queue_overflow"
+  | "permanent_failure"
+  | "retry_exhausted"
+  | "validation_failed";
+
+/** Diagnostic kinds surfaced via `onDiagnostic`. */
+export type DiagnosticKind =
+  | "queue_layer_selected"
+  | "queue_pressure"
+  | "queue_overflow"
+  | "retry"
+  | "flush"
+  | "validation_failed"
+  | "transport_error"
+  | "lifecycle_mode_change";
+
+/** Structured diagnostic record. */
+export interface Diagnostic {
+  readonly kind: DiagnosticKind;
+  readonly message: string;
+  readonly detail?: Readonly<Record<string, unknown>>;
+}
+
+/** Outcome of a single `flush()` invocation. */
+export interface FlushResult {
+  /** Events successfully transmitted to the ingester. */
+  readonly delivered: number;
+  /** Events still queued at the end of the flush. */
+  readonly queued: number;
+  /** Events dropped during this flush (terminal failures). */
+  readonly dropped: number;
+  /** Transport mode used for the flush. */
+  readonly mode: TransportMode;
+}
+
+/**
+ * Optional callbacks exposed to applications. None are required. The Web
+ * SDK does not emit automatic diagnostic events to Polaris in v1; these
+ * are the extension point operators wire into their own logging/metrics.
+ */
+export interface DiagnosticCallbacks {
+  onError?: (error: Error) => void;
+  onDrop?: (entry: QueueEntry, reason: DropReason) => void;
+  onRetry?: (entry: QueueEntry, attempt: number, error: Error) => void;
+  onFlush?: (result: FlushResult) => void;
+  onDiagnostic?: (diagnostic: Diagnostic) => void;
+}
+
+/** Options accepted by `track()`. */
+export interface TrackOptions {
+  /** Optional `context` overrides merged on top of the SDK default context. */
+  readonly context?: Partial<Envelope["context"]>;
+  /** Producer-supplied occurrence timestamp (ISO 8601 UTC). Defaults to `now`. */
+  readonly occurredAt?: Date | string;
+  /** Optional `schema_version` for this event. Defaults to `1`. */
+  readonly schemaVersion?: number;
+  /** Optional consent/privacy metadata to attach to this event. */
+  readonly consent?: Envelope["consent"];
+  readonly privacy?: Envelope["privacy"];
+  /**
+   * Local delivery priority. Defaults to `normal`. Affects queue retention
+   * under overflow only — priority does NOT change canonical event meaning
+   * or vendor routing.
+   */
+  readonly priority?: EventPriority;
+}
+
+/** Source metadata that the SDK stamps on every event. */
+export interface WebSourceConfig {
+  /** Stable identifier for the producer surface, e.g. `"checkout-app"`. */
+  readonly id: string;
+  /** Optional SDK version override (auto-detected from the package by default). */
+  readonly sdkVersion?: string;
+}
+
+/**
+ * Web SDK constructor options surface.
+ *
+ * Endpoint and API key are required at runtime to actually deliver events.
+ * Identity manager options are forwarded to the layered identity store.
  */
 export interface WebSdkOptions {
-  /** Polaris ingestion endpoint. Required in P3-003; ignored in P3-002. */
+  /** Polaris ingestion endpoint, e.g. `https://ingest.polaris.internal/v1/events`. */
   readonly endpoint?: string;
   /** API key bound to project/environment/source by the control plane. */
   readonly apiKey?: string;
+  /** Source metadata stamped on every event. */
+  readonly source?: WebSourceConfig;
+  /** Optional default context merged into every event. */
+  readonly defaultContext?: Partial<Envelope["context"]>;
   /** Identity manager options forwarded to the layered identity store. */
   readonly identity?: IdentityManagerOptions;
+  /**
+   * Maximum number of events held in the queue. Defaults to 1000. Once
+   * full, overflow drops by priority (oldest low first, then normal, then
+   * high).
+   */
+  readonly maxQueueSize?: number;
+  /**
+   * Eager-flush window. For the first `startupEagerFlushWindowMs` after
+   * construction the SDK eagerly flushes on every `track()` with a small
+   * debounce so quick bursts coalesce into one request. Defaults to
+   * 15000ms per the architecture doc.
+   */
+  readonly startupEagerFlushWindowMs?: number;
+  /**
+   * Debounce window for the eager-flush phase. Defaults to 100ms.
+   */
+  readonly startupEagerFlushDebounceMs?: number;
+  /**
+   * Steady-mode flush interval. After the eager window expires, the SDK
+   * flushes at this interval if there are queued events. Defaults to
+   * 5000ms.
+   */
+  readonly steadyFlushIntervalMs?: number;
+  /**
+   * Maximum batch size per flush. Defaults to 20.
+   */
+  readonly batchSize?: number;
+  /**
+   * Retry policy. Defaults to exponential backoff with jitter (max 3
+   * retries per the architecture doc).
+   */
+  readonly retry?: Partial<RetryPolicy>;
+  /**
+   * Whether to install a `pagehide`/`visibilitychange` listener to flush
+   * remaining queue on page exit using `sendBeacon` / `fetch` keepalive.
+   * Defaults to `true`. Page-exit delivery is best-effort.
+   */
+  readonly flushOnPagehide?: boolean;
+  /** Optional diagnostic callbacks. */
+  readonly diagnostics?: DiagnosticCallbacks;
+  /** Inject a custom queue (defaults to layered IndexedDB -> localStorage -> memory). */
+  readonly queue?: EventQueue;
+  /** Inject a custom transport (defaults to fetch / sendBeacon). */
+  readonly transport?: Transport;
+  /** Optional clock injection for tests. Defaults to `Date.now`. */
+  readonly now?: () => number;
+  /** Optional ID generator for `event_id`. Defaults to UUIDv7. */
+  readonly eventIdGenerator?: () => string;
+  /**
+   * Inject a `window`/`document` pair for tests in non-DOM contexts. The
+   * package is browser-targeted; happy-dom supplies these in tests. If
+   * omitted, the SDK reads from `globalThis`.
+   */
+  readonly window?: Window | undefined;
+  readonly document?: Document | undefined;
 }
