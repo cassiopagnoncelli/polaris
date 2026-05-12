@@ -28,10 +28,14 @@
   "dependencies": {
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-kafka": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-policy": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "fastify": "^5.8.5",
+    "ioredis": "^5.4.2",
     "kysely": "^0.29.0",
     "zod": "^4.4.3"
   }

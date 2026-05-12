@@ -2,17 +2,23 @@ import { z } from "zod";
 
 /**
  * Closed set of machine-readable reason codes the ingester returns inside
- * per-event batch responses for schema-related rejections. These codes are
- * declared here so consumers (ingester implementation, SDKs, CLI, tests)
- * share one source of truth.
+ * per-event batch responses. The set is the **only** vocabulary the
+ * ingester's batch responses emit; SDKs, the CLI, processors, and tests
+ * all branch off these literals.
  *
- * The forbidden-field policy's reason codes (`pii_card`, `pii_account`,
- * `pii_secret`, `policy`, `length`, `pattern_match`) live alongside the
- * policy module (P0-009) and are not duplicated here.
+ * Two sub-families:
  *
- * Emission of these codes lands with the ingester batch validation work
- * in P2-003; this package provides the shape so other components can
- * build against it now.
+ *   - schema-related (`schemaReasonCodeSchema`): produced by the catalog
+ *     validator
+ *   - batch-flow (`batchReasonCodeSchema`): produced by the ingester
+ *     orchestrator (forbidden-field policy, dedupe, publish, ingest-side
+ *     wire problems)
+ *
+ * The forbidden-field policy's per-rule reason codes (`pii_card`,
+ * `pii_account`, `pii_secret`, `policy`, `length`, `pattern_match`) live
+ * alongside the policy module (P0-009) and are not duplicated here — they
+ * describe **why** a field was matched, not the batch-response code that
+ * surfaces the match.
  */
 
 /** Producer sent a `schema_version` that the catalog does not know about. */
@@ -41,11 +47,62 @@ export const schemaReasonCodeSchema = z.enum([
 export type SchemaReasonCode = z.infer<typeof schemaReasonCodeSchema>;
 
 /**
+ * Reason returned when an event is rejected because the forbidden-field
+ * policy's reject tier fired. The per-rule reason code (`pii_card`,
+ * `pii_secret`, ...) lives on the response detail so producers can fix
+ * the underlying field; the top-level code is intentionally stable across
+ * rule additions.
+ */
+export const BATCH_REASON_FORBIDDEN_FIELD_REJECTED = "forbidden_field_rejected";
+
+/**
+ * Reason returned when a duplicate `event_id` was observed inside the
+ * ingester's short-window dedupe (15-min default, up to 24h opt-in). The
+ * downstream pipeline remains the canonical idempotency layer; this code
+ * exists so producers can recognise the dedupe-at-edge effect without
+ * conflating it with permanent rejection.
+ */
+export const BATCH_REASON_DUPLICATE = "duplicate";
+
+/**
+ * Reason returned when an accepted event cannot be published to Redpanda
+ * (transient broker failure, serializer error). SDKs retry these with
+ * backoff; the event is **not** counted as accepted by the ingester.
+ */
+export const BATCH_REASON_PUBLISH_FAILED = "publish_failed";
+
+/**
+ * Reason returned when the request payload at the batch level is itself
+ * malformed (e.g. `events` is missing or not an array). Used for the small
+ * envelope around the batch — not for per-event envelope/property errors.
+ */
+export const BATCH_REASON_INVALID_REQUEST = "invalid_request";
+
+/**
+ * Closed superset of every per-event reason code the ingester emits.
+ *
+ * Schema-related codes are reused verbatim; the union below adds the
+ * batch-flow codes (policy reject, dedupe hit, publish failure, malformed
+ * per-event payload that came in below the schema layer).
+ */
+export const batchReasonCodeSchema = z.enum([
+  SCHEMA_REASON_UNSUPPORTED_VERSION,
+  SCHEMA_REASON_SUNSET,
+  SCHEMA_REASON_UNKNOWN_EVENT,
+  SCHEMA_REASON_INVALID_PROPERTIES,
+  SCHEMA_REASON_INVALID_ENVELOPE,
+  BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
+  BATCH_REASON_DUPLICATE,
+  BATCH_REASON_PUBLISH_FAILED,
+  BATCH_REASON_INVALID_REQUEST,
+]);
+
+export type BatchReasonCode = z.infer<typeof batchReasonCodeSchema>;
+
+/**
  * Shape of a per-event rejection entry inside a batch response. The
  * ingester returns these alongside the rejected event_id so producers
  * can react without re-parsing free-form error strings.
- *
- * Only the shape is defined here; ingester emission lands in P2-003.
  */
 export const schemaRejectionSchema = z
   .object({
@@ -67,3 +124,66 @@ export const schemaRejectionSchema = z
   .strict();
 
 export type SchemaRejection = z.infer<typeof schemaRejectionSchema>;
+
+/**
+ * Per-event accepted entry inside a batch response. Lightweight: producers
+ * primarily care about the event_id so they can mark their queue entry as
+ * delivered.
+ */
+export const batchAcceptedResultSchema = z
+  .object({
+    event_id: z.string().uuid(),
+    status: z.literal("accepted"),
+    /**
+     * True when the event was accepted but uses a deprecated `schema_version`
+     * still inside its sunset window. Producers should use this to surface
+     * a deprecation warning in their own logs.
+     */
+    deprecated: z.boolean().optional(),
+  })
+  .strict();
+
+export type BatchAcceptedResult = z.infer<typeof batchAcceptedResultSchema>;
+
+/**
+ * Per-event rejection entry inside the batch response. The shape covers
+ * every reason in `batchReasonCodeSchema`. The `detail.path` field carries
+ * **field paths only** — never the rejected/redacted field value.
+ */
+export const batchRejectedResultSchema = z
+  .object({
+    event_id: z.string().uuid(),
+    status: z.literal("rejected"),
+    code: batchReasonCodeSchema,
+    detail: z
+      .object({
+        event: z.string().optional(),
+        schema_version: z.number().int().optional(),
+        sunset_at: z.string().datetime({ offset: false }).optional(),
+        supported_versions: z.array(z.number().int()).optional(),
+        path: z.array(z.union([z.string(), z.number()])).optional(),
+        message: z.string().optional(),
+        /** Closed-set policy reason (only present for `forbidden_field_rejected`). */
+        policy_reason: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type BatchRejectedResult = z.infer<typeof batchRejectedResultSchema>;
+
+/**
+ * Top-level shape of `POST /v1/events` batch responses. Partial acceptance
+ * means both lists may be non-empty in the same response.
+ *
+ * @see docs/architecture/04-ingestion-and-sdks.md "Batch Failure Behavior"
+ */
+export const batchResponseSchema = z
+  .object({
+    accepted: z.array(batchAcceptedResultSchema),
+    rejected: z.array(batchRejectedResultSchema),
+  })
+  .strict();
+
+export type BatchResponse = z.infer<typeof batchResponseSchema>;

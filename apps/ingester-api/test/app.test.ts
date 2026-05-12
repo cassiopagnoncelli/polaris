@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { buildIngesterApp } from "../src/app.js";
 import { API_KEY_HEADER, AUTH_PROBLEM_CODES } from "../src/auth/index.js";
-import { NOT_IMPLEMENTED_AFTER_AUTH_CODE } from "../src/routes/events.js";
-import { InMemoryApiKeyRepository, testConfig } from "./fixtures.js";
+import { InMemoryDedupeStore } from "../src/dedupe/index.js";
+import {
+  InMemoryApiKeyRepository,
+  RecordingProducer,
+  buildTestCatalog,
+  testConfig,
+} from "./fixtures.js";
 
 const PROBLEM_JSON = "application/problem+json; charset=utf-8" as const;
 
@@ -27,6 +32,11 @@ async function buildTestApp(overrides: Partial<Parameters<typeof buildIngesterAp
     config: testConfig,
     installShutdown: false,
     apiKeyRepository: repoWithKey(),
+    catalog: buildTestCatalog(),
+    producer: new RecordingProducer() as unknown as Parameters<
+      typeof buildIngesterApp
+    >[0]["producer"],
+    dedupe: new InMemoryDedupeStore(),
     ...overrides,
   });
 }
@@ -150,21 +160,13 @@ describe("buildIngesterApp", () => {
     }
   });
 
-  it("returns 501 not_implemented_after_auth when a valid key is provided", async () => {
-    // Use a verifier that accepts everything, so the test doesn't have to
-    // compute an argon2 hash. The real verifier is exercised in hash.test.ts.
+  it("returns 401 when a real argon2 verifier rejects the test stub hash", async () => {
+    // The real verifier is exercised in hash.test.ts. Here we only prove
+    // the wire path: a real key with a wrong secret is rejected before the
+    // ingest handler runs.
     const repo = repoWithKey();
-    const { app } = await buildIngesterApp({
-      config: testConfig,
-      installShutdown: false,
-      apiKeyRepository: repo,
-      // The repository is read first, so we can wire a stub verifier by
-      // wrapping the auth service ourselves via `apiKeyRepository`. To keep
-      // the test simple, swap the verifier by re-exporting service.
-    });
+    const { app } = await buildTestApp({ apiKeyRepository: repo });
     try {
-      // The default flow uses real argon2 verify, which fails on our stub
-      // hash. We expect 401 here, which still proves the wiring.
       const res = await app.inject({
         method: "POST",
         url: "/v1/events",
@@ -177,9 +179,6 @@ describe("buildIngesterApp", () => {
     } finally {
       await app.close();
     }
-    // The post-auth 501 code is asserted in auth.routes.test.ts where the
-    // verifier is stubbed; this test only proves the route is plumbed.
-    expect(NOT_IMPLEMENTED_AFTER_AUTH_CODE).toBe("not_implemented_after_auth");
   });
 
   it("invokes the OpenAPI setup hook with the ingester metadata", async () => {

@@ -9,8 +9,23 @@ import {
   createAuthPreHandler,
   createAuthService,
 } from "../../src/auth/index.js";
-import { NOT_IMPLEMENTED_AFTER_AUTH_CODE, registerEventsRoutes } from "../../src/routes/events.js";
+import type { IngestHandler } from "../../src/ingest/handler.js";
+import { registerEventsRoutes } from "../../src/routes/events.js";
 import { InMemoryApiKeyRepository } from "../fixtures.js";
+
+/**
+ * Auth-only test handler. Returns 200 with an empty response so the auth
+ * preHandler test can focus on header parsing / Problem code mapping
+ * without dragging in catalog, policy, producer, or dedupe fixtures.
+ *
+ * The real handler is exercised in `ingest/handler.test.ts` and
+ * `app.test.ts`.
+ */
+const authOnlyHandler: IngestHandler = {
+  async handle() {
+    return { status: 200, body: { accepted: [], rejected: [] } };
+  },
+};
 
 const PROBLEM_JSON = "application/problem+json; charset=utf-8";
 
@@ -40,7 +55,7 @@ async function buildAuthApp({
   app.setErrorHandler(createProblemErrorHandler());
   const authenticate = createAuthService({ repository: repo, verifyHash: verify });
   const authPreHandler = createAuthPreHandler({ authenticate });
-  registerEventsRoutes(app, { authPreHandler });
+  registerEventsRoutes(app, { authPreHandler, handler: authOnlyHandler });
   // Capture-route used to assert request.auth wiring downstream of the hook.
   app.post("/__auth_echo", { preHandler: authPreHandler }, async (req) => ({
     auth: req.auth,
@@ -152,7 +167,7 @@ describe("auth preHandler on POST /v1/events", () => {
     await app.close();
   });
 
-  it("returns 501 not_implemented_after_auth on valid auth", async () => {
+  it("reaches the ingest handler on valid auth", async () => {
     const repo = seedRepo();
     const app = await buildAuthApp({ repo, verify: async () => true });
     const res = await app.inject({
@@ -161,10 +176,13 @@ describe("auth preHandler on POST /v1/events", () => {
       payload: { events: [] },
       headers: { [API_KEY_HEADER]: "ak_live.right" },
     });
-    expect(res.statusCode).toBe(501);
-    const body = res.json() as Record<string, unknown>;
-    expect(body.code).toBe(NOT_IMPLEMENTED_AFTER_AUTH_CODE);
-    expect(body.status).toBe(501);
+    // Auth preHandler accepted the key; the stub ingest handler returned
+    // an empty batch response. The real handler is exercised separately
+    // in the ingest handler tests; here we only prove the wire path.
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { accepted: unknown[]; rejected: unknown[] };
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([]);
     await app.close();
   });
 
