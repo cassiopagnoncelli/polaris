@@ -1,0 +1,45 @@
+{
+  "name": "@polaris/shared-policy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Forbidden-field policy evaluator and named/pattern detection rules used by the Polaris ingester.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./reason-codes": {
+      "types": "./dist/reason-codes.d.ts",
+      "import": "./dist/reason-codes.js"
+    },
+    "./patterns": {
+      "types": "./dist/patterns.d.ts",
+      "import": "./dist/patterns.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*"
+  }
+}
