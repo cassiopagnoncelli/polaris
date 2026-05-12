@@ -1,39 +1,71 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, preHandlerAsyncHookHandler } from "fastify";
 
 import { ProblemError } from "@polaris/shared-service-bootstrap";
 
 /**
- * Stable problem code emitted by the shell `POST /v1/events` stub.
+ * Stable problem code emitted by the post-auth `POST /v1/events` stub.
  *
- * The shell ships this route so SDKs and integration smoke tests can hit a
- * known URL and receive an RFC 7807 Problem Details response with a
- * machine-readable code. P2-002 (API key auth) and P2-003 (batch validation
- * + Redpanda publish) replace the stub with the real handler in place.
+ * P2-002 wires the auth `preHandler` so authenticated requests reach this
+ * handler with `request.auth` populated. The handler still returns 501
+ * because the batch validation, dedupe, forbidden-field, and Redpanda
+ * publish layers land in P2-003.
+ *
+ * The code differs from the shell's original `not_implemented` so SDKs and
+ * smoke tests can distinguish "authentication still failing" from "auth
+ * accepted, ingestion handler still pending".
  */
-export const NOT_IMPLEMENTED_CODE = "not_implemented" as const;
+export const NOT_IMPLEMENTED_AFTER_AUTH_CODE = "not_implemented_after_auth" as const;
 
 /**
- * Register the `POST /v1/events` ingestion endpoint stub.
+ * Backwards-compatible alias for the pre-auth 501 code. Tests that hit the
+ * route without an API key still receive `not_implemented` semantics via
+ * the auth layer's `missing_api_key` 401, but the export name is preserved
+ * so any external import does not break.
  *
- * The shell route returns `501 Not Implemented` with the `not_implemented`
- * Problem code. Behavioural details (auth, validation, dedupe, publish) are
- * deliberately left to P2-002 and P2-003.
- *
- * Keeping the route shape stable now lets:
- *
- *   - SDK integration tests pin a URL without churn between phases
- *   - OpenAPI hooks see a populated path during shell development
- *   - operators verify the service is wired through the load balancer before
- *     ingestion code lands
+ * @deprecated use {@link NOT_IMPLEMENTED_AFTER_AUTH_CODE}.
  */
-export function registerEventsRoutes(app: FastifyInstance): void {
-  app.post("/v1/events", async (_request, _reply) => {
+export const NOT_IMPLEMENTED_CODE = NOT_IMPLEMENTED_AFTER_AUTH_CODE;
+
+export interface RegisterEventsRoutesOptions {
+  /**
+   * Auth `preHandler` hook returned by `createAuthPreHandler`. The shell
+   * left this slot undefined so the ingester boots without PostgreSQL in
+   * the very first scaffolding; P2-002 makes it required for any deployment
+   * that actually serves traffic.
+   */
+  readonly authPreHandler: preHandlerAsyncHookHandler;
+}
+
+/**
+ * Register the `POST /v1/events` ingestion endpoint.
+ *
+ * Flow on the wire:
+ *
+ *   1. Auth `preHandler` runs. On failure, the request never reaches the
+ *      route body — the Problem error is serialised by the shared error
+ *      handler with the per-request `request_id`.
+ *   2. On success, `request.auth` is populated with the trusted
+ *      `(project_id, environment, source)` tuple resolved from the API key.
+ *      The handler returns 501 `not_implemented_after_auth` until P2-003
+ *      lands the real batch handler. That code is distinct from the shell's
+ *      `not_implemented` so SDKs can tell whether they got past auth.
+ *
+ * The trusted tuple is intentionally NOT echoed in the 501 body. Producers
+ * already know which key they used; echoing the stamped values back risks
+ * making them feel authoritative before the publish path actually accepts
+ * them.
+ */
+export function registerEventsRoutes(
+  app: FastifyInstance,
+  options: RegisterEventsRoutesOptions,
+): void {
+  app.post("/v1/events", { preHandler: options.authPreHandler }, async (_request, _reply) => {
     throw new ProblemError({
       status: 501,
-      code: NOT_IMPLEMENTED_CODE,
+      code: NOT_IMPLEMENTED_AFTER_AUTH_CODE,
       title: "Ingestion not yet implemented",
       detail:
-        "POST /v1/events is reserved by the ingester shell. The batch validation and Redpanda publish handler ships in P2-002 / P2-003.",
+        "API key authentication succeeded. The batch validation, dedupe, and Redpanda publish handler ships in P2-003.",
     });
   });
 }

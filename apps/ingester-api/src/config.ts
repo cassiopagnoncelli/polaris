@@ -1,25 +1,73 @@
+import { z } from "zod";
+
 import {
   composeConfigSchema,
+  durationMsSchema,
   httpEnvSchema,
   loadConfigWithDefaults,
+  positiveIntSchema,
+  postgresEnvSchema,
   serviceEnvSchema,
   type HttpConfig,
+  type PostgresConfig,
   type ServiceConfig,
 } from "@polaris/shared-config";
 
 /**
+ * Tuning knobs for the in-process API key cache.
+ *
+ * The cache backs `apps/ingester-api/src/auth/cache.ts`. Defaults are tuned
+ * for a service running thousands of requests per second against a small key
+ * population (tens of keys per project) — the cache largely keeps PostgreSQL
+ * out of the hot path. Redis-backed caching is a future optimisation
+ * (`docs/architecture/02-control-plane.md` "Redis Role").
+ *
+ * Env vars:
+ *
+ *   POLARIS_AUTH_CACHE_MAX_ENTRIES   (1024)
+ *   POLARIS_AUTH_CACHE_TTL_MS        (60000)
+ *   POLARIS_AUTH_CACHE_NEGATIVE_TTL_MS (5000)
+ */
+export const authCacheEnvSchema = z
+  .object({
+    POLARIS_AUTH_CACHE_MAX_ENTRIES: positiveIntSchema.default(1024),
+    POLARIS_AUTH_CACHE_TTL_MS: durationMsSchema.default(60_000),
+    POLARIS_AUTH_CACHE_NEGATIVE_TTL_MS: durationMsSchema.default(5_000),
+  })
+  .transform(
+    (parsed): AuthCacheConfig => ({
+      maxEntries: parsed["POLARIS_AUTH_CACHE_MAX_ENTRIES"],
+      ttlMs: parsed["POLARIS_AUTH_CACHE_TTL_MS"],
+      negativeTtlMs: parsed["POLARIS_AUTH_CACHE_NEGATIVE_TTL_MS"],
+    }),
+  );
+
+export interface AuthCacheConfig {
+  readonly maxEntries: number;
+  readonly ttlMs: number;
+  readonly negativeTtlMs: number;
+}
+
+export const authCacheEnvKeys = [
+  "POLARIS_AUTH_CACHE_MAX_ENTRIES",
+  "POLARIS_AUTH_CACHE_TTL_MS",
+  "POLARIS_AUTH_CACHE_NEGATIVE_TTL_MS",
+] as const;
+
+/**
  * Runtime configuration for the Polaris ingester API.
  *
- * The shell of the service only needs the standard service identity bindings
- * (name, version, environment, git SHA, ...) and Fastify HTTP server tuning.
- * Later tasks attach further sub-configs (Redpanda, Redis, PostgreSQL) as the
- * ingester grows past the shell.
+ * P2-002 attaches the PostgreSQL bindings and the API key cache tuning. The
+ * shell shipped `service` + `http`; later tasks add Redpanda, Redis, and
+ * forbidden-field policy switches as the ingester grows past the shell.
  *
  * @see docs/architecture/09-engineering-standards.md "Runtime Configuration"
  */
 export interface IngesterConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
+  readonly postgres: PostgresConfig;
+  readonly authCache: AuthCacheConfig;
 }
 
 /**
@@ -42,6 +90,8 @@ export function ingesterConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
+    postgres: postgresEnvSchema,
+    authCache: authCacheEnvSchema,
   });
 }
 
