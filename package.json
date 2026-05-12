@@ -1,0 +1,20 @@
+{
+  "name": "polaris",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris internal multi-project event infrastructure platform",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.30.0",
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "format": "pnpm -r --if-present run format",
+    "test": "pnpm -r --if-present run test",
+    "clean": "pnpm -r --if-present run clean"
+  }
+}

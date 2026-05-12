@@ -68,8 +68,27 @@ pnpm --version
 
 ```text
 Files changed:
+- package.json (new): root workspace metadata, ESM type, Node>=22 / pnpm>=10 engines, packageManager pinned to pnpm@10.30.0, placeholder orchestration scripts (build/typecheck/lint/format/test/clean using `pnpm -r --if-present`).
+- pnpm-workspace.yaml (new): declares workspace globs apps/*, packages/*, processors/*/*, consumers/*/* (the latter two match the versioned `<name>/v<N>` layout in instructions/claude.md).
+- apps/.gitkeep (new)
+- packages/.gitkeep (new)
+- processors/.gitkeep (new)
+- consumers/.gitkeep (new)
+- catalog/.gitkeep (new)
+- infra/.gitkeep (new)
+- sql/.gitkeep (new)
+
 Commands run:
+- pnpm --version  -> 10.30.0 (PASS)
+- node --version  -> v22.14.0 (informational; confirms Active LTS Node available)
+
 Checks passed:
+- pnpm --version (the only check listed in the task card).
+
 Known gaps:
+- No package/service implementations exist yet (intentional; out of scope for P0-001, forbidden by write scope).
+- TypeScript tooling baseline (tsconfig, Biome) is deferred to P0-002.
+- The `apps/`, `packages/`, `processors/`, `consumers/`, `catalog/`, `infra/`, `sql/` directories contain only `.gitkeep` placeholders; no `db/` directory was created since the task scope omits it (it will be added when migrations are scaffolded in P1-002).
+- `pnpm install` was not run because there are no workspace packages yet and the task only requested `pnpm --version`.
 ```
 
