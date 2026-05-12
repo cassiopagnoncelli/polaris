@@ -21,7 +21,11 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "clean": "pnpm -r --if-present run clean"
+    "clean": "pnpm -r --if-present run clean",
+    "db:migrate": "pnpm --filter @polaris/shared-db db:migrate",
+    "db:rollback": "pnpm --filter @polaris/shared-db db:rollback",
+    "db:status": "pnpm --filter @polaris/shared-db db:status",
+    "db:create": "pnpm --filter @polaris/shared-db db:create"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
