@@ -24,6 +24,48 @@ importers:
         specifier: 4.1.6
         version: 4.1.6(@types/node@22.19.19)(@vitest/coverage-v8@4.1.6)(vite@8.0.12(@types/node@22.19.19)(yaml@2.9.0))
 
+  apps/ingester-api:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../packages/shared-config
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../packages/shared-logger
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../packages/shared-service-bootstrap
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+
+  apps/polaris-cli:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../packages/shared-config
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../packages/shared-logger
+      commander:
+        specifier: ^14.0.2
+        version: 14.0.3
+      smol-toml:
+        specifier: ^1.5.0
+        version: 1.6.1
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
+  packages/node-sdk:
+    dependencies:
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../shared-schemas
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+
   packages/shared-clickhouse:
     dependencies:
       '@clickhouse/client':
@@ -510,6 +552,10 @@ packages:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
 
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
+
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
@@ -913,6 +959,10 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  smol-toml@1.6.1:
+    resolution: {integrity: sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg==}
+    engines: {node: '>= 18'}
 
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
@@ -1387,6 +1437,8 @@ snapshots:
 
   chai@6.2.2: {}
 
+  commander@14.0.3: {}
+
   convert-source-map@2.0.0: {}
 
   cookie@1.1.1: {}
@@ -1760,6 +1812,8 @@ snapshots:
   siginfo@2.0.0: {}
 
   signal-exit@4.1.0: {}
+
+  smol-toml@1.6.1: {}
 
   sonic-boom@4.2.1:
     dependencies:
