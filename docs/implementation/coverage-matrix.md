@@ -29,7 +29,9 @@ It is not a replacement for task cards. It is a quick way to see whether the del
 | Observability | `08-observability-and-operations.md` | P10-* |
 | Local development | `08-observability-and-operations.md` | P1-001, P10-001, P5-002 |
 | Engineering standards | `09-engineering-standards.md` | P0-001, P0-002, P11-002, P11-007 |
-| Production deployment | `09-engineering-standards.md` plus roadmap | P11-* |
+| Production deployment | `09-engineering-standards.md`, `11-production-readiness.md` | P11-* |
+| Production secrets | `02-control-plane.md`, `11-production-readiness.md` | P0-008, P11-004 |
+| Data lifecycle | `03-redpanda-topics.md`, `07-clickhouse.md`, `11-production-readiness.md` | P11-005 |
 | Product release readiness | roadmap | P12-* |
 
 ## Known Intentional Gaps Before P11
@@ -49,4 +51,3 @@ These are not required for the first vertical slice, but are required before rea
 The implementation plan can be considered product-complete only after P12 acceptance criteria pass.
 
 The implementation plan can be considered vertical-slice-complete after P5 acceptance criteria pass.
-
