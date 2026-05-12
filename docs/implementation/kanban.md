@@ -12,17 +12,15 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P4-001 Analytics Processor Skeleton](./tasks/P4-001-analytics-processor.md)
+- [P4-002 ClickHouse Ingestion Integration](./tasks/P4-002-clickhouse-ingestion.md)
 - [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md)
-- [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md)
+- [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md)
-- [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md)
+- [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md)
+- [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
+- [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md)
 
 ## Backlog
-
-### P4 Processing and ClickHouse
-
-- [P4-002 ClickHouse Ingestion Integration](./tasks/P4-002-clickhouse-ingestion.md)
 
 ### P5 Vertical Slice
 
@@ -31,7 +29,6 @@ This board is the coordination surface for implementation work.
 ### P6 Control-Plane CLI
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
-- [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md)
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md)
 
 ### P7 Replay System
@@ -44,7 +41,6 @@ This board is the coordination surface for implementation work.
 
 ### P8 Production Processors
 
-- [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md)
 - [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md)
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
@@ -53,7 +49,6 @@ This board is the coordination surface for implementation work.
 
 ### P9 Destination Consumers
 
-- [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md)
 - [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md)
 - [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md)
@@ -85,7 +80,6 @@ This board is the coordination surface for implementation work.
 
 ### P12 Release Readiness
 
-- [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md)
 - [P12-003 Product Acceptance Test](./tasks/P12-003-product-acceptance-test.md)
 - [P12-004 Internal Onboarding Guide](./tasks/P12-004-internal-onboarding-guide.md)
 - [P12-005 Release Candidate Checklist](./tasks/P12-005-release-candidate-checklist.md)
@@ -135,12 +129,21 @@ No blocked cards.
 - [P3-002 Web SDK Identity Persistence](./tasks/P3-002-web-sdk-identity-persistence.md) — merged in `bd7b477`
 - [P3-003 Web SDK Queue and Transport](./tasks/P3-003-web-sdk-queue-transport.md) — merged in `889bb9f`
 
+### P4 Processing and ClickHouse
+
+- [P4-001 Analytics Processor Skeleton](./tasks/P4-001-analytics-processor.md) — merged in `5bbf133`
+
 ### P6 Control-Plane CLI
 
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`
 - [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md) — merged in `6756c72`
 - [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md) — merged in `ac639f0`
+- [P6-004 Destination Instance CLI](./tasks/P6-004-destination-instance-cli.md) — merged in `2f8679f`
 
 ### P11 Deployment, Security, and Data Lifecycle
 
 - [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md) — merged in `28d6105`
+
+### P12 Release Readiness
+
+- [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md) — merged in `9d80fb7`

@@ -1,6 +1,6 @@
 # P4-001: Analytics Processor Skeleton
 
-Status: Review
+Status: Done (merged in `5bbf133`)
 
 ## Goal
 

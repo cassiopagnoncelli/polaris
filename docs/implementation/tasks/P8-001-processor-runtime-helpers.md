@@ -1,6 +1,6 @@
 # P8-001: Processor Runtime Helpers
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

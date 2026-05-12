@@ -1,6 +1,6 @@
 # P12-002: API Docs and OpenAPI Publishing
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

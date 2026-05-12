@@ -1,6 +1,6 @@
 # P12-001: SDK Handbook
 
-Status: Review
+Status: Done (merged in `9d80fb7`)
 
 ## Goal
 

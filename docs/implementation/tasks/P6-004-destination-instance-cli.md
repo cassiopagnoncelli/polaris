@@ -1,6 +1,6 @@
 # P6-004: Destination Instance CLI
 
-Status: Review
+Status: Done (merged in `2f8679f`)
 
 ## Goal
 

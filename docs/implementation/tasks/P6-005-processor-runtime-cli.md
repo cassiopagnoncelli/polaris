@@ -1,6 +1,6 @@
 # P6-005: Processor Runtime CLI
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

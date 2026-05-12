@@ -1,6 +1,6 @@
 # P9-000: Shared Destination Normalization Package
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

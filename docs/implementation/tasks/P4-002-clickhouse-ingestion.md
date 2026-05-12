@@ -1,6 +1,6 @@
 # P4-002: ClickHouse Ingestion Integration
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
