@@ -87,8 +87,57 @@ pnpm lint
 
 ```text
 Files changed:
+  packages/shared-secrets/src/hashing.ts                 (new)  argon2id primitive shared by ingester and CLI
+  packages/shared-secrets/test/hashing.test.ts           (new)  hashSecret/verifySecret round-trip
+  packages/shared-secrets/src/index.ts                          export hashSecret/verifySecret/POLARIS_HASH_ALGORITHM
+  packages/shared-secrets/package.json                          add @node-rs/argon2, description update
+  apps/ingester-api/src/auth/hash.ts                            now a thin re-export over shared-secrets.verifySecret
+  apps/ingester-api/test/auth/hash.test.ts                      import hashSecret from shared-secrets (was @node-rs/argon2)
+  apps/ingester-api/package.json                                drop @node-rs/argon2, add @polaris/shared-secrets
+  apps/polaris-cli/package.json                                 add @polaris/shared-secrets, uuid
+  apps/polaris-cli/src/commands/keys/index.ts            (new)  `polaris keys` group
+  apps/polaris-cli/src/commands/keys/create.ts           (new)  mutates: true; prints raw token ONCE
+  apps/polaris-cli/src/commands/keys/list.ts             (new)  mutates: false; never shows secret/hash
+  apps/polaris-cli/src/commands/keys/revoke.ts           (new)  mutates: true; idempotent
+  apps/polaris-cli/src/commands/keys/rotate.ts           (new)  mutates: true; INSERT + revoke in one txn
+  apps/polaris-cli/src/commands/keys/token.ts            (new)  polaris_ak_<uuidv7>.base64url(32B) shape
+  apps/polaris-cli/src/db/api-keys.ts                    (new)  insert / find / list / revoke helpers
+  apps/polaris-cli/src/db/index.ts                              export api-keys helpers
+  apps/polaris-cli/src/commands/index.ts                        register keysCommand
+  apps/polaris-cli/src/index.ts                                 export keys command + runner builders + token helper
+  apps/polaris-cli/test/keys-commands.test.ts            (new)  20 tests covering all 4 commands + mutates flags
+  pnpm-lock.yaml                                                @node-rs/argon2 moved to shared-secrets; uuid added
+
 Commands run:
+  pnpm install
+  pnpm -r build
+  pnpm typecheck
+  pnpm lint
+  pnpm format:check
+  pnpm test
+  pnpm --filter @polaris/polaris-cli build
+  pnpm --filter @polaris/ingester-api typecheck
+
 Checks passed:
+  typecheck:        all workspace projects (13/13)
+  lint:             biome + lint-clickhouse-imports
+  format:check:     biome (after one auto-fix pass)
+  tests:            700 passing (61 test files), incl. 20 new keys-command tests +
+                    8 shared-secrets hashing tests + 4 updated ingester hash tests
+  build:            @polaris/polaris-cli compiles; bin/polaris.js runs --help end-to-end
+  ingester:         @polaris/ingester-api typechecks after the shared-secrets refactor
+
 Known gaps:
+  - Forced-rotation policy (e.g. 90-day max age) deferred per ADR. Tooling
+    ships today; policy is a one-line config later.
+  - Audit-record writes are out of scope (P6-006 territory). Commands declare
+    `mutates: true` so the P6-007 dispatcher gate plugs in cleanly.
+  - The CLI talks to PostgreSQL directly through @polaris/shared-db. When
+    apps/control-plane-api ships (P6-000), the keys commands will be
+    re-pointed at its HTTP endpoints; the runner+store abstraction keeps the
+    swap small.
+  - last_used_at column surfaced by `keys list` is currently written only by
+    the ingester (out-of-band coalesced writer is a follow-up). list renders
+    `(unused)` until the ingester wires it up.
 ```
 

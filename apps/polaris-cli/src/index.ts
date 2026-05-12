@@ -45,10 +45,43 @@ export {
 } from "./config.js";
 export {
   BUILTIN_COMMANDS,
+  keysCommand,
   projectsCommand,
   sourcesCommand,
   versionCommand,
 } from "./commands/index.js";
+export {
+  keysCreateCommand,
+  keysListCommand,
+  keysRevokeCommand,
+  keysRotateCommand,
+} from "./commands/keys/index.js";
+export {
+  buildKeysCreateRunner,
+  type KeysCreateHooks,
+  type KeysCreateStore,
+} from "./commands/keys/create.js";
+export {
+  buildKeysListRunner,
+  type KeysListHooks,
+  type KeysListStore,
+} from "./commands/keys/list.js";
+export {
+  buildKeysRevokeRunner,
+  type KeysRevokeHooks,
+  type KeysRevokeStore,
+} from "./commands/keys/revoke.js";
+export {
+  buildKeysRotateRunner,
+  type KeysRotateHooks,
+  type KeysRotateStore,
+  type RotateStoreInput,
+} from "./commands/keys/rotate.js";
+export {
+  formatToken,
+  generateKeyMaterial,
+  type IssuedKeyMaterial,
+} from "./commands/keys/token.js";
 export {
   projectsListCommand,
   projectsShowCommand,
@@ -95,7 +128,17 @@ export {
   type SyncAction,
   type Environment,
 } from "./catalog/index.js";
-export { connectDb, type ConnectDbOptions, type DbHandle } from "./db/index.js";
+export {
+  type ApiKeyRow,
+  connectDb,
+  type ConnectDbOptions,
+  type DbHandle,
+  findApiKeyById,
+  insertApiKey,
+  type InsertApiKeyInput,
+  listApiKeysByProjectEnv,
+  revokeApiKey,
+} from "./db/index.js";
 export {
   AuthError,
   CliError,

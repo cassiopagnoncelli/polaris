@@ -1,9 +1,14 @@
 /**
- * `@polaris/shared-secrets` — provider-based secret reference resolver.
+ * `@polaris/shared-secrets` — provider-based secret reference resolver and
+ * platform-standard hashing primitive.
  *
  * Polaris stores `(secret_provider, secret_ref)` pairs in PostgreSQL and
  * resolves them through pluggable provider adapters. v1 ships the `env`
  * adapter; the Vault adapter lands in P11-004 through the same interface.
+ *
+ * The package also owns the workspace's argon2id hashing primitive
+ * ({@link hashSecret} / {@link verifySecret}). Both the ingester and the
+ * polaris CLI consume it; no parallel hashing library is permitted.
  *
  * Hard rules baked in:
  *
@@ -46,6 +51,12 @@ export {
   SecretProviderNotConfiguredError,
   SecretReferenceParseError,
 } from "./errors.js";
+export {
+  hashSecret,
+  POLARIS_HASH_ALGORITHM,
+  type PolarisHashAlgorithm,
+  verifySecret,
+} from "./hashing.js";
 export { EnvSecretProvider, type EnvSecretProviderOptions } from "./providers/index.js";
 export { formatSecretReference, parseSecretReference } from "./reference.js";
 export { SecretResolver, type SecretResolverOptions } from "./resolver.js";

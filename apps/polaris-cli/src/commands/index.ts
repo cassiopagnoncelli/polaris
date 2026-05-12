@@ -17,6 +17,7 @@
  * shell's only built-ins for P6-001.
  */
 import type { CommandDefinition } from "../command.js";
+import { keysCommand } from "./keys/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { sourcesCommand } from "./sources/index.js";
 import { versionCommand } from "./version.js";
@@ -25,6 +26,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   versionCommand,
   projectsCommand,
   sourcesCommand,
+  keysCommand,
 ];
 
-export { projectsCommand, sourcesCommand, versionCommand };
+export { keysCommand, projectsCommand, sourcesCommand, versionCommand };

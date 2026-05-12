@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris provider-based secret reference resolver. Ships the env provider; Vault and cloud KMS adapters land later through the same interface.",
+  "description": "Polaris provider-based secret reference resolver and platform-standard argon2id hashing primitive. Ships the env provider; Vault and cloud KMS adapters land later through the same interface.",
   "license": "UNLICENSED",
   "exports": {
     ".": {
@@ -30,6 +30,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-logger": "workspace:*"
   },

@@ -36,9 +36,11 @@
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-secrets": "workspace:*",
     "commander": "^14.0.2",
     "kysely": "^0.29.0",
     "smol-toml": "^1.5.0",
+    "uuid": "^14.0.0",
     "yaml": "^2.6.1",
     "zod": "4.4.3"
   }
