@@ -34,6 +34,8 @@ export type {
   DestinationStatus,
   DestinationsTable,
   Environment,
+  ProcessorActivationState,
+  ProcessorActivationsTable,
   ProjectsTable,
   ProjectStatus,
   SourceRuntime,

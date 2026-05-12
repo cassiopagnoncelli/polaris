@@ -24,6 +24,17 @@ export {
   type UpdateDestinationOpsInput,
 } from "./destinations.js";
 export {
+  disableProcessorActivation,
+  type DisableProcessorActivationInput,
+  enableProcessorActivation,
+  type EnableProcessorActivationInput,
+  findActivationByKey,
+  listActivationsForProcessor,
+  listAllActivations,
+  type ProcessorActivationKey,
+  type ProcessorActivationRow,
+} from "./processor-activations.js";
+export {
   fetchAllProjects,
   fetchAllSources,
   fetchSourcesById,

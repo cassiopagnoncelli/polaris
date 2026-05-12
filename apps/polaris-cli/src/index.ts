@@ -47,6 +47,7 @@ export {
   BUILTIN_COMMANDS,
   destinationsCommand,
   keysCommand,
+  processorsCommand,
   projectsCommand,
   sourcesCommand,
   versionCommand,
@@ -59,6 +60,51 @@ export {
   destinationsShowCommand,
   destinationsUpdateOpsCommand,
 } from "./commands/destinations/index.js";
+export {
+  processorsDisableCommand,
+  processorsEnableCommand,
+  processorsListCommand,
+  processorsRunsCommand,
+  processorsRunsListCommand,
+  processorsRunsShowCommand,
+  processorsShowCommand,
+} from "./commands/processors/index.js";
+export {
+  buildProcessorsListRunner,
+  type ProcessorsListHooks,
+  type ProcessorsListStore,
+} from "./commands/processors/list.js";
+export {
+  buildProcessorsShowRunner,
+  type ProcessorsShowHooks,
+  type ProcessorsShowStore,
+} from "./commands/processors/show.js";
+export {
+  buildProcessorsEnableRunner,
+  type ProcessorsEnableHooks,
+  type ProcessorsEnableStore,
+} from "./commands/processors/enable.js";
+export {
+  buildProcessorsDisableRunner,
+  type ProcessorsDisableHooks,
+  type ProcessorsDisableStore,
+} from "./commands/processors/disable.js";
+export {
+  buildProcessorsRunsListRunner,
+  type ProcessorRunListRow,
+  type ProcessorsRunsListHooks,
+  type ProcessorsRunsListStore,
+} from "./commands/processors/runs-list.js";
+export {
+  buildProcessorsRunsShowRunner,
+  type ProcessorRunDetail,
+  type ProcessorsRunsShowHooks,
+  type ProcessorsRunsShowStore,
+} from "./commands/processors/runs-show.js";
+export {
+  FORBIDDEN_PROCESSOR_RULE_FLAG_TOKENS,
+  rejectProcessorRuleArguments,
+} from "./commands/processors/validation.js";
 export {
   buildDestinationsCreateRunner,
   type DestinationsCreateHooks,
@@ -141,14 +187,34 @@ export {
   sourcesSyncCommand,
 } from "./commands/sources/index.js";
 export {
+  type DiscoveredProcessorManifest,
   ENVIRONMENTS,
   environmentSchema,
   idSchema,
   loadCatalog,
   type LoadCatalogOptions,
   type LoadedCatalog,
+  type LoadOneProcessorManifestOptions,
+  type LoadProcessorManifestsOptions,
+  loadProcessorManifest,
+  loadProcessorManifests,
   planProjectsSync,
   planSourcesSync,
+  PROCESSOR_MODES,
+  type ProcessorDefaults,
+  processorDefaultsSchema,
+  type ProcessorManifest,
+  type ProcessorManifestScan,
+  type ProcessorManifestWarning,
+  processorManifestSchema,
+  type ProcessorMode,
+  processorModeSchema,
+  processorNameSchema,
+  type ProcessorReplay,
+  processorReplaySchema,
+  type ProcessorTopicSpec,
+  processorTopicSpecSchema,
+  processorVersionSchema,
   PROJECT_STATUSES,
   type ProjectDiffRow,
   type ProjectFile,
@@ -182,17 +248,26 @@ export {
   type ConnectDbOptions,
   type DbHandle,
   disableDestination,
+  disableProcessorActivation,
+  type DisableProcessorActivationInput,
   enableDestination,
+  enableProcessorActivation,
+  type EnableProcessorActivationInput,
   type DestinationRow,
+  findActivationByKey,
   findApiKeyById,
   findDestinationById,
   insertApiKey,
   insertDestination,
   type InsertApiKeyInput,
   type InsertDestinationInput,
+  listActivationsForProcessor,
+  listAllActivations,
   listAllDestinations,
   listApiKeysByProjectEnv,
   listDestinationsByProjectEnv,
+  type ProcessorActivationKey,
+  type ProcessorActivationRow,
   revokeApiKey,
   updateDestinationOps,
   type UpdateDestinationOpsInput,

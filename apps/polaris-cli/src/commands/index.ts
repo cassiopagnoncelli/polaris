@@ -19,6 +19,7 @@
 import type { CommandDefinition } from "../command.js";
 import { destinationsCommand } from "./destinations/index.js";
 import { keysCommand } from "./keys/index.js";
+import { processorsCommand } from "./processors/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { sourcesCommand } from "./sources/index.js";
 import { versionCommand } from "./version.js";
@@ -29,6 +30,14 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   sourcesCommand,
   keysCommand,
   destinationsCommand,
+  processorsCommand,
 ];
 
-export { destinationsCommand, keysCommand, projectsCommand, sourcesCommand, versionCommand };
+export {
+  destinationsCommand,
+  keysCommand,
+  processorsCommand,
+  projectsCommand,
+  sourcesCommand,
+  versionCommand,
+};

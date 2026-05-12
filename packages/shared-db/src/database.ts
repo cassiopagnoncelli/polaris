@@ -228,6 +228,76 @@ export interface DestinationsTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+/**
+ * Runtime activation state for a versioned processor.
+ *
+ * `enabled` means the processor runtime (P8-001) treats this
+ * `(processor_name, processor_version, project_id, environment)` tuple as
+ * runnable. `disabled` keeps the row for audit/state-change history but stops
+ * the runtime from picking up traffic.
+ *
+ * The set is intentionally minimal in v1. A future `paused` state would be
+ * added here AND to the `processor_activations_enabled_state_allowed` CHECK
+ * constraint in the same change.
+ */
+export type ProcessorActivationState = "enabled" | "disabled";
+
+/**
+ * `processor_activations` table.
+ *
+ * Per `(processor_name, processor_version, project_id, environment)`, this
+ * row records whether the processor is enabled in that scope, plus the
+ * last-toggle timestamps and a free-text `last_changed_by` actor label.
+ *
+ * **PostgreSQL DOES NOT store processor transform rules.** The semantic
+ * definition of every processor (inputs, outputs, mode, transform code)
+ * lives in `processors/<name>/v<n>/processor.manifest.yaml` and
+ * `processors/<name>/v<n>/src/`. This interface intentionally has NO column
+ * resembling `transform`, `rule`, `mapping`, `input_topic`, `output_topic`,
+ * `config_blob`, `routing`, `enrichment`, or any other transform-rule
+ * surface. The CLI cannot define semantics because the typed schema gives
+ * it nowhere to store them, and the migration's column set matches this
+ * contract.
+ *
+ * Schema reference:
+ *   db/migrations/20260512000006_create_processor_activations.sql
+ */
+export interface ProcessorActivationsTable {
+  /** Processor catalog name (e.g. `analytics-projector`). */
+  processor_name: string;
+  /**
+   * Immutable version directory under `processors/<name>/`. Free-form text
+   * (e.g. `v1`, `v2`, `v1.2.3`) — the manifest file on disk is the source of
+   * truth for which versions actually exist.
+   */
+  processor_version: string;
+  /** Project this activation row scopes to. References `projects(project_id)`. */
+  project_id: string;
+  /** Deployment environment. Closed set: development | staging | production. */
+  environment: string;
+  /** Runtime toggle (`enabled` | `disabled`). */
+  enabled_state: ColumnType<
+    ProcessorActivationState,
+    ProcessorActivationState | undefined,
+    ProcessorActivationState
+  >;
+  /** Last `enabled` transition timestamp. NULL when never enabled. */
+  enabled_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /** Last `disabled` transition timestamp. NULL when never disabled. */
+  disabled_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /**
+   * Free-text actor label. P6-007 will populate this with the authenticated
+   * operator token's actor id; until then it defaults to `'cli'`. The
+   * authoritative audit trail lives in `audit_records` (P6-006); this column
+   * is a convenience marker.
+   */
+  last_changed_by: ColumnType<string, string | undefined, string>;
+  /** Issuance time, in UTC. */
+  created_at: Generated<Date>;
+  /** Last mutation time, in UTC. Stamped on every UPDATE. */
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -239,6 +309,7 @@ export interface DestinationsTable {
 export interface Database {
   api_keys: ApiKeyTable;
   destinations: DestinationsTable;
+  processor_activations: ProcessorActivationsTable;
   projects: ProjectsTable;
   sources: SourcesTable;
 }
