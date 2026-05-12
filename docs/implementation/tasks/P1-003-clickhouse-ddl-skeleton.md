@@ -119,8 +119,48 @@ docker compose config
 
 ```text
 Files changed:
+  sql/clickhouse/README.md                                       (new)
+  sql/clickhouse/00_database.sql                                 (new)
+  sql/clickhouse/10_analytics_events_queue.sql                   (new)  Kafka Engine table on analytics.events, JSONEachRow
+  sql/clickhouse/20_analytics_ingest_log.sql                     (new)  {replicated}MergeTree append-only
+  sql/clickhouse/21_mv_queue_to_ingest_log.sql                   (new)  MV: queue -> ingest log (preserves transport truth)
+  sql/clickhouse/30_analytics_raw.sql                            (new)  {replicated}ReplacingMergeTree(_version) deduped facts
+  sql/clickhouse/31_mv_queue_to_raw.sql                          (new)  MV: queue -> raw, flattens nested JSON
+  sql/clickhouse/projections/40_event_daily_counts.sql           (new)  {replicated}SummingMergeTree projection (engine rationale in comment)
+  sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql (new)  argMax(occurred_at, _version) MV
+  sql/clickhouse/roles/00_roles.sql                              (new)  CREATE ROLE polaris_service, polaris_operator
+  sql/clickhouse/roles/01_grants.sql                             (new)  service SELECT on ingest log + projections only; defensive REVOKEs on analytics_raw and queue; operator gets polaris.* + DDL
+  sql/clickhouse/roles/README.md                                 (new)  role model + helper-package mapping
+  infra/clickhouse/README.md                                     (new)
+  infra/clickhouse/config.d/macros-local.xml                     (new)  {replicated} = '', no Keeper
+  infra/clickhouse/config.d/macros-production.xml                (new)  {replicated} = 'Replicated' + default_replica_path/name
+  infra/clickhouse/config.d/keeper.xml                           (new)  embedded Keeper for production v1
+  infra/clickhouse/compose/docker-compose.production.yml         (new)  production-mode compose showing ClickHouse + embedded Keeper
+  docs/implementation/tasks/P1-003-clickhouse-ddl-skeleton.md    (this handoff)
+
 Commands run:
+  docker compose -f infra/clickhouse/compose/docker-compose.production.yml config
+    FAIL (without env) -> intended: CLICKHOUSE_ADMIN_PASSWORD is `:?` required
+    PASS (with CLICKHOUSE_ADMIN_PASSWORD=dummy CLICKHOUSE_ADMIN_USER=polaris_admin set)
+  xmllint --noout on all three XML config files -> PASS
+  grep scan for `FINAL` keyword across sql/ and infra/ -> only present in comments documenting that it is forbidden
+  grep scan for `analytics_events_queue` references -> only the CREATE TABLE, the two sanctioned MVs, the REVOKE grants, and docs
+
 Checks passed:
+  docker compose config (production snippet) validates with required env vars set
+  XML config files are well-formed
+  No FINAL keyword used in any DDL or MV
+  No SELECT from the Kafka Engine table outside the two sanctioned MVs
+  polaris_service grants do NOT include analytics_raw or analytics_events_queue (and have defensive REVOKEs)
+  polaris_operator has the broader grants required for replay/rebuild but does NOT have SELECT on the Kafka Engine table either
+  At least one projection table (event_daily_counts) is present, fed by an argMax-based MV
+  {replicated} macro is used in every Polaris-owned MergeTree-family engine line
+
 Known gaps:
+  Docker daemon was not running in this worktree; could not boot a ClickHouse container to syntactically parse the DDL end-to-end against real ClickHouse. Syntactic validation was limited to docker compose config and xmllint.
+  Root docker-compose.yml does not exist yet (owned by P1-001). Wiring the local/dev ClickHouse service to mount macros-local.xml is described in infra/clickhouse/README.md but must be implemented when P1-001 lands.
+  Migration runner / apply tooling is intentionally not in scope (P4-002 owns it). SQL files are ordered lexically to make any runner that iterates the directory produce a valid apply order.
+  Production user/password provisioning is left to P11-004 (secret provider). 00_roles.sql defines the roles only; binding role -> user happens at deploy time.
+  Only one example projection (event_daily_counts) is shipped, as required for "at least one". Real projections land with their owning feature tasks.
 ```
 

@@ -1,0 +1,22 @@
+-- Polaris ClickHouse: database bootstrap
+--
+-- All Polaris analytical objects live in the `polaris` database.
+-- The same SQL files apply cleanly in local/dev (single node, no Keeper)
+-- and in production (Replicated* engines with ClickHouse Keeper).
+--
+-- Environment-specific behavior is driven by ClickHouse server macros:
+--
+--   {cluster}     defined in production server config; expands to the
+--                 single-shard cluster name. Local/dev leaves it empty
+--                 and the `ON CLUSTER '{cluster}'` clauses below are
+--                 harmless when the cluster macro is unset (the
+--                 statement is executed locally as a single-node DDL).
+--   {replicated}  '' in local/dev, 'Replicated' in production. Drives
+--                 the engine family.
+--   {shard}       per-shard identity used in Replicated table paths.
+--   {replica}     per-replica identity used in Replicated table paths.
+--
+-- See infra/clickhouse/config.d/ for the macro definitions used in
+-- production and the empty defaults used in local/dev.
+
+CREATE DATABASE IF NOT EXISTS polaris ON CLUSTER '{cluster}';

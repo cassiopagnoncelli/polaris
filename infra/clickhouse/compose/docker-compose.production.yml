@@ -1,0 +1,74 @@
+# Polaris ClickHouse: production-mode Docker Compose snippet.
+#
+# This file exists to demonstrate the production cluster posture
+# (Replicated* engines + ClickHouse Keeper) outside the
+# local/dev-focused root docker-compose.yml that P1-001 owns. It is
+# intended for:
+#
+#   * production-like staging environments
+#   * smoke-testing the Replicated* DDL paths before deployment
+#   * Helm/Kustomize reference (the container shape and volume
+#     mounts are the same in Kubernetes)
+#
+# Single ClickHouse instance running EMBEDDED Keeper, single shard,
+# single replica. This is the v1 production shape per
+# docs/architecture/07-clickhouse.md "Cluster Posture". When a second
+# replica lands, this stanza splits Keeper out into its own service
+# (or quorum) and the macro file's <replica> becomes per-host.
+#
+# Usage:
+#   docker compose \
+#     -f infra/clickhouse/compose/docker-compose.production.yml \
+#     up -d clickhouse
+#
+# NOT to be used in local/dev. The root docker-compose.yml (owned by
+# P1-001) uses macros-local.xml and runs plain MergeTree engines
+# without Keeper.
+
+services:
+  # ClickHouse with embedded ClickHouse Keeper. The macros mount
+  # selects the production engine family.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: polaris-clickhouse-production
+    hostname: clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # native TCP interface
+      - "9181:9181"   # Keeper client port (embedded)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      # Production macros: {replicated} = 'Replicated', non-empty
+      # {cluster}, {shard}, {replica}, plus default_replica_path.
+      - ../config.d/macros-production.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      # Embedded Keeper + <zookeeper> wiring so Replicated* engines
+      # have somewhere to register.
+      - ../config.d/keeper.xml:/etc/clickhouse-server/config.d/keeper.xml:ro
+      # SQL DDL is applied through the migration runner, not via
+      # docker-entrypoint-initdb.d, so it can be re-run idempotently
+      # against a long-lived production cluster.
+    environment:
+      CLICKHOUSE_DB: polaris
+      # Users/passwords come from the secret provider in real
+      # production (P11-004). These envs are placeholders for
+      # local production-like smoke testing only.
+      CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER:-polaris_admin}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:?set CLICKHOUSE_ADMIN_PASSWORD for production compose}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  clickhouse-data:
+    name: polaris-clickhouse-production-data
+  clickhouse-logs:
+    name: polaris-clickhouse-production-logs

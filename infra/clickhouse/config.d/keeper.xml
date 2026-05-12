@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!--
+  Polaris ClickHouse: embedded Keeper config for production v1.
+
+  Embedded Keeper is acceptable for the first single-replica
+  production deployment (see docs/architecture/07-clickhouse.md
+  "Cluster Posture / ClickHouse Keeper"). External Keeper becomes
+  necessary once a second replica lands; at that point the
+  <keeper_server> stanza here is removed and the <zookeeper> stanza
+  points at the external Keeper quorum.
+
+  Mount this file into the ClickHouse container at
+  /etc/clickhouse-server/config.d/keeper.xml in production. Do NOT
+  mount it in local/dev — plain MergeTree engines do not need
+  Keeper.
+-->
+<clickhouse>
+    <!--
+      Embedded Keeper server. Single-node Raft, quorum of 1. This is
+      a deliberate v1 simplification; with one replica there is no
+      coordination work and a real quorum is overkill.
+    -->
+    <keeper_server>
+        <tcp_port>9181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+
+        <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <session_timeout_ms>30000</session_timeout_ms>
+            <raft_logs_level>information</raft_logs_level>
+        </coordination_settings>
+
+        <raft_configuration>
+            <server>
+                <id>1</id>
+                <hostname>clickhouse</hostname>
+                <port>9234</port>
+            </server>
+        </raft_configuration>
+    </keeper_server>
+
+    <!--
+      Replicated* engines connect to Keeper through the <zookeeper>
+      configuration. Pointing the same ClickHouse process at its own
+      embedded Keeper is the recommended v1 layout.
+    -->
+    <zookeeper>
+        <node>
+            <host>clickhouse</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+</clickhouse>
