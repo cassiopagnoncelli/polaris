@@ -153,6 +153,25 @@ replay_delivery_policy
 
 Runtime knobs may tune delivery behavior, but not semantic meaning.
 
+### Version coexistence and migration
+
+Two versions of the same consumer may exist in code simultaneously (e.g., `meta-capi/v1` and `meta-capi/v2`). Each destination instance points at exactly one version through `consumer_version`. There is no hot dual-write — at any moment, an instance's events are processed by exactly one version.
+
+Migration model:
+
+- Operator flips one destination instance at a time via the CLI (`polaris destinations set-version <destination_id> --version v2`).
+- The instance's consumer cleanly drains the old version's offsets before the new version starts consuming.
+- Multiple instances may run different versions during a rolling migration window.
+- Mappings, normalization rules, and delivery behavior are versioned at the consumer level (see Three Stages); migration is the operator's deliberate decision per instance.
+
+Dual-write (the same event delivered by both v1 and v2) is explicitly disallowed for v1. It produces vendor-side double-delivery that vendor dedupe fields don't always catch.
+
+### Consent default when absent
+
+If the canonical event does not include `consent` fields, normalize stages default each consent flag to `true` when mapping to vendor consent slots. Reason: most vendor APIs interpret "no consent signal" more conservatively (often refusing the event), so absent fields are treated as positive consent at the platform boundary. Producers opting into stricter consent signaling set the fields explicitly.
+
+This default is per consumer-version normalize stage, not a platform-wide rule. A consumer that needs different default behavior for a specific vendor codifies that in its normalize stage and ships it as part of the version's contract.
+
 ## Delivery Model
 
 Destination consumers use reliable at-least-once delivery with Polaris-owned idempotency and vendor-specific best-effort dedupe.

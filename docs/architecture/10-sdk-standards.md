@@ -322,7 +322,19 @@ Diagnostics should report:
 - validation failures
 - flush outcomes
 
-SDKs do not emit automatic diagnostic events to Polaris in v1. Diagnostics must not include secrets or sensitive raw payloads.
+SDKs do not emit automatic diagnostic events to Polaris by default.
+
+An optional diagnostic stream is available for operators who want SDK-side operational signals (queue pressure, storage fallback, retry failures, dropped events, validation failures, flush outcomes) visible in the platform. When enabled:
+
+- The SDK emits to a Polaris ingestion endpoint using the same canonical envelope.
+- Event names live in the `polaris.diagnostics.*` namespace.
+- Events route to the `polaris.diagnostics.events` topic (see [Redpanda Topics / SDK Diagnostics Topic](./03-redpanda-topics.md)).
+- The diagnostic stream is not consumed by analytics processors or destination consumers.
+- The SDK must never include canonical event payloads, user PII, or secrets in diagnostic events.
+
+Diagnostic emission is opt-in per SDK installation. Default remains off.
+
+Diagnostics must not include secrets or sensitive raw payloads.
 
 ## Browser Support
 

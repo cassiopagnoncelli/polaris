@@ -11,8 +11,8 @@ This is a light decision ledger for production-facing Polaris defaults.
 5. Production secrets use provider-based references; plaintext secrets are never stored in PostgreSQL.
 6. Vault is the preferred production secret-manager candidate, but not fully locked.
 7. v1 control-plane permissions use a minimal trusted-operator model.
-8. Operator identity has three sources: `cli_oidc` (authenticated through org IdP), `cli_token` (long-lived personal token), `declared` (display only).
-9. v1 implements `cli_token` only. `cli_oidc` is a P11+ stretch goal.
+8. Operator identity has three sources: `cli_oidc` (authenticated through Keycloak), `cli_token` (long-lived personal token), `declared` (display only).
+9. v1 implements `cli_token` only. `cli_oidc` (Keycloak integration) is a P11+ stretch goal.
 10. Each CLI command declares `mutates: boolean`. The gate is one dispatcher rule: production mutations with `declared` source are rejected. Everything else is allowed.
 11. No risk tiers, no per-command lists, no separate gate-decision audit records.
 12. `--actor` is a display label only and cannot upgrade a `declared` source.
@@ -55,6 +55,19 @@ This is a light decision ledger for production-facing Polaris defaults.
 49. Production ClickHouse runs `Replicated*` engines and ClickHouse Keeper from day one, single-shard single-replica. Adding replicas is straightforward; multi-shard is honest future work.
 50. DDL uses a `{replicated}` macro so the same SQL files work in local/dev (plain engines) and production (replicated engines).
 51. ClickHouse access uses two roles: `polaris_service` (SELECT on projection tables and `analytics_ingest_log` only) and `polaris_operator` (broader access including `analytics_raw`). The `packages/shared-clickhouse/` workspace package is the only sanctioned in-process access path; direct `@clickhouse/client` imports outside it are blocked.
+52. CLI is a thin client to a small control-plane API service. Bash-invocable, env-var auth (`POLARIS_TOKEN`), profile config in `~/.polaris/config.toml`. No interactive login.
+53. Regional posture is single-region in v1. PII residency is not a v1 constraint.
+54. Identity graph storage uses confidence + open evidence_type + jsonb evidence so new heuristic rules land without migrations.
+55. GeoIP v1 backend is MaxMind GeoLite2 with operator-provided files; provider interface is swappable.
+56. Destination consumer versions coexist per-instance with no hot dual-write; migration is operator-driven per instance.
+57. Consent defaults to `true` per consumer normalize stage when absent from the canonical event.
+58. SDK diagnostic emission is opt-in via the `polaris.diagnostics.events` topic; never feeds analytics or destinations.
+59. Customer deletion is deferred. The designed pattern uses `customer.deletion_requested` tombstone events plus a downstream deletion-list service.
+60. Property-level conventions inside `properties` are event-owner discretion; the platform enforces envelope rules only.
+61. Backup/recovery v1 defaults: PostgreSQL RPO 5 min / RTO 1 h via WAL streaming and daily snapshots; ClickHouse `analytics_raw` RPO 24 h / RTO 4 h via `BACKUP TABLE` to object storage; projections rebuilt from `analytics_raw`; ingest_log RPO 7 d / RTO 4 h; Redpanda RPO 0 via RF=3 / min-ISR=2; Redis no backup; secret provider managed by the provider.
+62. Initial alert thresholds and SLOs are documented as v1 defaults in [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md); tightened after observed traffic.
+63. Initial DLQ triage SLAs are documented as v1 defaults in [P10-006](../implementation/tasks/P10-006-dlq-triage-runbook.md).
+64. API keys do not auto-expire in v1. Rotation is operator-driven; tooling surfaces key age so a forced-rotation policy can be added later without rebuilding the tooling.
 
 ## Review Rule
 

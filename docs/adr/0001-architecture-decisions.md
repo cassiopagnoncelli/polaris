@@ -52,6 +52,16 @@ This is a light decision ledger for the first Polaris architecture pass. The han
 46. ClickHouse production uses `Replicated*` engines and ClickHouse Keeper from day one, on single-shard single-replica. Multi-shard is honest future work.
 47. `analytics_raw` is never queried without explicit dedupe. MVs use `argMax(_version)`; projection tables are the query surface.
 48. ClickHouse access is enforced through database roles (`polaris_service`, `polaris_operator`) plus a workspace ClickHouse helper package. The regex-based SQL lint was rejected as brittle; grants are the enforcement mechanism, the helper is the ergonomic surface.
+49. The CLI is a thin client (bash-invocable, env-var auth via `POLARIS_TOKEN`, profile config in `~/.polaris/config.toml`) talking to a small control-plane API service. No interactive login.
+50. Regional posture is single-region in v1. PII residency is not a v1 constraint. Multi-region is post-v1 and would land as per-project topic isolation across regionally-deployed Polaris instances.
+51. Identity graph uses a flexible storage shape (`confidence` enum + open `evidence_type` text + `evidence` jsonb). New heuristic rule types land by inserting rows, not migrations.
+52. GeoIP v1 source is MaxMind GeoLite2 with operator-provided database files. The provider interface is swappable for future GeoIP2 / alternative backends.
+53. Destination consumer version coexistence is per-instance with no hot dual-write. Migration is operator-driven, one instance at a time.
+54. Consent fields default to `true` per consumer normalize stage when absent from the canonical event, because most vendor APIs interpret missing consent more strictly than missing fields.
+55. SDK diagnostic emission is opt-in. Diagnostic events use a dedicated `polaris.diagnostics.events` topic and never feed analytics or destinations.
+56. Customer deletion is deferred. The designed pattern uses `customer.deletion_requested` tombstone events plus a deletion-list service consumed by processors and destination consumers.
+57. Property-level conventions inside `properties` are event-owner discretion. The platform enforces envelope rules only.
+58. Backup/recovery targets per store are documented v1 defaults: PostgreSQL RPO 5 min / RTO 1 h, ClickHouse `analytics_raw` RPO 24 h / RTO 4 h, projection tables rebuilt from `analytics_raw`, Redpanda RPO 0 via RF=3, Redis no backup.
 
 ## Superseded Direction
 

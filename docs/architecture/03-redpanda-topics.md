@@ -145,6 +145,24 @@ ga4.dlq
 
 Retries and DLQs must include enough metadata to diagnose source event, processor/consumer version, error class, attempts, and timestamps.
 
+## SDK Diagnostics Topic (Optional)
+
+SDKs do not emit diagnostic events to Polaris by default. Operators may opt into a diagnostic stream per project, per environment:
+
+```text
+polaris.diagnostics.events
+```
+
+Producers (SDK installations with diagnostic emission enabled) write SDK-side operational signals to this topic: queue pressure, storage fallback, retry failures, dropped events, validation failures, flush outcomes. The diagnostic stream is not part of the canonical event path and never feeds analytics or destinations.
+
+Rules:
+
+- Opt-in per SDK installation. The SDK default remains "no automatic diagnostic events."
+- Diagnostic events use the same canonical envelope but always set `event` to a `polaris.diagnostics.*` namespace.
+- Diagnostic events must not contain raw user PII or canonical-event payloads.
+- The topic has its own short retention (suggested default: 7 days) and is not consumed by processors or destinations.
+- A small `polaris diagnostics inspect` CLI command lets operators tail the topic for a project.
+
 ## Event Semantics
 
 Events are immutable facts.

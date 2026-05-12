@@ -41,6 +41,16 @@ It is not a replacement for task cards. It is a quick way to see whether the del
 | Production secrets | `02-control-plane.md`, `11-production-readiness.md` | P0-008, P11-004 |
 | Data lifecycle | `03-redpanda-topics.md`, `07-clickhouse.md`, `11-production-readiness.md` | P11-005 |
 | Product release readiness | roadmap | P12-* |
+| CLI access model and control-plane API | `02-control-plane.md` | P6-000, P6-001, P6-007 |
+| Regional posture (single-region v1) | `11-production-readiness.md` | P11-001, P11-003 |
+| Identity graph storage flexibility | `05-processors-and-replay.md` | P8-002 |
+| GeoIP source (MaxMind GeoLite2) | `05-processors-and-replay.md` | P8-004 |
+| SDK diagnostic events topic (opt-in) | `03-redpanda-topics.md`, `10-sdk-standards.md` | P0-007, P3-001, P3-003 |
+| Customer deletion (deferred pattern) | `01-event-contract.md` | future |
+| Backup and recovery RPO/RTO | `11-production-readiness.md` | P11-005 |
+| Alert thresholds and SLOs (initial) | `11-production-readiness.md` | P10-005 |
+| DLQ triage SLAs (initial) | `11-production-readiness.md` | P10-006 |
+| API key rotation (no forced expiry v1) | `02-control-plane.md` | P6-003 |
 
 ## Known Intentional Gaps Before P11
 

@@ -58,6 +58,7 @@ This board is the coordination surface for implementation work.
 
 ### P6 Control-Plane CLI
 
+- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md)
 - [P6-002 Projects and Sources CLI](./tasks/P6-002-projects-sources-cli.md)
 - [P6-003 API Key Lifecycle CLI](./tasks/P6-003-api-key-lifecycle-cli.md)

@@ -69,6 +69,42 @@ polaris replays approve ...
 polaris destinations disable ...
 ```
 
+### Access model
+
+The CLI is bash-invocable. There is no interactive login. Authentication is via env vars in the AWS-CLI / GitHub-CLI tradition:
+
+```bash
+export POLARIS_API_URL="https://polaris.example.internal"
+export POLARIS_TOKEN="polaris_ot_..."
+polaris keys create --project storefront --env production --source storefront-web
+```
+
+- `POLARIS_TOKEN` is issued by `polaris operators create` and shown once at creation.
+- Token rotation (`polaris operators rotate`) issues a new token and revokes the old one immediately; the operator updates their env var.
+- Per-environment profiles live in `~/.polaris/config.toml`. The config file never stores tokens — it points at env var names:
+
+```toml
+[profiles.production]
+url = "https://polaris.example.internal"
+token_env = "POLARIS_PROD_TOKEN"
+
+[profiles.staging]
+url = "https://polaris-staging.example.internal"
+token_env = "POLARIS_STAGING_TOKEN"
+```
+
+- Profile is selected via `--profile <name>` or `POLARIS_PROFILE` env var.
+
+### Implementation shape
+
+The CLI is a thin client that talks to a small Polaris control-plane API service. This shape is recommended (not strictly required for v1) for three reasons:
+
+- Audit records are written server-side atomically with the mutation, so an operator-side network failure cannot leave a mutation without an audit row.
+- Operators don't need direct PostgreSQL network reach; only the control-plane API service does.
+- A future admin UI reuses the same API.
+
+The control-plane API service lives in `apps/control-plane-api/` and exposes the same operations the CLI invokes. The implementation choice is reconfirmed in [P6-001](../implementation/tasks/P6-001-cli-shell.md).
+
 The CLI should use libraries/services that a future admin API or UI can reuse. No admin UI is required in v1.
 
 ## Operator Identity and Audit Actor
@@ -78,7 +114,7 @@ Polaris's operator gate is intentionally minimal: one property per command, one 
 ### Actor sources
 
 ```text
-cli_oidc    authenticated through the organization IdP   (P11+ stretch goal, not v1)
+cli_oidc    authenticated through Keycloak (org IdP)   (P11+ stretch goal, not v1)
 cli_token   long-lived operator token, scoped per environment   (v1 authenticated source)
 declared    --actor flag, env var, OS user, git identity   (display only)
 ```

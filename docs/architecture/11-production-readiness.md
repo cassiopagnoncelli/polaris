@@ -24,6 +24,12 @@ Rules:
 - Runtime configuration comes from environment variables validated by shared config.
 - Secrets are references, not plaintext config.
 
+## Regional Posture
+
+Polaris is **single-region** in v1. One Redpanda cluster, one ClickHouse cluster, one PostgreSQL primary, one Redis. Multi-region (active-active, active-passive, regional sharding) is not in scope until a concrete project requires it.
+
+PII residency is **not a v1 constraint**. Polaris does not promise per-region storage of personal data; projects with data-residency obligations are not in v1's target use cases. If a future project requires residency, the design pattern is per-project topic isolation routed to a regionally-deployed Polaris instance, not in-cluster sharding.
+
 ## Secret Management
 
 Polaris uses provider-based secret references.
@@ -255,20 +261,46 @@ DDL is parameterized through a `{replicated}` macro so the same SQL file works i
 - Production starts single-shard, single-replica, with `Replicated*` engines and Keeper. Adding replicas is straightforward.
 - `Distributed` tables and multi-shard layouts are not v1. Sharding is honest future work, not a backwards-compatible engine swap.
 
+## Backup and Recovery
+
+Recovery objectives per store. Numbers are v1 defaults; production tuning may tighten them.
+
+| Store | Holds | RPO | RTO | Strategy |
+|---|---|---|---|---|
+| PostgreSQL | audit, replay jobs, processor runs, destination instances, operator tokens, API key hashes, schema/source registry, topic isolations | 5 min | 1 h | daily snapshot + continuous WAL streaming; 7-day point-in-time recovery |
+| ClickHouse `analytics_raw` | deduped analytical facts | 24 h | 4 h (recent partitions) | daily `BACKUP TABLE` to object storage |
+| ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time, documented at projection creation | no backup; rebuild from `analytics_raw` |
+| ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly snapshot, monthly cold archive |
+| Redpanda | canonical event topics | 0 under normal operation (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster RF; tiered storage future work |
+| Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss = transient duplicate increase, downstream handles |
+| Secret provider | references (no plaintext) | provider-managed | provider-managed | out of scope for Polaris backups |
+
+Rules:
+
+- The backup strategy lives in code and infrastructure templates, not runbook prose.
+- Restore validation is exercised in staging at least quarterly.
+- Audit records and operator tokens are the most operationally sensitive Postgres rows; losing them creates compliance gaps. The 5-minute RPO targets this.
+- ClickHouse projection rebuilds run through the standard replay/rebuild workflow ([P7-005](../implementation/tasks/P7-005-clickhouse-rebuild-workflows.md)), not as ad-hoc SQL.
+- Secret provider backups are the provider's responsibility; Polaris stores only references.
+
 ## Open Production Decisions
 
 These are intentionally not fully locked yet:
 
-- exact production secret manager
+- exact production secret manager (Vault preferred but not locked)
 - Redpanda retention byte caps and tiered storage
-- ClickHouse projection table engines per query shape
-- ClickHouse multi-shard layout (single-shard is v1)
+- ClickHouse projection table engines per query shape (chosen per-projection as projections land)
 - first real event catalog inventory
 - destination-specific mapping specifications and normalization rules per vendor
-- identity graph schema and conflict policy
-- production alert thresholds and SLOs
+- production alert thresholds tuned to observed traffic (initial defaults locked in [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md))
 - per-project ingress dedupe window overrides
 - topic isolation activation thresholds tuned to observed traffic
-- OIDC integration for `cli_oidc` operator identity
 
-These should be decided before real production traffic, but they do not block the first vertical slice.
+These should be reviewed before real production traffic, but they do not block the first vertical slice.
+
+Locked decisions that previously sat here:
+
+- ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
+- Identity graph schema: file-flexible (see [P8-002](../implementation/tasks/P8-002-identity-resolver-v1.md)).
+- Regional posture: single-region in v1; PII residency not a v1 constraint.
+- OIDC IdP for `cli_oidc`: Keycloak when implemented (P11+ stretch).

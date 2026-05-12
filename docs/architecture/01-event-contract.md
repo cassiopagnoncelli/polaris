@@ -118,6 +118,17 @@ The ingester rejects normal events whose `properties` do not match the registere
 
 Schema changes require code review and deploy. PostgreSQL must not redefine what an event means.
 
+### Property-level style is owner-defined
+
+The platform enforces envelope-level rules (lowercase dotted event names, snake_case segments, UUIDv7 event IDs, ISO 8601 UTC timestamps). Inside `properties`, conventions are event-owner discretion:
+
+- Currency representation (minor units vs decimal, currency field placement) is owner choice.
+- Nested objects vs flat fields is owner choice.
+- ID shape (prefixed strings, raw UUIDs, integers) is owner choice, subject to producer-side consistency.
+- Enum-vs-string is owner choice; enum values that grow should follow the schema evolution rules above.
+
+The platform does not enforce a style guide on property authoring. Reviews catch obvious problems (PII in property names, vendor-specific terms leaking into canonical events). Otherwise, owners are trusted to keep their event family coherent.
+
 ## Schema Evolution
 
 `schema_version` is a per-event-name integer. v1 and later versions coexist in the catalog. Producers send a specific `schema_version`; the ingester validates against that exact version's schema.
@@ -299,4 +310,39 @@ pattern_match   matched a configured pattern rule
 - The ingester's own metrics count redactions per field, never values.
 
 These guardrails are security hygiene, not a full consent-management system.
+
+## Customer Deletion (Deferred)
+
+Polaris events are immutable, so a "delete this customer's data" request cannot be satisfied by mutating existing events. The pattern below is designed but not built in v1; it lands when a project actually requires it.
+
+### Tombstone event
+
+A canonical event signals a deletion request:
+
+```text
+customer.deletion_requested
+```
+
+Properties include `customer_id` (and optionally `anonymous_id` if the customer was anonymous-only) and a `reason` field. The event is emitted by the project responsible for the customer's identity authority — typically a backend triggered by a user action or operator workflow. The tombstone is itself an immutable event in `raw.events`.
+
+### Deletion list service
+
+A small service (or processor) consumes `customer.deletion_requested` events and maintains a deletion list keyed by canonical identifier. The list is persisted (PostgreSQL) and exposed to downstream consumers through:
+
+- a processor-level filter that suppresses subsequent events for the deleted customer from derived topics
+- a destination-consumer hook that refuses to send to vendors for customers on the list
+- a ClickHouse-side filter applied to projection-rebuild jobs so historical analytics are scoped to non-deleted customers
+
+### What "deletion" means in v1 of this pattern
+
+- Future events for the customer do not propagate beyond `raw.events`.
+- Historical events in `raw.events` remain. They age out with retention.
+- Projection tables are rebuilt with the deletion filter applied; raw historical data is not retroactively scrubbed from `raw.events`.
+- Destination vendors that already received the customer's events are not auto-purged; vendor-side deletion is a separate API integration per vendor.
+
+This satisfies most operational definitions of "stop processing this customer" without retroactively rewriting immutable history. Stronger definitions (cryptographic shredding, retroactive raw-event scrubbing) are out of scope for v1.
+
+### When to build
+
+Defer until at least one internal project has a concrete deletion requirement. Design the tombstone schema and deletion-list service shape; do not implement the suppression hooks across processors/consumers until needed.
 
