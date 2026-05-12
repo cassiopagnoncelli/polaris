@@ -71,6 +71,9 @@ importers:
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config
+      '@polaris/shared-control-plane':
+        specifier: workspace:*
+        version: link:../../packages/shared-control-plane
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../../packages/shared-db
@@ -142,6 +145,12 @@ importers:
         specifier: 4.1.6
         version: 4.1.6(@types/node@22.19.19)(@vitest/coverage-v8@4.1.6)(happy-dom@15.11.7)(vite@8.0.12(@types/node@22.19.19)(yaml@2.9.0))
 
+  packages/shared-control-plane:
+    dependencies:
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../shared-secrets
+
   packages/shared-db:
     dependencies:
       kysely:
@@ -157,6 +166,15 @@ importers:
       dbmate:
         specifier: ^2.33.0
         version: 2.33.0
+
+  packages/shared-destination-normalize:
+    dependencies:
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../shared-policy
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../shared-schemas
 
   packages/shared-kafka:
     dependencies:
