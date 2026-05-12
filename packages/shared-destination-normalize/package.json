@@ -1,0 +1,75 @@
+{
+  "name": "@polaris/shared-destination-normalize",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vendor-agnostic normalization primitives reused by every Polaris destination consumer. Owns SHA-256 hashing of canonical PII, identity priority selection, context flattening, timestamp dual-form normalization, consent gating, and a defensive second-pass into @polaris/shared-policy. No network. No I/O. No vendor mapping.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./email": {
+      "types": "./dist/email.d.ts",
+      "import": "./dist/email.js"
+    },
+    "./phone": {
+      "types": "./dist/phone.d.ts",
+      "import": "./dist/phone.js"
+    },
+    "./external-id": {
+      "types": "./dist/external-id.d.ts",
+      "import": "./dist/external-id.js"
+    },
+    "./currency": {
+      "types": "./dist/currency.d.ts",
+      "import": "./dist/currency.js"
+    },
+    "./timestamp": {
+      "types": "./dist/timestamp.d.ts",
+      "import": "./dist/timestamp.js"
+    },
+    "./hashing": {
+      "types": "./dist/hashing.d.ts",
+      "import": "./dist/hashing.js"
+    },
+    "./consent": {
+      "types": "./dist/consent.d.ts",
+      "import": "./dist/consent.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "import": "./dist/identity.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js"
+    },
+    "./normalize": {
+      "types": "./dist/normalize.d.ts",
+      "import": "./dist/normalize.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-policy": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*"
+  }
+}
