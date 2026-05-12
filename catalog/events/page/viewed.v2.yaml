@@ -1,0 +1,16 @@
+# Catalog entry: page.viewed v2 (ACTIVE)
+name: page.viewed
+schema_version: 2
+domain: page
+owner: web-platform
+description: >-
+  Records that a user viewed a page. Splits the URL into `path` and
+  `search`, adds `referrer`, and removes `host` (which belongs in
+  `context.page`).
+lifecycle: active
+since: "2026-02-15"
+notes: >-
+  v1 remains in the catalog until its sunset_at so historical events stay
+  replayable.
+schema_module: "@polaris/shared-schemas/events/page/viewed.v2"
+schema_export: pageViewedV2PropertiesSchema

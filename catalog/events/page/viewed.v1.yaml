@@ -1,0 +1,19 @@
+# Catalog entry: page.viewed v1 (DEPRECATED)
+#
+# Original page-view shape. Replaced by v2 which separates pathname from
+# query string. Producers should migrate before the sunset date.
+name: page.viewed
+schema_version: 1
+domain: page
+owner: web-platform
+description: >-
+  Records that a user viewed a page. Legacy v1 shape — `path` carries the
+  full pathname + query and `host` is included as a sibling.
+lifecycle: deprecated
+sunset_at: "2026-08-10T00:00:00Z"
+since: "2025-09-01"
+notes: >-
+  Superseded by v2. v2 separates `search` from `path`, drops `host` (use
+  `context.page` instead), and adds `referrer`.
+schema_module: "@polaris/shared-schemas/events/page/viewed.v1"
+schema_export: pageViewedV1PropertiesSchema

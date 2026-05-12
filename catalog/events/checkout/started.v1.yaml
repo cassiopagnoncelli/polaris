@@ -1,0 +1,12 @@
+# Catalog entry: checkout.started v1 (ACTIVE)
+name: checkout.started
+schema_version: 1
+domain: checkout
+owner: commerce
+description: >-
+  Emitted when a customer enters the checkout flow with at least one
+  cart line item.
+lifecycle: active
+since: "2026-01-20"
+schema_module: "@polaris/shared-schemas/events/checkout/started.v1"
+schema_export: checkoutStartedV1PropertiesSchema
