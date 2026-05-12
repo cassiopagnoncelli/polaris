@@ -85,4 +85,20 @@ export {
   loadRuntimeCatalog,
   resolveDefaultCatalogRoot,
 } from "./catalog/runtime.js";
+export {
+  buildOpenApiDocument,
+  buildComponentSchemas,
+  buildPaths,
+  DEFAULT_OPENAPI_ROUTE,
+  EXAMPLE_CANONICAL_ENVELOPE,
+  OPERATIONS_COMPONENT_SCHEMAS,
+  openApiSetup,
+  openApiSetupWith,
+  PUBLISHED_OPENAPI_INFO,
+  PUBLISHED_OPENAPI_SERVERS,
+  registerOpenApiRoute,
+  type BuildOpenApiDocumentOptions,
+  type OpenApiDocument,
+  type OpenApiSetupOptions,
+} from "./openapi/index.js";
 export { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";

@@ -1,0 +1,1140 @@
+openapi: "3.0.3"
+info:
+  title: "Polaris Ingester API"
+  version: "0.0.1"
+  description: "Polaris event ingestion API. Authenticates API keys, validates events against the canonical envelope and event catalog, applies the forbidden-field policy, performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`.
+
+
+    This document is *generated* from Zod sources in the Polaris monorepo. Do not edit by hand — run `pnpm openapi` after changing a Zod schema or a Fastify route."
+  contact:
+    name: "Polaris Platform"
+    url: "https://github.com/polaris/polaris"
+  license:
+    name: "UNLICENSED"
+servers:
+  - url: "https://ingest.polaris.internal"
+    description: "Canonical internal ingest endpoint (replace with deployment URL)"
+  - url: "http://localhost:8080"
+    description: "Local docker-compose stack"
+tags:
+  - name: "ingest"
+    description: "Event ingestion endpoints. The only path that publishes to Redpanda."
+  - name: "operations"
+    description: "Operator endpoints (liveness, readiness, Prometheus metrics)."
+paths:
+  /v1/events:
+    post:
+      operationId: "ingestEvents"
+      summary: "Ingest a batch of events"
+      description: "Authenticates the API key, validates each event independently against the canonical envelope and registered `schema_version`, applies the forbidden-field policy (reject vs redact), performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`. Partial acceptance is non-negotiable: one invalid event does not block the rest of the batch — see the `partialAccept` example below.
+
+
+        See [Ingestion and SDKs](https://github.com/polaris/polaris/blob/main/docs/architecture/04-ingestion-and-sdks.md) for the architectural contract and [SDK handbook](https://github.com/polaris/polaris/blob/main/docs/sdk/README.md) for the client-side perspective."
+      tags:
+        - "ingest"
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+            examples:
+              singleEvent:
+                summary: "Single producer event"
+                value:
+                  events:
+                    - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                      event: "payment.approved"
+                      schema_version: 1
+                      project_id: "checkout"
+                      environment: "production"
+                      occurred_at: "2026-05-11T12:00:00.000Z"
+                      ingested_at: "2026-05-11T12:00:01.120Z"
+                      source:
+                        type: "backend"
+                        id: "payments-api"
+                        sdk: "node"
+                        sdk_version: "1.0.0"
+                      identity:
+                        anonymous_id: null
+                        session_id: null
+                        customer_id: "cus_123"
+                        device_id: null
+                      context:
+                        ip: "203.0.113.10"
+                        user_agent: "Mozilla/5.0 ..."
+                        locale: "pt-BR"
+                        page: null
+                        campaign: null
+                      properties:
+                        payment_id: "pay_123"
+                        order_id: "ord_456"
+                        amount: 12990
+                        currency: "BRL"
+      responses:
+        "200":
+          description: "Batch processed. Both `accepted` and `rejected` may be non-empty in the same response. SDKs MUST NOT retry permanently invalid events (see `BatchReasonCode`); transient failures (`publish_failed`) may be retried with backoff."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchResponse"
+              examples:
+                fullAccept:
+                  summary: "All events accepted"
+                  value:
+                    accepted:
+                      - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                        status: "accepted"
+                    rejected: []
+                partialAccept:
+                  summary: "Partial acceptance (mix of accepted + rejected)"
+                  value:
+                    accepted:
+                      - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                        status: "accepted"
+                    rejected:
+                      - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f552"
+                        status: "rejected"
+                        code: "invalid_properties"
+                        detail:
+                          event: "payment.approved"
+                          schema_version: 1
+                          path:
+                            - "amount"
+                          message: "Number must be positive"
+                      - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f553"
+                        status: "rejected"
+                        code: "forbidden_field_rejected"
+                        detail:
+                          path:
+                            - "properties"
+                            - "cvv"
+                          policy_reason: "pii_card"
+                          message: "forbidden field 'properties.cvv' present (policy reason: pii_card)"
+                      - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f554"
+                        status: "rejected"
+                        code: "publish_failed"
+                        detail:
+                          event: "page.viewed"
+                          message: "raw.events publish failed; retry the event"
+                malformedBatch:
+                  summary: "Batch envelope itself is malformed (status 400; shown here for body shape)"
+                  value:
+                    accepted: []
+                    rejected: []
+                    error:
+                      code: "invalid_request"
+                      message: "request body is not a valid event batch"
+        "400":
+          description: "The request body is malformed — either invalid JSON or the batch envelope does not match `BatchRequest`. Per-event validation failures use the per-event `BatchRejectedResult` codes inside a 200 response, not a 400 Problem."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                invalidRequest:
+                  summary: "Invalid request body"
+                  value:
+                    type: "https://docs.polaris/errors/invalid_request"
+                    title: "Invalid request"
+                    status: 400
+                    code: "invalid_request"
+                    detail: "request body is not a valid event batch"
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+        "401":
+          description: "Authentication failed. Polaris maps every reject reason (malformed header, no matching `api_key_id`, revoked row, hash mismatch, algorithm mismatch) to the same `invalid_api_key` code so attackers cannot enumerate which arm failed. A missing header maps to `missing_api_key`."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                missingApiKey:
+                  summary: "No API key header sent"
+                  value:
+                    type: "https://docs.polaris/errors/missing_api_key"
+                    title: "Missing API key"
+                    status: 401
+                    code: "missing_api_key"
+                    detail: "Missing required `x-polaris-api-key` header."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                invalidApiKey:
+                  summary: "API key invalid or revoked"
+                  value:
+                    type: "https://docs.polaris/errors/invalid_api_key"
+                    title: "Invalid API key"
+                    status: 401
+                    code: "invalid_api_key"
+                    detail: "The provided API key is invalid or revoked."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f552"
+        "413":
+          description: "The batch exceeded the configured per-request event count or body size. The body limit is enforced by Fastify (see `config.http.bodyLimitBytes`); the per-batch event cap is enforced by the ingest handler. SDKs must split the batch and retry."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                payloadTooLarge:
+                  summary: "Body exceeds bodyLimitBytes"
+                  value:
+                    type: "https://docs.polaris/errors/payload_too_large"
+                    title: "Payload too large"
+                    status: 413
+                    code: "payload_too_large"
+                    detail: "Request body exceeds the configured limit."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                batchTooLarge:
+                  summary: "Batch exceeds the per-request event cap (in a 200 envelope error)"
+                  value:
+                    accepted: []
+                    rejected: []
+                    error:
+                      code: "invalid_request"
+                      message: "batch exceeds the maximum of 1000 events"
+        "415":
+          description: "The request `content-type` is not `application/json`. SDKs always send JSON; this only surfaces against hand-rolled producers."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                unsupportedMediaType:
+                  summary: "Wrong content-type"
+                  value:
+                    type: "https://docs.polaris/errors/unsupported_media_type"
+                    title: "Unsupported media type"
+                    status: 415
+                    code: "unsupported_media_type"
+                    detail: "Expected application/json."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+        "500":
+          description: "Unhandled server-side error. Stable `code` is `internal_error`; SDKs treat this as transient and retry with backoff."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                internalError:
+                  summary: "Unhandled server error"
+                  value:
+                    type: "https://docs.polaris/errors/internal_error"
+                    title: "Internal error"
+                    status: 500
+                    code: "internal_error"
+                    detail: "An unexpected error occurred."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+        "503":
+          description: "Auth dependency unavailable (PostgreSQL outage). SDKs retry with backoff. Surfaced as 503 rather than 401 so producers do not invalidate working keys on a transient outage."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemBody"
+              examples:
+                authUnavailable:
+                  summary: "Auth dependency down"
+                  value:
+                    type: "https://docs.polaris/errors/auth_unavailable"
+                    title: "Authentication unavailable"
+                    status: 503
+                    code: "auth_unavailable"
+                    detail: "Authentication backend is temporarily unavailable."
+                    request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+  /health:
+    get:
+      operationId: "getHealth"
+      summary: "Liveness probe"
+      description: "Answers 200 as long as the process is up. Use for container liveness probes — `/health` does NOT check downstream dependencies. For dependency status use `/ready`."
+      tags:
+        - "operations"
+      responses:
+        "200":
+          description: "Service process is alive."
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  status:
+                    type: "string"
+                    example: "ok"
+                  service:
+                    type: "string"
+                    example: "ingester-api"
+                  version:
+                    type: "string"
+                    example: "0.0.1"
+                  git_sha:
+                    type: "string"
+                    example: "deadbee"
+                  build_time:
+                    type: "string"
+                    format: "date-time"
+                  environment:
+                    type: "string"
+                    example: "production"
+                  time:
+                    type: "string"
+                    format: "date-time"
+                required:
+                  - "status"
+                  - "service"
+                  - "version"
+                  - "time"
+  /ready:
+    get:
+      operationId: "getReady"
+      summary: "Readiness probe"
+      description: "Aggregates registered readiness probes (PostgreSQL, Redis, Redpanda, ...). Returns 200 when every probe reports `up`; returns 503 when any probe is `down` (or `degraded`, by default). Use for container readiness / Kubernetes readiness checks."
+      tags:
+        - "operations"
+      responses:
+        "200":
+          description: "All probes report `up`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: "One or more probes reported `down` or `degraded`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+  /metrics:
+    get:
+      operationId: "getMetrics"
+      summary: "Prometheus metrics exposition"
+      description: "Returns Prometheus text-format metrics. Scraped by Prometheus; not intended for direct consumption by SDKs."
+      tags:
+        - "operations"
+      responses:
+        "200":
+          description: "Prometheus text exposition."
+          content:
+            text/plain; version=0.0.4; charset=utf-8:
+              schema:
+                type: "string"
+              example: "# HELP polaris_ingest_batch_accepted_total Accepted ingester events.
+
+                # TYPE polaris_ingest_batch_accepted_total counter
+
+                polaris_ingest_batch_accepted_total{project_id=\"checkout\",environment=\"production\"} 12345\n"
+components:
+  securitySchemes:
+    apiKey:
+      type: "apiKey"
+      in: "header"
+      name: "x-polaris-api-key"
+      description: "Polaris API key. The ingester resolves the `(project_id, environment, source_id, source_type)` tuple from the key and stamps the canonical envelope from it — producers never send these fields directly. Keys are issued by the polaris CLI; see [Control Plane](https://github.com/polaris/polaris/blob/main/docs/architecture/02-control-plane.md)."
+  schemas:
+    Envelope:
+      type: "object"
+      properties:
+        event_id:
+          type: "string"
+          format: "uuid"
+          pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        event:
+          type: "string"
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+        schema_version:
+          type: "integer"
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        project_id:
+          type: "string"
+          minLength: 1
+          maxLength: 128
+        environment:
+          type: "string"
+          enum:
+            - "production"
+            - "staging"
+            - "development"
+            - "test"
+        occurred_at:
+          type: "string"
+          format: "date-time"
+          pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        ingested_at:
+          type: "string"
+          format: "date-time"
+          pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        source:
+          type: "object"
+          properties:
+            type:
+              type: "string"
+              enum:
+                - "browser"
+                - "backend"
+                - "mobile"
+                - "server"
+                - "internal"
+            id:
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            sdk:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 64
+            sdk_version:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 64
+          required:
+            - "type"
+            - "id"
+          additionalProperties: false
+        identity:
+          type: "object"
+          properties:
+            anonymous_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            session_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            customer_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            device_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+          required:
+            - "anonymous_id"
+            - "session_id"
+            - "customer_id"
+            - "device_id"
+          additionalProperties: false
+        context:
+          type: "object"
+          properties:
+            ip:
+              nullable: true
+              type: "string"
+              maxLength: 64
+            user_agent:
+              nullable: true
+              type: "string"
+              maxLength: 1024
+            locale:
+              nullable: true
+              type: "string"
+              maxLength: 32
+            page:
+              nullable: true
+              type: "object"
+              properties:
+                url:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+                  format: "uri"
+                path:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+                title:
+                  nullable: true
+                  type: "string"
+                  maxLength: 512
+                referrer:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+              additionalProperties: false
+            campaign:
+              nullable: true
+              type: "object"
+              properties:
+                source:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                medium:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                name:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                term:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                content:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                click_id:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+              additionalProperties: false
+          required:
+            - "ip"
+            - "user_agent"
+            - "locale"
+            - "page"
+            - "campaign"
+          additionalProperties: false
+        properties:
+          type: "object"
+          additionalProperties: {}
+        consent:
+          type: "object"
+          properties:
+            analytics:
+              nullable: true
+              type: "boolean"
+            marketing:
+              nullable: true
+              type: "boolean"
+            personalization:
+              nullable: true
+              type: "boolean"
+          additionalProperties: false
+        privacy:
+          type: "object"
+          properties:
+            classification:
+              nullable: true
+              type: "string"
+              enum:
+                - "public"
+                - "internal"
+                - "confidential"
+                - "restricted"
+          additionalProperties: false
+      required:
+        - "event_id"
+        - "event"
+        - "schema_version"
+        - "project_id"
+        - "environment"
+        - "occurred_at"
+        - "ingested_at"
+        - "source"
+        - "identity"
+        - "context"
+        - "properties"
+      additionalProperties: false
+      description: "Canonical event envelope. The ingester stamps `project_id`, `environment`, `ingested_at`, and trusted `source.id` from the API key; this is the *post-stamp* shape downstream consumers see in Redpanda `raw.events`."
+      example:
+        event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+        event: "payment.approved"
+        schema_version: 1
+        project_id: "checkout"
+        environment: "production"
+        occurred_at: "2026-05-11T12:00:00.000Z"
+        ingested_at: "2026-05-11T12:00:01.120Z"
+        source:
+          type: "backend"
+          id: "payments-api"
+          sdk: "node"
+          sdk_version: "1.0.0"
+        identity:
+          anonymous_id: null
+          session_id: null
+          customer_id: "cus_123"
+          device_id: null
+        context:
+          ip: "203.0.113.10"
+          user_agent: "Mozilla/5.0 ..."
+          locale: "pt-BR"
+          page: null
+          campaign: null
+        properties:
+          payment_id: "pay_123"
+          order_id: "ord_456"
+          amount: 12990
+          currency: "BRL"
+    ProducerEnvelope:
+      type: "object"
+      properties:
+        event_id:
+          type: "string"
+          format: "uuid"
+          pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        event:
+          type: "string"
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+        schema_version:
+          type: "integer"
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        occurred_at:
+          type: "string"
+          format: "date-time"
+          pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        source:
+          type: "object"
+          properties:
+            type:
+              type: "string"
+              enum:
+                - "browser"
+                - "backend"
+                - "mobile"
+                - "server"
+                - "internal"
+            id:
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            sdk:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 64
+            sdk_version:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 64
+          required:
+            - "type"
+          additionalProperties: false
+        identity:
+          type: "object"
+          properties:
+            anonymous_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            session_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            customer_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            device_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+          required:
+            - "anonymous_id"
+            - "session_id"
+            - "customer_id"
+            - "device_id"
+          additionalProperties: false
+        context:
+          type: "object"
+          properties:
+            ip:
+              nullable: true
+              type: "string"
+              maxLength: 64
+            user_agent:
+              nullable: true
+              type: "string"
+              maxLength: 1024
+            locale:
+              nullable: true
+              type: "string"
+              maxLength: 32
+            page:
+              nullable: true
+              type: "object"
+              properties:
+                url:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+                  format: "uri"
+                path:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+                title:
+                  nullable: true
+                  type: "string"
+                  maxLength: 512
+                referrer:
+                  nullable: true
+                  type: "string"
+                  maxLength: 2048
+              additionalProperties: false
+            campaign:
+              nullable: true
+              type: "object"
+              properties:
+                source:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                medium:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                name:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                term:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                content:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+                click_id:
+                  nullable: true
+                  type: "string"
+                  maxLength: 256
+              additionalProperties: false
+          required:
+            - "ip"
+            - "user_agent"
+            - "locale"
+            - "page"
+            - "campaign"
+          additionalProperties: false
+        properties:
+          type: "object"
+          additionalProperties: {}
+        consent:
+          type: "object"
+          properties:
+            analytics:
+              nullable: true
+              type: "boolean"
+            marketing:
+              nullable: true
+              type: "boolean"
+            personalization:
+              nullable: true
+              type: "boolean"
+          additionalProperties: false
+        privacy:
+          type: "object"
+          properties:
+            classification:
+              nullable: true
+              type: "string"
+              enum:
+                - "public"
+                - "internal"
+                - "confidential"
+                - "restricted"
+          additionalProperties: false
+      required:
+        - "event_id"
+        - "event"
+        - "schema_version"
+        - "occurred_at"
+        - "source"
+        - "identity"
+        - "context"
+        - "properties"
+      additionalProperties: false
+      description: "Producer-side envelope: the shape SDKs and trusted producers actually send. The ingester overwrites `project_id`, `environment`, `ingested_at`, and `source.id` from the API key, so producers omit them."
+      example:
+        event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+        event: "page.viewed"
+        schema_version: 2
+        occurred_at: "2026-05-11T12:00:00.000Z"
+        source:
+          type: "browser"
+          sdk: "web"
+          sdk_version: "1.0.0"
+        identity:
+          anonymous_id: "anon_018f..."
+          session_id: "sess_018f..."
+          customer_id: null
+          device_id: null
+        context:
+          ip: null
+          user_agent: "Mozilla/5.0 ..."
+          locale: "pt-BR"
+          page:
+            url: "https://shop.example/cart"
+            path: "/cart"
+            title: "Cart"
+            referrer: null
+          campaign: null
+        properties:
+          path: "/cart"
+          title: "Cart"
+    BatchRequest:
+      type: "object"
+      properties:
+        events:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: {}
+      required:
+        - "events"
+      additionalProperties: {}
+      description: "Request body for `POST /v1/events`. Producers send a batch of `ProducerEnvelope` entries; per-event validation, partial acceptance, and per-event reason codes are described in the `BatchResponse` shape."
+      example:
+        events:
+          - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+            event: "page.viewed"
+            schema_version: 2
+            occurred_at: "2026-05-11T12:00:00.000Z"
+            source:
+              type: "browser"
+              sdk: "web"
+              sdk_version: "1.0.0"
+            identity:
+              anonymous_id: "anon_018f..."
+              session_id: "sess_018f..."
+              customer_id: null
+              device_id: null
+            context:
+              ip: null
+              user_agent: "Mozilla/5.0 ..."
+              locale: "pt-BR"
+              page:
+                url: "https://shop.example/cart"
+                path: "/cart"
+                title: "Cart"
+                referrer: null
+              campaign: null
+            properties:
+              path: "/cart"
+              title: "Cart"
+    BatchAcceptedResult:
+      type: "object"
+      properties:
+        event_id:
+          type: "string"
+          format: "uuid"
+          pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        status:
+          type: "string"
+          enum:
+            - "accepted"
+        deprecated:
+          type: "boolean"
+      required:
+        - "event_id"
+        - "status"
+      additionalProperties: false
+      description: "Per-event entry in the `accepted` array of a `BatchResponse`. `deprecated: true` is present when the event used a deprecated `schema_version` still inside its sunset window."
+    BatchRejectedResult:
+      type: "object"
+      properties:
+        event_id:
+          type: "string"
+          format: "uuid"
+          pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        status:
+          type: "string"
+          enum:
+            - "rejected"
+        code:
+          type: "string"
+          enum:
+            - "unsupported_schema_version"
+            - "schema_version_sunset"
+            - "unknown_event"
+            - "invalid_properties"
+            - "invalid_envelope"
+            - "forbidden_field_rejected"
+            - "duplicate"
+            - "publish_failed"
+            - "invalid_request"
+        detail:
+          type: "object"
+          properties:
+            event:
+              type: "string"
+            schema_version:
+              type: "integer"
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            sunset_at:
+              type: "string"
+              format: "date-time"
+              pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            supported_versions:
+              type: "array"
+              items:
+                type: "integer"
+                minimum: -9007199254740991
+                maximum: 9007199254740991
+            path:
+              type: "array"
+              items:
+                anyOf:
+                  - type: "string"
+                  - type: "number"
+            message:
+              type: "string"
+            policy_reason:
+              type: "string"
+          additionalProperties: false
+      required:
+        - "event_id"
+        - "status"
+        - "code"
+      additionalProperties: false
+      description: "Per-event entry in the `rejected` array of a `BatchResponse`. `code` is one of the stable reason codes in `BatchReasonCode`. `detail.path` carries field paths but never the rejected or redacted value."
+    BatchResponse:
+      type: "object"
+      properties:
+        accepted:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+              event_id:
+                type: "string"
+                format: "uuid"
+                pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              status:
+                type: "string"
+                enum:
+                  - "accepted"
+              deprecated:
+                type: "boolean"
+            required:
+              - "event_id"
+              - "status"
+            additionalProperties: false
+        rejected:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+              event_id:
+                type: "string"
+                format: "uuid"
+                pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              status:
+                type: "string"
+                enum:
+                  - "rejected"
+              code:
+                type: "string"
+                enum:
+                  - "unsupported_schema_version"
+                  - "schema_version_sunset"
+                  - "unknown_event"
+                  - "invalid_properties"
+                  - "invalid_envelope"
+                  - "forbidden_field_rejected"
+                  - "duplicate"
+                  - "publish_failed"
+                  - "invalid_request"
+              detail:
+                type: "object"
+                properties:
+                  event:
+                    type: "string"
+                  schema_version:
+                    type: "integer"
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  sunset_at:
+                    type: "string"
+                    format: "date-time"
+                    pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  supported_versions:
+                    type: "array"
+                    items:
+                      type: "integer"
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                  path:
+                    type: "array"
+                    items:
+                      anyOf:
+                        - type: "string"
+                        - type: "number"
+                  message:
+                    type: "string"
+                  policy_reason:
+                    type: "string"
+                additionalProperties: false
+            required:
+              - "event_id"
+              - "status"
+              - "code"
+            additionalProperties: false
+      required:
+        - "accepted"
+        - "rejected"
+      additionalProperties: false
+      description: "Response body for `POST /v1/events`. Partial acceptance is non-negotiable: both `accepted` and `rejected` may be non-empty in the same response."
+      examples:
+        fullAccept:
+          summary: "All events accepted"
+          value:
+            accepted:
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                status: "accepted"
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f552"
+                status: "accepted"
+                deprecated: true
+            rejected: []
+        partialAccept:
+          summary: "Some events rejected (partial acceptance)"
+          value:
+            accepted:
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+                status: "accepted"
+            rejected:
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f552"
+                status: "rejected"
+                code: "schema_validation_failed"
+                detail:
+                  event: "payment.approved"
+                  schema_version: 1
+                  path:
+                    - "amount"
+                  message: "Number must be positive"
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f553"
+                status: "rejected"
+                code: "forbidden_field_rejected"
+                detail:
+                  path:
+                    - "properties"
+                    - "cvv"
+                  policy_reason: "pii_card"
+                  message: "forbidden field 'properties.cvv' present (policy reason: pii_card)"
+              - event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f554"
+                status: "rejected"
+                code: "duplicate"
+                detail:
+                  event: "page.viewed"
+                  message: "event_id observed within the ingester dedupe window"
+    BatchReasonCode:
+      type: "string"
+      enum:
+        - "unsupported_schema_version"
+        - "schema_version_sunset"
+        - "unknown_event"
+        - "invalid_properties"
+        - "invalid_envelope"
+        - "forbidden_field_rejected"
+        - "duplicate"
+        - "publish_failed"
+        - "invalid_request"
+      description: "Closed set of stable machine-readable reason codes the ingester emits inside `BatchRejectedResult.code`. SDK retry logic and dashboards branch on these literals. Schema-related codes (`unsupported_schema_version`, `schema_version_sunset`, ...) overlap with `SchemaReasonCode`."
+    SchemaReasonCode:
+      type: "string"
+      enum:
+        - "unsupported_schema_version"
+        - "schema_version_sunset"
+        - "unknown_event"
+        - "invalid_properties"
+        - "invalid_envelope"
+      description: "Subset of `BatchReasonCode` produced by the catalog validator (envelope and per-event property validation). Kept as its own component because processors and consumers reuse it to label DLQ entries."
+    ProblemBody:
+      type: "object"
+      title: "ProblemBody"
+      description: "RFC 7807 Problem Details body returned for request-level failures. Per Polaris convention, `code` and `request_id` are always present so SDK retry logic and operators can correlate the failure deterministically."
+      required:
+        - "type"
+        - "title"
+        - "status"
+        - "code"
+        - "request_id"
+      properties:
+        type:
+          type: "string"
+          format: "uri"
+          description: "Fully qualified URI identifying the problem class."
+          example: "https://docs.polaris/errors/invalid_api_key"
+        title:
+          type: "string"
+          description: "Short, human-readable summary of the problem class."
+          example: "Invalid API key"
+        status:
+          type: "integer"
+          minimum: 400
+          maximum: 599
+          description: "HTTP status code, mirrored into the body so log readers see it."
+          example: 401
+        code:
+          type: "string"
+          description: "Stable machine-readable problem code. SDKs branch on this — see the per-response examples below."
+          example: "invalid_api_key"
+        detail:
+          type: "string"
+          description: "Optional human-readable detail; safe for end-user display."
+          example: "The provided API key is invalid or revoked."
+        request_id:
+          type: "string"
+          format: "uuid"
+          description: "Per-request UUIDv7 correlation ID — also echoed in `x-request-id`."
+          example: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551"
+      additionalProperties: true
+    ReadinessResponse:
+      type: "object"
+      description: "Body returned by `/ready`. Per-probe results are surfaced individually."
+      required:
+        - "status"
+        - "service"
+        - "version"
+        - "time"
+        - "probes"
+      properties:
+        status:
+          type: "string"
+          enum:
+            - "ready"
+            - "not_ready"
+        service:
+          type: "string"
+          example: "ingester-api"
+        version:
+          type: "string"
+          example: "0.0.1"
+        time:
+          type: "string"
+          format: "date-time"
+        probes:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ReadinessProbeResult"
+    ReadinessProbeResult:
+      type: "object"
+      required:
+        - "name"
+        - "status"
+      properties:
+        name:
+          type: "string"
+          example: "postgres"
+        status:
+          type: "string"
+          enum:
+            - "up"
+            - "down"
+            - "degraded"
+        detail:
+          type: "string"
+        latencyMs:
+          type: "number"

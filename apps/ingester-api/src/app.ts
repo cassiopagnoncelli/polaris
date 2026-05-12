@@ -12,7 +12,6 @@ import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 import type { EventCatalog } from "@polaris/shared-schemas";
 import {
   bootstrapService,
-  NOOP_OPENAPI_SETUP,
   type BootstrappedService,
   type OpenApiSetup,
   type ReadinessProbe,
@@ -37,6 +36,7 @@ import {
 import { buildRedisOptions } from "./dedupe/redis.js";
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { IngestMetrics } from "./metrics/registry.js";
+import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
 import { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";
 import { registerEventsRoutes } from "./routes/events.js";
 
@@ -226,7 +226,11 @@ export async function buildIngesterApp(
     },
     ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
     openapi: {
-      setup: options.openApiSetup ?? NOOP_OPENAPI_SETUP,
+      // Polaris ingester ships an OpenAPI 3.0 document derived from the
+      // Zod sources (`packages/shared-schemas`) and the Fastify routes
+      // declared here. The default setup serves `/openapi.json`; tests
+      // and embedding code may override with `NOOP_OPENAPI_SETUP`.
+      setup: options.openApiSetup ?? defaultOpenApiSetup,
       metadata: {
         title: "Polaris Ingester API",
         version: config.service.serviceVersion,

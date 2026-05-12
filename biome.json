@@ -14,7 +14,9 @@
       "!**/coverage",
       "!**/.turbo",
       "!**/*.min.js",
-      "!**/pnpm-lock.yaml"
+      "!**/pnpm-lock.yaml",
+      "!docs/api/openapi.json",
+      "!docs/api/openapi.yaml"
     ]
   },
   "formatter": {
