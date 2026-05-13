@@ -163,7 +163,6 @@ services:
       # break local engine selection.
       - ./infra/clickhouse/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
       - ./infra/clickhouse/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
-      - ./infra/clickhouse/users.d:/etc/clickhouse-server/users.d:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
       interval: 5s
