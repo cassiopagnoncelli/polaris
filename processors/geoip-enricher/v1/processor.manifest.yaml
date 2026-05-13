@@ -1,0 +1,89 @@
+# Polaris processor manifest — geoip-enricher v1
+#
+# This manifest is the SEMANTIC definition for the geoip-enricher
+# processor, version 1. Per docs/architecture/05-processors-and-replay.md
+# ("Processor Versioning"), the contents of this file for a given
+# (name, version) pair are immutable. Any change that affects emitted
+# event meaning, fields, identity links, attribution outcomes, filtering
+# behavior, or output schema requires a NEW version directory (v2/) with
+# its own manifest.
+#
+# PostgreSQL stores the runtime activation state (enabled/disabled,
+# project/environment scope, consumer group, batch size, ...) — never
+# semantic transformation rules. See docs/architecture/05-processors-and-replay.md
+# "Processor Configuration".
+
+name: geoip-enricher
+version: v1
+owner: platform-data
+description: |
+  Reads `raw.events`, looks up `envelope.context.ip` against a swappable
+  `IPLookup` backend, and republishes the geo result on `enriched.events`
+  as canonical `enriched.geoip` v1 envelopes. The enriched envelope is
+  keyed back to the source event_id via `source_event_id`; downstream
+  consumers (analytics, attribution) join on it without mutating the
+  immutable source envelope.
+
+  PII posture: the raw IP NEVER appears on the enriched event or in any
+  structured log line. The runtime hashes the IP with SHA-256 and persists
+  only `source_ip_hash`. This matches the forbidden-field-policy posture
+  from `docs/architecture/01-event-contract.md` and the redaction
+  guarantees ("redacted values must never be logged, even at debug
+  level").
+
+  v1 ships TWO IPLookup adapters:
+
+    - `InMemoryIPLookup` — backed by a small JSON fixture. Used by
+      tests, the smoke harness, and integration scenarios that want
+      deterministic geo results without depending on the MaxMind binary
+      database.
+
+    - `NoOpIPLookup` — production fail-open default. Emits an
+      `enriched.geoip` row with every geo field set to null and
+      `source = "no_lookup"`. The runtime fails open, not closed, so a
+      missing GeoIP database does not break the streaming pipeline.
+
+  A MaxMind GeoLite2-backed `MaxmindIPLookup` adapter is intentionally
+  out of scope for v1 (the MaxMind database is large and license-
+  restricted; it lives outside the repo). A follow-up task adds the
+  adapter behind the same `IPLookup` interface, which keeps THIS
+  processor version unchanged.
+
+# Streaming mode: each input event maps to exactly one emitted
+# enriched.geoip event. There is no batching, no aggregation, no time
+# windowing. Replay is straightforward: re-applying the lookup against
+# the source raw.events range yields byte-identical output for the same
+# IPLookup backend.
+mode: streaming
+
+# Topic-family inputs/outputs. The shared-kafka topic-family resolver
+# turns these into concrete topic names per project isolation state at
+# runtime. Per-project activation lives in PostgreSQL (P6-005).
+inputs:
+  - family: raw.events
+    schema_versions: "*"
+outputs:
+  - family: enriched.events
+    schema_versions: [1]
+
+# State stores this processor uses. v1 is stateless beyond the in-memory
+# / file-backed IPLookup adapter the runtime is configured with. No
+# Redis windows, no PostgreSQL writes. The slot is here for shape
+# consistency with later processors that DO need state.
+state_stores: []
+
+# Operational defaults the runtime helpers fall back to when no
+# PostgreSQL activation row overrides them. Non-semantic per the
+# architecture doc ("Processor Configuration").
+defaults:
+  consumer_group: polaris-geoip-enricher-v1
+  partitions_consumed_concurrently: 1
+
+# Replay metadata. GeoIP enrichment is deterministic for a fixed
+# IPLookup backend — replaying the same raw.events range yields
+# byte-identical enriched output. The MaxMind dataset version is
+# stamped on `properties.source` so an operator can confirm which
+# database snapshot produced a given enrichment during lineage queries.
+replay:
+  supported: true
+  restrictions: []

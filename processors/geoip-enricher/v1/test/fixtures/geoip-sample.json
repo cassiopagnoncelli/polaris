@@ -1,0 +1,41 @@
+{
+  "8.8.8.8": {
+    "source": "in_memory:test-fixture",
+    "country_code": "US",
+    "country_name": "United States",
+    "region_code": "US-CA",
+    "region_name": "California",
+    "city": "Mountain View",
+    "postal_code": "94043",
+    "latitude": 37.422,
+    "longitude": -122.084,
+    "timezone": "America/Los_Angeles",
+    "accuracy_radius_km": 1000
+  },
+  "203.0.113.10": {
+    "source": "in_memory:test-fixture",
+    "country_code": "BR",
+    "country_name": "Brazil",
+    "region_code": "BR-SP",
+    "region_name": "São Paulo",
+    "city": "São Paulo",
+    "postal_code": "01310-100",
+    "latitude": -23.5505,
+    "longitude": -46.6333,
+    "timezone": "America/Sao_Paulo",
+    "accuracy_radius_km": 50
+  },
+  "2001:db8::1": {
+    "source": "in_memory:test-fixture",
+    "country_code": "DE",
+    "country_name": "Germany",
+    "region_code": "DE-BE",
+    "region_name": "Berlin",
+    "city": "Berlin",
+    "postal_code": "10115",
+    "latitude": 52.52,
+    "longitude": 13.405,
+    "timezone": "Europe/Berlin",
+    "accuracy_radius_km": 20
+  }
+}

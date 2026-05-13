@@ -243,6 +243,32 @@ export function buildTestCatalog(): EventCatalog {
         description: "processor-emitted v1",
         lifecycle: "active",
       },
+      // Session events (P8-003) are emitted by the sessionizer processor.
+      {
+        name: "session.started",
+        schema_version: 1,
+        domain: "session",
+        owner: "platform",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      {
+        name: "session.ended",
+        schema_version: 1,
+        domain: "session",
+        owner: "platform",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      // Enriched events (P8-004) are emitted by the geoip-enricher processor.
+      {
+        name: "enriched.geoip",
+        schema_version: 1,
+        domain: "enriched",
+        owner: "platform-data",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
     ],
     defaultSchemaBindings,
   );

@@ -1,4 +1,5 @@
 import { checkoutStartedV1PropertiesSchema } from "../events/checkout/started.v1.js";
+import { enrichedGeoipV1PropertiesSchema } from "../events/enriched/geoip.v1.js";
 import { identityLinkedV1PropertiesSchema } from "../events/identity/linked.v1.js";
 import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.js";
 import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
@@ -61,5 +62,10 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "session.ended",
     schema_version: 1,
     propertiesSchema: sessionEndedV1PropertiesSchema,
+  },
+  {
+    event: "enriched.geoip",
+    schema_version: 1,
+    propertiesSchema: enrichedGeoipV1PropertiesSchema,
   },
 ];

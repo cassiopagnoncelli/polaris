@@ -1,0 +1,28 @@
+# Catalog entry: enriched.geoip v1 (ACTIVE)
+#
+# Emitted by `processors/geoip-enricher/v1/` once per source `raw.events`
+# record. The enricher looks up `envelope.context.ip` against a local
+# IP-to-geo database and republishes the geo result on `enriched.events`
+# keyed back to the source `event_id` via `source_event_id`. Downstream
+# consumers (analytics, attribution) join on `source_event_id` rather than
+# mutating the immutable source envelope.
+#
+# The IP itself never appears on the enriched event. Per
+# `docs/architecture/01-event-contract.md` § "Forbidden-Field Policy", the
+# enricher persists only `source_ip_hash` (lowercase SHA-256 hex) so
+# downstream lineage can verify which observation produced the geo result
+# without re-exposing the raw IP.
+name: enriched.geoip
+schema_version: 1
+domain: enriched
+owner: platform-data
+description: >-
+  GeoIP enrichment derived from `envelope.context.ip`. Keyed back to the
+  source event_id via `source_event_id`. v1 ships a swappable
+  `IPLookup` backend; the default runtime uses an `InMemoryIPLookup` (test
+  fixtures) or a `NoOpIPLookup` (production fail-open). A MaxMind
+  GeoLite2-backed lookup lands in a follow-up task.
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/enriched/geoip.v1"
+schema_export: enrichedGeoipV1PropertiesSchema

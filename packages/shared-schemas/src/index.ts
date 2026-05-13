@@ -31,6 +31,14 @@ export {
   identityRotatedV1PropertiesSchema,
   type IdentityRotatedV1Properties,
 } from "./events/identity/rotated.v1.js";
+export {
+  enrichedGeoipV1PropertiesSchema,
+  geoipCountryCodeSchema,
+  geoipRegionCodeSchema,
+  geoipSourceIpHashSchema,
+  geoipSourceSchema,
+  type EnrichedGeoipV1Properties,
+} from "./events/enriched/geoip.v1.js";
 
 // Catalog loader / validator surface (file-backed; intended for the
 // ingester process, not SDK distributions).

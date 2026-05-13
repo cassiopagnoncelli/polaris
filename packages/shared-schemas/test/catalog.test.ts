@@ -76,6 +76,7 @@ describe("EventCatalog (built from YAML + bindings)", () => {
   it("listEventNames is unique and sorted", () => {
     expect(catalog.listEventNames()).toEqual([
       "checkout.started",
+      "enriched.geoip",
       "identity.linked",
       "identity.merged",
       "identity.rotated",
