@@ -1,6 +1,6 @@
 # P10-001: Observability Compose
 
-Status: Review
+Status: Done (merged in `d5ab28f`)
 
 ## Goal
 

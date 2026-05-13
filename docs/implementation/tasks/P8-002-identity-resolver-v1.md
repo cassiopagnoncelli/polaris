@@ -1,6 +1,6 @@
 # P8-002: Identity Resolver v1
 
-Status: Ready
+Status: Done (merged in `a9dd1cf`)
 
 ## Goal
 

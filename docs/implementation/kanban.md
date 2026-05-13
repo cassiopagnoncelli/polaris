@@ -14,11 +14,8 @@ This board is the coordination surface for implementation work.
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md)
-- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md)
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
-- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md)
-- [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md)
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
 - [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
 
@@ -83,7 +80,7 @@ No cards awaiting review.
 
 ## Blocked
 
-No blocked cards.
+- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — worker hit org usage limit mid-flight (2026-05-12). ~3,000 LOC of runtime/dlq/rate-limiter/dedupe/idempotency/replay-suppression/metrics + delivery_records migration are staged in worktree `agent-a7054e36bdb4f718e` (branch `worktree-agent-a7054e36bdb4f718e`). Missing: `src/index.ts` barrel, test directory, and final wiring. Resume by re-spawning with explicit instructions to ship the missing pieces — do NOT re-implement the staged code.
 
 ## Done
 
@@ -141,10 +138,15 @@ No blocked cards.
 ### P8 Production Processors
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
+- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md) — merged in `a9dd1cf`
 
 ### P9 Destination Consumers
 
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
+
+### P10 Observability and Operations
+
+- [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md) — merged in `d5ab28f`
 
 ### P11 Deployment, Security, and Data Lifecycle
 
