@@ -1,0 +1,42 @@
+# Grafana datasource provisioning for the local observability stack.
+#
+# Grafana reads every *.yml under /etc/grafana/provisioning/datasources/
+# at start and reconciles datasources non-destructively. Two
+# datasources ship by default:
+#
+#   - Prometheus (default) — the polaris-local scrape config.
+#   - Loki                  — local single-binary Loki for logs.
+#
+# Production Grafana lives behind an SSO frontproxy with environment-
+# specific datasource URLs; that wiring is owned by the deployment
+# layer, not this file.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: polaris-prometheus
+    access: proxy
+    # The compose network resolves `prometheus` to the prometheus
+    # container; Grafana itself runs in the same network.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # Match the scrape_interval in infra/prometheus/prometheus.yml
+      # so range queries don't over-resolve.
+      timeInterval: 15s
+      httpMethod: POST
+
+  - name: Loki
+    type: loki
+    uid: polaris-loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      # Tie log lines back to metric series when both sides share the
+      # `polaris_service` label. The actual derived-fields wiring is
+      # added by P10-004 once the ingest pipeline is finalised.
+      maxLines: 1000

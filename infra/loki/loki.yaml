@@ -1,0 +1,87 @@
+# Polaris local Loki configuration.
+#
+# Single-binary Loki, filesystem storage, short retention. Local Loki
+# is for tailing recent service logs while developing or running the
+# vertical-slice smoke; it is NOT a production deployment shape.
+#
+# Production Loki runs the distributed deployment behind an object
+# store (S3/GCS), with the read/write/backend separation documented
+# in the Loki operator's docs. See
+# docs/architecture/08-observability-and-operations.md for the
+# production target shape.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9095
+  log_level: info
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+schema_config:
+  configs:
+    # Single boltdb-shipper schema period for local dev. Production
+    # bumps to TSDB and adds chunked object storage.
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: loki_index_
+        period: 24h
+
+limits_config:
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # 7 day local retention. Real production retention is set by the
+  # deployment layer, not by this file.
+  retention_period: 168h
+  # Bound per-stream cardinality so a chatty service can't push
+  # Loki over. Local-only number; raise if a smoke run hits it.
+  max_streams_per_user: 5000
+
+# Retention is enforced by the compactor in v13.
+compactor:
+  working_directory: /loki/retention
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 50
+  delete_request_store: filesystem
+
+# Disable Loki's analytics phone-home for local dev.
+analytics:
+  reporting_enabled: false
+
+# Ruler is required to exist on disk for the single-binary boot, but
+# the Polaris rule set (alerts on log volume, error rate per service)
+# lands with P10-005.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://localhost:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true

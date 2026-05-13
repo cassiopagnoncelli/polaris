@@ -1,0 +1,214 @@
+# Polaris local OPTIONAL observability stack.
+#
+# This compose file is a separate overlay. The core data path
+# (Redpanda, PostgreSQL, Redis, ClickHouse) in docker-compose.yml runs
+# without observability backends — they are preferred but not hard
+# runtime dependencies, per
+# docs/architecture/08-observability-and-operations.md.
+#
+# Services:
+#
+#   - prometheus       Pull-based metrics store. Scrapes Polaris services
+#                      and itself. Short local retention (15d).
+#   - grafana          Dashboards + datasource fanout. Auto-provisioned
+#                      Prometheus + Loki datasources. Default admin/admin
+#                      credentials are local-only; production uses an SSO
+#                      frontproxy. See docs/development/observability.md.
+#   - loki             Single-binary log store. 7d local retention.
+#   - otel-collector   OpenTelemetry Collector. Receives OTLP from Polaris
+#                      services, forwards metrics to Prometheus via
+#                      remote-write, logs to Loki. Traces exporter is a
+#                      commented placeholder pending a Tempo/Jaeger task.
+#
+# This task ships ONLY the compose surface. Downstream P10-* tasks own
+# specific surfaces:
+#
+#   * P10-002 — actual `polaris_*` Prometheus metric emission from
+#               services (Prometheus scrape targets become live).
+#   * P10-003 — Grafana dashboards (JSON files dropped into
+#               infra/grafana/dashboards/).
+#   * P10-004 — Loki ingest pipeline (Pino JSON → Loki labels via the
+#               OTel collector or promtail).
+#   * P10-005 — alerts + incident runbooks (Prometheus alerting rules,
+#               Alertmanager wiring).
+#
+# Usage:
+#
+#   # Start the optional stack on top of the core compose.
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+#   # Validate the merged compose without starting containers.
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml config
+#
+#   # Stop just the observability overlay (core stack keeps running).
+#   docker compose -f docker-compose.observability.yml down
+#
+# Host ports:
+#
+#   Prometheus       http://localhost:9090
+#   Grafana          http://localhost:3000   (admin/admin, local-only)
+#   Loki             http://localhost:3100
+#   OTLP gRPC        localhost:4317
+#   OTLP HTTP        http://localhost:4318
+#
+# All four services join the existing `polaris` bridge network created
+# by docker-compose.yml so Prometheus can resolve `ingester-api:8080`
+# or `localhost:8080` when services run on the host. The shared network
+# also lets the OTel collector be reached at `otel-collector:4317`
+# from inside the compose network and `localhost:4317` from host
+# processes.
+#
+# Override host ports with the *_HOST_PORT env vars below when they
+# clash with other local services.
+
+name: polaris
+
+services:
+  prometheus:
+    # Pull-based metrics store. Scrapes the ingester `/metrics` endpoint
+    # (port 8080 by default), the analytics-projector `/metrics`
+    # endpoint (port 8081), the Redpanda admin API, and itself. Short
+    # local retention (15d) keeps the on-disk footprint small for dev.
+    #
+    # The image is pinned to a recent stable to keep `up -d` deterministic
+    # across developer machines.
+    image: prom/prometheus:v3.0.1
+    container_name: polaris-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      # Allow OTel remote-write into Prometheus from the collector.
+      - --web.enable-remote-write-receiver
+    ports:
+      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - polaris
+
+  grafana:
+    # Local-only Grafana with auto-provisioned datasources and a
+    # dashboards provider pointed at infra/grafana/dashboards/. P10-003
+    # drops JSON dashboard files into that directory.
+    #
+    # Default admin/admin credentials are local-only. Production runs
+    # Grafana behind an SSO frontproxy with no local admin user; see
+    # docs/architecture/08-observability-and-operations.md.
+    image: grafana/grafana:11.4.0
+    container_name: polaris-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Disable anonymous access — local-only, but no reason to leave it open.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Quieter logs locally; raise to debug when investigating provisioning.
+      GF_LOG_LEVEL: ${GRAFANA_LOG_LEVEL:-info}
+      # Make the welcome screen point at the dashboards we ship.
+      GF_USERS_DEFAULT_THEME: dark
+      # Prevent Grafana from phoning home and reporting analytics.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q '\"database\": \"ok\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    networks:
+      - polaris
+
+  loki:
+    # Single-binary Loki for local development. Short retention (7d) and
+    # filesystem storage are intentional — local Loki is for tailing,
+    # not archival. Production Loki runs the distributed deployment with
+    # object storage; see
+    # docs/architecture/08-observability-and-operations.md.
+    image: grafana/loki:3.3.0
+    container_name: polaris-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "${LOKI_HOST_PORT:-3100}:3100"
+    volumes:
+      - ./infra/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    networks:
+      - polaris
+
+  otel-collector:
+    # OpenTelemetry Collector (contrib build for the lokiexporter +
+    # prometheusremotewrite exporters). Receives OTLP from Polaris
+    # services and fans out:
+    #
+    #   - metrics -> Prometheus via remote-write
+    #   - logs    -> Loki
+    #   - traces  -> reserved (commented placeholder pending Tempo/Jaeger)
+    #
+    # Polaris services already expose `/metrics` directly for Prometheus
+    # scrapes (see infra/prometheus/prometheus.yml). The collector path
+    # is for OTLP-only signals (traces) and for services that prefer
+    # push-based metric forwarding.
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    container_name: polaris-otel-collector
+    restart: unless-stopped
+    command:
+      - --config=/etc/otel/collector.yaml
+    ports:
+      # OTLP gRPC — primary intake from Polaris SDKs and services.
+      - "${OTEL_GRPC_HOST_PORT:-4317}:4317"
+      # OTLP HTTP — fallback intake for environments without gRPC.
+      - "${OTEL_HTTP_HOST_PORT:-4318}:4318"
+      # Collector self-metrics — scraped by Prometheus.
+      - "${OTEL_METRICS_HOST_PORT:-8889}:8889"
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otel/collector.yaml:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    networks:
+      - polaris
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+
+networks:
+  polaris:
+    # The core compose file (docker-compose.yml) owns this network. The
+    # observability overlay reuses it so Prometheus can resolve
+    # `redpanda:9644`, `clickhouse:8123`, and any other in-network
+    # service. When running this overlay alone (without the core
+    # compose), the network is created by this file.
+    name: polaris
+    driver: bridge

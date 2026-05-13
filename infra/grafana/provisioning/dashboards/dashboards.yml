@@ -1,0 +1,29 @@
+# Grafana dashboards provider for the local observability stack.
+#
+# This file declares ONE file-backed provider that watches
+# /var/lib/grafana/dashboards (mounted from infra/grafana/dashboards/
+# by docker-compose.observability.yml). Drop JSON dashboard exports
+# into that directory and Grafana picks them up on the next sync
+# (10s by default).
+#
+# P10-001 ships a single placeholder dashboard so the provider has
+# something to load and doesn't log a 'no dashboards found' warning
+# on first start. P10-003 replaces that placeholder with the real
+# Polaris dashboards (Ingestion, Processors, Destinations, ClickHouse,
+# Redpanda).
+
+apiVersion: 1
+
+providers:
+  - name: polaris-dashboards
+    orgId: 1
+    folder: Polaris
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      # Path inside the container — matches the mount in
+      # docker-compose.observability.yml.
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

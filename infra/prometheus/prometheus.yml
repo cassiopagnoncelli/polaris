@@ -1,0 +1,112 @@
+# Polaris local Prometheus scrape config.
+#
+# Mounted read-only into the `prometheus` container by
+# docker-compose.observability.yml. Targets reflect the local layout:
+# Polaris services typically run on the host (so Prometheus reaches
+# them via `host.docker.internal` from inside the compose network);
+# Redpanda and ClickHouse run inside the compose network and are
+# reachable by service name.
+#
+# Metric ownership:
+#
+#   * `polaris_ingest_*`      — apps/ingester-api/src/metrics/registry.ts
+#                               surfaced over /metrics. P10-002 wires the
+#                               Prometheus text-format exposition.
+#   * `polaris_processor_*`   — packages/shared-processor/src/metrics.ts
+#                               surfaced over the per-processor /metrics
+#                               endpoint (analytics-projector :8081 today).
+#   * `polaris_destination_*` — reserved for P9/P10-002 consumer metrics.
+#
+# See:
+#   docs/architecture/08-observability-and-operations.md
+#   apps/ingester-api/src/metrics/registry.ts
+#   packages/shared-processor/src/metrics.ts
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  # `cluster` is a fixed label on every series so a future federation
+  # step has a coherent identifier. Local dev uses `polaris-local`;
+  # staging and production override via Prometheus instance config.
+  external_labels:
+    cluster: polaris-local
+
+# Alerting rules live with P10-005 (Alerts and Runbooks). When that
+# task lands it drops files into infra/prometheus/rules/*.yml and adds
+# a `rule_files:` entry here.
+rule_files: []
+
+scrape_configs:
+  # ---------------------------------------------------------------
+  # Prometheus itself — useful for "is my Prometheus alive?" panels
+  # and a sanity scrape target during initial bring-up.
+  # ---------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          polaris_component: observability
+
+  # ---------------------------------------------------------------
+  # Ingester API — `apps/ingester-api`. Exposes /metrics with the
+  # `polaris_ingest_*` counters defined in
+  # apps/ingester-api/src/metrics/registry.ts.
+  #
+  # `host.docker.internal` resolves to the host machine from inside
+  # the compose network on Docker Desktop and on Linux 26+. When
+  # running the ingester INSIDE the compose network instead, replace
+  # this target with `ingester-api:8080`.
+  # ---------------------------------------------------------------
+  - job_name: polaris-ingester
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          polaris_service: ingester-api
+          polaris_component: ingester
+
+  # ---------------------------------------------------------------
+  # Analytics projector — `processors/analytics-projector/v1`.
+  # Exposes /metrics with the `polaris_processor_*` counters and
+  # gauges defined in packages/shared-processor/src/metrics.ts.
+  # ---------------------------------------------------------------
+  - job_name: polaris-analytics-projector
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+        labels:
+          polaris_service: analytics-projector
+          polaris_processor_name: analytics-projector
+          polaris_processor_version: v1
+          polaris_component: processor
+
+  # ---------------------------------------------------------------
+  # Redpanda admin API. Redpanda exposes Prometheus-shape metrics on
+  # the admin listener at `/public_metrics` (and the legacy `/metrics`
+  # which is louder). `polaris-redpanda` is the container name from
+  # docker-compose.yml; the compose network resolves it.
+  #
+  # See:
+  #   https://docs.redpanda.com/current/manage/monitoring/
+  # ---------------------------------------------------------------
+  - job_name: polaris-redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ["polaris-redpanda:9644"]
+        labels:
+          polaris_service: redpanda
+          polaris_component: streaming
+
+  # ---------------------------------------------------------------
+  # OpenTelemetry Collector self-metrics. The collector exposes its
+  # own Prometheus endpoint on :8889 (configured in
+  # infra/otel/collector.yaml). Catches collector health issues
+  # before services notice them as silent metric drops.
+  # ---------------------------------------------------------------
+  - job_name: polaris-otel-collector
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          polaris_service: otel-collector
+          polaris_component: observability

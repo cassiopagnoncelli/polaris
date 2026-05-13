@@ -1,0 +1,128 @@
+# Polaris local OpenTelemetry Collector configuration.
+#
+# Mounted into the `otel-collector` container by
+# docker-compose.observability.yml. The collector accepts OTLP from
+# Polaris services and fans signals out:
+#
+#   metrics  -> Prometheus via remote-write (Prometheus is started
+#               with --web.enable-remote-write-receiver).
+#   logs     -> Loki via the lokiexporter (contrib build).
+#   traces   -> reserved; commented placeholder lands with a future
+#               Tempo/Jaeger task.
+#
+# Polaris services also expose `/metrics` directly for pull-based
+# Prometheus scrapes. This collector path is for:
+#
+#   - traces from SDKs and services (OTLP-only signal),
+#   - structured logs forwarded as OTLP from services that prefer
+#     push over file tailing,
+#   - the future SDK telemetry pipeline (web/node SDKs sending
+#     internal SDK diagnostics).
+#
+# See:
+#   docs/architecture/08-observability-and-operations.md
+#   docs/development/observability.md
+
+receivers:
+  # OTLP intake. Polaris services point OTEL_EXPORTER_OTLP_ENDPOINT at
+  # http://localhost:4317 (gRPC) or http://localhost:4318 (HTTP).
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # memory_limiter must be the first processor in every pipeline so a
+  # collector under memory pressure rejects new data before it OOMs.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+  # batch reduces the number of outbound calls; the defaults are tuned
+  # for the contrib distribution.
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+  # Stamp every signal with a stable `cluster` resource attribute so
+  # the same label exists on Prometheus series and Loki streams.
+  resource:
+    attributes:
+      - key: cluster
+        value: polaris-local
+        action: upsert
+
+exporters:
+  # Logging exporter for local debugging. `verbosity: normal` keeps
+  # the output bounded; set `verbosity: detailed` when diagnosing
+  # collector-level drops.
+  debug:
+    verbosity: normal
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # Push metrics into Prometheus via remote-write. The Prometheus
+  # service in docker-compose.observability.yml is started with
+  # --web.enable-remote-write-receiver, which accepts writes at
+  # /api/v1/write. The `external_labels` in prometheus.yml apply
+  # only to scraped series; the resource processor above ensures the
+  # remote-write path carries the same `cluster` label.
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+    # The contrib build groups series by resource attributes; turn
+    # this on so `cluster`/`service.name` show up as labels.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Push logs to Loki. The lokiexporter translates OTLP log records
+  # into Loki's stream model; labels are derived from resource
+  # attributes (`service.name`, `cluster`, ...).
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: false
+      job: true
+
+  # Traces exporter is intentionally absent in v1. When a Tempo or
+  # Jaeger task lands, add an OTLP exporter pointing at it and wire it
+  # into a `traces` pipeline. The receiver and processors above are
+  # already trace-capable; only the destination is missing.
+  #
+  # Example for the future task:
+  # otlp/tempo:
+  #   endpoint: http://tempo:4317
+  #   tls:
+  #     insecure: true
+
+service:
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8889
+
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheusremotewrite, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [loki, debug]
+
+    # Trace pipeline is staged but lands with the Tempo/Jaeger task.
+    # Defining it now without an exporter would fail collector
+    # validation, so it is intentionally commented out.
+    #
+    # traces:
+    #   receivers: [otlp]
+    #   processors: [memory_limiter, resource, batch]
+    #   exporters: [otlp/tempo, debug]
