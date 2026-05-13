@@ -1,4 +1,7 @@
 import { checkoutStartedV1PropertiesSchema } from "../events/checkout/started.v1.js";
+import { identityLinkedV1PropertiesSchema } from "../events/identity/linked.v1.js";
+import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.js";
+import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
 import type { SchemaBinding } from "./types.js";
@@ -31,5 +34,20 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "checkout.started",
     schema_version: 1,
     propertiesSchema: checkoutStartedV1PropertiesSchema,
+  },
+  {
+    event: "identity.linked",
+    schema_version: 1,
+    propertiesSchema: identityLinkedV1PropertiesSchema,
+  },
+  {
+    event: "identity.merged",
+    schema_version: 1,
+    propertiesSchema: identityMergedV1PropertiesSchema,
+  },
+  {
+    event: "identity.rotated",
+    schema_version: 1,
+    propertiesSchema: identityRotatedV1PropertiesSchema,
   },
 ];

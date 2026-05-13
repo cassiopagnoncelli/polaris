@@ -1,0 +1,21 @@
+# Catalog entry: identity.merged v1 (ACTIVE)
+#
+# Emitted by `processors/identity-resolver/v1/` when an authoritative event
+# causes two previously-separate canonical identities to collapse onto one.
+# Example: `anonymous_id:anon_X` was previously linked to `customer_id:cus_A`;
+# the resolver now sees the same `anon_X` alongside `customer_id:cus_B` in
+# the same event.
+#
+# v1 only records the fact of the merge — re-attribution of historical
+# events is deferred to later identity work.
+name: identity.merged
+schema_version: 1
+domain: identity
+owner: platform-identity
+description: >-
+  Records that two previously-separate canonical identity bindings collapsed
+  onto a single identifier due to an authoritative overlap observation.
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/identity/merged.v1"
+schema_export: identityMergedV1PropertiesSchema

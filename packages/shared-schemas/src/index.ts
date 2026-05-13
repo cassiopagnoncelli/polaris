@@ -16,6 +16,21 @@ export {
   checkoutStartedV1PropertiesSchema,
   type CheckoutStartedV1Properties,
 } from "./events/checkout/started.v1.js";
+export {
+  identityIdentifierSchema,
+  identityLinkConfidenceSchema,
+  identityLinkedV1PropertiesSchema,
+  type IdentityLinkConfidence,
+  type IdentityLinkedV1Properties,
+} from "./events/identity/linked.v1.js";
+export {
+  identityMergedV1PropertiesSchema,
+  type IdentityMergedV1Properties,
+} from "./events/identity/merged.v1.js";
+export {
+  identityRotatedV1PropertiesSchema,
+  type IdentityRotatedV1Properties,
+} from "./events/identity/rotated.v1.js";
 
 // Catalog loader / validator surface (file-backed; intended for the
 // ingester process, not SDK distributions).

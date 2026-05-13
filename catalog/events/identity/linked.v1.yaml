@@ -1,0 +1,22 @@
+# Catalog entry: identity.linked v1 (ACTIVE)
+#
+# Emitted by `processors/identity-resolver/v1/` whenever the resolver records
+# a new authoritative link between two identifiers (the first time a
+# `<left, right>` pair is observed with `confidence = authoritative`).
+#
+# v1 of the resolver only recognizes the explicit-overlap rule from
+# `docs/architecture/05-processors-and-replay.md` § "Identity Resolution":
+# a single event carrying both `anonymous_id` and `customer_id` (or any other
+# documented strong identifier pair) is treated as an authoritative link.
+name: identity.linked
+schema_version: 1
+domain: identity
+owner: platform-identity
+description: >-
+  Records an authoritative link between two canonical identifiers. v1 emits
+  this event for every new (left, right) pair observed via explicit overlap.
+  Companion table: `identity_links` (PostgreSQL).
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/identity/linked.v1"
+schema_export: identityLinkedV1PropertiesSchema

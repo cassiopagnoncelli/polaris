@@ -34,6 +34,8 @@ export type {
   DestinationStatus,
   DestinationsTable,
   Environment,
+  IdentityLinkConfidence,
+  IdentityLinksTable,
   ProcessorActivationState,
   ProcessorActivationsTable,
   ProcessorRunsTable,

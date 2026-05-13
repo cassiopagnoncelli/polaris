@@ -1,0 +1,21 @@
+# Catalog entry: identity.rotated v1 (ACTIVE)
+#
+# Emitted by `processors/identity-resolver/v1/` when a rotating identifier
+# (typically `anonymous_id`) rolls under a stable strong identifier
+# (typically `customer_id`). The canonical trigger is the Web SDK `reset()`
+# flow described in `docs/architecture/10-sdk-standards.md`.
+#
+# v1 only records the fact of the rotation — re-attribution of historical
+# events under the new anonymous identifier is deferred to later identity work.
+name: identity.rotated
+schema_version: 1
+domain: identity
+owner: platform-identity
+description: >-
+  Records that a rotating identifier (e.g. anonymous_id) rolled under an
+  existing strong identifier (e.g. customer_id). Typically follows an SDK
+  reset().
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/identity/rotated.v1"
+schema_export: identityRotatedV1PropertiesSchema

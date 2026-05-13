@@ -215,6 +215,34 @@ export function buildTestCatalog(): EventCatalog {
         description: "active v1",
         lifecycle: "active",
       },
+      // Identity events (P8-002) are emitted by the identity-resolver processor,
+      // not by SDKs, but their bindings are registered in defaultSchemaBindings,
+      // so every binding needs a matching catalog entry for buildCatalog to
+      // pass strict 1:1 validation.
+      {
+        name: "identity.linked",
+        schema_version: 1,
+        domain: "identity",
+        owner: "platform",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      {
+        name: "identity.merged",
+        schema_version: 1,
+        domain: "identity",
+        owner: "platform",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      {
+        name: "identity.rotated",
+        schema_version: 1,
+        domain: "identity",
+        owner: "platform",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
     ],
     defaultSchemaBindings,
   );

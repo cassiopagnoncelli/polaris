@@ -74,7 +74,13 @@ describe("EventCatalog (built from YAML + bindings)", () => {
   });
 
   it("listEventNames is unique and sorted", () => {
-    expect(catalog.listEventNames()).toEqual(["checkout.started", "page.viewed"]);
+    expect(catalog.listEventNames()).toEqual([
+      "checkout.started",
+      "identity.linked",
+      "identity.merged",
+      "identity.rotated",
+      "page.viewed",
+    ]);
   });
 
   it("propertiesSchema is bound on each entry", () => {

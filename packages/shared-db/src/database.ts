@@ -377,6 +377,97 @@ export interface ProcessorRunsTable {
   error_summary: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
+/**
+ * Closed set of `identity_links.confidence` values. Mirrors the
+ * `identity_links_confidence_allowed` CHECK constraint in
+ * `db/migrations/20260512000010_create_identity_links.sql`.
+ *
+ * v1 of `processors/identity-resolver/v1/` only emits `authoritative` from
+ * the explicit-overlap rule. `candidate` is reserved for future heuristic
+ * processors; the default identity-resolver view filters on
+ * `confidence = 'authoritative'` so candidate rows never enter the canonical
+ * graph.
+ */
+export type IdentityLinkConfidence = "authoritative" | "candidate";
+
+/**
+ * `identity_links` table.
+ *
+ * Canonical identity graph storage. Each row is one **directional pair**
+ * between two identifiers expressed in `<kind>:<value>` form (e.g.
+ * `anonymous_id:anon_abc` and `customer_id:cus_123`). The shape is
+ * intentionally extensible: `evidence_type` is open-vocabulary text and
+ * `evidence` is `jsonb`, so new heuristic rules can be introduced by
+ * inserting rows with a new `evidence_type` value plus code that interprets
+ * it — no migration required.
+ *
+ * Schema reference:
+ *   db/migrations/20260512000010_create_identity_links.sql
+ *
+ * Task reference:
+ *   docs/implementation/tasks/P8-002-identity-resolver-v1.md
+ */
+export interface IdentityLinksTable {
+  /** UUIDv7 of the link row. Application-generated. */
+  link_id: string;
+  /** Project scope. References `projects(project_id)`. */
+  project_id: string;
+  /** Environment scope. Closed set: development | staging | production. */
+  environment: string;
+  /**
+   * Left identifier in `<kind>:<value>` form. Convention: the
+   * alphabetically-smaller `kind` is placed left.
+   */
+  left_identifier: string;
+  /** Right identifier in `<kind>:<value>` form. */
+  right_identifier: string;
+  /**
+   * Link-quality marker. v1 emits only `authoritative`; `candidate` is
+   * reserved for future heuristic processors. See {@link IdentityLinkConfidence}.
+   */
+  confidence: ColumnType<
+    IdentityLinkConfidence,
+    IdentityLinkConfidence | undefined,
+    IdentityLinkConfidence
+  >;
+  /**
+   * Open vocabulary identifying which rule produced the link
+   * (e.g. `explicit_overlap`, `session_proximity`). New values land without
+   * a schema migration.
+   */
+  evidence_type: string;
+  /**
+   * Heuristic-specific evidence payload. Shape is per-`evidence_type`; the
+   * processor code registry documents expected shapes. `jsonb` so existing
+   * rows survive future shape additions.
+   */
+  evidence: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  /** Human-readable rationale captured at insert time. */
+  reason: string;
+  /** Emitting processor name (matches the directory under `processors/`). */
+  processor_name: string;
+  /** Emitting processor version (matches the directory under `processors/<name>/`). */
+  processor_version: string;
+  /**
+   * `processor_runs.run_id` that recorded the link. NULL after the run row
+   * is deleted (FK is `ON DELETE SET NULL`) — the audit trail of the link
+   * itself stays intact.
+   */
+  run_id: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Insertion time, in UTC. Defaults to `now()` server-side. */
+  created_at: Generated<Date>;
+  /**
+   * Retirement marker. NULL while the link is active. Set when a heuristic
+   * promotion or operator correction supersedes the row — the row is
+   * preserved (no DELETE) for audit purposes.
+   */
+  superseded_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -388,6 +479,7 @@ export interface ProcessorRunsTable {
 export interface Database {
   api_keys: ApiKeyTable;
   destinations: DestinationsTable;
+  identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;
   processor_runs: ProcessorRunsTable;
   projects: ProjectsTable;
