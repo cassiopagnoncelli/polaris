@@ -1,0 +1,95 @@
+# Polaris processor manifest — sessionizer v1
+#
+# This manifest is the SEMANTIC definition for the sessionizer
+# processor, version 1. Per docs/architecture/05-processors-and-replay.md
+# ("Processor Versioning"), the contents of this file for a given
+# (name, version) pair are immutable. Any change that affects emitted
+# event meaning, fields, identity links, attribution outcomes, filtering
+# behavior, or output schema requires a NEW version directory (v2/) with
+# its own manifest.
+#
+# PostgreSQL stores the runtime activation state (enabled/disabled,
+# project/environment scope, consumer group, batch size, ...) — never
+# semantic transformation rules. See docs/architecture/05-processors-and-replay.md
+# "Processor Configuration".
+
+name: sessionizer
+version: v1
+owner: platform-data
+description: |
+  First sessionizer processor in Polaris. Consumes `raw.events` and
+  maintains an in-memory inactivity window per
+  `(project_id, environment, primary_identifier)` tuple.
+
+  Primary-identifier resolution: v1 picks the first available identifier
+  from the canonical envelope's `identity` block in preference order
+  customer_id > anonymous_id > session_id. Events with none of these are
+  dropped (the sessionizer cannot attribute them to a session window).
+
+  SDK behavior reference: the Web SDK rotates `session_id` after 30
+  minutes of inactivity per `docs/architecture/10-sdk-standards.md`.
+  The processor treats SDK `session_id` as a HINT only — its own
+  `session_id` (emitted in `session.started` / `session.ended` property
+  payloads) is deterministically derived from
+  `(primary_identifier_kind, primary_identifier_value, started_at)` so
+  reinterpretation during replay produces the same value.
+
+  Outputs:
+    - `session.started` — emitted the first time a key opens a window
+      (or after lazy expiration on the next event for that key).
+    - `session.ended`   — emitted when the next event for a key arrives
+      after `inactivity_seconds` of silence; `ended_at` is anchored to
+      the window boundary (`last_seen_at + inactivity_seconds`) so the
+      timeline is stable across replays.
+
+  Campaign-change handling: v1 does NOT rotate sessions on campaign or
+  click-id changes. Per `docs/architecture/10-sdk-standards.md`,
+  campaign attribution is captured in context, not used to rotate
+  sessions.
+
+  State store: in-memory. Crash-induced loss of session windows is
+  acceptable for v1 because the sessionizer is replayable from
+  `raw.events` and the inactivity window is short (30 minutes). A
+  Redis-backed v2 is deferred — see CHANGELOG.
+
+# Streaming mode: each input event maps to zero, one, or two emitted
+# session.* events (start; or end-then-start on lazy expiration).
+mode: streaming
+
+# Topic-family inputs/outputs. The shared-kafka topic-family resolver
+# turns these into concrete topic names per project isolation state at
+# runtime. Per-project activation lives in PostgreSQL (P6-005).
+inputs:
+  - family: raw.events
+    schema_versions: "*"   # the sessionizer does not gate on event schema version
+outputs:
+  - family: session.events
+    schema_versions: [1]
+
+# State stores this processor uses.
+state_stores:
+  - memory:sessions
+
+# Operational defaults the runtime helpers fall back to when no
+# PostgreSQL activation row overrides them. Non-semantic per the
+# architecture doc ("Processor Configuration") EXCEPT for
+# `session.inactivity_seconds`, which IS semantic: changing it would
+# alter emitted `session.started` / `session.ended` events. Per the
+# architecture rule "If changing a setting can change emitted event
+# meaning, the setting is semantic", the inactivity window MUST live
+# in the manifest, not in env. A bump requires v2.
+defaults:
+  consumer_group: polaris-sessionizer-v1
+  partitions_consumed_concurrently: 1
+  # SEMANTIC: 30 minutes per docs/architecture/10-sdk-standards.md and
+  # the Web SDK's session rotation rule. v1 emits session.ended for any
+  # key with last_seen_at + 1800s < occurred_at on the next observed
+  # event. Changing this value requires a new processor version.
+  session_inactivity_seconds: 1800
+
+# Replay metadata. The sessionizer is replayable from raw.events; the
+# deterministic session_id derivation guarantees the same output for
+# the same input slice.
+replay:
+  supported: true
+  restrictions: []

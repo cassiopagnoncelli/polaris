@@ -1,0 +1,33 @@
+# Catalog entry: session.started v1 (ACTIVE)
+#
+# Emitted by `processors/sessionizer/v1/` the first time the sessionizer
+# observes a `raw.events` envelope for a `(project_id, environment,
+# primary_identifier)` key whose prior session has expired (or never
+# existed). Subsequent events for the same key inside the inactivity
+# window do NOT re-emit `session.started` — they only update the
+# in-memory window. The companion `session.ended` event is emitted when
+# the window expires.
+#
+# v1 picks a primary identifier from the canonical envelope's `identity`
+# block, in preference order:
+#   1. customer_id   — stable across rotations
+#   2. anonymous_id  — SDK-managed; rotates on reset()
+#   3. session_id    — SDK hint; rotates on its own clock
+#
+# The SDK's `session_id` is a HINT, not authoritative — per the task's
+# implementation notes ("Processor may use SDK `session_id` as a hint,
+# not as immutable truth"). Reinterpretation during replay is possible
+# because the sessionizer derives session_id deterministically from
+# `(primary_identifier, session_started_at_iso)`.
+name: session.started
+schema_version: 1
+domain: session
+owner: platform-data
+description: >-
+  Records that a new session window has opened for a
+  `(project_id, environment, primary_identifier)` tuple. The session_id
+  is deterministically derived so replays produce the same value.
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/session/started.v1"
+schema_export: sessionStartedV1PropertiesSchema

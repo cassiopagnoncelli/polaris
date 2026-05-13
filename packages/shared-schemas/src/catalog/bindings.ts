@@ -4,6 +4,8 @@ import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.j
 import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
+import { sessionEndedV1PropertiesSchema } from "../events/session/ended.v1.js";
+import { sessionStartedV1PropertiesSchema } from "../events/session/started.v1.js";
 import type { SchemaBinding } from "./types.js";
 
 /**
@@ -49,5 +51,15 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "identity.rotated",
     schema_version: 1,
     propertiesSchema: identityRotatedV1PropertiesSchema,
+  },
+  {
+    event: "session.started",
+    schema_version: 1,
+    propertiesSchema: sessionStartedV1PropertiesSchema,
+  },
+  {
+    event: "session.ended",
+    schema_version: 1,
+    propertiesSchema: sessionEndedV1PropertiesSchema,
   },
 ];

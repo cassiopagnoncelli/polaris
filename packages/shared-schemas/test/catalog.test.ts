@@ -80,6 +80,8 @@ describe("EventCatalog (built from YAML + bindings)", () => {
       "identity.merged",
       "identity.rotated",
       "page.viewed",
+      "session.ended",
+      "session.started",
     ]);
   });
 

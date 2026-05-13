@@ -1,0 +1,29 @@
+# Catalog entry: session.ended v1 (ACTIVE)
+#
+# Emitted by `processors/sessionizer/v1/` when a session window expires
+# without further activity. The window is the manifest's
+# `session.inactivity_seconds` value (default 1800 seconds / 30 minutes
+# per `docs/architecture/10-sdk-standards.md`).
+#
+# v1 detects expiration lazily: when a new `raw.events` envelope arrives
+# for a `(project_id, environment, primary_identifier)` key whose
+# current session's `last_seen_at` is older than the inactivity window,
+# the sessionizer emits `session.ended` for the prior session AND
+# `session.started` for the new one. There is no background timer in
+# v1 — sessions garbage-collect on the next observed event for the same
+# key.
+#
+# Because expiration is lazy, the `occurred_at` of `session.ended`
+# reflects the WINDOW BOUNDARY (last_seen_at + inactivity_seconds) so
+# downstream consumers see a stable end-of-session timeline.
+name: session.ended
+schema_version: 1
+domain: session
+owner: platform-data
+description: >-
+  Records that a session window has closed by inactivity. v1 detects
+  expiration lazily on the next observed event for the same key.
+lifecycle: active
+since: "2026-05-12"
+schema_module: "@polaris/shared-schemas/events/session/ended.v1"
+schema_export: sessionEndedV1PropertiesSchema
