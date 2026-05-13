@@ -1,6 +1,6 @@
 # P8-003: Sessionizer v1
 
-Status: Review
+Status: Done (merged in `12a6670`)
 
 ## Goal
 

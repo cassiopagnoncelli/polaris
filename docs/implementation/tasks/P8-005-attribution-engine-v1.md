@@ -1,6 +1,6 @@
 # P8-005: Attribution Engine v1
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # P8-004: GeoIP Enricher v1
 
-Status: Ready
+Status: Done (merged in `d8bf80d`)
 
 ## Goal
 

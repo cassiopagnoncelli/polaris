@@ -14,9 +14,7 @@ This board is the coordination surface for implementation work.
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md)
-- [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md)
-- [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md)
-- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md)
+- [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
 
 ## Backlog
@@ -34,7 +32,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P8 Production Processors
 
-- [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P8-006 Processor Manifests and Golden Fixtures](./tasks/P8-006-processor-manifests-fixtures.md)
 
 ### P9 Destination Consumers
@@ -61,6 +58,8 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
 - [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
+
+(P11-005 Backup and Retention Runbooks moved to Done.)
 
 (P11-002 CI Workflow moved to Done.)
 
@@ -125,6 +124,10 @@ No cards awaiting review.
 - [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md) — merged in `e9c7651`
 - [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md) — merged in `ef21797`
 
+### P11 Deployment, Security, and Data Lifecycle (continued)
+
+- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
+
 ### P6 Control-Plane CLI
 
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`
@@ -139,6 +142,8 @@ No cards awaiting review.
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
 - [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md) — merged in `a9dd1cf`
+- [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md) — merged in `12a6670`
+- [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md) — merged in `d8bf80d`
 
 ### P9 Destination Consumers
 
