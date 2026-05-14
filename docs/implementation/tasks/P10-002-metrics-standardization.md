@@ -1,6 +1,6 @@
 # P10-002: Metrics Standardization
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

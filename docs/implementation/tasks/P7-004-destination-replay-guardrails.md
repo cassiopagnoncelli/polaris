@@ -1,6 +1,6 @@
 # P7-004: Destination Replay Guardrails
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

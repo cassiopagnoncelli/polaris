@@ -1,6 +1,6 @@
 # P7-002: Replay Planner Dry Run
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

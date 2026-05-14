@@ -1,6 +1,6 @@
 # P11-001: Production Dockerfiles
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

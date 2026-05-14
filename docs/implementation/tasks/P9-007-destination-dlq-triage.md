@@ -1,6 +1,6 @@
 # P9-007: Destination Delivery Records and DLQ Triage
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

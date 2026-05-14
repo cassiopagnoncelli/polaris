@@ -1,6 +1,6 @@
 # P9-002: Webhook Sink Consumer v1
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 
