@@ -149,7 +149,7 @@ export const destinationsCreateCommand: CommandDefinition = {
 export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateDestinationId;
   const openStore = hooks.openStore ?? defaultStore;
-  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const nowFn = hooks.now ?? (() => new Date());
   const actorLabelOverride = hooks.actorLabel;
 

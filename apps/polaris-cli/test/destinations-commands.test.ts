@@ -89,7 +89,9 @@ function captureOutput(): Capture {
 interface CapturedDestinationAudit {
   readonly action: string;
   readonly auditId: string;
+  readonly targetType: string;
   readonly targetId: string;
+  readonly actorSource: string;
   readonly actorLabel: string;
   readonly projectId: string;
   readonly environment: string;
@@ -133,7 +135,9 @@ class InMemoryDestinationStore {
         this.auditCalls.push({
           action: "destinations.create",
           auditId: audit.auditId,
+          targetType: "destination",
           targetId: input.destination_id,
+          actorSource: audit.actorSource,
           actorLabel: audit.actorLabel,
           projectId: audit.projectId,
           environment: audit.environment,
@@ -190,7 +194,9 @@ class InMemoryDestinationStore {
         this.auditCalls.push({
           action: "destinations.enable",
           auditId: audit.auditId,
+          targetType: "destination",
           targetId: id,
+          actorSource: audit.actorSource,
           actorLabel: audit.actorLabel,
           projectId: audit.projectId,
           environment: audit.environment,
@@ -222,7 +228,9 @@ class InMemoryDestinationStore {
         this.auditCalls.push({
           action: "destinations.disable",
           auditId: audit.auditId,
+          targetType: "destination",
           targetId: id,
+          actorSource: audit.actorSource,
           actorLabel: audit.actorLabel,
           projectId: audit.projectId,
           environment: audit.environment,
@@ -260,7 +268,9 @@ class InMemoryDestinationStore {
         this.auditCalls.push({
           action: "destinations.update-ops",
           auditId: audit.auditId,
+          targetType: "destination",
           targetId: id,
+          actorSource: audit.actorSource,
           actorLabel: audit.actorLabel,
           projectId: audit.projectId,
           environment: audit.environment,
@@ -449,7 +459,9 @@ describe("destinations create runner", () => {
     if (audit === undefined) throw new Error("expected one audit call");
     expect(audit.action).toBe("destinations.create");
     expect(audit.auditId).toBe("audit-create-1");
+    expect(audit.targetType).toBe("destination");
     expect(audit.targetId).toBe("polaris_dst_fixed-id-1");
+    expect(audit.actorSource).toBe("cli");
     expect(audit.actorLabel).toBe("cli");
     expect(audit.projectId).toBe("storefront");
     expect(audit.environment).toBe("production");
@@ -514,6 +526,24 @@ describe("destinations create runner", () => {
       retry_policy: "aggressive",
       dead_letter_threshold: 12,
     });
+  });
+
+  it("defaults the audit_id generator to a `polaris_aud_<uuidv7>` value", async () => {
+    // Pin the canonical shape so a future refactor can't silently regress
+    // to bare UUIDv7. The test does NOT inject `generateAuditId`, so the
+    // runner uses its built-in default.
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_audit-prefix",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(CREATE_BASE_ARGS, makeContext(capture.streams));
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.auditId).toMatch(
+      /^polaris_aud_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
   });
 
   it("emits the same shape under --output json with the resolved secret_provider", async () => {
@@ -729,7 +759,9 @@ describe("destinations enable runner", () => {
     // P6-006: audit row persisted (no more stderr TODO marker).
     expect(store.auditCalls).toHaveLength(1);
     expect(store.auditCalls[0]?.action).toBe("destinations.enable");
+    expect(store.auditCalls[0]?.targetType).toBe("destination");
     expect(store.auditCalls[0]?.targetId).toBe("polaris_dst_paused");
+    expect(store.auditCalls[0]?.actorSource).toBe("cli");
     expect(store.auditCalls[0]?.actorLabel).toBe("cli");
   });
 
@@ -781,6 +813,10 @@ describe("destinations disable runner", () => {
     // P6-006: audit row persisted with the reason.
     expect(store.auditCalls).toHaveLength(1);
     expect(store.auditCalls[0]?.action).toBe("destinations.disable");
+    expect(store.auditCalls[0]?.targetType).toBe("destination");
+    expect(store.auditCalls[0]?.targetId).toBe("polaris_dst_to-disable");
+    expect(store.auditCalls[0]?.actorSource).toBe("cli");
+    expect(store.auditCalls[0]?.actorLabel).toBe("cli");
     expect(store.auditCalls[0]?.reason).toBe("incident response");
   });
 
@@ -888,7 +924,9 @@ describe("destinations update-ops runner", () => {
     if (audit === undefined) throw new Error("expected one audit call");
     expect(audit.action).toBe("destinations.update-ops");
     expect(audit.auditId).toBe("audit-update-1");
+    expect(audit.targetType).toBe("destination");
     expect(audit.targetId).toBe("polaris_dst_to-tune");
+    expect(audit.actorSource).toBe("cli");
     expect(audit.actorLabel).toBe("cli");
     expect(audit.projectId).toBe("storefront");
     expect(audit.environment).toBe("production");
