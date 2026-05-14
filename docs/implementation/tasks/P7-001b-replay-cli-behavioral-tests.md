@@ -1,6 +1,6 @@
 # P7-001b: Replay CLI Behavioral Tests + Store Surface Cleanup
 
-Status: Ready
+Status: Done (merged in `a7d7e1e`)
 
 ## Goal
 

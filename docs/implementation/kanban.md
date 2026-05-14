@@ -12,14 +12,6 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-Salvage follow-ups (highest priority — convert partial v1 deliveries into verified production-ready):
-
-- [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md)
-- [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md)
-- [P11-006b Security Hardening Completion (wire-up + rate limits + HSTS + body limit)](./tasks/P11-006b-security-hardening-completion.md)
-
-New work unblocked by the salvage:
-
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
@@ -28,6 +20,7 @@ New work unblocked by the salvage:
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
+- [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) (split from P11-006b)
 
 ## Backlog
 
@@ -165,7 +158,13 @@ No blocked cards.
 
 ### P11 Deployment, Security, and Data Lifecycle (continued)
 
-- [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial; rate-limit + HSTS + body-limit + app.ts wiring are the follow-ups)
+- [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
+- [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
+
+### Salvage Behavioral Test Follow-ups
+
+- [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
+- [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
 
 ### P11 Deployment, Security, and Data Lifecycle
 

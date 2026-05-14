@@ -1,6 +1,6 @@
 # P9-001b: Destination Consumer Runtime — Behavioral Test Matrix
 
-Status: Ready
+Status: Done (merged in `f6318c3`)
 
 ## Goal
 
