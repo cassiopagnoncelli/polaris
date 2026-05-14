@@ -149,7 +149,7 @@ No blocked cards.
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
 - [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — merged in `34c4fe8` (salvaged from stalled worker; behavioral coverage closed by P9-001b)
 - [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
-- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md) — merged in `PENDING`
+- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md) — merged in `b1cf534`
 
 ### P10 Observability and Operations
 
