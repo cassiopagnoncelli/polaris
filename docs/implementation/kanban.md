@@ -12,7 +12,6 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
 
 ## Backlog
@@ -130,6 +129,7 @@ No blocked cards.
 - [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md) — merged in `f670d28` (salvaged from stalled worker; behavioral coverage closed by P7-001b)
 - [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md) — merged in `f017da8`
+- [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md) — merged in `e0b1e3d` (planner-extension follow-up deferred to P11-008 or later)
 
 ### P8 Production Processors
 
