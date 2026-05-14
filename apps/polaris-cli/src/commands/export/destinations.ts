@@ -128,6 +128,11 @@ function emit(ctx: CommandContext, args: ValidatedArgs, rows: readonly Destinati
       retry_policy: row.retry_policy,
       dead_letter_threshold: row.dead_letter_threshold,
       disabled_reason: row.disabled_reason,
+      // P7-004: replay-opt-in snapshot. Reference + flag only — no
+      // resolved secret values appear in the export.
+      replay_opt_in: row.replay_opt_in,
+      replay_opt_in_reason: row.replay_opt_in_reason,
+      replay_opt_in_at: row.replay_opt_in_at,
       created_at: row.created_at,
       updated_at: row.updated_at,
     })),

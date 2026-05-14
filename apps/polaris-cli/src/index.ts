@@ -102,7 +102,9 @@ export {
 export {
   destinationsCreateCommand,
   destinationsDisableCommand,
+  destinationsDisableReplayCommand,
   destinationsEnableCommand,
+  destinationsEnableReplayCommand,
   destinationsListCommand,
   destinationsShowCommand,
   destinationsUpdateOpsCommand,
@@ -163,10 +165,23 @@ export {
   type DestinationsDisableStore,
 } from "./commands/destinations/disable.js";
 export {
+  buildDestinationsDisableReplayRunner,
+  type DestinationsDisableReplayAuditPayload,
+  type DestinationsDisableReplayHooks,
+  type DestinationsDisableReplayStore,
+} from "./commands/destinations/disable-replay.js";
+export {
   buildDestinationsEnableRunner,
   type DestinationsEnableHooks,
   type DestinationsEnableStore,
 } from "./commands/destinations/enable.js";
+export {
+  buildDestinationsEnableReplayRunner,
+  type DestinationReplayAuditSnapshot,
+  type DestinationsEnableReplayAuditPayload,
+  type DestinationsEnableReplayHooks,
+  type DestinationsEnableReplayStore,
+} from "./commands/destinations/enable-replay.js";
 export {
   buildDestinationsListRunner,
   type DestinationsListHooks,
@@ -386,9 +401,11 @@ export {
   type ConnectDbOptions,
   type DbHandle,
   disableDestination,
+  disableDestinationReplay,
   disableProcessorActivation,
   type DisableProcessorActivationInput,
   enableDestination,
+  enableDestinationReplay,
   enableProcessorActivation,
   type EnableProcessorActivationInput,
   type DestinationRow,

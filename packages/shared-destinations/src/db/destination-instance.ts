@@ -51,6 +51,14 @@ import type { Kysely } from "kysely";
  * runtime hands it to `@polaris/shared-secrets`'s `SecretResolver`; the
  * resolved plaintext lives in memory only for the duration of one
  * delivery attempt.
+ *
+ * `replay_opt_in` (P7-004) is the per-instance gate the runtime consults
+ * before delivering replay traffic. It DEFAULTS to `false` for every row;
+ * operators flip it on via `polaris destinations enable-replay <id>
+ * --reason <text>`. The runtime's per-message check in
+ * `replay-suppression.ts` consults this flag alongside the host-level
+ * `allowReplay` opt-in — both must be true for a replay message to
+ * advance past the suppression gate.
  */
 export interface DestinationInstance {
   readonly destination_id: string;
@@ -65,6 +73,13 @@ export interface DestinationInstance {
   readonly max_rps: number;
   readonly retry_policy: DestinationRetryPolicy;
   readonly dead_letter_threshold: number;
+  /**
+   * Per-instance replay opt-in. P7-004 ships the column; the runtime
+   * defaults to suppressing replay traffic when the column is `false`
+   * (which is also the schema default for every newly-created
+   * destination).
+   */
+  readonly replay_opt_in: boolean;
 }
 
 /**
@@ -165,6 +180,7 @@ export function createKyselyDestinationInstanceReader(
         "max_rps",
         "retry_policy",
         "dead_letter_threshold",
+        "replay_opt_in",
       ])
       .where("destination_id", "=", destination_id)
       .executeTakeFirst();
@@ -190,6 +206,7 @@ export function createKyselyDestinationInstanceReader(
         "max_rps",
         "retry_policy",
         "dead_letter_threshold",
+        "replay_opt_in",
       ])
       .where("vendor", "=", vendor)
       .where("environment", "=", environment)

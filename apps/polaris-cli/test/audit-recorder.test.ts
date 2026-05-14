@@ -98,6 +98,10 @@ function seedActiveDestination(): DestinationRow {
     retry_policy: "standard",
     dead_letter_threshold: 5,
     disabled_reason: null,
+    // P7-004: replay-opt-in trio. Defaults match a freshly-created destination.
+    replay_opt_in: false,
+    replay_opt_in_reason: null,
+    replay_opt_in_at: null,
     created_at: "2026-05-10T00:00:00.000Z",
     updated_at: "2026-05-10T00:00:00.000Z",
   };

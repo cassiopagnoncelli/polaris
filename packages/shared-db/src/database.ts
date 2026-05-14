@@ -222,6 +222,37 @@ export interface DestinationsTable {
    * `enable` so the column always reflects the most recent disable.
    */
   disabled_reason: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * Per-instance replay opt-in (P7-004). DEFAULTS to `false`: every
+   * destination is opt-out-by-default per
+   * `docs/architecture/05-processors-and-replay.md` "Replay Control
+   * Plane" and `docs/architecture/06-destinations.md` "Delivery Model".
+   * Operators flip the column via `polaris destinations enable-replay
+   * <id> --reason <text>`, which writes an audit row in the same
+   * transaction. The runtime consults this column alongside the
+   * host-level `allowReplay` flag in
+   * `packages/shared-destinations/src/replay-suppression.ts`; replay
+   * traffic against an opted-out destination is suppressed with a
+   * structured log line and a `polaris_destination_replay_suppressed_total`
+   * metric increment.
+   */
+  replay_opt_in: ColumnType<boolean, boolean | undefined, boolean>;
+  /**
+   * Operator-supplied rationale for the most recent enable-replay /
+   * disable-replay transition. NULL until the first opt-in. The CHECK
+   * constraint `destinations_replay_opt_in_reason_when_enabled` enforces
+   * that an opted-in row always carries a non-null reason; the audit
+   * history in `audit_records` carries every transition.
+   */
+  replay_opt_in_reason: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * Wall-clock timestamp of the most recent enable-replay transition.
+   * NULL until the first opt-in. Disable-replay does NOT clear this
+   * column — operators may want to see the last time replay was active
+   * even after it has been turned off. The boolean is the authoritative
+   * gate; this column is informational.
+   */
+  replay_opt_in_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
   /** Issuance time, in UTC. */
   created_at: Generated<Date>;
   /** Last mutation time, in UTC. Stamped on every UPDATE. */

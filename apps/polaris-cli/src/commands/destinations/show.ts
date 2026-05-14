@@ -106,11 +106,18 @@ function renderHuman(row: DestinationRow): string {
     `max_rps               ${row.max_rps}`,
     `retry_policy          ${row.retry_policy}`,
     `dead_letter_threshold ${row.dead_letter_threshold}`,
+    `replay_opt_in         ${row.replay_opt_in}`,
     `created_at            ${row.created_at}`,
     `updated_at            ${row.updated_at}`,
   ];
   if (row.disabled_reason !== null) {
     lines.push(`disabled_reason       ${row.disabled_reason}`);
+  }
+  if (row.replay_opt_in_reason !== null) {
+    lines.push(`replay_opt_in_reason  ${row.replay_opt_in_reason}`);
+  }
+  if (row.replay_opt_in_at !== null) {
+    lines.push(`replay_opt_in_at      ${row.replay_opt_in_at}`);
   }
   return lines.join("\n");
 }

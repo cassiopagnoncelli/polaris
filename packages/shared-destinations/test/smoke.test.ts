@@ -86,9 +86,46 @@ describe("@polaris/shared-destinations public surface", () => {
     expect(ctx.is_replay).toBe(false);
   });
 
-  it("applyReplayPolicy refuses replays when the destination opts out", () => {
-    const decision = applyReplayPolicy({ is_replay: true, replay_job_id: "polaris_rpj_x" }, false);
+  it("applyReplayPolicy refuses replays when the host has not opted in", () => {
+    const decision = applyReplayPolicy({
+      context: { is_replay: true, replay_job_id: "polaris_rpj_x" },
+      allowHost: false,
+      allowInstance: false,
+    });
     expect(decision.kind).toBe("suppress");
+    if (decision.kind === "suppress") {
+      expect(decision.reason).toBe("replay_disabled_host");
+    }
+  });
+
+  it("applyReplayPolicy refuses replays when the destination has not opted in (P7-004)", () => {
+    const decision = applyReplayPolicy({
+      context: { is_replay: true, replay_job_id: "polaris_rpj_x" },
+      allowHost: true,
+      allowInstance: false,
+    });
+    expect(decision.kind).toBe("suppress");
+    if (decision.kind === "suppress") {
+      expect(decision.reason).toBe("replay_disabled_instance");
+    }
+  });
+
+  it("applyReplayPolicy delivers replays when both gates are open", () => {
+    const decision = applyReplayPolicy({
+      context: { is_replay: true, replay_job_id: "polaris_rpj_x" },
+      allowHost: true,
+      allowInstance: true,
+    });
+    expect(decision.kind).toBe("deliver");
+  });
+
+  it("applyReplayPolicy delivers non-replay traffic regardless of gate state", () => {
+    const decision = applyReplayPolicy({
+      context: { is_replay: false },
+      allowHost: false,
+      allowInstance: false,
+    });
+    expect(decision.kind).toBe("deliver");
   });
 
   it("truncateSummary clamps to VENDOR_RESPONSE_SUMMARY_MAX_LENGTH", () => {

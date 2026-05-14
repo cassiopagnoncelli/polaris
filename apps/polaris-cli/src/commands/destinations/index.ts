@@ -1,14 +1,16 @@
 /**
  * `polaris destinations` command group.
  *
- * Surfaces six commands:
+ * Surfaces eight commands:
  *
- *   - `polaris destinations list`                          mutates: false
- *   - `polaris destinations show <destination_id>`         mutates: false
- *   - `polaris destinations create ...`                    mutates: true
- *   - `polaris destinations enable <destination_id>`       mutates: true
- *   - `polaris destinations disable <destination_id> ...`  mutates: true
- *   - `polaris destinations update-ops <destination_id>`   mutates: true
+ *   - `polaris destinations list`                              mutates: false
+ *   - `polaris destinations show <destination_id>`             mutates: false
+ *   - `polaris destinations create ...`                        mutates: true
+ *   - `polaris destinations enable <destination_id>`           mutates: true
+ *   - `polaris destinations disable <destination_id> ...`      mutates: true
+ *   - `polaris destinations update-ops <destination_id>`       mutates: true
+ *   - `polaris destinations enable-replay <destination_id> ...`  mutates: true  (P7-004)
+ *   - `polaris destinations disable-replay <destination_id> ...` mutates: true  (P7-004)
  *
  * Central architectural rule baked into this group:
  *
@@ -21,19 +23,33 @@
  *
  * Audit hand-off:
  *
- *   Every mutating subcommand (create, enable, disable, update-ops) wraps
- *   its write + insertAuditRecord in one Kysely transaction. create stamps
- *   a default rationale on the audit row when `--reason` is omitted;
- *   update-ops requires `--reason` (matching disable).
+ *   Every mutating subcommand (create, enable, disable, update-ops,
+ *   enable-replay, disable-replay) wraps its write + insertAuditRecord in
+ *   one Kysely transaction. create stamps a default rationale on the
+ *   audit row when `--reason` is omitted; update-ops, disable,
+ *   enable-replay, and disable-replay require `--reason`.
+ *
+ * Replay-guardrail commands (P7-004):
+ *
+ *   `enable-replay` / `disable-replay` flip the per-instance
+ *   `replay_opt_in` column on the destination row. The destination
+ *   runtime consults this column on every replayed message; until an
+ *   operator flips it on, replay traffic against the destination is
+ *   suppressed. The defaults are safe: every destination is opt-out
+ *   until an operator explicitly enables replay.
  *
  * @see docs/architecture/06-destinations.md
+ * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/architecture/02-control-plane.md "Destinations"
  * @see docs/implementation/tasks/P6-004-destination-instance-cli.md
+ * @see docs/implementation/tasks/P7-004-destination-replay-guardrails.md
  */
 import type { CommandDefinition } from "../../command.js";
 import { destinationsCreateCommand } from "./create.js";
 import { destinationsDisableCommand } from "./disable.js";
+import { destinationsDisableReplayCommand } from "./disable-replay.js";
 import { destinationsEnableCommand } from "./enable.js";
+import { destinationsEnableReplayCommand } from "./enable-replay.js";
 import { destinationsListCommand } from "./list.js";
 import { destinationsShowCommand } from "./show.js";
 import { destinationsUpdateOpsCommand } from "./update-ops.js";
@@ -45,6 +61,8 @@ const CHILDREN: readonly CommandDefinition[] = [
   destinationsEnableCommand,
   destinationsDisableCommand,
   destinationsUpdateOpsCommand,
+  destinationsEnableReplayCommand,
+  destinationsDisableReplayCommand,
 ];
 
 export const destinationsCommand: CommandDefinition = {
@@ -68,7 +86,9 @@ export const destinationsCommand: CommandDefinition = {
 export {
   destinationsCreateCommand,
   destinationsDisableCommand,
+  destinationsDisableReplayCommand,
   destinationsEnableCommand,
+  destinationsEnableReplayCommand,
   destinationsListCommand,
   destinationsShowCommand,
   destinationsUpdateOpsCommand,

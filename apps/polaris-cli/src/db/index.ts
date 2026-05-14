@@ -26,7 +26,9 @@ export {
 export { type ConnectDbOptions, type DbHandle, connectDb } from "./connect.js";
 export {
   disableDestination,
+  disableDestinationReplay,
   enableDestination,
+  enableDestinationReplay,
   type DestinationRow,
   findDestinationById,
   insertDestination,

@@ -37,6 +37,12 @@ import type { Kysely } from "kysely";
 /**
  * Read-shape returned to the command layer. Plain JSON, no Date — timestamps
  * stamped as ISO strings so JSON output matches the human form.
+ *
+ * The replay-opt-in trio (P7-004) ships alongside the existing operational
+ * tuning columns. `replay_opt_in` is the authoritative gate the runtime
+ * consults; the `reason` + `at` columns are surfaced to operators on
+ * `polaris destinations show` so the most recent rationale is visible
+ * without consulting the full audit history.
  */
 export interface DestinationRow {
   readonly destination_id: string;
@@ -52,6 +58,9 @@ export interface DestinationRow {
   readonly retry_policy: DestinationRetryPolicy;
   readonly dead_letter_threshold: number;
   readonly disabled_reason: string | null;
+  readonly replay_opt_in: boolean;
+  readonly replay_opt_in_reason: string | null;
+  readonly replay_opt_in_at: string | null;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -230,6 +239,64 @@ export async function disableDestination(
 }
 
 /**
+ * Transition a destination's `replay_opt_in` column to `true` and stamp
+ * the operator-supplied reason + opt-in timestamp (P7-004).
+ *
+ * Returns whether a real transition happened: the UPDATE filters on
+ * `replay_opt_in = false` so a second invocation against an already
+ * opted-in row touches zero rows and the CLI surfaces "already opted in"
+ * idempotently. The CHECK constraint
+ * `destinations_replay_opt_in_reason_when_enabled` enforces that the
+ * reason is non-empty when the column is flipped on.
+ */
+export async function enableDestinationReplay(
+  db: Kysely<Database>,
+  destinationId: string,
+  reason: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("destinations")
+    .set({
+      replay_opt_in: true,
+      replay_opt_in_reason: reason,
+      replay_opt_in_at: now,
+      updated_at: now,
+    })
+    .where("destination_id", "=", destinationId)
+    .where("replay_opt_in", "=", false)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
+}
+
+/**
+ * Transition a destination's `replay_opt_in` column to `false` and stamp
+ * the operator-supplied reason (P7-004).
+ *
+ * The `replay_opt_in_at` column is intentionally NOT cleared: operators
+ * may want to see the most recent time replay was active even after
+ * it has been turned off. The boolean is the authoritative gate.
+ */
+export async function disableDestinationReplay(
+  db: Kysely<Database>,
+  destinationId: string,
+  reason: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("destinations")
+    .set({
+      replay_opt_in: false,
+      replay_opt_in_reason: reason,
+      updated_at: now,
+    })
+    .where("destination_id", "=", destinationId)
+    .where("replay_opt_in", "=", true)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
+}
+
+/**
  * Update operational tuning fields. Mapping semantics are intentionally
  * absent from the parameter shape; there is no path through this function
  * that can write event-to-vendor mapping data.
@@ -275,6 +342,9 @@ function toRow(row: {
   readonly retry_policy: DestinationRetryPolicy;
   readonly dead_letter_threshold: number;
   readonly disabled_reason: string | null;
+  readonly replay_opt_in: boolean;
+  readonly replay_opt_in_reason: string | null;
+  readonly replay_opt_in_at: Date | null;
   readonly created_at: Date;
   readonly updated_at: Date;
 }): DestinationRow {
@@ -292,6 +362,9 @@ function toRow(row: {
     retry_policy: row.retry_policy,
     dead_letter_threshold: row.dead_letter_threshold,
     disabled_reason: row.disabled_reason,
+    replay_opt_in: row.replay_opt_in,
+    replay_opt_in_reason: row.replay_opt_in_reason,
+    replay_opt_in_at: row.replay_opt_in_at === null ? null : row.replay_opt_in_at.toISOString(),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };

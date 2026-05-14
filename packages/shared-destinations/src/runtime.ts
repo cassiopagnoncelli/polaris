@@ -476,45 +476,53 @@ async function processOne<Payload>(
     environment: envelope.environment,
   });
 
-  // 1. Replay suppression.
-  const replayDecision = applyReplayPolicy({ is_replay }, allowReplay);
-  if (replayDecision.kind === "suppress") {
-    metrics.incrementReplaySuppressed({
-      ...baseLabels,
-      destination_id,
-      project_id: envelope.project_id,
-      environment: envelope.environment,
-    });
-    logger.info(
-      {
-        component: "destination.runtime",
+  // 1. Resolve the destination instance.
+  //
+  // The instance is resolved BEFORE the replay-suppression check (P7-004)
+  // because the suppression policy consults the per-instance
+  // `replay_opt_in` column. A non-replay message still goes through the
+  // same path; the cache lookup is the same hot-path call. The earlier
+  // P9-001 ordering (suppress -> resolve) was kept while the host-level
+  // `allowReplay` was the only gate; the per-instance gate forces the
+  // resolve to happen first.
+  //
+  // For replay traffic targeting an UNKNOWN destination_id we treat it
+  // the same way the original suppression path did: no delivery record,
+  // structured log + metric, return. The lookup itself is bounded by
+  // the cache, so the cost of resolving before the suppression check is
+  // one cache hit per replayed message.
+  const instance = await instances.findById(destination_id);
+  if (instance === null) {
+    if (is_replay) {
+      metrics.incrementReplaySuppressed({
         ...baseLabels,
         destination_id,
         project_id: envelope.project_id,
         environment: envelope.environment,
-        event_id: envelope.event_id,
-        reason: replayDecision.reason,
-      },
-      "destination replay suppressed",
-    );
-    // No delivery record on suppression — the replay was intentionally
-    // dropped before the runtime even resolved the instance. Operators
-    // see the metric and the structured log line.
-    return null;
-  }
-
-  // 2. Resolve the destination instance.
-  const instance = await instances.findById(destination_id);
-  if (instance === null) {
-    logger.error(
-      {
-        component: "destination.runtime",
-        ...baseLabels,
-        destination_id,
-        event_id: envelope.event_id,
-      },
-      "destination instance not found — skipping",
-    );
+      });
+      logger.info(
+        {
+          component: "destination.runtime",
+          ...baseLabels,
+          destination_id,
+          project_id: envelope.project_id,
+          environment: envelope.environment,
+          event_id: envelope.event_id,
+          reason: "replay_disabled_instance",
+        },
+        "destination replay suppressed: unknown destination_id",
+      );
+    } else {
+      logger.error(
+        {
+          component: "destination.runtime",
+          ...baseLabels,
+          destination_id,
+          event_id: envelope.event_id,
+        },
+        "destination instance not found — skipping",
+      );
+    }
     // No delivery record; we have no destination row to FK against.
     return null;
   }
@@ -525,6 +533,34 @@ async function processOne<Payload>(
     project_id: envelope.project_id,
     environment: envelope.environment,
   };
+
+  // 2. Replay suppression. Both the host-level `allowReplay` and the
+  //    per-instance `replay_opt_in` column must be true for a replay
+  //    message to advance. See P7-004 +
+  //    `replay-suppression.ts` for the full contract.
+  const replayDecision = applyReplayPolicy({
+    context: { is_replay },
+    allowHost: allowReplay,
+    allowInstance: instance.replay_opt_in,
+  });
+  if (replayDecision.kind === "suppress") {
+    metrics.incrementReplaySuppressed(instanceLabels);
+    logger.info(
+      {
+        component: "destination.runtime",
+        ...instanceLabels,
+        event_id: envelope.event_id,
+        reason: replayDecision.reason,
+      },
+      "destination replay suppressed",
+    );
+    // No delivery record on suppression — the replay was intentionally
+    // dropped before the runtime touched the dedupe / normalize / map /
+    // deliver stages. Operators see the metric and the structured log
+    // line; the audit history for the destination's opt-in state lives
+    // in `audit_records`.
+    return null;
+  }
 
   if (instance.status !== "active") {
     logger.info(
@@ -1192,4 +1228,7 @@ const PLACEHOLDER_INSTANCE: DestinationInstance = {
   max_rps: 1,
   retry_policy: "standard",
   dead_letter_threshold: 1,
+  // Placeholder is opt-out: this row only stamps DLQ headers on
+  // pre-resolve failures; it never goes through the replay gate.
+  replay_opt_in: false,
 };

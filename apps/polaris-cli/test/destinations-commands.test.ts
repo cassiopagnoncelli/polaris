@@ -23,7 +23,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildDestinationsCreateRunner,
   buildDestinationsDisableRunner,
+  buildDestinationsDisableReplayRunner,
   buildDestinationsEnableRunner,
+  buildDestinationsEnableReplayRunner,
   buildDestinationsListRunner,
   buildDestinationsShowRunner,
   buildDestinationsUpdateOpsRunner,
@@ -31,7 +33,9 @@ import {
   DESTINATION_ID_PREFIX,
   type DestinationRow,
   type DestinationsCreateStore,
+  type DestinationsDisableReplayStore,
   type DestinationsDisableStore,
+  type DestinationsEnableReplayStore,
   type DestinationsEnableStore,
   type DestinationsListStore,
   type DestinationsShowStore,
@@ -129,6 +133,10 @@ class InMemoryDestinationStore {
           retry_policy: input.retry_policy ?? "standard",
           dead_letter_threshold: input.dead_letter_threshold ?? 5,
           disabled_reason: null,
+          // P7-004: newly-created destinations are opt-out by default.
+          replay_opt_in: false,
+          replay_opt_in_reason: null,
+          replay_opt_in_at: null,
           created_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
           updated_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
         });
@@ -246,6 +254,76 @@ class InMemoryDestinationStore {
     };
   }
 
+  asEnableReplayStore(): DestinationsEnableReplayStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      enableReplayWithAudit: async (id, reason, now, audit) => {
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        if (row.replay_opt_in === true) return false;
+        this.rows.set(id, {
+          ...row,
+          replay_opt_in: true,
+          replay_opt_in_reason: reason,
+          replay_opt_in_at: now.toISOString(),
+          updated_at: now.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.enable-replay",
+          auditId: audit.auditId,
+          targetType: "destination",
+          targetId: id,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
+  asDisableReplayStore(): DestinationsDisableReplayStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      disableReplayWithAudit: async (id, reason, now, audit) => {
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        if (row.replay_opt_in === false) return false;
+        this.rows.set(id, {
+          ...row,
+          replay_opt_in: false,
+          replay_opt_in_reason: reason,
+          // replay_opt_in_at is preserved.
+          updated_at: now.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.disable-replay",
+          auditId: audit.auditId,
+          targetType: "destination",
+          targetId: id,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
   asUpdateOpsStore(): DestinationsUpdateOpsStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
@@ -342,6 +420,11 @@ function seedActiveRow(
     retry_policy: "standard",
     dead_letter_threshold: 5,
     disabled_reason: null,
+    // P7-004: replay-opt-in trio. Defaults to opt-out so the seed mirrors
+    // a freshly-created destination.
+    replay_opt_in: false,
+    replay_opt_in_reason: null,
+    replay_opt_in_at: null,
     created_at: "2026-05-10T00:00:00.000Z",
     updated_at: "2026-05-10T00:00:00.000Z",
   };
@@ -1055,6 +1138,319 @@ describe("destinations update-ops runner", () => {
   });
 });
 
+describe("destinations enable-replay runner (P7-004)", () => {
+  // The acceptance criterion: the CLI requires an explicit reason flag to
+  // flip replay opt-in on, writes a structured audit row in the same
+  // transaction as the row UPDATE, and is idempotent against repeats.
+  it("flips replay_opt_in on a destination that was opted out", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_to-opt-in" });
+    const now = new Date("2026-05-14T10:00:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+      now: () => now,
+      generateAuditId: () => "polaris_aud_enable-replay-1",
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_to-opt-in",
+        reason: "running attribution replay for storefront-prod",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_to-opt-in");
+    expect(after?.replay_opt_in).toBe(true);
+    expect(after?.replay_opt_in_reason).toBe("running attribution replay for storefront-prod");
+    expect(after?.replay_opt_in_at).toBe(now.toISOString());
+    expect(after?.updated_at).toBe(now.toISOString());
+    expect(capture.stdout.join("")).toContain("replay opt-in enabled for polaris_dst_to-opt-in");
+    expect(capture.stdout.join("")).toContain("running attribution replay");
+
+    // P7-004 audit row: action + reason + before/after snapshot.
+    expect(store.auditCalls).toHaveLength(1);
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.action).toBe("destinations.enable-replay");
+    expect(audit.auditId).toBe("polaris_aud_enable-replay-1");
+    expect(audit.targetType).toBe("destination");
+    expect(audit.targetId).toBe("polaris_dst_to-opt-in");
+    expect(audit.actorSource).toBe("cli");
+    expect(audit.actorLabel).toBe("cli");
+    expect(audit.projectId).toBe("storefront");
+    expect(audit.environment).toBe("production");
+    expect(audit.reason).toBe("running attribution replay for storefront-prod");
+    expect(audit.before).toMatchObject({
+      destination_id: "polaris_dst_to-opt-in",
+      replay_opt_in: false,
+      replay_opt_in_reason: null,
+      replay_opt_in_at: null,
+    });
+    expect(audit.after).toMatchObject({
+      destination_id: "polaris_dst_to-opt-in",
+      replay_opt_in: true,
+      replay_opt_in_reason: "running attribution replay for storefront-prod",
+      replay_opt_in_at: now.toISOString(),
+    });
+  });
+
+  it("requires --reason and never touches the row when omitted", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_no-reason" });
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_no-reason" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    const after = store.rows.get("polaris_dst_no-reason");
+    expect(after?.replay_opt_in).toBe(false);
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("is idempotent on an already-opted-in destination and preserves the original reason + timestamp", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_already-in",
+      replay_opt_in: true,
+      replay_opt_in_reason: "first opt-in",
+      replay_opt_in_at: "2026-05-10T08:00:00.000Z",
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_already-in",
+        reason: "second attempt",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_already-in");
+    expect(after?.replay_opt_in).toBe(true);
+    // Original reason and timestamp preserved on the idempotent path.
+    expect(after?.replay_opt_in_reason).toBe("first opt-in");
+    expect(after?.replay_opt_in_at).toBe("2026-05-10T08:00:00.000Z");
+    expect(capture.stdout.join("")).toContain("already opted in");
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("raises a usage error when the destination id is unknown", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_missing", reason: "x" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_smuggle" });
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+    });
+    await expect(
+      runner(
+        {
+          destinationId: "polaris_dst_smuggle",
+          reason: "operator decision",
+          ...({ fieldMap: "x=y" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    const after = store.rows.get("polaris_dst_smuggle");
+    expect(after?.replay_opt_in).toBe(false);
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("rejects --reason values longer than 1024 chars", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_too-long" });
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+    });
+    await expect(
+      runner(
+        { destinationId: "polaris_dst_too-long", reason: "x".repeat(1025) },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("emits JSON output that pins the contract shape", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_json-shape" });
+    const now = new Date("2026-05-14T10:30:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsEnableReplayRunner({
+      openStore: () => store.asEnableReplayStore(),
+      now: () => now,
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_json-shape",
+        reason: "test reason",
+      },
+      jsonContext(capture.streams),
+    );
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed).toMatchObject({
+      destination_id: "polaris_dst_json-shape",
+      applied: true,
+      replay_opt_in: true,
+      reason: "test reason",
+      replay_opt_in_at: now.toISOString(),
+    });
+  });
+});
+
+describe("destinations disable-replay runner (P7-004)", () => {
+  it("flips replay_opt_in back on a destination that was opted in", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_to-opt-out",
+      replay_opt_in: true,
+      replay_opt_in_reason: "original opt-in reason",
+      replay_opt_in_at: "2026-05-10T08:00:00.000Z",
+    });
+    const now = new Date("2026-05-14T11:00:00.000Z");
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableReplayRunner({
+      openStore: () => store.asDisableReplayStore(),
+      now: () => now,
+      generateAuditId: () => "polaris_aud_disable-replay-1",
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_to-opt-out",
+        reason: "replay run completed; tightening back",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_to-opt-out");
+    expect(after?.replay_opt_in).toBe(false);
+    expect(after?.replay_opt_in_reason).toBe("replay run completed; tightening back");
+    // P7-004: replay_opt_in_at is preserved on disable so operators see
+    // the last time replay was active.
+    expect(after?.replay_opt_in_at).toBe("2026-05-10T08:00:00.000Z");
+    expect(after?.updated_at).toBe(now.toISOString());
+    expect(capture.stdout.join("")).toContain("replay opt-in disabled for polaris_dst_to-opt-out");
+    expect(capture.stdout.join("")).toContain("tightening back");
+
+    // P7-004 audit row.
+    expect(store.auditCalls).toHaveLength(1);
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.action).toBe("destinations.disable-replay");
+    expect(audit.targetId).toBe("polaris_dst_to-opt-out");
+    expect(audit.reason).toBe("replay run completed; tightening back");
+    expect(audit.before).toMatchObject({
+      destination_id: "polaris_dst_to-opt-out",
+      replay_opt_in: true,
+      replay_opt_in_reason: "original opt-in reason",
+    });
+    expect(audit.after).toMatchObject({
+      destination_id: "polaris_dst_to-opt-out",
+      replay_opt_in: false,
+      replay_opt_in_reason: "replay run completed; tightening back",
+      // replay_opt_in_at is preserved on the after-snapshot.
+      replay_opt_in_at: "2026-05-10T08:00:00.000Z",
+    });
+  });
+
+  it("requires --reason", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_no-reason-d",
+      replay_opt_in: true,
+      replay_opt_in_reason: "needed reason",
+      replay_opt_in_at: "2026-05-10T08:00:00.000Z",
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableReplayRunner({
+      openStore: () => store.asDisableReplayStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_no-reason-d" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("is idempotent on an already-opted-out destination", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_already-out",
+      replay_opt_in: false,
+      replay_opt_in_reason: null,
+      replay_opt_in_at: null,
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableReplayRunner({
+      openStore: () => store.asDisableReplayStore(),
+    });
+    await runner(
+      {
+        destinationId: "polaris_dst_already-out",
+        reason: "no-op",
+      },
+      makeContext(capture.streams),
+    );
+    const after = store.rows.get("polaris_dst_already-out");
+    expect(after?.replay_opt_in).toBe(false);
+    expect(capture.stdout.join("")).toContain("already opted out");
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("raises a usage error when the destination id is unknown", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableReplayRunner({
+      openStore: () => store.asDisableReplayStore(),
+    });
+    await expect(
+      runner({ destinationId: "polaris_dst_missing", reason: "x" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, {
+      destination_id: "polaris_dst_disable-smuggle",
+      replay_opt_in: true,
+      replay_opt_in_reason: "x",
+      replay_opt_in_at: "2026-05-10T08:00:00.000Z",
+    });
+    const capture = captureOutput();
+    const runner = buildDestinationsDisableReplayRunner({
+      openStore: () => store.asDisableReplayStore(),
+    });
+    await expect(
+      runner(
+        {
+          destinationId: "polaris_dst_disable-smuggle",
+          reason: "operator decision",
+          ...({ fieldMap: "x=y" } as Record<string, string>),
+        },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    const after = store.rows.get("polaris_dst_disable-smuggle");
+    // Unchanged.
+    expect(after?.replay_opt_in).toBe(true);
+    expect(store.auditCalls).toHaveLength(0);
+  });
+});
+
 describe("destinations command surface mutates flags", () => {
   it("declares mutates: true on writers and mutates: false on read commands", async () => {
     const mod = await import("../src/index.js");
@@ -1064,6 +1460,9 @@ describe("destinations command surface mutates flags", () => {
     expect(mod.destinationsEnableCommand.mutates).toBe(true);
     expect(mod.destinationsDisableCommand.mutates).toBe(true);
     expect(mod.destinationsUpdateOpsCommand.mutates).toBe(true);
+    // P7-004: replay guardrails.
+    expect(mod.destinationsEnableReplayCommand.mutates).toBe(true);
+    expect(mod.destinationsDisableReplayCommand.mutates).toBe(true);
   });
 
   it("destinationsCommand group reports mutates: false (children declare their own)", async () => {
@@ -1073,7 +1472,7 @@ describe("destinations command surface mutates flags", () => {
 });
 
 describe("destinations command dispatcher wiring", () => {
-  it("`polaris destinations --help` lists all six subcommands", async () => {
+  it("`polaris destinations --help` lists all eight subcommands", async () => {
     const capture = captureOutput();
     const code = await run({
       argv: ["destinations", "--help"],
@@ -1089,6 +1488,9 @@ describe("destinations command dispatcher wiring", () => {
     expect(help).toContain("enable");
     expect(help).toContain("disable");
     expect(help).toContain("update-ops");
+    // P7-004 replay guardrail commands.
+    expect(help).toContain("enable-replay");
+    expect(help).toContain("disable-replay");
   });
 
   it("help text emphasises the no-mapping rule", async () => {
@@ -1168,6 +1570,9 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       retry_policy: "standard",
       dead_letter_threshold: 1,
       disabled_reason: null,
+      replay_opt_in: false,
+      replay_opt_in_reason: null,
+      replay_opt_in_at: null,
       created_at: "2026-05-12T00:00:00.000Z",
       updated_at: "2026-05-12T00:00:00.000Z",
     };
@@ -1175,6 +1580,34 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       const normalised = key.toLowerCase().replace(/_/g, "-");
       expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain(normalised);
     }
+  });
+
+  it("the destinations migration SQL declares the P7-004 replay-opt-in columns", async () => {
+    // Schema-level smoke for P7-004: the follow-up migration must add the
+    // per-instance opt-in trio (`replay_opt_in`, `replay_opt_in_reason`,
+    // `replay_opt_in_at`) and a CHECK constraint that refuses an opted-in
+    // row without a reason.
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const migrationPath = join(
+      here,
+      "..",
+      "..",
+      "..",
+      "db",
+      "migrations",
+      "20260514000002_add_destination_replay_opt_in.sql",
+    );
+    const sql = await readFile(migrationPath, "utf8");
+    expect(sql).toMatch(/-- migrate:up/);
+    expect(sql).toMatch(/-- migrate:down/);
+    expect(sql).toMatch(/ADD COLUMN replay_opt_in\s+boolean\s+NOT NULL DEFAULT false/);
+    expect(sql).toMatch(/ADD COLUMN replay_opt_in_reason\s+text/);
+    expect(sql).toMatch(/ADD COLUMN replay_opt_in_at\s+timestamptz/);
+    expect(sql).toMatch(/destinations_replay_opt_in_reason_when_enabled/);
+    expect(sql).toMatch(/destinations_replay_opt_in_reason_length/);
   });
 
   it("the destinations migration SQL declares no mapping-shaped column", async () => {

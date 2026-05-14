@@ -66,6 +66,11 @@ const SEED_INSTANCE: DestinationInstance = {
   max_rps: 50,
   retry_policy: "standard",
   dead_letter_threshold: 5,
+  // P7-004: per-instance replay opt-in. The seed is opt-IN so the
+  // existing tests (which exercise normal delivery, not replay) match
+  // their original semantics; the replay-specific tests below override
+  // this to `false` when the suppression gate is what's being tested.
+  replay_opt_in: true,
 };
 
 function makeEnvelope(overrides: Partial<NormalizableEnvelope> = {}): NormalizableEnvelope {
@@ -671,6 +676,88 @@ describe("destination runtime — replay suppression + dedupe", () => {
       envelope: makeEnvelope(),
       destination_id: SEED_INSTANCE.destination_id,
       is_replay: true,
+    });
+    expect(env.delivererCalls).toHaveLength(1);
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("accepted");
+  });
+
+  it("P7-004: replay against a destination with replay_opt_in=false is suppressed even when allowReplay=true", async () => {
+    // The central P7-004 acceptance test. The host has globally opted
+    // into replay traffic (`allowReplay: true`), but this specific
+    // destination has not been flipped to `replay_opt_in: true`. The
+    // runtime MUST suppress the message and increment the metric — the
+    // per-instance gate is the guardrail that keeps a host-level opt-in
+    // from accidentally delivering to every co-resident destination.
+    const env = makeEnv({
+      instance: { ...SEED_INSTANCE, replay_opt_in: false },
+    });
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+      allowReplay: true,
+    });
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      is_replay: true,
+    });
+    expect(env.mapperCalls).toHaveLength(0);
+    expect(env.delivererCalls).toHaveLength(0);
+    // Metric counter is the audit trail; no delivery record is written
+    // when the runtime suppresses replay traffic.
+    const samples = consumer.metrics.getSamples();
+    const suppressed = samples.find(
+      (s) => s.name === "polaris_destination_replay_suppressed_total",
+    );
+    expect(suppressed?.value).toBeGreaterThanOrEqual(1);
+  });
+
+  it("P7-004: replay against an opted-in destination + allowReplay=true → delivered", async () => {
+    // The corollary: when BOTH gates are open, the runtime delivers the
+    // replay message exactly like a live one.
+    const env = makeEnv({
+      instance: { ...SEED_INSTANCE, replay_opt_in: true },
+    });
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+      allowReplay: true,
+    });
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      is_replay: true,
+    });
+    expect(env.delivererCalls).toHaveLength(1);
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("accepted");
+  });
+
+  it("P7-004: non-replay traffic still flows regardless of replay_opt_in", async () => {
+    // The per-instance gate ONLY affects messages flagged as replay.
+    // Live traffic delivers normally whether the destination has opted
+    // into replay or not.
+    const env = makeEnv({
+      instance: { ...SEED_INSTANCE, replay_opt_in: false },
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      // is_replay omitted → false
     });
     expect(env.delivererCalls).toHaveLength(1);
     const rec = lastRecord(env);

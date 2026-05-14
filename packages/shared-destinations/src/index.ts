@@ -92,11 +92,13 @@ export {
 
 export {
   applyReplayPolicy,
+  type ApplyReplayPolicyInput,
   POLARIS_HEADER_REPLAY,
   POLARIS_HEADER_REPLAY_JOB_ID,
   readReplayContext,
   type ReplayContext,
   type ReplayPolicyDecision,
+  type ReplaySuppressionReason,
 } from "./replay-suppression.js";
 
 export {
