@@ -21,8 +21,9 @@
  *
  * Audit hand-off:
  *
- *   enable/disable/create/update-ops wrap their mutation + insertAuditRecord
- *   in one Kysely transaction (wired in P6-006).
+ *   enable and disable wrap their UPDATE + insertAuditRecord in one Kysely
+ *   transaction (wired in P6-006). create and update-ops are mutating but
+ *   are not yet recorder-instrumented.
  *
  * @see docs/architecture/06-destinations.md
  * @see docs/architecture/02-control-plane.md "Destinations"
