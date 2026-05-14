@@ -16,7 +16,6 @@ This board is the coordination surface for implementation work.
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
-- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) (split from P11-006b)
@@ -150,6 +149,7 @@ No blocked cards.
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
 - [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — merged in `34c4fe8` (salvaged from stalled worker; behavioral coverage closed by P9-001b)
 - [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
+- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md) — merged in `PENDING`
 
 ### P10 Observability and Operations
 

@@ -1,6 +1,6 @@
 # P9-002: Webhook Sink Consumer v1
 
-Status: Ready
+Status: Done
 
 ## Goal
 
@@ -46,12 +46,12 @@ processors/
 
 ## Acceptance Criteria
 
-- [ ] Versioned consumer exists with manifest/changelog.
-- [ ] Consumer reads canonical events from configured topic.
-- [ ] Consumer sends HTTP webhook payloads.
-- [ ] Delivery records are written.
-- [ ] Retry and DLQ behavior are tested.
-- [ ] `SPEC.md` filled from the consumer SPEC template covers field mapping, error class table, rate limit profile, and test-fixture references for at least one canonical event.
+- [x] Versioned consumer exists with manifest/changelog.
+- [x] Consumer reads canonical events from configured topic.
+- [x] Consumer sends HTTP webhook payloads.
+- [x] Delivery records are written.
+- [x] Retry and DLQ behavior are tested.
+- [x] `SPEC.md` filled from the consumer SPEC template covers field mapping, error class table, rate limit profile, and test-fixture references for at least one canonical event.
 
 ## Checks
 
@@ -67,8 +67,53 @@ pnpm lint
 
 ```text
 Files changed:
+  consumers/webhook-sink/v1/                      new package
+    package.json
+    tsconfig.json
+    vitest.config.ts
+    consumer.manifest.yaml
+    CHANGELOG.md
+    SPEC.md
+    src/
+      app.ts                Fastify shell + DestinationConsumer wiring
+      config.ts             Zod env schema (service+http+redpanda+postgres+sink)
+      deliverer.ts          fetch + HMAC-SHA256 + error class mapping
+      descriptor.ts         DestinationDescriptor with passthrough mapper Proxy
+      descriptor-identity.ts pinned vendor + per-stage versions
+      index.ts              public barrel
+      main.ts               binary entry point
+      mapper.ts             pure canonical → WebhookPayload mapper + stampDelivery
+      types.ts              WebhookPayload + ResolvedWebhookConfig
+    test/
+      config.test.ts        5 tests
+      deliverer.test.ts     25 tests
+      integration.test.ts   6 tests (handleEvent end-to-end)
+      mapper.test.ts        8 tests
+      fixtures/normalized.ts shared fixture builders
+  docs/implementation/kanban.md                   moved P9-002 Ready → Done
+  docs/implementation/tasks/P9-002-...md          Status: Done + checked AC
+
 Commands run:
+  pnpm install
+  pnpm typecheck                  (workspace; clean)
+  pnpm lint                       (workspace; clean)
+  pnpm format:check               (workspace; clean)
+  pnpm test                       (workspace: 1447 passed, 1 skipped)
+  pnpm test:scripts               (59 passed)
+
 Checks passed:
+  typecheck, lint, format:check, test, test:scripts
+
 Known gaps:
+  - Per-event golden fixture pairs are intentionally omitted: webhook-sink
+    is event-agnostic (every canonical event passes through the same
+    mapper). Future vendor consumers MUST ship per-event fixtures per SPEC.
+  - The deliverer hard-codes `X-Polaris-*` header names. If a downstream
+    receiver complains about lowercase canonical-form headers, a future
+    version can introduce a configurable header prefix.
+  - The DLQ producer in app.ts is a real PolarisProducer; tests inject a
+    no-op stub. End-to-end DLQ behavior is exercised through
+    @polaris/shared-destinations' runtime tests (P9-001b), not duplicated
+    here.
 ```
 
