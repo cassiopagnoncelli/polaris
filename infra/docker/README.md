@@ -16,6 +16,7 @@ next to each service:
 | `attribution-engine v1`                  | `processors/attribution-engine/v1/Dockerfile`         | `polaris/processor-attribution-engine-v1`        | 4014 |
 | `webhook-sink v1`                        | `consumers/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
 | `meta-capi v1`                           | `consumers/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
+| `tiktok v1`                              | `consumers/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
 
 The polaris-cli image is a CLI bin, not a long-running server — it has no
 exposed port and no `HEALTHCHECK`.

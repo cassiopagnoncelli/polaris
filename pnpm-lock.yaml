@@ -186,6 +186,42 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  consumers/tiktok/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../packages/shared-destinations
+      '@polaris/shared-kafka':
+        specifier: workspace:*
+        version: link:../../../packages/shared-kafka
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../packages/shared-metrics
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../../../packages/shared-secrets
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../packages/shared-service-bootstrap
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   consumers/webhook-sink/v1:
     dependencies:
       '@polaris/shared-config':

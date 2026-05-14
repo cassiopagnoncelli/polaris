@@ -90,6 +90,11 @@ const services = [
     dockerfile: "consumers/meta-capi/v1/Dockerfile",
     image: "polaris/consumer-meta-capi-v1",
   },
+  {
+    name: "tiktok",
+    dockerfile: "consumers/tiktok/v1/Dockerfile",
+    image: "polaris/consumer-tiktok-v1",
+  },
 ];
 
 /**
