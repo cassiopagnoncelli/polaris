@@ -1,6 +1,6 @@
 # P6-000: Control-Plane API Shell
 
-Status: Ready
+Status: Done
 
 ## Goal
 
@@ -96,15 +96,15 @@ Generate OpenAPI from Fastify route schemas as required by engineering standards
 
 ## Acceptance Criteria
 
-- [ ] Service starts locally.
-- [ ] Health, readiness, version routes exist.
-- [ ] Bearer-token auth hook validates against `operator_tokens` and attaches actor context.
-- [ ] Routes carry a `mutates` flag; the dispatcher gate rejects production mutations with `declared` source.
-- [ ] `whoami` returns the resolved actor context after auth.
-- [ ] Audit hook writes one record per mutating request (proven with a single sample mutating test route that exists only in tests).
-- [ ] Errors use RFC 7807 Problem Details.
-- [ ] OpenAPI generation hook or route exists.
-- [ ] No token plaintext appears in any log line.
+- [x] Service starts locally.
+- [x] Health, readiness, version routes exist.
+- [x] Bearer-token auth hook validates against `operator_tokens` and attaches actor context.
+- [x] Routes carry a `mutates` flag; the dispatcher gate rejects production mutations with `declared` source.
+- [x] `whoami` returns the resolved actor context after auth.
+- [x] Audit hook writes one record per mutating request (proven with a single sample mutating test route that exists only in tests).
+- [x] Errors use RFC 7807 Problem Details.
+- [x] OpenAPI generation hook or route exists.
+- [x] No token plaintext appears in any log line.
 
 ## Checks
 
@@ -121,7 +121,38 @@ pnpm --filter control-plane-api build
 
 ```text
 Files changed:
+  apps/control-plane-api/                                              new package
+    package.json, tsconfig.json, vitest.config.ts
+    src/app.ts, server.ts, index.ts, config.ts
+    src/auth/bearer.ts        Authorization: Bearer hook → ResolvedActor
+    src/auth/gate.ts          enforceProductionMutationGate wrapper
+    src/audit/recorder.ts     AuditRecorder + Kysely + InMemory adapters
+    src/metrics/registry.ts   ControlPlaneMetrics shell
+    src/openapi/setup.ts      NOOP_OPENAPI_SETUP placeholder
+    src/operators/repository.ts  OperatorTokenRepository Kysely adapter
+    src/routes/whoami.ts      GET /v1/whoami
+    test/app.test.ts          8 behavioral tests
+  docs/implementation/kanban.md                                        P6-000 Ready → Done
+  docs/implementation/tasks/P6-000-control-plane-api-shell.md          Status: Done + AC
+
 Commands run:
+  pnpm install
+  pnpm --filter @polaris/control-plane-api typecheck
+  pnpm --filter @polaris/control-plane-api test
+  pnpm typecheck                                          workspace; clean
+  pnpm lint, format:check, test                           clean (1574 + 59 passing)
+
 Checks passed:
+  typecheck, lint, format:check, test
+
 Known gaps:
+  - Business routes deferred to P6-002+ (the shell exists; routes plug
+    into the gate factory).
+  - OperatorTokensTable + AuditRecordsTable typed augmentations are
+    duplicated with apps/polaris-cli. Future cleanup hoists to
+    @polaris/shared-control-plane.
+  - Audit recorder is not yet a global onResponse hook — each route's
+    handler calls it explicitly (the test demonstrates the pattern).
+  - OpenAPI document is the no-op shape; first business route lands
+    a real schema.
 ```

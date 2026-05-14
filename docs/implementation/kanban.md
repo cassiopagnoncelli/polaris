@@ -12,7 +12,6 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
@@ -127,6 +126,7 @@ No blocked cards.
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md) — merged in `6b919cb`
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md) — merged in `29bcbef`
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md) — merged in `964f14a`
+- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md) — merged in `PENDING`
 
 ### P7 Replay System
 
