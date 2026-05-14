@@ -237,10 +237,5 @@ find apps processors consumers -name Dockerfile -print0 \
 
 ## Known gaps
 
-- **`processors/identity-resolver/v1`** does not yet have a `src/main.ts`
-  entrypoint (it is library-only as of the P8-002 skeleton). Its Dockerfile
-  is in place so the service is wired into the build inventory, but
-  `docker build` will fail at the `test -f /deploy/dist/main.js` sanity
-  check until the runtime entrypoint lands.
 - **GeoIP `.mmdb`** files are mounted at runtime, not baked into the image.
   See `processors/geoip-enricher/v1/Dockerfile` and the operator runbook.

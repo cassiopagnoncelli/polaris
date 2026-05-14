@@ -544,6 +544,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../packages/shared-metrics
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../../packages/shared-processor
