@@ -31,6 +31,7 @@ interface ReplayPauseArgs {
 }
 
 export interface ReplayPauseStore {
+  findById(replayJobId: string): Promise<ReplayJobRow | null>;
   pauseWithAudit(input: ReplayPauseStoreInput): Promise<ReplayPauseOutcome>;
   close(): Promise<void>;
 }
@@ -99,12 +100,7 @@ export function buildReplayPauseRunner(hooks: ReplayPauseHooks = {}) {
 
     const store = openStore();
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic dispatch for test stores
-      const dynamic = store as any;
-      if (typeof dynamic.findById !== "function") {
-        throw new Error("replay pause store must expose findById");
-      }
-      const existing = (await dynamic.findById(id)) as ReplayJobRow | null;
+      const existing = await store.findById(id);
       if (existing === null) {
         throw new UsageError(`replay job "${id}" not found`);
       }
@@ -132,6 +128,7 @@ const runReplayPause = buildReplayPauseRunner();
 function defaultStore(): ReplayPauseStore {
   const handle = connectDb({ env: process.env });
   return {
+    findById: (id) => findReplayJobById(handle.db, id),
     pauseWithAudit: async (input) =>
       handle.db.transaction().execute(async (trx) => {
         const paused = await pauseReplayJob(trx, input.replayJobId, input.pausedAt);
@@ -159,9 +156,8 @@ function defaultStore(): ReplayPauseStore {
         }
         return { kind: "paused" as const, row: after };
       }),
-    findById: (id: string) => findReplayJobById(handle.db, id),
     close: () => handle.close(),
-  } as ReplayPauseStore & { findById: (id: string) => Promise<ReplayJobRow | null> };
+  };
 }
 
 function emit(ctx: CommandContext, outcome: ReplayPauseOutcome): void {

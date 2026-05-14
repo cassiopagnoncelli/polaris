@@ -257,6 +257,57 @@ export {
   projectsSyncCommand,
 } from "./commands/projects/index.js";
 export {
+  replayCancelCommand,
+  replayCommand,
+  replayCreateCommand,
+  replayListCommand,
+  replayPauseCommand,
+  replayResumeCommand,
+  replayShowCommand,
+} from "./commands/replay/index.js";
+export {
+  buildReplayCancelRunner,
+  type ReplayCancelHooks,
+  type ReplayCancelOutcome,
+  type ReplayCancelStore,
+  type ReplayCancelStoreInput,
+} from "./commands/replay/cancel.js";
+export {
+  buildReplayCreateRunner,
+  type ReplayCreateAuditPayload,
+  type ReplayCreateHooks,
+  type ReplayCreateStore,
+  type ReplayJobAuditSnapshot,
+} from "./commands/replay/create.js";
+export {
+  buildReplayListRunner,
+  type ReplayListHooks,
+  type ReplayListStore,
+} from "./commands/replay/list.js";
+export {
+  buildReplayPauseRunner,
+  type ReplayPauseHooks,
+  type ReplayPauseOutcome,
+  type ReplayPauseStore,
+  type ReplayPauseStoreInput,
+} from "./commands/replay/pause.js";
+export {
+  buildReplayResumeRunner,
+  type ReplayResumeHooks,
+  type ReplayResumeOutcome,
+  type ReplayResumeStore,
+  type ReplayResumeStoreInput,
+} from "./commands/replay/resume.js";
+export {
+  buildReplayShowRunner,
+  type ReplayShowHooks,
+  type ReplayShowStore,
+} from "./commands/replay/show.js";
+export {
+  FORBIDDEN_REPLAY_PLAN_FLAG_TOKENS,
+  rejectReplayPlanArguments,
+} from "./commands/replay/validation.js";
+export {
   sourcesListCommand,
   sourcesShowCommand,
   sourcesSyncCommand,

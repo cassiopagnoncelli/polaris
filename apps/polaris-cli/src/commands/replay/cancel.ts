@@ -36,6 +36,7 @@ interface ReplayCancelArgs {
 }
 
 export interface ReplayCancelStore {
+  findById(replayJobId: string): Promise<ReplayJobRow | null>;
   cancelWithAudit(input: ReplayCancelStoreInput): Promise<ReplayCancelOutcome>;
   close(): Promise<void>;
 }
@@ -104,7 +105,7 @@ export function buildReplayCancelRunner(hooks: ReplayCancelHooks = {}) {
 
     const store = openStore();
     try {
-      const existing = await findExisting(store, id);
+      const existing = await store.findById(id);
       if (existing === null) {
         throw new UsageError(`replay job "${id}" not found`);
       }
@@ -133,22 +134,10 @@ export function buildReplayCancelRunner(hooks: ReplayCancelHooks = {}) {
 
 const runReplayCancel = buildReplayCancelRunner();
 
-async function findExisting(store: ReplayCancelStore, id: string): Promise<ReplayJobRow | null> {
-  // The store's findById helper lives on the connectDb handle; we fetch via the
-  // default store path. Tests inject a fake store with its own findById.
-  // (Cancellation needs the before-row both for the audit snapshot and the
-  // terminal-status guard.)
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic dispatch for test stores
-  const dynamic = store as any;
-  if (typeof dynamic.findById === "function") {
-    return (await dynamic.findById(id)) as ReplayJobRow | null;
-  }
-  throw new Error("replay cancel store must expose findById");
-}
-
 function defaultStore(): ReplayCancelStore {
   const handle = connectDb({ env: process.env });
   return {
+    findById: (id) => findReplayJobById(handle.db, id),
     cancelWithAudit: async (input) =>
       handle.db.transaction().execute(async (trx) => {
         const cancelled = await cancelReplayJob(trx, input.replayJobId, input.cancelledAt);
@@ -184,9 +173,8 @@ function defaultStore(): ReplayCancelStore {
         }
         return { kind: "cancelled" as const, row: after };
       }),
-    findById: (id: string) => findReplayJobById(handle.db, id),
     close: () => handle.close(),
-  } as ReplayCancelStore & { findById: (id: string) => Promise<ReplayJobRow | null> };
+  };
 }
 
 function emit(ctx: CommandContext, outcome: ReplayCancelOutcome): void {

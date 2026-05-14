@@ -31,6 +31,7 @@ interface ReplayResumeArgs {
 }
 
 export interface ReplayResumeStore {
+  findById(replayJobId: string): Promise<ReplayJobRow | null>;
   resumeWithAudit(input: ReplayResumeStoreInput): Promise<ReplayResumeOutcome>;
   close(): Promise<void>;
 }
@@ -99,12 +100,7 @@ export function buildReplayResumeRunner(hooks: ReplayResumeHooks = {}) {
 
     const store = openStore();
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic dispatch for test stores
-      const dynamic = store as any;
-      if (typeof dynamic.findById !== "function") {
-        throw new Error("replay resume store must expose findById");
-      }
-      const existing = (await dynamic.findById(id)) as ReplayJobRow | null;
+      const existing = await store.findById(id);
       if (existing === null) {
         throw new UsageError(`replay job "${id}" not found`);
       }
@@ -132,6 +128,7 @@ const runReplayResume = buildReplayResumeRunner();
 function defaultStore(): ReplayResumeStore {
   const handle = connectDb({ env: process.env });
   return {
+    findById: (id) => findReplayJobById(handle.db, id),
     resumeWithAudit: async (input) =>
       handle.db.transaction().execute(async (trx) => {
         // v1 only supports resume to 'running'. The planner (P7-002) restores
@@ -162,9 +159,8 @@ function defaultStore(): ReplayResumeStore {
         }
         return { kind: "resumed" as const, row: after };
       }),
-    findById: (id: string) => findReplayJobById(handle.db, id),
     close: () => handle.close(),
-  } as ReplayResumeStore & { findById: (id: string) => Promise<ReplayJobRow | null> };
+  };
 }
 
 function emit(ctx: CommandContext, outcome: ReplayResumeOutcome): void {
