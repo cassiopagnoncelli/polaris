@@ -231,6 +231,10 @@ function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
     secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
+    max_concurrency: row.max_concurrency,
+    max_rps: row.max_rps,
+    retry_policy: row.retry_policy,
+    dead_letter_threshold: row.dead_letter_threshold,
     disabled_reason: row.disabled_reason,
   };
 }

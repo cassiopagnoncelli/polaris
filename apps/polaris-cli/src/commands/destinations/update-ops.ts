@@ -1,7 +1,8 @@
 /**
  * `polaris destinations update-ops <destination_id>
  *   [--max-concurrency <n>] [--max-rps <n>]
- *   [--retry-policy <profile>] [--dead-letter-threshold <n>]` — mutating.
+ *   [--retry-policy <profile>] [--dead-letter-threshold <n>]
+ *   --reason <reason>` — mutating.
  *
  * Update the operational tuning fields on one destination instance. ONLY
  * the four operational knobs are accepted. Any flag/argument that resembles
@@ -14,20 +15,31 @@
  * four operational knobs, the runtime `rejectMappingArguments` gate catches
  * any mapping-shaped token someone tries to smuggle through.
  *
+ * Audit trail: when the UPDATE lands, this command writes an `audit_records`
+ * row in the SAME transaction. `before` snapshots the row pre-update,
+ * `after` snapshots the row post-update. The `--reason` flag is required
+ * (matching `destinations.disable`) so every operational mutation carries a
+ * structured rationale on its audit row.
+ *
  * `mutates: true` — P6-007 gates this in production.
  */
 import type { DestinationRetryPolicy } from "@polaris/shared-db";
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
+  type AuditActorSource,
+  type AuditEnvironment,
   type DestinationRow,
   connectDb,
   findDestinationById,
+  insertAuditRecord,
   updateDestinationOps,
   type UpdateDestinationOpsInput,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import type { DestinationAuditSnapshot } from "./enable.js";
 import { rejectMappingArguments } from "./validation.js";
 
 const SUPPORTED_RETRY_POLICIES: readonly DestinationRetryPolicy[] = [
@@ -42,17 +54,37 @@ interface DestinationsUpdateOpsArgs {
   readonly maxRps?: string;
   readonly retryPolicy?: string;
   readonly deadLetterThreshold?: string;
+  readonly reason?: string;
+}
+
+export interface DestinationsUpdateOpsAuditPayload {
+  readonly auditId: string;
+  readonly actorSource: AuditActorSource;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly before: DestinationAuditSnapshot;
+  readonly after: DestinationAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+  readonly reason: string;
 }
 
 export interface DestinationsUpdateOpsStore {
   findById(destinationId: string): Promise<DestinationRow | null>;
-  update(destinationId: string, patch: UpdateDestinationOpsInput, now: Date): Promise<boolean>;
+  updateWithAudit(
+    destinationId: string,
+    patch: UpdateDestinationOpsInput,
+    now: Date,
+    audit: DestinationsUpdateOpsAuditPayload,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
 export interface DestinationsUpdateOpsHooks {
   readonly openStore?: () => DestinationsUpdateOpsStore;
   readonly now?: () => Date;
+  readonly generateAuditId?: () => string;
+  readonly actorLabel?: () => string;
 }
 
 export const destinationsUpdateOpsCommand: CommandDefinition = {
@@ -75,6 +107,10 @@ export const destinationsUpdateOpsCommand: CommandDefinition = {
       .option(
         "--dead-letter-threshold <n>",
         "Attempts after which a message is routed to the DLQ (positive integer).",
+      )
+      .requiredOption(
+        "--reason <reason>",
+        "Operator rationale for the audit record. Free text, required.",
       );
     cmd.action(
       async (
@@ -84,6 +120,7 @@ export const destinationsUpdateOpsCommand: CommandDefinition = {
           maxRps?: string;
           retryPolicy?: string;
           deadLetterThreshold?: string;
+          reason?: string;
         },
         command: Command,
       ) => {
@@ -99,6 +136,7 @@ export const destinationsUpdateOpsCommand: CommandDefinition = {
           ...(opts.deadLetterThreshold !== undefined
             ? { deadLetterThreshold: opts.deadLetterThreshold }
             : {}),
+          ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
         };
         // Pass the full opts bag through so rejectMappingArguments can see
         // whatever commander parsed, not just the four declared options.
@@ -115,6 +153,8 @@ export const destinationsUpdateOpsCommand: CommandDefinition = {
 export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHooks = {}) {
   const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(
     args: DestinationsUpdateOpsArgs,
@@ -130,6 +170,14 @@ export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHoo
     const id = args.destinationId.trim();
     if (id.length === 0) {
       throw new UsageError("destination_id is required");
+    }
+
+    const reason = args.reason?.trim();
+    if (reason === undefined || reason.length === 0) {
+      throw new UsageError("--reason is required for audit traceability");
+    }
+    if (reason.length > 1024) {
+      throw new UsageError("--reason must be 1024 characters or fewer");
     }
 
     const patch = validatePatch(args);
@@ -153,14 +201,53 @@ export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHoo
       }
 
       const now = nowFn();
-      const applied = await store.update(id, patch, now);
-      const after = await store.findById(id);
-      if (after === null) {
+      const auditId = generateAuditId();
+      const before = toSnapshot(existing);
+      const after: DestinationAuditSnapshot = {
+        ...before,
+        ...(patch.max_concurrency !== undefined ? { max_concurrency: patch.max_concurrency } : {}),
+        ...(patch.max_rps !== undefined ? { max_rps: patch.max_rps } : {}),
+        ...(patch.retry_policy !== undefined ? { retry_policy: patch.retry_policy } : {}),
+        ...(patch.dead_letter_threshold !== undefined
+          ? { dead_letter_threshold: patch.dead_letter_threshold }
+          : {}),
+      };
+      const auditPayload: DestinationsUpdateOpsAuditPayload = {
+        auditId,
+        actorSource: ctx.actor.source,
+        actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
+        occurredAt: now,
+        before,
+        after,
+        projectId: existing.project_id,
+        environment: existing.environment as AuditEnvironment,
+        reason,
+      };
+
+      const applied = await store.updateWithAudit(id, patch, now, auditPayload);
+      const afterRow = await store.findById(id);
+      if (afterRow === null) {
         // Should be impossible: we just confirmed the row exists. Surface
         // a usage error rather than crash so scripts see exit code 2.
         throw new UsageError(`destination "${id}" disappeared during update`);
       }
-      emit(ctx, { applied, before: existing, after, patch });
+
+      if (applied) {
+        ctx.logger.info(
+          {
+            audit_id: auditId,
+            audit_action: "destinations.update-ops",
+            destination_id: id,
+            project_id: existing.project_id,
+            environment: existing.environment,
+            reason,
+            occurred_at: now.toISOString(),
+          },
+          "destination ops updated (audit row persisted)",
+        );
+      }
+
+      emit(ctx, { applied, before: existing, after: afterRow, patch });
     } finally {
       await store.close();
     }
@@ -174,8 +261,46 @@ function defaultStore(): DestinationsUpdateOpsStore {
   const handle = connectDb({ env: process.env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    update: (id, patch, now) => updateDestinationOps(handle.db, id, patch, now),
+    updateWithAudit: async (id, patch, now, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        const applied = await updateDestinationOps(trx, id, patch, now);
+        if (!applied) return false;
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: audit.actorSource,
+          actor_label: audit.actorLabel,
+          action: "destinations.update-ops",
+          target_type: "destination",
+          target_id: id,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+        return true;
+      }),
     close: () => handle.close(),
+  };
+}
+
+function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
+  return {
+    destination_id: row.destination_id,
+    project_id: row.project_id,
+    environment: row.environment,
+    vendor: row.vendor,
+    instance_label: row.instance_label,
+    secret_ref: row.secret_ref,
+    status: row.status,
+    mode: row.mode,
+    max_concurrency: row.max_concurrency,
+    max_rps: row.max_rps,
+    retry_policy: row.retry_policy,
+    dead_letter_threshold: row.dead_letter_threshold,
+    disabled_reason: row.disabled_reason,
   };
 }
 

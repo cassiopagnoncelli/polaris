@@ -40,7 +40,10 @@ interface DestinationsEnableArgs {
  * Snapshot the runner places into `audit_records.before` / `after`. The
  * shape is the operational columns of the destination row, never anything
  * secret-resolved. The persisted JSON is exactly what is shown to
- * operators by `audit show`.
+ * operators by `audit show`. Operational tuning columns are included so
+ * `destinations.create` and `destinations.update-ops` audit rows carry a
+ * complete picture of the row state — for `enable` and `disable` those
+ * columns are unchanged but the snapshot is still self-contained.
  */
 export interface DestinationAuditSnapshot {
   readonly destination_id: string;
@@ -51,6 +54,10 @@ export interface DestinationAuditSnapshot {
   readonly secret_ref: string;
   readonly status: string;
   readonly mode: string;
+  readonly max_concurrency: number;
+  readonly max_rps: number;
+  readonly retry_policy: string;
+  readonly dead_letter_threshold: number;
   readonly disabled_reason: string | null;
 }
 
@@ -232,6 +239,10 @@ function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
     secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
+    max_concurrency: row.max_concurrency,
+    max_rps: row.max_rps,
+    retry_policy: row.retry_policy,
+    dead_letter_threshold: row.dead_letter_threshold,
     disabled_reason: row.disabled_reason,
   };
 }

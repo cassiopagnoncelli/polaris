@@ -111,7 +111,7 @@ class InMemoryDestinationStore {
 
   asCreateStore(): DestinationsCreateStore {
     return {
-      insert: async (input) => {
+      insertWithAudit: async (input, audit) => {
         this.inserts.push(input);
         this.rows.set(input.destination_id, {
           destination_id: input.destination_id,
@@ -129,6 +129,17 @@ class InMemoryDestinationStore {
           disabled_reason: null,
           created_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
           updated_at: new Date("2026-05-12T12:00:00.000Z").toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.create",
+          auditId: audit.auditId,
+          targetId: input.destination_id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: null,
+          after: audit.after,
+          reason: audit.reason,
         });
       },
       close: async () => {
@@ -230,7 +241,7 @@ class InMemoryDestinationStore {
   asUpdateOpsStore(): DestinationsUpdateOpsStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
-      update: async (id, patch: UpdateDestinationOpsInput, now) => {
+      updateWithAudit: async (id, patch: UpdateDestinationOpsInput, now, audit) => {
         this.updateCalls += 1;
         const row = this.rows.get(id);
         if (row === undefined) return false;
@@ -245,6 +256,17 @@ class InMemoryDestinationStore {
             ? { dead_letter_threshold: patch.dead_letter_threshold }
             : {}),
           updated_at: now.toISOString(),
+        });
+        this.auditCalls.push({
+          action: "destinations.update-ops",
+          auditId: audit.auditId,
+          targetId: id,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
         });
         return true;
       },
@@ -400,6 +422,7 @@ describe("destinations create runner", () => {
     const runner = buildDestinationsCreateRunner({
       issueId: () => "polaris_dst_fixed-id-1",
       openStore: () => store.asCreateStore(),
+      generateAuditId: () => "audit-create-1",
     });
     await runner(CREATE_BASE_ARGS, makeContext(capture.streams));
 
@@ -419,6 +442,78 @@ describe("destinations create runner", () => {
     expect(stdout).toContain("polaris destination created");
     expect(stdout).toContain("polaris_dst_fixed-id-1");
     expect(stdout).toContain("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+
+    // P6-006 follow-up: audit row persisted in the same transaction.
+    expect(store.auditCalls).toHaveLength(1);
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.action).toBe("destinations.create");
+    expect(audit.auditId).toBe("audit-create-1");
+    expect(audit.targetId).toBe("polaris_dst_fixed-id-1");
+    expect(audit.actorLabel).toBe("cli");
+    expect(audit.projectId).toBe("storefront");
+    expect(audit.environment).toBe("production");
+    expect(audit.before).toBeNull();
+    expect(audit.after).toMatchObject({
+      destination_id: "polaris_dst_fixed-id-1",
+      project_id: "storefront",
+      environment: "production",
+      vendor: "meta-capi",
+      instance_label: "storefront-prod",
+      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
+      status: "active",
+      mode: "live",
+      max_concurrency: 4,
+      max_rps: 50,
+      retry_policy: "standard",
+      dead_letter_threshold: 5,
+      disabled_reason: null,
+    });
+    // No --reason supplied: runner stamps a default rationale so the audit
+    // row carries non-null context.
+    expect(audit.reason).toBe("destinations.create: meta-capi instance storefront-prod");
+  });
+
+  it("stamps the operator-supplied --reason on the audit row when provided", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_with-reason",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(
+      { ...CREATE_BASE_ARGS, reason: "onboarding new merchant" },
+      makeContext(capture.streams),
+    );
+    expect(store.auditCalls).toHaveLength(1);
+    expect(store.auditCalls[0]?.reason).toBe("onboarding new merchant");
+  });
+
+  it("snapshots operator-supplied operational tuning on the audit `after`", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_tuned-audit",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(
+      {
+        ...CREATE_BASE_ARGS,
+        maxConcurrency: "32",
+        maxRps: "500",
+        retryPolicy: "aggressive",
+        deadLetterThreshold: "12",
+      },
+      makeContext(capture.streams),
+    );
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.after).toMatchObject({
+      max_concurrency: 32,
+      max_rps: 500,
+      retry_policy: "aggressive",
+      dead_letter_threshold: 12,
+    });
   });
 
   it("emits the same shape under --output json with the resolved secret_provider", async () => {
@@ -762,6 +857,7 @@ describe("destinations update-ops runner", () => {
     const runner = buildDestinationsUpdateOpsRunner({
       openStore: () => store.asUpdateOpsStore(),
       now: () => now,
+      generateAuditId: () => "audit-update-1",
     });
     await runner(
       {
@@ -770,6 +866,7 @@ describe("destinations update-ops runner", () => {
         maxRps: "250",
         retryPolicy: "aggressive",
         deadLetterThreshold: "9",
+        reason: "scaling for Black Friday",
       },
       makeContext(capture.streams),
     );
@@ -784,6 +881,49 @@ describe("destinations update-ops runner", () => {
     expect(after?.mode).toBe("live");
     expect(after?.secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
     expect(capture.stdout.join("")).toContain("updated polaris_dst_to-tune");
+
+    // P6-006 follow-up: audit row persisted with before/after and reason.
+    expect(store.auditCalls).toHaveLength(1);
+    const audit = store.auditCalls[0];
+    if (audit === undefined) throw new Error("expected one audit call");
+    expect(audit.action).toBe("destinations.update-ops");
+    expect(audit.auditId).toBe("audit-update-1");
+    expect(audit.targetId).toBe("polaris_dst_to-tune");
+    expect(audit.actorLabel).toBe("cli");
+    expect(audit.projectId).toBe("storefront");
+    expect(audit.environment).toBe("production");
+    expect(audit.reason).toBe("scaling for Black Friday");
+    expect(audit.before).toMatchObject({
+      destination_id: "polaris_dst_to-tune",
+      max_concurrency: 4,
+      max_rps: 50,
+      retry_policy: "standard",
+      dead_letter_threshold: 5,
+    });
+    expect(audit.after).toMatchObject({
+      destination_id: "polaris_dst_to-tune",
+      max_concurrency: 16,
+      max_rps: 250,
+      retry_policy: "aggressive",
+      dead_letter_threshold: 9,
+    });
+  });
+
+  it("requires --reason", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store, { destination_id: "polaris_dst_needs-reason" });
+    const capture = captureOutput();
+    const runner = buildDestinationsUpdateOpsRunner({
+      openStore: () => store.asUpdateOpsStore(),
+    });
+    await expect(
+      runner(
+        { destinationId: "polaris_dst_needs-reason", maxConcurrency: "8" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    // No update issued.
+    expect(store.updateCalls).toBe(0);
   });
 
   it("rejects calls with zero operational flags", async () => {
@@ -794,7 +934,10 @@ describe("destinations update-ops runner", () => {
       openStore: () => store.asUpdateOpsStore(),
     });
     await expect(
-      runner({ destinationId: "polaris_dst_noflags" }, makeContext(capture.streams)),
+      runner(
+        { destinationId: "polaris_dst_noflags", reason: "operator decision" },
+        makeContext(capture.streams),
+      ),
     ).rejects.toMatchObject({ name: "UsageError" });
     // No update issued.
     expect(store.updateCalls).toBe(0);
@@ -809,7 +952,11 @@ describe("destinations update-ops runner", () => {
     });
     await expect(
       runner(
-        { destinationId: "polaris_dst_overlimit", maxConcurrency: "9999" },
+        {
+          destinationId: "polaris_dst_overlimit",
+          maxConcurrency: "9999",
+          reason: "operator decision",
+        },
         makeContext(capture.streams),
       ),
     ).rejects.toMatchObject({ name: "UsageError" });
@@ -832,6 +979,7 @@ describe("destinations update-ops runner", () => {
         {
           destinationId: "polaris_dst_no-mapping",
           maxConcurrency: "8",
+          reason: "operator decision",
           // smuggled mapping flag
           ...({ fieldMap: "purchase.value=value" } as Record<string, string>),
         },
@@ -858,6 +1006,7 @@ describe("destinations update-ops runner", () => {
           {
             destinationId: "polaris_dst_token-test",
             maxConcurrency: "8",
+            reason: "operator decision",
             ...({ [camel]: "forbidden" } as Record<string, string>),
           },
           makeContext(capture.streams),

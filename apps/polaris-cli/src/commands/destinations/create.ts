@@ -2,7 +2,7 @@
  * `polaris destinations create --project <id> --env <env> --vendor <vendor>
  *   --instance-label <label> --secret-ref <provider:ref>
  *   [--mode <live|sandbox|test>] [--max-concurrency <n>] [--max-rps <n>]
- *   [--retry-policy <profile>] [--dead-letter-threshold <n>]`
+ *   [--retry-policy <profile>] [--dead-letter-threshold <n>] [--reason <text>]`
  *
  * Mutating: inserts one destination row scoped to a
  * `(project_id, environment, vendor, instance_label)` tuple. The
@@ -14,14 +14,31 @@
  * versioned consumer code under `consumers/<vendor>/v<n>/mappers/`. The
  * argument validator rejects mapping-shaped flags BEFORE any DB write.
  *
+ * Audit trail: when the insert lands, this command writes an `audit_records`
+ * row in the SAME transaction as the INSERT. `before` is null (no prior row).
+ * `after` is a snapshot of the inserted row — including the operational
+ * tuning columns and the `secret_ref` literal, never a resolved secret. The
+ * `--reason` flag is optional; when omitted the runner stamps a default
+ * `destinations.create: <vendor> instance <label>` reason so the audit row
+ * always carries non-null context.
+ *
  * `mutates: true` so the P6-007 production gate picks this command up
  * automatically.
  */
 import type { DestinationMode, DestinationRetryPolicy } from "@polaris/shared-db";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { connectDb, insertDestination, type InsertDestinationInput } from "../../db/index.js";
+import {
+  type AuditActorSource,
+  type AuditEnvironment,
+  connectDb,
+  insertAuditRecord,
+  insertDestination,
+  type InsertDestinationInput,
+} from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import type { DestinationAuditSnapshot } from "./enable.js";
 import { generateDestinationId } from "./id.js";
 import { rejectMappingArguments, validateSecretRef } from "./validation.js";
 
@@ -38,14 +55,36 @@ const SUPPORTED_RETRY_POLICIES: readonly DestinationRetryPolicy[] = [
 const VENDOR_FORMAT = /^[a-z][a-z0-9_-]{1,62}[a-z0-9]$/;
 const INSTANCE_LABEL_FORMAT = /^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$/;
 
+const DEFAULT_MAX_CONCURRENCY = 4;
+const DEFAULT_MAX_RPS = 50;
+const DEFAULT_RETRY_POLICY: DestinationRetryPolicy = "standard";
+const DEFAULT_DEAD_LETTER_THRESHOLD = 5;
+
+export interface DestinationsCreateAuditPayload {
+  readonly auditId: string;
+  readonly actorSource: AuditActorSource;
+  readonly actorLabel: string;
+  readonly occurredAt: Date;
+  readonly after: DestinationAuditSnapshot;
+  readonly projectId: string;
+  readonly environment: AuditEnvironment;
+  readonly reason: string;
+}
+
 export interface DestinationsCreateStore {
-  insert(input: InsertDestinationInput): Promise<void>;
+  insertWithAudit(
+    input: InsertDestinationInput,
+    audit: DestinationsCreateAuditPayload,
+  ): Promise<void>;
   close(): Promise<void>;
 }
 
 export interface DestinationsCreateHooks {
   readonly issueId?: () => string;
   readonly openStore?: () => DestinationsCreateStore;
+  readonly generateAuditId?: () => string;
+  readonly now?: () => Date;
+  readonly actorLabel?: () => string;
 }
 
 interface DestinationsCreateArgs {
@@ -59,6 +98,7 @@ interface DestinationsCreateArgs {
   readonly maxRps?: string;
   readonly retryPolicy?: string;
   readonly deadLetterThreshold?: string;
+  readonly reason?: string;
 }
 
 export const destinationsCreateCommand: CommandDefinition = {
@@ -97,6 +137,11 @@ export const destinationsCreateCommand: CommandDefinition = {
         "--dead-letter-threshold <n>",
         "Attempts after which a message is routed to the DLQ (default: 5).",
       )
+      .option(
+        "--reason <reason>",
+        "Operator rationale stamped on the audit record (optional). " +
+          "Defaults to `destinations.create: <vendor> instance <label>` when omitted.",
+      )
       .action(deps.runCommand({ id: "destinations.create", mutates: true }, runDestinationsCreate));
   },
 };
@@ -104,6 +149,9 @@ export const destinationsCreateCommand: CommandDefinition = {
 export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateDestinationId;
   const openStore = hooks.openStore ?? defaultStore;
+  const generateAuditId = hooks.generateAuditId ?? uuidv7;
+  const nowFn = hooks.now ?? (() => new Date());
+  const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(
     args: DestinationsCreateArgs,
@@ -136,9 +184,57 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
         : {}),
     };
 
+    const now = nowFn();
+    const auditId = generateAuditId();
+    const reason =
+      validated.reason ??
+      `destinations.create: ${validated.vendor} instance ${validated.instanceLabel}`;
+    const after: DestinationAuditSnapshot = {
+      destination_id: destinationId,
+      project_id: validated.project,
+      environment: validated.env,
+      vendor: validated.vendor,
+      instance_label: validated.instanceLabel,
+      secret_ref: validated.secretRef,
+      status: "active",
+      mode: validated.mode,
+      max_concurrency: validated.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+      max_rps: validated.maxRps ?? DEFAULT_MAX_RPS,
+      retry_policy: validated.retryPolicy ?? DEFAULT_RETRY_POLICY,
+      dead_letter_threshold: validated.deadLetterThreshold ?? DEFAULT_DEAD_LETTER_THRESHOLD,
+      disabled_reason: null,
+    };
+    const auditPayload: DestinationsCreateAuditPayload = {
+      auditId,
+      actorSource: ctx.actor.source,
+      actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
+      occurredAt: now,
+      after,
+      projectId: validated.project,
+      environment: validated.env as AuditEnvironment,
+      reason,
+    };
+
     const store = openStore();
     try {
-      await store.insert(insertInput);
+      await store.insertWithAudit(insertInput, auditPayload);
+
+      ctx.logger.info(
+        {
+          audit_id: auditId,
+          audit_action: "destinations.create",
+          destination_id: destinationId,
+          project_id: validated.project,
+          environment: validated.env,
+          vendor: validated.vendor,
+          instance_label: validated.instanceLabel,
+          mode: validated.mode,
+          reason,
+          occurred_at: now.toISOString(),
+        },
+        "destination created (audit row persisted)",
+      );
+
       emit(ctx, { ...validated, destinationId, secretProvider: validated.secretProvider });
     } finally {
       await store.close();
@@ -152,7 +248,25 @@ const runDestinationsCreate = buildDestinationsCreateRunner();
 function defaultStore(): DestinationsCreateStore {
   const handle = connectDb({ env: process.env });
   return {
-    insert: (input) => insertDestination(handle.db, input),
+    insertWithAudit: async (input, audit) =>
+      handle.db.transaction().execute(async (trx) => {
+        await insertDestination(trx, input);
+        await insertAuditRecord(trx, {
+          audit_id: audit.auditId,
+          actor_source: audit.actorSource,
+          actor_label: audit.actorLabel,
+          action: "destinations.create",
+          target_type: "destination",
+          target_id: input.destination_id,
+          project_id: audit.projectId,
+          environment: audit.environment,
+          before: null,
+          after: audit.after,
+          reason: audit.reason,
+          request_id: audit.auditId,
+          created_at: audit.occurredAt,
+        });
+      }),
     close: () => handle.close(),
   };
 }
@@ -169,6 +283,7 @@ interface ValidatedArgs {
   readonly maxRps: number | undefined;
   readonly retryPolicy: DestinationRetryPolicy | undefined;
   readonly deadLetterThreshold: number | undefined;
+  readonly reason: string | undefined;
 }
 
 function validate(args: DestinationsCreateArgs): ValidatedArgs {
@@ -207,6 +322,7 @@ function validate(args: DestinationsCreateArgs): ValidatedArgs {
     1,
     1000,
   );
+  const reason = parseReason(args.reason);
 
   return {
     project,
@@ -220,6 +336,7 @@ function validate(args: DestinationsCreateArgs): ValidatedArgs {
     maxRps,
     retryPolicy,
     deadLetterThreshold,
+    reason,
   };
 }
 
@@ -262,6 +379,16 @@ function parsePositiveInt(
     throw new UsageError(`${flag} must be between ${min} and ${max} (got ${value})`);
   }
   return value;
+}
+
+function parseReason(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length > 1024) {
+    throw new UsageError("--reason must be 1024 characters or fewer");
+  }
+  return trimmed;
 }
 
 function requireTrim(value: string | undefined, flag: string): string {

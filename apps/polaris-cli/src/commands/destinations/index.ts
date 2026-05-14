@@ -21,9 +21,10 @@
  *
  * Audit hand-off:
  *
- *   enable and disable wrap their UPDATE + insertAuditRecord in one Kysely
- *   transaction (wired in P6-006). create and update-ops are mutating but
- *   are not yet recorder-instrumented.
+ *   Every mutating subcommand (create, enable, disable, update-ops) wraps
+ *   its write + insertAuditRecord in one Kysely transaction. create stamps
+ *   a default rationale on the audit row when `--reason` is omitted;
+ *   update-ops requires `--reason` (matching disable).
  *
  * @see docs/architecture/06-destinations.md
  * @see docs/architecture/02-control-plane.md "Destinations"
