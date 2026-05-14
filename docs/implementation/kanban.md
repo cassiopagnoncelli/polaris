@@ -17,7 +17,6 @@ This board is the coordination surface for implementation work.
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
-- [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) (split from P11-006b)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
 
 ## Backlog
@@ -162,6 +161,7 @@ No blocked cards.
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
 - [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
 - [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
+- [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) — merged in `PENDING`
 
 ### P12 Release Readiness
 

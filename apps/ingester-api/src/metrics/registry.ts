@@ -36,6 +36,8 @@ export const METRIC_INGEST_BATCH_REJECTED_TOTAL = "polaris_ingest_batch_rejected
 export const METRIC_INGEST_DEDUPE_HIT_TOTAL = "polaris_ingest_dedupe_hit_total";
 export const METRIC_INGEST_DEDUPE_SKIPPED_TOTAL = "polaris_ingest_dedupe_skipped_total";
 export const METRIC_INGEST_ORIGIN_REJECTED_TOTAL = "polaris_ingest_origin_rejected_total";
+export const METRIC_INGEST_RATE_LIMIT_REJECTED_TOTAL = "polaris_ingest_rate_limit_rejected_total";
+export const METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL = "polaris_ingest_rate_limit_skipped_total";
 
 export interface DeprecatedSchemaVersionLabels {
   readonly event: string;
@@ -54,6 +56,11 @@ export interface DedupeOutcomeLabels {
 }
 
 export interface OriginRejectedLabels {
+  readonly project_id: string;
+  readonly environment: string;
+}
+
+export interface RateLimitLabels {
   readonly project_id: string;
   readonly environment: string;
 }
@@ -102,6 +109,14 @@ export class IngestMetrics {
 
   incrementOriginRejected(labels: OriginRejectedLabels): void {
     this.incrementByLabels(METRIC_INGEST_ORIGIN_REJECTED_TOTAL, toLabelRecord(labels));
+  }
+
+  incrementRateLimitRejected(labels: RateLimitLabels): void {
+    this.incrementByLabels(METRIC_INGEST_RATE_LIMIT_REJECTED_TOTAL, toLabelRecord(labels));
+  }
+
+  incrementRateLimitSkipped(labels: RateLimitLabels): void {
+    this.incrementByLabels(METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL, toLabelRecord(labels));
   }
 
   /** Returns a snapshot of every counter the registry has seen. */

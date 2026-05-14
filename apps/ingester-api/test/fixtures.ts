@@ -74,6 +74,16 @@ export const testConfig: IngesterConfig = {
     redisOpTimeoutMs: 50,
     maxBatchEvents: 1000,
   },
+  rateLimit: {
+    // Tests default to unlimited (perApiKeyRps=0) so existing suites
+    // don't have to thread per-test budgets through. Rate-limit-specific
+    // tests pass a custom value.
+    perApiKeyRps: 0,
+    windowSeconds: 1,
+    projectOverrides: {},
+    redisKeyPrefix: "polaris:ingest:rl",
+    redisOpTimeoutMs: 50,
+  },
 };
 
 /**

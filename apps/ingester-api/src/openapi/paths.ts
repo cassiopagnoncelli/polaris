@@ -167,6 +167,36 @@ const PROBLEM_RESPONSES = {
       },
     },
   },
+  "429": {
+    description:
+      "The per-API-key rate limit has been exceeded for the current window. The response carries a `Retry-After` header in seconds; SDKs MUST back off for at least that long before the next attempt. Refusals increment `polaris_ingest_rate_limit_rejected_total`. Polaris fails OPEN if the limiter subsystem (Redis) is unavailable — see `polaris_ingest_rate_limit_skipped_total`. Operators tune the per-key budget via `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` and per-project overrides via `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES`.",
+    headers: {
+      "Retry-After": {
+        description:
+          "Number of seconds the SDK MUST wait before retrying. Always present on a 429 response.",
+        schema: { type: "integer", minimum: 1 },
+        example: 7,
+      },
+    },
+    content: {
+      "application/problem+json": {
+        schema: { $ref: "#/components/schemas/ProblemBody" },
+        examples: {
+          rateLimited: {
+            summary: "Per-API-key rate limit exceeded",
+            value: {
+              type: "https://docs.polaris/errors/rate_limited",
+              title: "Too many requests",
+              status: 429,
+              code: "rate_limited",
+              detail: "Per-key rate limit exceeded. Retry after 7s.",
+              request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+            },
+          },
+        },
+      },
+    },
+  },
   "500": {
     description:
       "Unhandled server-side error. Stable `code` is `internal_error`; SDKs treat this as transient and retry with backoff.",
@@ -320,6 +350,7 @@ const EVENTS_POST: PathItem = {
       "403": PROBLEM_RESPONSES["403"],
       "413": PROBLEM_RESPONSES["413"],
       "415": PROBLEM_RESPONSES["415"],
+      "429": PROBLEM_RESPONSES["429"],
       "500": PROBLEM_RESPONSES["500"],
       "503": PROBLEM_RESPONSES["503"],
     },

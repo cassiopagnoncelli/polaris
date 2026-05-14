@@ -1,6 +1,6 @@
 # P11-006c: Rate-Limit Module for the Ingester
 
-Status: Ready
+Status: Done
 
 ## Goal
 
@@ -97,14 +97,14 @@ Add a `429 rate_limited` Problem response declaration in `paths.ts` with a `Retr
 
 ## Acceptance Criteria
 
-- [ ] `apps/ingester-api/src/rate-limit/` module ships with Redis-backed + in-memory adapters.
-- [ ] Rate-limit preHandler runs after auth and before origin guard.
-- [ ] Refused requests return HTTP 429 `rate_limited` with `Retry-After`.
-- [ ] Redis-down path fails OPEN (mirrors dedupe posture).
-- [ ] `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` + per-project overrides wired.
-- [ ] OpenAPI 429 Problem response documented; `pnpm openapi:check` green.
-- [ ] Tests cover counter behavior + wire-up integration.
-- [ ] `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm format:check` green.
+- [x] `apps/ingester-api/src/rate-limit/` module ships with Redis-backed + in-memory adapters.
+- [x] Rate-limit preHandler runs after auth and before origin guard.
+- [x] Refused requests return HTTP 429 `rate_limited` with `Retry-After`.
+- [x] Redis-down path fails OPEN (mirrors dedupe posture).
+- [x] `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` + per-project overrides wired.
+- [x] OpenAPI 429 Problem response documented; `pnpm openapi:check` green.
+- [x] Tests cover counter behavior + wire-up integration.
+- [x] `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm format:check` green.
 
 ## Checks
 
@@ -119,7 +119,51 @@ pnpm lint
 
 ```text
 Files changed:
+  apps/ingester-api/src/rate-limit/                                   new module
+    types.ts                  RateLimiter + RateLimitDecision contracts
+    redis.ts                  Redis INCR/EXPIRE limiter, fail-open
+    memory.ts                 in-memory adapter for tests + local
+    guard.ts                  Fastify preHandler -> 429 + Retry-After
+    index.ts                  barrel + createAllowanceResolver helper
+  apps/ingester-api/src/config.ts                                     add rateLimitEnvSchema + RateLimitConfig
+  apps/ingester-api/src/app.ts                                        wire limiter; preHandler chain
+  apps/ingester-api/src/routes/events.ts                              chain auth -> rateLimit -> origin
+  apps/ingester-api/src/openapi/paths.ts                              add 429 Problem response + Retry-After
+  apps/ingester-api/src/metrics/registry.ts                           rate_limit_rejected/skipped counters
+  apps/ingester-api/test/fixtures.ts                                  testConfig.rateLimit = perKeyRps=0
+  apps/ingester-api/test/rate-limit/                                  new test dir
+    memory.test.ts            7 counter / overrides tests
+    redis.test.ts             5 stubbed-client tests (INCR, EXPIRE, fail-open)
+    wire-up.test.ts           3 end-to-end inject tests against /v1/events
+  docs/api/openapi.yaml                                               regen with 429
+  docs/api/openapi.json                                               regen with 429
+
 Commands run:
+  pnpm install
+  pnpm --filter @polaris/ingester-api typecheck    clean
+  pnpm --filter @polaris/ingester-api test          134 passed (was 119, +15 new)
+  pnpm openapi                                       regenerated docs/api/openapi.{yaml,json}
+  pnpm openapi:check                                 in sync
+  pnpm typecheck                                     workspace; clean
+  pnpm lint                                          workspace; clean
+  pnpm format:check                                  workspace; clean
+  pnpm test                                          1566 passed, 1 skipped (was 1551)
+  pnpm test:scripts                                  59 passed
+
 Checks passed:
+  typecheck, lint, format:check, test, openapi:check
+
 Known gaps:
+  - The Redis rate-limit adapter opens a SECOND ioredis client when
+    enabled (the dedupe store keeps its own). That's two connections
+    per ingester replica. A future refactor could share one client
+    between both stores; the structural surfaces differ (set vs incr)
+    so the share is non-trivial.
+  - Per-project overrides are statically resolved from env at startup.
+    A future control-plane endpoint could push live overrides; the
+    current resolver shape accepts a Map so swapping it is one line.
+  - There is no production telemetry assertion that the limiter
+    actually fires under load — `polaris_ingest_rate_limit_rejected_total`
+    is exported via /metrics and a Grafana alert wires up under
+    P10-005 (alerts-runbooks).
 ```

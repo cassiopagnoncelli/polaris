@@ -47,6 +47,13 @@ import {
   registerCorsPreflightRoute,
 } from "./origin/index.js";
 import { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";
+import {
+  createAllowanceResolver,
+  createMemoryRateLimiter,
+  createRateLimitPreHandler,
+  createRedisRateLimiter,
+  type RateLimiter,
+} from "./rate-limit/index.js";
 import { registerEventsRoutes } from "./routes/events.js";
 
 /**
@@ -130,6 +137,16 @@ export interface BuildIngesterAppOptions {
    * app construct an `ioredis` client from `config.redis`.
    */
   readonly redisClient?: RedisClientLike;
+  /**
+   * Pre-built rate limiter. When supplied, the app does NOT construct
+   * one. Tests inject the in-memory adapter; production builds the
+   * Redis-backed adapter when the dedupe Redis client is available,
+   * and otherwise falls back to in-memory (single-node behavior).
+   *
+   * Setting `rateLimitConfig.perApiKeyRps=0` (via env) disables the
+   * limiter regardless of the wired adapter.
+   */
+  readonly rateLimiter?: RateLimiter;
 }
 
 /**
@@ -233,6 +250,57 @@ export async function buildIngesterApp(
 
   // ---- dedupe ----------------------------------------------------------
   const { dedupe, ownedDedupe } = await buildDedupeStore(config, options, logger);
+
+  // ---- rate limiter (P11-006c) ---------------------------------------
+  // Construction:
+  //   - Caller-supplied `options.rateLimiter` wins.
+  //   - When `config.rateLimit.perApiKeyRps === 0`, the limiter is a
+  //     no-op (returns `allowed: true` for every acquire). The guard
+  //     still runs but is cheap and emits no metrics.
+  //   - Otherwise: build the Redis adapter when an ioredis client is
+  //     available; fall back to the in-memory adapter for single-node /
+  //     local-dev hosts. The fall-back trades distributed correctness
+  //     for keeping the host self-contained; production deployments
+  //     are expected to have Redis wired.
+  const allowanceFor = createAllowanceResolver({
+    defaultPerKeyRps: config.rateLimit.perApiKeyRps,
+    projectOverrides: new Map(Object.entries(config.rateLimit.projectOverrides)),
+  });
+  let rateLimiter: RateLimiter;
+  if (options.rateLimiter !== undefined) {
+    rateLimiter = options.rateLimiter;
+  } else if (config.rateLimit.perApiKeyRps <= 0) {
+    rateLimiter = createMemoryRateLimiter({
+      allowanceFor: () => 0,
+      windowSeconds: config.rateLimit.windowSeconds,
+    });
+  } else {
+    const rateLimitClient = options.redisClient ?? (await maybeBuildRedisClient(config, logger));
+    if (rateLimitClient !== undefined && hasIncrAndExpire(rateLimitClient)) {
+      rateLimiter = createRedisRateLimiter({
+        client: rateLimitClient,
+        keyPrefix: config.rateLimit.redisKeyPrefix,
+        windowSeconds: config.rateLimit.windowSeconds,
+        opTimeoutMs: config.rateLimit.redisOpTimeoutMs,
+        allowanceFor,
+        metrics,
+        logger,
+      });
+    } else {
+      logger.warn(
+        { component: "ingest.rate_limit" },
+        "rate limiter falling back to in-memory adapter (no Redis client wired)",
+      );
+      rateLimiter = createMemoryRateLimiter({
+        allowanceFor,
+        windowSeconds: config.rateLimit.windowSeconds,
+      });
+    }
+  }
+  const rateLimitPreHandler: preHandlerAsyncHookHandler = createRateLimitPreHandler({
+    limiter: rateLimiter,
+    metrics,
+  });
 
   // ---- consolidate shutdown tasks --------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
@@ -338,6 +406,7 @@ export async function buildIngesterApp(
 
   registerEventsRoutes(bootstrap.app, {
     authPreHandler,
+    rateLimitPreHandler,
     handler,
     ...(originPreHandler !== undefined ? { originPreHandler } : {}),
   });
@@ -442,4 +511,18 @@ function errSummary(err: unknown): { name?: string; message?: string } {
   if (err instanceof Error) return { name: err.name, message: err.message };
   if (typeof err === "string") return { message: err };
   return {};
+}
+
+/**
+ * Type guard that confirms a `RedisClientLike` instance also implements
+ * the narrower `incr` + `expire` surface the rate limiter needs. Every
+ * ioredis client satisfies this in practice; the explicit check keeps
+ * the typing honest at the seam.
+ */
+function hasIncrAndExpire(client: RedisClientLike): client is RedisClientLike & {
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, ttlSec: number) => Promise<number | "OK">;
+} {
+  const candidate = client as { incr?: unknown; expire?: unknown };
+  return typeof candidate.incr === "function" && typeof candidate.expire === "function";
 }

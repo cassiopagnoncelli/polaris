@@ -27,6 +27,14 @@ export interface RegisterEventsRoutesOptions {
    */
   readonly authPreHandler: preHandlerAsyncHookHandler;
   /**
+   * Rate-limit `preHandler` returned by `createRateLimitPreHandler`.
+   * Runs AFTER `authPreHandler` (so `request.auth.apiKeyId` is
+   * populated) and BEFORE `originPreHandler` — a request refused on
+   * volume should not consume an allow-list lookup. Refusals surface
+   * as HTTP 429 `rate_limited` with a `Retry-After` header.
+   */
+  readonly rateLimitPreHandler?: preHandlerAsyncHookHandler;
+  /**
    * Optional CORS origin allow-list `preHandler` returned by
    * `createOriginGuardPreHandler`. When supplied, runs AFTER `authPreHandler`
    * so it can scope on the resolved project/source/environment tuple.
@@ -63,7 +71,15 @@ export function registerEventsRoutes(
   app: FastifyInstance,
   options: RegisterEventsRoutesOptions,
 ): void {
+  // Pre-handler chain ordering matters: auth → rate-limit → origin. A
+  // request refused on volume should not consume an allow-list lookup;
+  // a request refused on origin should still consume a token to keep
+  // the bucket honest. The rate-limit guard runs after auth so the
+  // limiter can key on `apiKeyId`.
   const preHandler: preHandlerAsyncHookHandler[] = [options.authPreHandler];
+  if (options.rateLimitPreHandler !== undefined) {
+    preHandler.push(options.rateLimitPreHandler);
+  }
   if (options.originPreHandler !== undefined) {
     preHandler.push(options.originPreHandler);
   }

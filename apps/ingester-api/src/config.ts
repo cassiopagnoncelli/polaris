@@ -147,6 +147,96 @@ export const ingestEnvKeys = [
   "POLARIS_INGEST_MAX_BATCH_EVENTS",
 ] as const;
 
+/**
+ * Tuning knobs for the per-API-key rate limiter (P11-006c).
+ *
+ * Per `docs/architecture/11-production-readiness.md` the ingester
+ * caps each `api_key_id` at a configurable per-second budget so one
+ * noisy SDK can't drown the broker. Per-project overrides let an
+ * operator widen the budget for a known high-throughput project
+ * without raising the platform default. The limiter shares the Redis
+ * client with the dedupe store; a separate key prefix keeps the two
+ * keyspaces disjoint.
+ *
+ * Env vars:
+ *
+ *   POLARIS_RATE_LIMIT_PER_API_KEY_RPS         (1000)   per-key request budget
+ *   POLARIS_RATE_LIMIT_WINDOW_SECONDS          (1)      sliding window size
+ *   POLARIS_RATE_LIMIT_PROJECT_OVERRIDES       ""       "project_id=rps,project_id=rps"
+ *   POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX        "polaris:ingest:rl"
+ *   POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS     (50)
+ *
+ * A `*_PER_API_KEY_RPS` value of 0 disables the limiter (fail-open by
+ * design). Tests + smoke runs set this to keep the runtime out of the
+ * way.
+ */
+export const rateLimitEnvSchema = z
+  .object({
+    POLARIS_RATE_LIMIT_PER_API_KEY_RPS: z.coerce.number().int().min(0).default(1000),
+    POLARIS_RATE_LIMIT_WINDOW_SECONDS: positiveIntSchema.default(1),
+    POLARIS_RATE_LIMIT_PROJECT_OVERRIDES: z.string().default(""),
+    POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX: z.string().min(1).default("polaris:ingest:rl"),
+    POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS: durationMsSchema.default(50),
+  })
+  .transform((parsed, ctx): RateLimitConfig => {
+    const overrides = parseProjectRpsOverrides(parsed["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"], ctx);
+    return {
+      perApiKeyRps: parsed["POLARIS_RATE_LIMIT_PER_API_KEY_RPS"],
+      windowSeconds: parsed["POLARIS_RATE_LIMIT_WINDOW_SECONDS"],
+      projectOverrides: overrides,
+      redisKeyPrefix: parsed["POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX"],
+      redisOpTimeoutMs: parsed["POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS"],
+    };
+  });
+
+export interface RateLimitConfig {
+  readonly perApiKeyRps: number;
+  readonly windowSeconds: number;
+  readonly projectOverrides: Readonly<Record<string, number>>;
+  readonly redisKeyPrefix: string;
+  readonly redisOpTimeoutMs: number;
+}
+
+export const rateLimitEnvKeys = [
+  "POLARIS_RATE_LIMIT_PER_API_KEY_RPS",
+  "POLARIS_RATE_LIMIT_WINDOW_SECONDS",
+  "POLARIS_RATE_LIMIT_PROJECT_OVERRIDES",
+  "POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX",
+  "POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS",
+] as const;
+
+function parseProjectRpsOverrides(raw: string, ctx: z.RefinementCtx): Record<string, number> {
+  const out: Record<string, number> = {};
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return out;
+  for (const entry of trimmed.split(",")) {
+    const pair = entry.trim();
+    if (pair.length === 0) continue;
+    const equalsIndex = pair.indexOf("=");
+    if (equalsIndex <= 0 || equalsIndex === pair.length - 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"],
+        message: `expected "project_id=rps" entries, got "${pair}"`,
+      });
+      continue;
+    }
+    const projectId = pair.slice(0, equalsIndex).trim();
+    const rpsRaw = pair.slice(equalsIndex + 1).trim();
+    const rps = Number(rpsRaw);
+    if (!Number.isInteger(rps) || rps < 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"],
+        message: `invalid rps for project '${projectId}': "${rpsRaw}"`,
+      });
+      continue;
+    }
+    out[projectId] = rps;
+  }
+  return out;
+}
+
 function parseProjectWindowOverrides(
   raw: string,
   cap: number,
@@ -209,6 +299,7 @@ export interface IngesterConfig {
   readonly redis: RedisConfig;
   readonly authCache: AuthCacheConfig;
   readonly ingest: IngestConfig;
+  readonly rateLimit: RateLimitConfig;
 }
 
 /**
@@ -236,6 +327,7 @@ export function ingesterConfigSchema() {
     redis: redisEnvSchema,
     authCache: authCacheEnvSchema,
     ingest: ingestEnvSchema,
+    rateLimit: rateLimitEnvSchema,
   });
 }
 
