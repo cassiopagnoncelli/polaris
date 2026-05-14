@@ -12,7 +12,6 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
@@ -132,6 +131,7 @@ No blocked cards.
 
 - [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md) — merged in `f670d28` (salvaged from stalled worker; behavioral coverage closed by P7-001b)
 - [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
+- [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md) — merged in `f017da8`
 
 ### P8 Production Processors
 
