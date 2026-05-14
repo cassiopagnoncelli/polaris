@@ -13,7 +13,6 @@ This board is the coordination surface for implementation work.
 ## Ready
 
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
-- [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
 
@@ -140,6 +139,7 @@ No blocked cards.
 - [P8-002b Identity Resolver Behavioral Test Matrix](./tasks/P8-002b-identity-resolver-behavioral-tests.md) — merged in `bac7bc2`
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md) — merged in `12a6670`
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md) — merged in `d8bf80d`
+- [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md) — merged in `30cbdd4`
 
 ### P9 Destination Consumers
 
