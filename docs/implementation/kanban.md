@@ -12,7 +12,7 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
-- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
+_(no cards — all Ready picks merged in the 7-task batch P11-006c · P6-000 · P7-002 · P8-005 · P11-001 · P7-004 · P11-008.)_
 
 ## Backlog
 
@@ -162,6 +162,7 @@ No blocked cards.
 - [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
 - [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) — merged in `3d6e236`
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md) — merged in `9a5da8d`
+- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) — merged in `58608ef` (migration renamed to `20260514000003_` at integration time)
 
 ### P12 Release Readiness
 
