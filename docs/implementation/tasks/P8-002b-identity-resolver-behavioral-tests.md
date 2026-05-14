@@ -1,6 +1,6 @@
 # P8-002b: Identity Resolver v1 — Behavioral Test Matrix
 
-Status: Ready
+Status: Done (merged in `bac7bc2`)
 
 ## Goal
 

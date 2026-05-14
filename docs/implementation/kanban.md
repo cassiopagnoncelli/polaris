@@ -43,6 +43,7 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 - [P9-004 GA4 Consumer v1](./tasks/P9-004-ga4-consumer-v1.md)
 - [P9-005 TikTok Consumer v1](./tasks/P9-005-tiktok-consumer-v1.md)
 - [P9-006 Braze Consumer v1](./tasks/P9-006-braze-consumer-v1.md)
+
 ### P10 Observability and Operations
 
 - [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
@@ -140,7 +141,7 @@ No blocked cards.
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
 - [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md) — merged in `a9dd1cf` (salvaged from stalled worker; behavioral coverage closed by P8-002b)
-- [P8-002b Identity Resolver Behavioral Test Matrix](./tasks/P8-002b-identity-resolver-behavioral-tests.md) — merged in `<TBD>`
+- [P8-002b Identity Resolver Behavioral Test Matrix](./tasks/P8-002b-identity-resolver-behavioral-tests.md) — merged in `bac7bc2`
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md) — merged in `12a6670`
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md) — merged in `d8bf80d`
 
