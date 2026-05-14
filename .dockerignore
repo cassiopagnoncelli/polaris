@@ -1,0 +1,76 @@
+# Polaris Docker build context filter.
+#
+# Keeps `docker build` snappy and reproducible by pruning everything the
+# multi-stage Dockerfiles do not need. The builder stage runs
+# `pnpm install --frozen-lockfile` and `pnpm --filter <name> build` from the
+# repository root, so the build context must include source, package.json
+# files, pnpm-workspace.yaml, pnpm-lock.yaml, and TypeScript configs — and
+# nothing else of size or sensitivity.
+#
+# Conventions:
+#   - Negation patterns (`!path`) are only used to re-include items beneath a
+#     broader exclusion. We avoid them where a plain include is enough.
+#   - Test artifacts and tests themselves are excluded; production images do
+#     not need them, and tsconfig.json files reference test sources via the
+#     `tests` rootDir which the builder image installs anyway.
+
+# Node / pnpm install artifacts. The builder stage runs a fresh install.
+node_modules
+**/node_modules
+.pnpm-store
+**/.pnpm-store
+
+# Build outputs. Always re-emitted by `pnpm --filter <name> build`.
+dist
+**/dist
+build
+**/build
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Test artifacts and snapshots.
+coverage
+**/coverage
+.vitest
+**/.vitest
+**/__snapshots__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+
+# VCS metadata. `POLARIS_GIT_SHA` is passed in as a build arg instead.
+.git
+.gitignore
+.gitattributes
+
+# Local environment files. Production secrets are injected at runtime.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Editor / OS scratch.
+.DS_Store
+Thumbs.db
+*.swp
+.idea
+.vscode
+
+# Claude Code worktree / session state.
+.claude
+
+# Local-only ops files that have no business in a runtime image.
+docker-compose*.yml
+Makefile
+README.md
+USAGE.md
+docs
+catalog
+sql
+scripts/smoke
+tests
+resources/maxmind
+
+# Per-package READMEs and changelogs are not needed in the image.
+**/README.md
+**/CHANGELOG.md

@@ -35,7 +35,9 @@
     "openapi": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs",
     "openapi:check": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs --check",
     "smoke:vertical-slice": "node scripts/smoke/vertical-slice.mjs",
-    "test:smoke": "POLARIS_SMOKE_DOCKER=1 vitest run --root . tests/smoke"
+    "test:smoke": "POLARIS_SMOKE_DOCKER=1 vitest run --root . tests/smoke",
+    "docker:build": "node scripts/docker-build.mjs",
+    "docker:build:list": "node scripts/docker-build.mjs --list"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
