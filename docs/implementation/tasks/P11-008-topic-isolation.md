@@ -1,6 +1,6 @@
 # P11-008: Topic Isolation and Per-Project Metrics
 
-Status: Backlog
+Status: Ready
 
 ## Goal
 

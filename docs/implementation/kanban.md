@@ -18,9 +18,9 @@ This board is the coordination surface for implementation work.
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
 - [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
-- [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) (split from P11-006b)
+- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
 
 ## Backlog
 
@@ -55,7 +55,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
 - [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) (waiting on P11-001 + P8-006)
-- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (waiting on P10-002)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
@@ -155,6 +154,7 @@ No blocked cards.
 ### P10 Observability and Operations
 
 - [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md) — merged in `d5ab28f`
+- [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md) — merged in `f918b55`
 
 ### P11 Deployment, Security, and Data Lifecycle (continued)
 
