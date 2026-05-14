@@ -32,6 +32,7 @@ import {
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationDedupe,
   InMemoryDestinationInstanceReader,
+  InMemoryDlqRecordRepository,
   type Mapper,
   type MapperResult,
   POLARIS_HEADER_DESTINATION_VENDOR,
@@ -256,6 +257,44 @@ function lastRecord(env: TestEnv): DeliveryRecord | undefined {
   return env.records.snapshot().at(-1);
 }
 
+/**
+ * Build a fake KafkaJS payload with the bytes + headers a DLQ-bound
+ * envelope needs. The runtime requires a `payload` slot to publish to
+ * the DLQ (and to persist a `dlq_records` row); tests that exercise the
+ * DLQ branch wire one through.
+ */
+function makeFakeKafkaPayload(): {
+  topic: string;
+  partition: number;
+  message: {
+    value: Buffer;
+    headers: IHeaders;
+    offset: string;
+    timestamp: string;
+    attributes: number;
+    size: number;
+    key: null;
+  };
+  heartbeat: () => Promise<void>;
+  pause: () => () => void;
+} {
+  return {
+    topic: "analytics.events",
+    partition: 0,
+    message: {
+      value: Buffer.from('{"event":"payment.approved"}', "utf8"),
+      headers: {},
+      offset: "12345",
+      timestamp: "0",
+      attributes: 0,
+      size: 0,
+      key: null,
+    },
+    heartbeat: async () => {},
+    pause: () => () => {},
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -448,6 +487,111 @@ describe("destination runtime — deliverer outcomes", () => {
     expect(rec?.status).toBe("failed_permanent");
     expect(rec?.error_class).toBe("permanent");
     expect(rec?.vendor_response_code).toBe("400");
+  });
+});
+
+describe("destination runtime — dlq_records persistence", () => {
+  it("failed_permanent persists a dlq_records row when dlqRecords is wired", async () => {
+    const env = makeEnv({
+      deliverer: async () => ({
+        kind: "failed_permanent",
+        error_class: "permanent",
+        vendor_response_code: "400",
+        vendor_response_summary: "invalid payload",
+      }),
+    });
+    const dlqRecords = new InMemoryDlqRecordRepository();
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      dlqRecords,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+    });
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      payload: makeFakeKafkaPayload(),
+    });
+    const rows = dlqRecords.snapshot();
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row?.destination_id).toBe(SEED_INSTANCE.destination_id);
+    expect(row?.reason).toBe("permanent");
+    expect(row?.error_class).toBe("permanent");
+    expect(row?.vendor_response_code).toBe("400");
+    expect(row?.vendor_response_summary).toBe("invalid payload");
+    expect(row?.event_id).toBe("018f1b9e-7b50-7b12-9a2e-0e2f88d8f551");
+    expect(row?.vendor).toBe("test-vendor");
+    expect(row?.resolved_at).toBeNull();
+  });
+
+  it("failed_retryable persists a dlq_records row only at-or-above dead_letter_threshold", async () => {
+    const env = makeEnv({
+      deliverer: async () => ({
+        kind: "failed_retryable",
+        error_class: "transient",
+        vendor_response_code: "503",
+      }),
+    });
+    const dlqRecords = new InMemoryDlqRecordRepository();
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      dlqRecords,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+    });
+    // Attempt below threshold (SEED_INSTANCE.dead_letter_threshold=5) →
+    // rethrow but no DLQ row.
+    await expect(
+      consumer.handleEvent({
+        envelope: makeEnvelope(),
+        destination_id: SEED_INSTANCE.destination_id,
+        payload: makeFakeKafkaPayload(),
+        attempt: 1,
+      }),
+    ).rejects.toThrow();
+    expect(dlqRecords.snapshot()).toHaveLength(0);
+    // Attempt at threshold → rethrow + DLQ row.
+    await expect(
+      consumer.handleEvent({
+        envelope: makeEnvelope(),
+        destination_id: SEED_INSTANCE.destination_id,
+        payload: makeFakeKafkaPayload(),
+        attempt: SEED_INSTANCE.dead_letter_threshold,
+      }),
+    ).rejects.toThrow();
+    expect(dlqRecords.snapshot()).toHaveLength(1);
+    const row = dlqRecords.snapshot()[0];
+    expect(row?.attempts).toBe(SEED_INSTANCE.dead_letter_threshold);
+    expect(row?.reason).toBe("transient");
+  });
+
+  it("Kafka DLQ publish still happens when dlqRecords is omitted (backward compat)", async () => {
+    const env = makeEnv({
+      deliverer: async () => ({
+        kind: "failed_permanent",
+        error_class: "permanent",
+        vendor_response_code: "400",
+      }),
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      payload: makeFakeKafkaPayload(),
+    });
+    // The Kafka publish landed (one DLQ producer send observed).
+    expect(env.producerSends.length).toBeGreaterThanOrEqual(1);
   });
 });
 

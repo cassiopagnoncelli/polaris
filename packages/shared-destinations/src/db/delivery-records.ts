@@ -221,6 +221,29 @@ export interface RecordDeliveryInput {
   readonly finished_at?: Date;
 }
 
+/**
+ * Filters accepted by `findByDestinationId`. Each is optional; the
+ * repository applies the ones that are set and ignores the rest.
+ *
+ *   - `status`        narrow to one outcome (e.g. only `failed_permanent`)
+ *   - `errorClass`    narrow to one error_class label
+ *   - `since` / `until`
+ *                     half-open finished-at window (`finished_at >= since`,
+ *                     `finished_at < until`); both default to "no bound"
+ *   - `limit`         max rows returned; the repository caps at 1000 to
+ *                     stop a runaway CLI invocation from blowing memory
+ */
+export interface ListDeliveryRecordsFilter {
+  readonly status?: DeliveryRecordStatus;
+  readonly errorClass?: DeliveryRecordErrorClass;
+  readonly since?: Date;
+  readonly until?: Date;
+  readonly limit?: number;
+}
+
+/** Maximum number of rows `findByDestinationId` will ever return. */
+export const LIST_DELIVERY_RECORDS_HARD_LIMIT = 1000 as const;
+
 /** Repository contract. Implementations: in-memory + Kysely. */
 export interface DeliveryRecordRepository {
   /** Insert one record. Returns the persisted row. */
@@ -233,6 +256,17 @@ export interface DeliveryRecordRepository {
    * command and by the runtime's idempotent-replay guard.
    */
   findRecordsByEventId(event_id: string): Promise<readonly DeliveryRecord[]>;
+  /**
+   * List delivery records for a destination_id, ordered by
+   * `finished_at DESC`. Filter knobs narrow by status, error class, and
+   * time window. Capped at `LIST_DELIVERY_RECORDS_HARD_LIMIT` rows.
+   *
+   * Used by `polaris deliveries list <destination_id>` (P9-007).
+   */
+  findByDestinationId(
+    destination_id: string,
+    filter?: ListDeliveryRecordsFilter,
+  ): Promise<readonly DeliveryRecord[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +328,24 @@ export class InMemoryDeliveryRecordRepository implements DeliveryRecordRepositor
       if (record.event_id === event_id) matches.push(record);
     }
     return matches.sort((a, b) => b.finished_at.getTime() - a.finished_at.getTime());
+  }
+
+  async findByDestinationId(
+    destination_id: string,
+    filter: ListDeliveryRecordsFilter = {},
+  ): Promise<readonly DeliveryRecord[]> {
+    const matches: DeliveryRecord[] = [];
+    for (const record of this.records.values()) {
+      if (record.destination_id !== destination_id) continue;
+      if (filter.status !== undefined && record.status !== filter.status) continue;
+      if (filter.errorClass !== undefined && record.error_class !== filter.errorClass) continue;
+      if (filter.since !== undefined && record.finished_at < filter.since) continue;
+      if (filter.until !== undefined && record.finished_at >= filter.until) continue;
+      matches.push(record);
+    }
+    matches.sort((a, b) => b.finished_at.getTime() - a.finished_at.getTime());
+    const limit = clampListLimit(filter.limit);
+    return matches.slice(0, limit);
   }
 
   /** Snapshot every record. Useful for tests. */
@@ -381,12 +433,50 @@ export function createKyselyDeliveryRecordRepository(
     return rows.map(toRecord);
   }
 
-  return { recordDelivery, findRecord, findRecordsByEventId };
+  async function findByDestinationId(
+    destination_id: string,
+    filter: ListDeliveryRecordsFilter = {},
+  ): Promise<readonly DeliveryRecord[]> {
+    let query = db
+      .selectFrom("delivery_records")
+      .selectAll()
+      .where("destination_id", "=", destination_id);
+    if (filter.status !== undefined) {
+      query = query.where("status", "=", filter.status);
+    }
+    if (filter.errorClass !== undefined) {
+      query = query.where("error_class", "=", filter.errorClass);
+    }
+    if (filter.since !== undefined) {
+      query = query.where("finished_at", ">=", filter.since);
+    }
+    if (filter.until !== undefined) {
+      query = query.where("finished_at", "<", filter.until);
+    }
+    const limit = clampListLimit(filter.limit);
+    const rows = await query.orderBy("finished_at", "desc").limit(limit).execute();
+    return rows.map(toRecord);
+  }
+
+  return { recordDelivery, findRecord, findRecordsByEventId, findByDestinationId };
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Clamp a caller-supplied `limit` to `[1, LIST_DELIVERY_RECORDS_HARD_LIMIT]`.
+ * Undefined / zero / negative values fall back to the hard cap so the CLI's
+ * default `polaris deliveries list` invocation returns the maximum allowed
+ * rows without the caller having to think about it.
+ */
+function clampListLimit(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return LIST_DELIVERY_RECORDS_HARD_LIMIT;
+  }
+  return Math.min(Math.floor(value), LIST_DELIVERY_RECORDS_HARD_LIMIT);
+}
 
 /** Truncate `vendor_response_summary` to the CHECK-constrained max length. */
 export function truncateSummary(value: string | null | undefined): string | null {

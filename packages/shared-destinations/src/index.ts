@@ -106,6 +106,7 @@ export {
   InMemoryDeliveryRecordRepository,
   isDeliveryRecordErrorClass,
   isDeliveryRecordStatus,
+  LIST_DELIVERY_RECORDS_HARD_LIMIT,
   truncateSummary,
   VENDOR_RESPONSE_SUMMARY_MAX_LENGTH,
   type DeliveryRecord,
@@ -115,8 +116,25 @@ export {
   type DeliveryRecordStatus,
   type InMemoryDeliveryRecordRepositoryOptions,
   type KyselyDeliveryRecordRepositoryOptions,
+  type ListDeliveryRecordsFilter,
   type RecordDeliveryInput,
 } from "./db/delivery-records.js";
+
+export {
+  createKyselyDlqRecordRepository,
+  DLQ_RECORD_ID_PREFIX,
+  DLQ_RESOLUTION_NOTE_MAX_LENGTH,
+  InMemoryDlqRecordRepository,
+  LIST_DLQ_RECORDS_HARD_LIMIT,
+  type DlqRecord,
+  type DlqRecordRepository,
+  type DlqRecordsTable,
+  type InMemoryDlqRecordRepositoryOptions,
+  type KyselyDlqRecordRepositoryOptions,
+  type ListDlqRecordsFilter,
+  type MarkResolvedOutcome,
+  type RecordDlqInput,
+} from "./db/dlq-records.js";
 
 export {
   createKyselyDestinationInstanceReader,

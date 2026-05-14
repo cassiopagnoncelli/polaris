@@ -72,6 +72,7 @@ import {
   type DeliveryRecordStatus,
   truncateSummary,
 } from "./db/delivery-records.js";
+import type { DlqRecordRepository } from "./db/dlq-records.js";
 import type { DestinationInstance, DestinationInstanceReader } from "./db/destination-instance.js";
 import { publishToDestinationDlq } from "./dlq.js";
 import { DestinationMetrics } from "./metrics.js";
@@ -121,6 +122,17 @@ export interface DestinationConsumerOptions<Payload> {
   readonly instances: DestinationInstanceReader;
   /** Delivery records repository (in-memory or Kysely-backed). */
   readonly records: DeliveryRecordRepository;
+  /**
+   * Optional DLQ records repository. When supplied, the runtime persists
+   * a `dlq_records` row alongside the Kafka DLQ publish so the
+   * `polaris dlq list/show/retry/mark-resolved` commands can read the
+   * triage queue from PostgreSQL.
+   *
+   * When omitted, the runtime publishes to Kafka only — preserves
+   * backward compatibility for callers (and tests) that don't depend on
+   * the Postgres-backed triage path.
+   */
+  readonly dlqRecords?: DlqRecordRepository;
   /** Secret resolver. The runtime calls `.resolve(instance.secret_ref)`. */
   readonly secrets: SecretResolver;
   /** Structured logger. */
@@ -234,6 +246,7 @@ export function createDestinationConsumer<Payload>(
       descriptor: options.descriptor,
       instances: options.instances,
       records: options.records,
+      ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
       secrets: options.secrets,
       producer: options.producer,
       logger: options.logger,
@@ -357,6 +370,7 @@ export function createDestinationConsumer<Payload>(
       descriptor: options.descriptor,
       instances: options.instances,
       records: options.records,
+      ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
       secrets: options.secrets,
       producer: options.producer,
       logger: options.logger,
@@ -415,6 +429,7 @@ interface ProcessOneInput<Payload> {
   readonly descriptor: DestinationDescriptor<Payload>;
   readonly instances: DestinationInstanceReader;
   readonly records: DeliveryRecordRepository;
+  readonly dlqRecords?: DlqRecordRepository;
   readonly secrets: SecretResolver;
   readonly producer: PolarisProducer;
   readonly logger: Logger;
@@ -437,6 +452,7 @@ async function processOne<Payload>(
     descriptor,
     instances,
     records,
+    dlqRecords,
     secrets,
     producer,
     logger,
@@ -715,6 +731,7 @@ async function processOne<Payload>(
       // Permanent failures publish to DLQ.
       ...(payload !== undefined ? { payloadForDlq: payload } : {}),
       producer,
+      ...(dlqRecords !== undefined ? { dlqRecords } : {}),
     });
   }
 
@@ -827,6 +844,7 @@ async function processOne<Payload>(
         ? { payloadForDlq: payload }
         : {}),
       producer,
+      ...(dlqRecords !== undefined ? { dlqRecords } : {}),
     });
   }
 
@@ -851,6 +869,7 @@ async function processOne<Payload>(
     labels: instanceLabels,
     ...(payload !== undefined ? { payloadForDlq: payload } : {}),
     producer,
+    ...(dlqRecords !== undefined ? { dlqRecords } : {}),
   });
 }
 
@@ -887,6 +906,13 @@ interface RecordOutcomeInput {
   readonly payloadForDlq?: EachMessagePayload;
   /** PolarisProducer required when `payloadForDlq` is set. */
   readonly producer?: PolarisProducer;
+  /**
+   * Optional DLQ records repository — persists a `dlq_records` row
+   * alongside the Kafka publish. When omitted, the Kafka publish still
+   * occurs but the row is not written. The CLI's triage commands read
+   * from this table.
+   */
+  readonly dlqRecords?: DlqRecordRepository;
   /** When set, the function rethrows this error after the record is written. */
   readonly rethrow?: unknown;
   /** Skip the per-status metric increment (used when the caller already counted). */
@@ -980,6 +1006,14 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
       error: input.logErr,
       attempts: input.attempt,
       delivery_key: input.delivery_key,
+      envelope: input.envelope,
+      ...(input.dlqRecords !== undefined ? { dlqRecords: input.dlqRecords } : {}),
+      ...(input.vendor_response_code !== null
+        ? { vendor_response_code: input.vendor_response_code }
+        : {}),
+      ...(input.vendor_response_summary !== null
+        ? { vendor_response_summary: input.vendor_response_summary }
+        : {}),
     });
     input.metrics.incrementDlq({
       ...input.labels,

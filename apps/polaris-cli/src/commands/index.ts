@@ -19,7 +19,9 @@
  */
 import type { CommandDefinition } from "../command.js";
 import { auditCommand } from "./audit/index.js";
+import { deliveriesCommand } from "./deliveries/index.js";
 import { destinationsCommand } from "./destinations/index.js";
+import { dlqCommand } from "./dlq/index.js";
 import { exportCommand } from "./export/index.js";
 import { keysCommand } from "./keys/index.js";
 import { operatorsCommand } from "./operators/index.js";
@@ -40,11 +42,15 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   auditCommand,
   exportCommand,
   replayCommand,
+  deliveriesCommand,
+  dlqCommand,
 ];
 
 export {
   auditCommand,
+  deliveriesCommand,
   destinationsCommand,
+  dlqCommand,
   exportCommand,
   keysCommand,
   operatorsCommand,
