@@ -126,7 +126,7 @@ No blocked cards.
 - [P6-005 Processor Runtime CLI](./tasks/P6-005-processor-runtime-cli.md) — merged in `6b919cb`
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md) — merged in `29bcbef`
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md) — merged in `964f14a`
-- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md) — merged in `PENDING`
+- [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md) — merged in `0621843`
 
 ### P7 Replay System
 
