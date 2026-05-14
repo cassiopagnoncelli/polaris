@@ -1,3 +1,6 @@
+import { attributionFirstTouchAssignedV1PropertiesSchema } from "../events/attribution/first_touch_assigned.v1.js";
+import { attributionLastTouchAssignedV1PropertiesSchema } from "../events/attribution/last_touch_assigned.v1.js";
+import { attributionTouchpointCapturedV1PropertiesSchema } from "../events/attribution/touchpoint_captured.v1.js";
 import { checkoutStartedV1PropertiesSchema } from "../events/checkout/started.v1.js";
 import { enrichedGeoipV1PropertiesSchema } from "../events/enriched/geoip.v1.js";
 import { identityLinkedV1PropertiesSchema } from "../events/identity/linked.v1.js";
@@ -67,5 +70,20 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "enriched.geoip",
     schema_version: 1,
     propertiesSchema: enrichedGeoipV1PropertiesSchema,
+  },
+  {
+    event: "attribution.touchpoint_captured",
+    schema_version: 1,
+    propertiesSchema: attributionTouchpointCapturedV1PropertiesSchema,
+  },
+  {
+    event: "attribution.first_touch_assigned",
+    schema_version: 1,
+    propertiesSchema: attributionFirstTouchAssignedV1PropertiesSchema,
+  },
+  {
+    event: "attribution.last_touch_assigned",
+    schema_version: 1,
+    propertiesSchema: attributionLastTouchAssignedV1PropertiesSchema,
   },
 ];

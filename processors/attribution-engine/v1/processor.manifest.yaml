@@ -1,0 +1,153 @@
+# Polaris processor manifest — attribution-engine v1
+#
+# This manifest is the SEMANTIC definition for the attribution-engine
+# processor, version 1. Per docs/architecture/05-processors-and-replay.md
+# ("Processor Versioning"), the contents of this file for a given
+# (name, version) pair are immutable. Any change that affects emitted
+# event meaning, fields, identity links, attribution outcomes, filtering
+# behavior, or output schema requires a NEW version directory (v2/) with
+# its own manifest.
+#
+# PostgreSQL stores the runtime activation state (enabled/disabled,
+# project/environment scope, consumer group, batch size, ...) — never
+# semantic transformation rules. See docs/architecture/05-processors-and-replay.md
+# "Processor Configuration".
+
+name: attribution-engine
+version: v1
+owner: platform-data
+description: |
+  First attribution processor in Polaris. Consumes `analytics.events`
+  (the analytics-projector's downstream stream of canonical envelopes
+  that have already been processor-stamped) and maintains an in-memory
+  touchpoint chain per `(project_id, environment, primary_identifier)`
+  tuple. The processor is intentionally CONSERVATIVE and DETERMINISTIC
+  in v1.
+
+  Why consume `analytics.events` and not `raw.events`:
+  - `analytics.events` already carries processor metadata so attribution
+    lineage stamps reference the projector's audited output.
+  - Sessionizer + identity-resolver also consume `raw.events` directly;
+    placing attribution downstream of analytics keeps the topology
+    explicit and avoids triple-fanout on the raw topic.
+  - Per `docs/architecture/03-redpanda-topics.md`, `analytics.events` is
+    the canonical "decorated raw" stream; attribution is one of its
+    documented consumers.
+
+  Primary-identifier resolution: v1 picks the first available identifier
+  from the canonical envelope's `identity` block in preference order
+  `customer_id > anonymous_id > session_id`. Mirrors the sessionizer's
+  rule so a session and its attribution chain key on the same identifier.
+  Events with none of these are dropped (the engine cannot attribute them
+  to a touchpoint chain).
+
+  Touchpoint detection: an event is a "touchpoint" iff its
+  `context.campaign` block is present and at least one of
+  `(source, medium, name, term, content, click_id)` is non-null. Empty
+  strings are normalised to null upstream of detection so
+  `campaign: { source: "" }` is treated identically to
+  `campaign: { source: null }`.
+
+  Outputs (every event keyed on the same primary identifier):
+
+    - `attribution.touchpoint_captured` — emitted ONCE per source event
+      whose campaign block is non-empty. Records the raw observation
+      keyed back to the source `event_id`.
+
+    - `attribution.first_touch_assigned` — emitted the FIRST time a
+      campaign-tagged observation is seen for an identifier. Subsequent
+      touchpoints for the same identifier do not re-emit this.
+
+    - `attribution.last_touch_assigned` — emitted on the first
+      touchpoint AND whenever the canonical campaign tuple differs from
+      the previously-recorded last-touch tuple. Identical-tuple
+      observations do NOT re-emit (idempotent delta detection on the
+      tuple).
+
+  Touchpoint id derivation:
+  `touchpoint_id = "tp_" + sha256(source_event_id ++ canonical_campaign_tuple)[0..32]`.
+  Replays of the same `analytics.events` slice produce the same
+  `touchpoint_id` byte-for-byte.
+
+  v1 deliberately does NOT decide what constitutes a "conversion". The
+  processor only surfaces the touchpoint chain; downstream analytics
+  joins last-touch / first-touch events to commerce events on
+  `(project_id, environment, primary_identifier, occurred_at)` using
+  whatever conversion semantics each project defines.
+
+  v1 also deliberately does NOT add vendor-specific destination logic
+  (Google Ads, Meta CAPI, TikTok). Per the task card forbidden paths,
+  vendor-specific click_id splitting / dedicated `gclid` / `fbclid`
+  fields are out of scope. The catch-all `campaign.click_id` is recorded
+  verbatim and downstream destinations interpret it.
+
+  State store: in-memory. Crash-induced loss of touchpoint chains is
+  acceptable for v1 because (a) the engine is replayable from
+  `analytics.events`, (b) the deterministic touchpoint_id derivation
+  means replay reproduces identical output, and (c) the v1 chain depth
+  is bounded by the touchpoint observations themselves — no expiring
+  windows participate. A Redis-backed v2 is deferred — see CHANGELOG.
+
+# Streaming mode: each input event maps to zero, one, two, or three
+# emitted attribution.* events:
+#   - 0 if the event has no usable identifier OR no campaign signal,
+#   - 1 if same-tuple-as-prior (touchpoint_captured only),
+#   - 2 if delta from prior (touchpoint_captured + last_touch_assigned),
+#   - 3 if first observation (touchpoint_captured + first_touch_assigned
+#       + last_touch_assigned).
+mode: streaming
+
+# Topic-family inputs/outputs. The shared-kafka topic-family resolver
+# turns these into concrete topic names per project isolation state at
+# runtime. Per-project activation lives in PostgreSQL.
+inputs:
+  - family: analytics.events
+    schema_versions: "*"   # the engine does not gate on event schema version
+outputs:
+  - family: attribution.events
+    schema_versions: [1]
+
+# State stores this processor uses.
+state_stores:
+  - memory:touchpoints
+
+# Operational defaults the runtime helpers fall back to when no
+# PostgreSQL activation row overrides them. Non-semantic per the
+# architecture doc ("Processor Configuration").
+defaults:
+  consumer_group: polaris-attribution-engine-v1
+  partitions_consumed_concurrently: 1
+
+# Replay metadata. The engine is replayable from analytics.events. The
+# deterministic touchpoint_id derivation guarantees byte-identical
+# output for the same input slice.
+#
+# Replay notes (per `docs/implementation/tasks/P8-005-attribution-engine-v1.md`
+# Acceptance Criteria — "Replay notes describe how v1 behavior may
+# affect historical outputs"):
+#
+#   1. The in-memory chain is rebuilt FROM THE BEGINNING of the replay
+#      slice. A replay that starts AFTER an identifier's original first
+#      touchpoint will emit a NEW first_touch_assigned event for whichever
+#      touchpoint comes first in the slice. Downstream consumers should
+#      treat first_touch_assigned events as authoritative ONLY when the
+#      replay window covers the identifier's full lifetime.
+#
+#   2. The same caveat applies to last_touch_assigned. A replay that
+#      starts mid-chain will treat the slice's first observation as a
+#      delta (no prior state), emitting last_touch_assigned for it even
+#      if it would have been a no-op in real-time processing.
+#
+#   3. touchpoint_captured events ARE replay-stable: the touchpoint_id
+#      derivation is purely a function of (source_event_id,
+#      campaign_tuple), so replays reproduce identical touchpoint events.
+#
+#   4. Order of emission within a single source event is deterministic:
+#      touchpoint_captured first, then (if applicable) first_touch_assigned,
+#      then last_touch_assigned. Consumers can rely on this ordering when
+#      reading from the topic with `fromBeginning=true`.
+replay:
+  supported: true
+  restrictions:
+    - first_touch_replay_caveat
+    - last_touch_replay_caveat

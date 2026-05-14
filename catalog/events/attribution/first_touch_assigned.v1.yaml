@@ -1,0 +1,34 @@
+# Catalog entry: attribution.first_touch_assigned v1 (ACTIVE)
+#
+# Emitted by `processors/attribution-engine/v1/` the FIRST TIME a
+# campaign-tagged observation is seen for a `(project_id, environment,
+# primary_identifier)` tuple. Subsequent touchpoints for the same
+# identifier do NOT re-emit this — only the first observation does.
+#
+# v1 uses the conservative deterministic rule: "the first touchpoint
+# observed in the source stream is the first-touch assignment". This is
+# replay-stable: re-running the processor over the same input slice
+# produces the same first-touch event for the same identifier.
+#
+# This event carries the same `touchpoint_id` as the originating
+# `attribution.touchpoint_captured` event so downstream consumers can
+# join the first-touch assignment back to the raw touchpoint observation.
+#
+# Replay caveat: if a replay slice STARTS in the middle of an existing
+# identifier's touchpoint history (i.e. the original first-touch was
+# observed before the replay window), the replay will emit a new
+# first-touch event for whichever touchpoint comes first in the slice.
+# This is documented in the processor's CHANGELOG under "Replay notes".
+name: attribution.first_touch_assigned
+schema_version: 1
+domain: attribution
+owner: platform-data
+description: >-
+  Records the FIRST observed campaign touchpoint for a
+  (project_id, environment, primary_identifier) tuple. v1 uses
+  conservative deterministic last-write-wins-on-first-observation rules
+  and does not interpret conversions.
+lifecycle: active
+since: "2026-05-14"
+schema_module: "@polaris/shared-schemas/events/attribution/first_touch_assigned.v1"
+schema_export: attributionFirstTouchAssignedV1PropertiesSchema

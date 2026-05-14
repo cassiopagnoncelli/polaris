@@ -279,6 +279,31 @@ export function buildTestCatalog(): EventCatalog {
         description: "processor-emitted v1",
         lifecycle: "active",
       },
+      // Attribution events (P8-005) are emitted by the attribution-engine processor.
+      {
+        name: "attribution.touchpoint_captured",
+        schema_version: 1,
+        domain: "attribution",
+        owner: "platform-data",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      {
+        name: "attribution.first_touch_assigned",
+        schema_version: 1,
+        domain: "attribution",
+        owner: "platform-data",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
+      {
+        name: "attribution.last_touch_assigned",
+        schema_version: 1,
+        domain: "attribution",
+        owner: "platform-data",
+        description: "processor-emitted v1",
+        lifecycle: "active",
+      },
     ],
     defaultSchemaBindings,
   );

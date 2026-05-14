@@ -75,6 +75,9 @@ describe("EventCatalog (built from YAML + bindings)", () => {
 
   it("listEventNames is unique and sorted", () => {
     expect(catalog.listEventNames()).toEqual([
+      "attribution.first_touch_assigned",
+      "attribution.last_touch_assigned",
+      "attribution.touchpoint_captured",
       "checkout.started",
       "enriched.geoip",
       "identity.linked",

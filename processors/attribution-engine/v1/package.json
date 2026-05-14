@@ -1,0 +1,41 @@
+{
+  "name": "@polaris/processor-attribution-engine-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris attribution engine processor v1. Consumes analytics.events, maintains an in-memory per-identifier touchpoint chain, and emits attribution.touchpoint_captured / attribution.first_touch_assigned / attribution.last_touch_assigned events on attribution.events. Conservative deterministic rules only — no vendor-specific destination semantics.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "processor.manifest.yaml",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "kafkajs": "^2.2.4",
+    "uuid": "^14.0.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,36 @@
+# Catalog entry: attribution.touchpoint_captured v1 (ACTIVE)
+#
+# Emitted by `processors/attribution-engine/v1/` once per source
+# `analytics.events` envelope whose `context.campaign` block carries at
+# least one non-null field (`source`, `medium`, `name`, `term`, `content`,
+# or `click_id`). The event records that a campaign-tagged observation
+# was seen for a `(project_id, environment, primary_identifier)` tuple.
+#
+# Touchpoint capture is the BASE attribution operation in v1. No
+# vendor-specific destination logic is applied — the processor only
+# surfaces what the SDK already captured per
+# `docs/architecture/10-sdk-standards.md` ("Capture campaign/click context
+# because persistent identity may fail in WebViews"). Whether a given
+# touchpoint becomes a "conversion" is a downstream interpretation
+# question; v1 deliberately does not decide.
+#
+# The processor is deterministic: replaying the same `analytics.events`
+# slice produces the same `attribution.touchpoint_captured` events
+# byte-for-byte. The `touchpoint_id` is derived from
+# `(source_event_id, campaign tuple)` via SHA-256 so replays reproduce
+# identical IDs.
+name: attribution.touchpoint_captured
+schema_version: 1
+domain: attribution
+owner: platform-data
+description: >-
+  Records that a campaign-tagged observation was seen for a
+  (project_id, environment, primary_identifier) tuple. v1 emits one
+  touchpoint event per source analytics event that carries a non-empty
+  campaign context. Primary identifier preference order:
+  customer_id > anonymous_id > session_id. Events without a usable
+  identifier are dropped.
+lifecycle: active
+since: "2026-05-14"
+schema_module: "@polaris/shared-schemas/events/attribution/touchpoint_captured.v1"
+schema_export: attributionTouchpointCapturedV1PropertiesSchema

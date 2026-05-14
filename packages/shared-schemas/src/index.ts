@@ -39,6 +39,22 @@ export {
   geoipSourceSchema,
   type EnrichedGeoipV1Properties,
 } from "./events/enriched/geoip.v1.js";
+export {
+  attributionCampaignTupleSchema,
+  attributionPrimaryIdentifierKindSchema,
+  attributionTouchpointCapturedV1PropertiesSchema,
+  type AttributionCampaignTuple,
+  type AttributionPrimaryIdentifierKind,
+  type AttributionTouchpointCapturedV1Properties,
+} from "./events/attribution/touchpoint_captured.v1.js";
+export {
+  attributionFirstTouchAssignedV1PropertiesSchema,
+  type AttributionFirstTouchAssignedV1Properties,
+} from "./events/attribution/first_touch_assigned.v1.js";
+export {
+  attributionLastTouchAssignedV1PropertiesSchema,
+  type AttributionLastTouchAssignedV1Properties,
+} from "./events/attribution/last_touch_assigned.v1.js";
 
 // Catalog loader / validator surface (file-backed; intended for the
 // ingester process, not SDK distributions).

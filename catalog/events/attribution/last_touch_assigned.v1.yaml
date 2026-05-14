@@ -1,0 +1,37 @@
+# Catalog entry: attribution.last_touch_assigned v1 (ACTIVE)
+#
+# Emitted by `processors/attribution-engine/v1/` whenever the
+# most-recently-observed campaign tuple changes for a
+# `(project_id, environment, primary_identifier)` tuple. The first
+# touchpoint also emits a last-touch event (since "no prior" != "same as
+# new") — so every identifier with at least one touchpoint has at least
+# one `last_touch_assigned`. Subsequent touchpoints with the SAME tuple
+# do not re-emit (idempotent delta detection).
+#
+# v1 deliberately does NOT decide what counts as a "conversion". The
+# processor only tracks the touchpoint chain; downstream analytics joins
+# `attribution.last_touch_assigned` events to commerce / conversion
+# events on `(project_id, environment, primary_identifier, occurred_at)`
+# using whatever conversion semantics each project defines.
+#
+# Delta detection compares the canonical campaign tuple
+# `(source, medium, name, term, content, click_id)`. Missing fields are
+# normalised to null. If every field is null the campaign block is
+# considered EMPTY and is not treated as a touchpoint — `context.campaign:
+# null` and `context.campaign: { source: null, ... }` are equivalent.
+#
+# Replay stability: the delta-detection rule is deterministic on the
+# input slice. Re-running the processor over the same slice produces the
+# same sequence of last-touch events.
+name: attribution.last_touch_assigned
+schema_version: 1
+domain: attribution
+owner: platform-data
+description: >-
+  Records that the most-recently-observed campaign tuple changed for a
+  (project_id, environment, primary_identifier) tuple. Idempotent on the
+  campaign tuple — same tuple does not re-emit.
+lifecycle: active
+since: "2026-05-14"
+schema_module: "@polaris/shared-schemas/events/attribution/last_touch_assigned.v1"
+schema_export: attributionLastTouchAssignedV1PropertiesSchema
