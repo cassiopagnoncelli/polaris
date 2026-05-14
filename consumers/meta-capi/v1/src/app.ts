@@ -1,31 +1,26 @@
 /**
- * Service bootstrap for webhook-sink v1.
+ * Service bootstrap for meta-capi v1.
  *
- * The webhook-sink consumer runs as a standalone Node service. The shape
- * mirrors the analytics-projector skeleton (`processors/analytics-projector/
- * v1/src/app.ts`):
+ * Mirrors `consumers/webhook-sink/v1/src/app.ts`:
  *
- *   1. Build a structured logger from `@polaris/shared-logger`.
+ *   1. Build a structured logger.
  *   2. Build the PostgreSQL `Kysely<Database>` over the shared-config pool.
  *   3. Build the KafkaJS client + `PolarisConsumer` (analytics.events) +
  *      `PolarisProducer` (DLQ publishes only).
- *   4. Build the `DestinationConsumer` runtime from the webhook-sink
+ *   4. Build the `DestinationConsumer` runtime from the meta-capi
  *      descriptor and wire it to:
  *        - `createKyselyDestinationInstanceReader` wrapped in
  *          `DestinationInstanceCache` (per-event lookup)
  *        - `createKyselyDeliveryRecordRepository` (delivery_records)
+ *        - `createKyselyDlqRecordRepository` (P9-007 triage queue)
  *        - `SecretResolver` with the env-backed adapter
  *        - a fresh `DestinationMetrics` registry threaded into `/metrics`
- *   5. Hand the runtime's `start`/`stop` and the consumer/producer/db
- *      lifecycles to `bootstrapService`:
- *        - `/health` and `/ready` come from the bootstrap
- *        - `/metrics` serves the Prometheus text format from the live registry
- *        - shutdown tasks stop the runtime, disconnect the consumer +
- *          producer, then end the Kysely pool in that order
+ *   5. Hand the runtime's `start`/`stop` and lifecycle to
+ *      `bootstrapService`.
  *
- * Tests inject pre-built consumer + producer + instance reader + records
- * repo + secrets through the `BuildAppOptions` slots so they can drive
- * the runtime without a real Redpanda broker or PostgreSQL.
+ * Tests inject pre-built consumer + producer + adapters through the
+ * `BuildAppOptions` slots so they can drive the runtime without a real
+ * Redpanda broker or PostgreSQL.
  */
 
 import {
@@ -60,78 +55,32 @@ import {
 } from "@polaris/shared-service-bootstrap";
 import type { Kysely } from "kysely";
 
-import type { WebhookSinkRuntimeConfig } from "./config.js";
-import { createWebhookSinkDescriptor } from "./descriptor.js";
+import type { MetaCapiRuntimeConfig } from "./config.js";
+import { createMetaCapiDescriptor } from "./descriptor.js";
 import { CONSUMER_VENDOR, CONSUMER_VERSION } from "./descriptor-identity.js";
 
-/**
- * Options accepted by `buildWebhookSinkApp`.
- *
- * Tests override `consumer`, `producer`, `db`, `instances`, `records`, and
- * `secrets` to drive the runtime in isolation.
- */
 export interface BuildAppOptions {
-  readonly config: WebhookSinkRuntimeConfig;
-  /** Extra readiness probes plugged into `/ready`. */
+  readonly config: MetaCapiRuntimeConfig;
   readonly readinessProbes?: ReadonlyArray<ReadinessProbe>;
-  /** Additional shutdown tasks. */
   readonly shutdownTasks?: ReadonlyArray<ShutdownTask>;
-  /** Whether to install signal handlers. */
   readonly installShutdown?: boolean;
-  /** Override of `process.exit` for shutdown tests. */
   readonly shutdownExit?: (code: number) => void;
 
   // ---- pluggable subsystem overrides ------------------------------------
 
-  /**
-   * Pre-built consumer. When supplied, the app does NOT call
-   * `connect()` or `disconnect()`; the caller owns the lifecycle.
-   */
   readonly consumer?: PolarisConsumer;
-  /**
-   * Pre-built producer. When supplied, the app does NOT call
-   * `connect()` or `disconnect()`; the caller owns the lifecycle.
-   */
   readonly producer?: PolarisProducer;
-  /**
-   * Pre-built Kysely client. When supplied, the app does NOT call
-   * `closeDb()` on shutdown.
-   */
   readonly db?: Kysely<Database>;
-  /** Pre-built `DestinationInstanceReader`. Default: Kysely-backed + cache. */
   readonly instances?: DestinationInstanceReader;
-  /** Pre-built `DeliveryRecordRepository`. Default: Kysely-backed. */
   readonly records?: DeliveryRecordRepository;
-  /**
-   * Pre-built `DlqRecordRepository`. Default: Kysely-backed. The runtime
-   * writes a row alongside the Kafka DLQ publish so `polaris dlq list`
-   * (P9-007) surfaces every triage entry. Tests inject the in-memory
-   * adapter.
-   */
   readonly dlqRecords?: DlqRecordRepository;
-  /**
-   * Pre-built secret resolver. Default: env-only resolver (production wires
-   * a Vault / file adapter through `@polaris/shared-secrets`).
-   */
   readonly secrets?: SecretResolver;
-  /** `fetch`-compatible deliverer implementation. Default: `globalThis.fetch`. */
   readonly fetch?: typeof globalThis.fetch;
-  /** Override of `() => new Date()` for deterministic tests. */
   readonly now?: () => Date;
-  /**
-   * Whether to start the destination consumer runtime as part of bootstrap.
-   * Defaults to `true` for production; tests set this to `false` and drive
-   * the runtime's `handler` directly.
-   */
   readonly startRuntime?: boolean;
 }
 
-/**
- * Outcome of `buildWebhookSinkApp`. Bundles the Fastify bootstrap with the
- * runtime handle so the binary entry point can call `runtime.start()` and
- * `runtime.stop()` deterministically.
- */
-export interface BuiltWebhookSinkApp {
+export interface BuiltMetaCapiApp {
   readonly bootstrap: BootstrappedService;
   readonly runtime: DestinationConsumer;
   readonly producer: PolarisProducer;
@@ -143,7 +92,7 @@ export interface BuiltWebhookSinkApp {
   readonly ownsDb: boolean;
 }
 
-export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<BuiltWebhookSinkApp> {
+export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltMetaCapiApp> {
   const { config } = options;
 
   const logger = createLogger({
@@ -152,7 +101,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     env: config.service.environment,
   });
   const consumerLogger = logger.child({
-    component: "webhook-sink.runtime",
+    component: "meta-capi.runtime",
     vendor: CONSUMER_VENDOR,
     consumer_version: CONSUMER_VERSION,
   });
@@ -197,10 +146,10 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
   const dlqRecords = options.dlqRecords ?? createKyselyDlqRecordRepository({ db });
   const metrics = new DestinationMetrics();
 
-  const descriptor = createWebhookSinkDescriptor({
-    requestTimeoutMs: config.sink.requestTimeoutMs,
+  const descriptor = createMetaCapiDescriptor({
+    requestTimeoutMs: config.meta.requestTimeoutMs,
+    graphHost: config.meta.graphHost,
     ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
-    ...(options.now !== undefined ? { now: options.now } : {}),
   });
 
   const runtime = createDestinationConsumer({
@@ -212,9 +161,9 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     dlqRecords,
     secrets,
     logger: consumerLogger,
-    allowReplay: config.sink.allowReplay,
+    allowReplay: config.meta.allowReplay,
     metrics,
-    partitionsConsumedConcurrently: config.sink.partitionsConsumedConcurrently,
+    partitionsConsumedConcurrently: config.meta.partitionsConsumedConcurrently,
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 
@@ -279,10 +228,10 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     openapi: {
       setup: NOOP_OPENAPI_SETUP,
       metadata: {
-        title: "Polaris webhook-sink v1",
+        title: "Polaris meta-capi v1",
         version: config.service.serviceVersion,
         description:
-          "Destination consumer that POSTs canonical events as JSON to a configurable HTTPS endpoint. /health, /ready, and /metrics only — no business routes.",
+          "Destination consumer that POSTs canonical events into Meta's Conversions API. /health, /ready, and /metrics only — no business routes.",
       },
     },
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
@@ -316,38 +265,29 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
   };
 }
 
+/**
+ * Build a libpq-style connection string. Mirrors
+ * `consumers/webhook-sink/v1/src/app.ts` and
+ * `apps/ingester-api/src/app.ts`: user/password URL-encoded; sslmode
+ * explicit via URLSearchParams ('require' or 'disable').
+ */
 function buildDb(
-  config: WebhookSinkRuntimeConfig,
+  config: MetaCapiRuntimeConfig,
   override: Kysely<Database> | undefined,
 ): { db: Kysely<Database>; ownsDb: boolean } {
   if (override !== undefined) {
     return { db: override, ownsDb: false };
   }
-  const connectionString = buildConnectionString(config);
-  const db = createDb({ connectionString, maxConnections: config.postgres.poolMax });
-  return { db, ownsDb: true };
-}
-
-/**
- * Build a libpq-style connection string. Mirrors
- * `apps/ingester-api/src/app.ts`'s `buildDb` so SSL semantics stay
- * consistent across services — sslmode is explicit (`require` or
- * `disable`) rather than implicit via omission.
- *
- * Username + password are URL-encoded because operator-supplied secrets
- * routinely contain `@`, `:`, `/`, or `%`; host + database are left raw
- * because PostgreSQL doesn't accept percent-encoding there and operator
- * inputs are expected to be DNS-safe / SQL-identifier-safe.
- */
-function buildConnectionString(config: WebhookSinkRuntimeConfig): string {
   const pg = config.postgres;
   const params = new URLSearchParams();
   params.set("sslmode", pg.ssl ? "require" : "disable");
-  return `postgres://${encodeURIComponent(pg.user)}:${encodeURIComponent(pg.password)}@${pg.host}:${pg.port}/${pg.database}?${params.toString()}`;
+  const connectionString = `postgres://${encodeURIComponent(pg.user)}:${encodeURIComponent(pg.password)}@${pg.host}:${pg.port}/${pg.database}?${params.toString()}`;
+  const db = createDb({ connectionString, maxConnections: pg.poolMax });
+  return { db, ownsDb: true };
 }
 
 function buildProducer(
-  config: WebhookSinkRuntimeConfig,
+  config: MetaCapiRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
@@ -365,7 +305,7 @@ function buildProducer(
 }
 
 function buildConsumer(
-  config: WebhookSinkRuntimeConfig,
+  config: MetaCapiRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
@@ -379,7 +319,7 @@ function buildConsumer(
     consumerName: CONSUMER_VENDOR,
     consumerVersion: CONSUMER_VERSION,
     consumerConfig: {
-      groupId: config.sink.consumerGroup,
+      groupId: config.meta.consumerGroup,
     },
   });
   return { consumer, ownsConsumer: true };
