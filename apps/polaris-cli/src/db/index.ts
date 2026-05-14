@@ -71,3 +71,23 @@ export {
   updateProject,
   updateSource,
 } from "./projects.js";
+export {
+  cancelReplayJob,
+  findReplayJobById,
+  insertReplayJob,
+  type InsertReplayJobInput,
+  isTerminalReplayStatus,
+  listReplayJobs,
+  type ListReplayJobsFilter,
+  pauseReplayJob,
+  REPLAY_JOB_MODES,
+  REPLAY_JOB_STATUSES,
+  REPLAY_JOB_TARGETS,
+  type ReplayJobMode,
+  type ReplayJobRow,
+  type ReplayJobsTable,
+  type ReplayJobStatus,
+  type ReplayJobTarget,
+  resumeReplayJob,
+  TERMINAL_REPLAY_JOB_STATUSES,
+} from "./replay-jobs.js";
