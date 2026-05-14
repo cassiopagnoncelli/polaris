@@ -24,11 +24,8 @@
  *
  * Audit hand-off:
  *
- *   `enable` and `disable` emit a structured audit-intent log line and
- *   write a stderr TODO marker. The `audit_records` table itself lands in
- *   P6-006; this group must be extended to INSERT into that table once
- *   the schema exists. The audit-intent log carries the same canonical
- *   fields the future record will store, so the shim is one line.
+ *   enable/disable wrap their mutation + insertAuditRecord in one Kysely
+ *   transaction (wired in P6-006).
  *
  * Processor-runs hand-off:
  *
