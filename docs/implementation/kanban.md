@@ -20,13 +20,12 @@ This board is the coordination surface for implementation work.
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
-- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
-- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
 
-### Follow-ups from partial salvage
+### Follow-ups from partial salvage (high priority before declaring P9-001/P7-001 production-ready)
 
-- P9-001 follow-up: deep behavioral tests for the runtime (consent + retry + DLQ + delivery_records round-trips). Scaffold landed in `34c4fe8`.
-- P11-006 follow-up: rate-limit module, HSTS header, body-size limit, app.ts wiring of the origin guard, OpenAPI 403/429 doc. Origin allow-list scaffold landed in `b8b9741`.
+- **P9-001 follow-up**: behavioral test matrix for the runtime — consent_not_granted drop path → delivery_records row; mapper-throws → mapped_failed; deliverer transient throw → retry; deliverer permanent throw → DLQ + status=failed_permanent; replay suppression on/off; rate-limiter lease acquisition. Scaffold landed in `34c4fe8` but the 1,165-line runtime is essentially un-exercised by tests.
+- **P11-006 follow-up**: wire the origin guard into `apps/ingester-api/src/app.ts` (currently dormant code), ship the rate-limit module (only types.ts was salvageable; no implementation), HSTS header on production responses, body-size limit, OpenAPI 403/429 docs, `polaris sources origin-management` CLI. Origin allow-list scaffold landed in `b8b9741`.
+- **P7-001 follow-up**: behavioral tests for cancel/pause/resume runners against in-memory stores (the four hand-written runners are currently un-exercised by tests; replace the `(store as any).findById` cast pattern with a clean interface).
 
 ## Backlog
 
@@ -60,6 +59,8 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
+- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) (waiting on P11-001 + P8-006)
+- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (waiting on P10-002)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
