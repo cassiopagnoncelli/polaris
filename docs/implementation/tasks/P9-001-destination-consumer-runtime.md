@@ -1,6 +1,6 @@
 # P9-001: Destination Consumer Runtime
 
-Status: Blocked (org usage limit, partial implementation staged in worktree `agent-a7054e36bdb4f718e`)
+Status: Done (merged in `34c4fe8`; behavioral test matrix is a follow-up)
 
 ## Goal
 

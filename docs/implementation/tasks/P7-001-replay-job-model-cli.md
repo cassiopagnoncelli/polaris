@@ -1,6 +1,6 @@
 # P7-001: Replay Job Model and CLI
 
-Status: Ready
+Status: Done (merged in `f670d28`; behavioral test matrix is a follow-up)
 
 ## Goal
 

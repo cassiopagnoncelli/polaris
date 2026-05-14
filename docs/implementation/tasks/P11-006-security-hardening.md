@@ -1,6 +1,6 @@
 # P11-006: Security Hardening: Origins, Rate Limits, and Forbidden Fields
 
-Status: Ready
+Status: Partial — origin allow-list scaffold merged in `b8b9741`. Follow-up: rate-limit module, HSTS, body-size limit, app.ts wiring, OpenAPI 403/429 docs.
 
 ## Goal
 

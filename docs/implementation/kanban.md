@@ -13,9 +13,20 @@ This board is the coordination surface for implementation work.
 ## Ready
 
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
-- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md)
+- [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
+- [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md)
-- [P11-006 Security Hardening](./tasks/P11-006-security-hardening.md)
+- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
+- [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
+- [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
+- [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
+- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
+- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
+
+### Follow-ups from partial salvage
+
+- P9-001 follow-up: deep behavioral tests for the runtime (consent + retry + DLQ + delivery_records round-trips). Scaffold landed in `34c4fe8`.
+- P11-006 follow-up: rate-limit module, HSTS header, body-size limit, app.ts wiring of the origin guard, OpenAPI 403/429 doc. Origin allow-list scaffold landed in `b8b9741`.
 
 ## Backlog
 
@@ -25,9 +36,7 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P7 Replay System
 
-- [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-003 Processor Replay Executor](./tasks/P7-003-processor-replay-executor.md)
-- [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
 - [P7-005 ClickHouse Rebuild Workflows](./tasks/P7-005-clickhouse-rebuild-workflows.md)
 
 ### P8 Production Processors
@@ -36,16 +45,12 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P9 Destination Consumers
 
-- [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md)
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md)
 - [P9-004 GA4 Consumer v1](./tasks/P9-004-ga4-consumer-v1.md)
 - [P9-005 TikTok Consumer v1](./tasks/P9-005-tiktok-consumer-v1.md)
 - [P9-006 Braze Consumer v1](./tasks/P9-006-braze-consumer-v1.md)
-- [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
-
 ### P10 Observability and Operations
 
-- [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
 - [P10-004 Loki Logging Pipeline](./tasks/P10-004-loki-logging-pipeline.md)
 - [P10-005 Alerts and Incident Runbooks](./tasks/P10-005-alerts-runbooks.md)
@@ -53,11 +58,8 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P11 Deployment, Security, and Data Lifecycle
 
-- [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
-- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
-- [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
@@ -79,7 +81,7 @@ No cards awaiting review.
 
 ## Blocked
 
-- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — worker hit org usage limit mid-flight (2026-05-12). ~3,000 LOC of runtime/dlq/rate-limiter/dedupe/idempotency/replay-suppression/metrics + delivery_records migration are staged in worktree `agent-a7054e36bdb4f718e` (branch `worktree-agent-a7054e36bdb4f718e`). Missing: `src/index.ts` barrel, test directory, and final wiring. Resume by re-spawning with explicit instructions to ship the missing pieces — do NOT re-implement the staged code.
+No blocked cards.
 
 ## Done
 
@@ -138,6 +140,10 @@ No cards awaiting review.
 - [P6-006 Audit and Export CLI](./tasks/P6-006-audit-export-cli.md) — merged in `29bcbef`
 - [P6-007 Operator Tokens and Mutation Gate](./tasks/P6-007-operator-tokens-and-mutation-gate.md) — merged in `964f14a`
 
+### P7 Replay System
+
+- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md) — merged in `f670d28` (salvaged from worker that hit usage limit; behavioral test matrix is the follow-up)
+
 ### P8 Production Processors
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
@@ -148,10 +154,15 @@ No cards awaiting review.
 ### P9 Destination Consumers
 
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
+- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — merged in `34c4fe8` (salvaged from worker that hit usage limit; behavioral test matrix is the follow-up)
 
 ### P10 Observability and Operations
 
 - [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md) — merged in `d5ab28f`
+
+### P11 Deployment, Security, and Data Lifecycle (continued)
+
+- [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial; rate-limit + HSTS + body-limit + app.ts wiring are the follow-ups)
 
 ### P11 Deployment, Security, and Data Lifecycle
 
