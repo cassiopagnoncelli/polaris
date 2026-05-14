@@ -1,0 +1,168 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Per-project schema validation rate and error rate. Operators consult this dashboard to spot the schema-risk isolation trigger from docs/architecture/03-redpanda-topics.md (a project's experimental or high-cardinality event traffic would meaningfully degrade validation latency or skew metrics for unrelated projects). The top panel surfaces the per-project accepted rate; the bottom panel surfaces the per-project rejection rate broken down by reason.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Per-project schema validation rate and error rate\n\nUses the Polaris ingester metrics labels `project_id`, `environment` and the rejection-reason label `reason`. Schema-shape rejections cluster around `schema_validation_failed`, `forbidden_field_present`, and `unsupported_schema_version`.\n\n- A sustained per-project rejection rate above 1%, or a sustained per-project rejection rate that exceeds the family-wide rate by an order of magnitude, is the schema-risk isolation trigger.\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the trigger has persisted for one operational review cycle.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id) (rate(polaris_ingest_batch_accepted_total{environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{project_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-project accepted events (5m rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.005 },
+              { "color": "red", "value": 0.01 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id) (rate(polaris_ingest_batch_rejected_total{environment=\"$environment\"}[15m])) / ignoring(project_id) group_left() (sum by (project_id) (rate(polaris_ingest_batch_rejected_total{environment=\"$environment\"}[15m])) + sum by (project_id) (rate(polaris_ingest_batch_accepted_total{environment=\"$environment\"}[15m])))",
+          "legendFormat": "{{project_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-project rejection ratio (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id, reason) (rate(polaris_ingest_batch_rejected_total{environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{project_id}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-project rejections by reason (5m rate)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "topic-isolation", "per-project", "schema"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — Per-Project Schema Validation",
+  "uid": "polaris-per-project-schema",
+  "version": 1,
+  "weekStart": ""
+}

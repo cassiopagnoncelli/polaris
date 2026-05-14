@@ -1,0 +1,144 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Per-project share of shared-topic throughput. Operators consult this dashboard to spot the volume-share isolation trigger from docs/architecture/03-redpanda-topics.md (a project drives more than 25% of a shared topic's sustained throughput). The shared family is selected via the $topic_family template variable; the $environment variable filters to one runtime environment. Lines split by project_id; the right-hand stat panel surfaces the per-project share as a percentage of the family total.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Per-project share of shared-topic throughput\n\nUses the Polaris topic-family labels `project_id`, `environment`, `topic_family`, and `concrete_topic`. The 25%-of-shared-throughput line is the documented isolation trigger.\n\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the trigger has persisted for one operational review cycle.\n- Use `polaris topics deisolate ...` to roll back once the trigger has resolved for a documented period.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id) (rate(polaris_ingest_batch_accepted_total{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\"}[5m]))",
+          "legendFormat": "{{project_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Shared-topic throughput by project_id (per 5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.15 },
+              { "color": "red", "value": 0.25 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id) (rate(polaris_ingest_batch_accepted_total{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\"}[15m])) / ignoring(project_id) group_left() sum(rate(polaris_ingest_batch_accepted_total{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\"}[15m]))",
+          "legendFormat": "{{project_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-project share of shared-topic throughput (15m)",
+      "type": "stat"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "topic-isolation", "per-project"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "raw.events", "value": "raw.events" },
+        "options": [
+          { "text": "raw.events", "value": "raw.events", "selected": true },
+          { "text": "identity.events", "value": "identity.events" },
+          { "text": "enriched.events", "value": "enriched.events" },
+          { "text": "attribution.events", "value": "attribution.events" },
+          { "text": "analytics.events", "value": "analytics.events" }
+        ],
+        "label": "Topic family",
+        "name": "topic_family",
+        "query": "raw.events,identity.events,enriched.events,attribution.events,analytics.events",
+        "type": "custom"
+      },
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — Per-Project Shared-Topic Throughput",
+  "uid": "polaris-per-project-throughput",
+  "version": 1,
+  "weekStart": ""
+}

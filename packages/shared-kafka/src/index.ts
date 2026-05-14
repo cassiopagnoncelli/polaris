@@ -76,13 +76,22 @@ export {
 
 export {
   type IsolationLookup,
+  type ScopedTopicResolverLookup,
   type SyncIsolationLookup,
   consumerTopicsForFamily,
   resolveTopicName,
+  resolveTopicNameScoped,
   resolveTopicNameSync,
   sharedOnlyIsolationLookup,
   staticIsolationLookup,
 } from "./topic-family.js";
+
+export {
+  type ScopedIsolationLookup,
+  type TopicIsolationCacheOptions,
+  InMemoryScopedIsolationLookup,
+  TopicIsolationCache,
+} from "./topic-isolation-cache.js";
 
 export {
   type PartitionKeyIdentity,

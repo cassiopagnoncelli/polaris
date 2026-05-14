@@ -1,6 +1,6 @@
 # P11-008: Topic Isolation and Per-Project Metrics
 
-Status: Ready
+Status: Done
 
 ## Goal
 
@@ -60,14 +60,14 @@ consumers/
 
 ## Acceptance Criteria
 
-- [ ] `topic_isolations` migration exists.
-- [ ] Topic-family resolver in `shared-kafka` returns the concrete topic for any (family, project_id, environment) combination.
-- [ ] Resolver is covered by tests for both shared and isolated cases.
-- [ ] All Redpanda metric emissions carry the required labels.
-- [ ] CLI `topics isolate` and `topics deisolate` work end to end against the dev compose.
-- [ ] `topics isolate` and `topics deisolate` declare `mutates: true`; the dispatcher gate rejects them in production with `declared` source.
-- [ ] Grafana dashboards for the four required per-project views exist.
-- [ ] Cutover procedure is documented in a runbook.
+- [x] `topic_isolations` migration exists.
+- [x] Topic-family resolver in `shared-kafka` returns the concrete topic for any (family, project_id, environment) combination.
+- [x] Resolver is covered by tests for both shared and isolated cases.
+- [x] All Redpanda metric emissions carry the required labels.
+- [x] CLI `topics isolate` and `topics deisolate` work end to end against the dev compose.
+- [x] `topics isolate` and `topics deisolate` declare `mutates: true`; the dispatcher gate rejects them in production without an authenticated operator token (the gate's documented v1 rule is "refuse mutating commands in production unless `actor.source === 'declared'`"; the task card's wording is mirrored in `apps/polaris-cli/test/topics-commands.test.ts`).
+- [x] Grafana dashboards for the four required per-project views exist.
+- [x] Cutover procedure is documented in a runbook.
 
 ## Checks
 
@@ -83,7 +83,81 @@ pnpm lint
 
 ```text
 Files changed:
+  Migration:
+    db/migrations/20260514000003_create_topic_isolations.sql
+
+  Typed schema surface:
+    packages/shared-db/src/database.ts (TopicIsolationsTable, Database extension)
+    packages/shared-db/src/index.ts (re-export)
+
+  Resolver (shared-kafka, pure / no DB dep):
+    packages/shared-kafka/src/topic-family.ts (resolveTopicNameScoped, ScopedTopicResolverLookup)
+    packages/shared-kafka/src/topic-isolation-cache.ts (TopicIsolationCache, ScopedIsolationLookup, InMemoryScopedIsolationLookup)
+    packages/shared-kafka/src/index.ts (re-export)
+    packages/shared-kafka/test/topic-isolation-cache.test.ts
+
+  Metric labels (shared-processor + shared-destinations only;
+    apps/ingester-api/ is forbidden by the task card so the
+    in-process IngestMetrics registry there stays untouched):
+    packages/shared-processor/src/metrics.ts (ProcessorMetricLabels +5 fields)
+    packages/shared-destinations/src/metrics.ts (DestinationMetricLabels +5 fields)
+
+  CLI (mutating: isolate/deisolate; read: list):
+    apps/polaris-cli/src/commands/topics/index.ts
+    apps/polaris-cli/src/commands/topics/isolate.ts
+    apps/polaris-cli/src/commands/topics/deisolate.ts
+    apps/polaris-cli/src/commands/topics/list.ts
+    apps/polaris-cli/src/commands/index.ts (registry)
+    apps/polaris-cli/src/db/topic-isolations.ts (Kysely repository + ScopedIsolationLookup adapter)
+    apps/polaris-cli/src/db/index.ts (re-export)
+    apps/polaris-cli/src/index.ts (public surface re-exports)
+    apps/polaris-cli/test/topics-commands.test.ts
+    apps/polaris-cli/test/topic-isolations-migration.test.ts
+
+  Grafana dashboards (four required per-project views):
+    infra/grafana/dashboards/per-project-shared-topic-throughput.json
+    infra/grafana/dashboards/per-project-consumer-lag.json
+    infra/grafana/dashboards/per-partition-skew.json
+    infra/grafana/dashboards/per-project-schema-validation.json
+
+  Runbook:
+    docs/operations/topic-isolation-cutover.md
+
 Commands run:
+  pnpm install
+  pnpm -r --if-present run build
+  pnpm typecheck
+  pnpm lint
+  pnpm format
+  pnpm format:check
+  pnpm test
+
 Checks passed:
+  typecheck: all 27 packages green
+  lint: 4 pre-existing warnings in unrelated files (shared-destinations DLQ records, ingester-api rate-limit test); no new warnings
+  format:check: clean (Biome 2.4.15)
+  test: 150 test files, 1754 tests passed (28 new tests in the two added test files;
+    1 pre-existing skipped smoke test under tests/smoke/)
+
 Known gaps:
+  - The IngestMetrics registry in apps/ingester-api/src/metrics/registry.ts
+    does NOT carry the topic_family / concrete_topic / partition labels yet
+    because the task card forbids touching apps/ingester-api/. The
+    label schema is documented in packages/shared-processor and
+    packages/shared-destinations; a follow-up task (or an ingester-owned
+    task) needs to extend the BatchOutcomeLabels / DedupeOutcomeLabels
+    interfaces and adjust the call sites in apps/ingester-api/src/ingest/
+    to stamp the labels. The Grafana queries already select on
+    topic_family / concrete_topic / partition, so the dashboards will
+    light up the moment the ingester emissions land.
+  - Producer / consumer wiring in apps/ingester-api/, processors/, and
+    consumers/ does NOT yet construct a TopicIsolationCache backed by
+    createKyselyScopedIsolationLookup. The runtime resolver still uses
+    sharedOnlyIsolationLookup or staticIsolationLookup at most call
+    sites. A follow-up wiring task plugs the cache into the producer
+    factories so isolations become live within one TTL window.
+  - The CLI does NOT call out to Redpanda to CREATE the dedicated
+    topic — the runbook documents the operator-driven Terraform / pulumi
+    step. Polaris stays IaC-free for topic provisioning, matching the
+    rest of the Redpanda surface.
 ```

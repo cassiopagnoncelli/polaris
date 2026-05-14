@@ -29,6 +29,7 @@ import { processorsCommand } from "./processors/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { replayCommand } from "./replay/index.js";
 import { sourcesCommand } from "./sources/index.js";
+import { topicsCommand } from "./topics/index.js";
 import { versionCommand } from "./version.js";
 
 export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
@@ -44,6 +45,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   replayCommand,
   deliveriesCommand,
   dlqCommand,
+  topicsCommand,
 ];
 
 export {
@@ -58,5 +60,6 @@ export {
   projectsCommand,
   replayCommand,
   sourcesCommand,
+  topicsCommand,
   versionCommand,
 };

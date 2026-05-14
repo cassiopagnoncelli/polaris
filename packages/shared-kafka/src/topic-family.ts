@@ -107,6 +107,47 @@ export async function resolveTopicName(
 }
 
 /**
+ * Environment-scoped async lookup. The persistent `topic_isolations`
+ * table records isolations per `(family, project_id, environment)`
+ * because the same project may be isolated in production but not in
+ * development. Callers that operate across environments (CLI tooling,
+ * the resolver in services that handle more than one environment) pass
+ * an environment-aware lookup here.
+ *
+ * Single-environment callers should prefer the v1 `IsolationLookup`
+ * adapter exposed by `TopicIsolationCache.forEnvironment(env)`.
+ */
+export interface ScopedTopicResolverLookup {
+  isIsolated(
+    family: CanonicalTopicFamily,
+    projectId: string,
+    environment: string,
+  ): Promise<boolean>;
+}
+
+/**
+ * Async variant of {@link resolveTopicName} that consults an
+ * environment-scoped lookup. Returns the shared family topic when the
+ * triple is not isolated; returns the dedicated topic otherwise.
+ *
+ * This is the resolver entry point CLI tooling and cross-environment
+ * services call; the single-environment producer/consumer hot path
+ * stays on the v1 `resolveTopicName(...)` signature via the adapter
+ * `TopicIsolationCache.forEnvironment(env)`.
+ */
+export async function resolveTopicNameScoped(
+  family: CanonicalTopicFamily | string,
+  projectId: string,
+  environment: string,
+  lookup: ScopedTopicResolverLookup,
+): Promise<string> {
+  ensureFamily(family);
+  const isolated = await lookup.isIsolated(family, projectId, environment);
+  if (isolated) return dedicatedTopicName(family, projectId);
+  return family;
+}
+
+/**
  * The set of concrete topics a consumer must subscribe to when reading a
  * family. Consumers cannot rely on a single shared topic if any project
  * is isolated; they must subscribe to every dedicated topic plus the

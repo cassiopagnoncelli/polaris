@@ -53,6 +53,7 @@ export {
   processorsCommand,
   projectsCommand,
   sourcesCommand,
+  topicsCommand,
   versionCommand,
 } from "./commands/index.js";
 export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
@@ -333,6 +334,33 @@ export {
   sourcesShowCommand,
   sourcesSyncCommand,
 } from "./commands/sources/index.js";
+export {
+  topicsDeisolateCommand,
+  topicsIsolateCommand,
+  topicsListCommand,
+} from "./commands/topics/index.js";
+export {
+  buildTopicsIsolateRunner,
+  TOPIC_ISOLATION_ID_PREFIX,
+  type IsolateInsertOutcome,
+  type TopicIsolationAuditSnapshot,
+  type TopicsIsolateAuditPayload,
+  type TopicsIsolateHooks,
+  type TopicsIsolateStore,
+} from "./commands/topics/isolate.js";
+export {
+  buildTopicsDeisolateRunner,
+  type TopicIsolationDeisolateSnapshot,
+  type TopicsDeisolateAuditPayload,
+  type TopicsDeisolateHooks,
+  type TopicsDeisolateStore,
+} from "./commands/topics/deisolate.js";
+export {
+  buildTopicsListRunner,
+  type TopicsListFilter,
+  type TopicsListHooks,
+  type TopicsListStore,
+} from "./commands/topics/list.js";
 export {
   type DiscoveredProcessorManifest,
   ENVIRONMENTS,

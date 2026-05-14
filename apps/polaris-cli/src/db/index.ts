@@ -93,3 +93,14 @@ export {
   resumeReplayJob,
   TERMINAL_REPLAY_JOB_STATUSES,
 } from "./replay-jobs.js";
+export {
+  createKyselyScopedIsolationLookup,
+  deactivateIsolation,
+  findActiveIsolation,
+  findLatestIsolationByTriple,
+  findTopicIsolationById,
+  insertTopicIsolation,
+  type InsertTopicIsolationInput,
+  listActiveIsolations,
+  type TopicIsolationRow,
+} from "./topic-isolations.js";

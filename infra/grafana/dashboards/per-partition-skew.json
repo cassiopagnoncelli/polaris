@@ -1,0 +1,157 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Per-partition skew on shared topics, grouped by project_id. Operators consult this dashboard to spot the volume-share isolation trigger when one project's identity-key distribution repeatedly hot-spots a single partition. The bar gauge surfaces per-(project_id, partition) message-rate; the heatmap surfaces the skew over time for the selected family.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Per-partition skew on shared topics, grouped by project_id\n\nUses the Polaris topic-family labels `project_id`, `environment`, `topic_family`, `concrete_topic`, `partition`. A repeatedly-hot partition for one project is the volume-share isolation trigger.\n\n- The partition key for `raw.events` is `<project_id>:<environment>:<identity>`. A project whose identity distribution collapses onto one key hot-spots one partition.\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the hot-partition pattern has persisted for one operational review cycle.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": { "displayMode": "lcd" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 4 },
+      "id": 2,
+      "options": {
+        "displayMode": "lcd",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (project_id, partition) (rate(polaris_processor_events_consumed_total{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\"}[5m]))",
+          "legendFormat": "{{project_id}} - p{{partition}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-(project_id, partition) consumer throughput on $topic_family",
+      "type": "bargauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "sum by (partition) (rate(polaris_processor_events_consumed_total{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\", project_id=\"$project_id\"}[5m]))",
+          "legendFormat": "partition {{partition}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-partition skew over time (filtered to $project_id)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "topic-isolation", "per-project", "per-partition"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "raw.events", "value": "raw.events" },
+        "options": [
+          { "text": "raw.events", "value": "raw.events", "selected": true },
+          { "text": "identity.events", "value": "identity.events" },
+          { "text": "enriched.events", "value": "enriched.events" },
+          { "text": "attribution.events", "value": "attribution.events" },
+          { "text": "analytics.events", "value": "analytics.events" }
+        ],
+        "label": "Topic family",
+        "name": "topic_family",
+        "query": "raw.events,identity.events,enriched.events,attribution.events,analytics.events",
+        "type": "custom"
+      },
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      },
+      {
+        "current": { "text": "All", "value": ".*" },
+        "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+        "definition": "label_values(polaris_processor_events_consumed_total, project_id)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": false,
+        "name": "project_id",
+        "query": {
+          "query": "label_values(polaris_processor_events_consumed_total, project_id)",
+          "refId": "Prometheus-project_id"
+        },
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — Per-Partition Skew (Per-Project)",
+  "uid": "polaris-per-partition-skew",
+  "version": 1,
+  "weekStart": ""
+}

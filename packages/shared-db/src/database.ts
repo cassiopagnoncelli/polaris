@@ -499,6 +499,70 @@ export interface IdentityLinksTable {
   superseded_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
 }
 
+/**
+ * `topic_isolations` table.
+ *
+ * Per `docs/architecture/03-redpanda-topics.md` "Topic Isolation Triggers"
+ * and "Topic Families", a project may graduate from a shared canonical
+ * topic to a dedicated topic when one of the documented isolation
+ * triggers fires. The move is operational, not structural: producer and
+ * consumer code continues to reference the logical topic family and
+ * consults the resolver in `@polaris/shared-kafka` for the concrete
+ * topic. This table is the persistent backing store the resolver reads.
+ *
+ * One row per activation event. `deactivated_at` is NULL while the
+ * isolation is active; the resolver only considers rows with
+ * `deactivated_at IS NULL`. Deactivated rows accumulate as history so
+ * operators can answer "when was family X isolated for project Y?"
+ * without consulting the audit log.
+ *
+ * **PostgreSQL does NOT store the canonical topic family list.** The
+ * source of truth for canonical families is the `CANONICAL_TOPIC_FAMILIES`
+ * constant in `packages/shared-kafka/src/topics.ts`; the migration's
+ * CHECK constraint mirrors that constant. Widening the set is a
+ * coordinated change to the constant AND the migration.
+ *
+ * Schema reference:
+ *   db/migrations/20260514000003_create_topic_isolations.sql
+ */
+export interface TopicIsolationsTable {
+  /** Platform-issued UUIDv7 of the activation event. */
+  id: string;
+  /** Project the isolation applies to. References `projects(project_id)`. */
+  project_id: string;
+  /** Environment the isolation is scoped to. */
+  environment: string;
+  /**
+   * Canonical topic family this isolation moves off the shared default.
+   * Must be one of the families in `CANONICAL_TOPIC_FAMILIES`.
+   */
+  topic_family: string;
+  /**
+   * Concrete dedicated topic name. Always `<topic_family>.<project_id>`;
+   * materialized in the row so list queries do not re-derive it.
+   */
+  concrete_topic: string;
+  /** Activation timestamp. Server-stamped via `DEFAULT now()`. */
+  activated_at: Generated<Date>;
+  /**
+   * Deactivation timestamp. NULL while the isolation is active; the
+   * resolver filters on `deactivated_at IS NULL`.
+   */
+  deactivated_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /** Operator-supplied rationale stamped at activation. */
+  reason: string;
+  /**
+   * Free-text actor label captured at activation. Mirrors
+   * `processor_activations.last_changed_by`; the authoritative audit
+   * actor identity lives in `audit_records`.
+   */
+  actor_id: string;
+  /** Issuance time, in UTC. */
+  created_at: Generated<Date>;
+  /** Last mutation time, in UTC. Stamped on every UPDATE. */
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -515,4 +579,5 @@ export interface Database {
   processor_runs: ProcessorRunsTable;
   projects: ProjectsTable;
   sources: SourcesTable;
+  topic_isolations: TopicIsolationsTable;
 }

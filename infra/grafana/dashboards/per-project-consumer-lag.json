@@ -1,0 +1,144 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Per-project consumer lag against shared-topic offsets. Operators consult this dashboard to spot the lag-isolation trigger from docs/architecture/03-redpanda-topics.md (a project's primary consumer cannot keep up with shared-topic offsets and is dragging end-to-end lag SLOs for unrelated projects). The lag panel splits by project_id; a per-project end-to-end lag gauge surfaces the last observation for quick alerting reference.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Per-project consumer lag against shared-topic offsets\n\nUses the Polaris topic-family labels `project_id`, `environment`, `topic_family`, `concrete_topic`, `partition`. The `polaris_processor_lag_ms_last` gauge is emitted by the shared processor metrics registry per partition.\n\n- Sustained lag growth on one project across multiple consumer pods is the lag-isolation trigger documented in `docs/architecture/03-redpanda-topics.md`.\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the trigger has persisted for one operational review cycle.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "max by (project_id) (polaris_processor_lag_ms_last{topic_family=\"$topic_family\", environment=\"$environment\", concrete_topic=\"$topic_family\"})",
+          "legendFormat": "{{project_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Max per-project lag against shared-topic partitions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10000 },
+              { "color": "red", "value": 60000 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "polaris-prometheus" },
+          "expr": "max by (project_id, processor_name) (polaris_processor_lag_ms_last{topic_family=\"$topic_family\", environment=\"$environment\"})",
+          "legendFormat": "{{project_id}} - {{processor_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest per-project per-processor lag",
+      "type": "stat"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "topic-isolation", "per-project"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "raw.events", "value": "raw.events" },
+        "options": [
+          { "text": "raw.events", "value": "raw.events", "selected": true },
+          { "text": "identity.events", "value": "identity.events" },
+          { "text": "enriched.events", "value": "enriched.events" },
+          { "text": "attribution.events", "value": "attribution.events" },
+          { "text": "analytics.events", "value": "analytics.events" }
+        ],
+        "label": "Topic family",
+        "name": "topic_family",
+        "query": "raw.events,identity.events,enriched.events,attribution.events,analytics.events",
+        "type": "custom"
+      },
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — Per-Project Consumer Lag",
+  "uid": "polaris-per-project-lag",
+  "version": 1,
+  "weekStart": ""
+}
