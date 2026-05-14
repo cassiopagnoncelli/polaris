@@ -13,7 +13,6 @@ This board is the coordination surface for implementation work.
 ## Ready
 
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
-- [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
 - [P11-008 Topic Isolation and Per-Project Metrics](./tasks/P11-008-topic-isolation.md) (unblocked by P10-002)
 
 ## Backlog
@@ -162,6 +161,7 @@ No blocked cards.
 - [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
 - [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
 - [P11-006c Rate-Limit Module for the Ingester](./tasks/P11-006c-rate-limit-module.md) — merged in `3d6e236`
+- [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md) — merged in `9a5da8d`
 
 ### P12 Release Readiness
 
