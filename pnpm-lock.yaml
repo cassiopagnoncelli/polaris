@@ -176,6 +176,36 @@ importers:
         specifier: workspace:*
         version: link:../shared-schemas
 
+  packages/shared-destinations:
+    dependencies:
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../shared-destination-normalize
+      '@polaris/shared-kafka':
+        specifier: workspace:*
+        version: link:../shared-kafka
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../shared-logger
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../shared-processor
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../shared-secrets
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+
   packages/shared-kafka:
     dependencies:
       '@polaris/shared-config':
