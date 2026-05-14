@@ -121,10 +121,6 @@ No blocked cards.
 - [P5-001 Vertical Slice Smoke Test](./tasks/P5-001-vertical-slice-smoke.md) — merged in `e9c7651`
 - [P5-002 Developer Runbook](./tasks/P5-002-developer-runbook.md) — merged in `ef21797`
 
-### P11 Deployment, Security, and Data Lifecycle (continued)
-
-- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
-
 ### P6 Control-Plane CLI
 
 - [P6-001 Control-Plane CLI Shell](./tasks/P6-001-cli-shell.md) — merged in `89d1521`
@@ -137,38 +133,34 @@ No blocked cards.
 
 ### P7 Replay System
 
-- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md) — merged in `f670d28` (salvaged from worker that hit usage limit; behavioral test matrix is the follow-up)
+- [P7-001 Replay Job Model and CLI](./tasks/P7-001-replay-job-model-cli.md) — merged in `f670d28` (salvaged from stalled worker; behavioral coverage closed by P7-001b)
+- [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
 
 ### P8 Production Processors
 
 - [P8-001 Processor Runtime Helpers](./tasks/P8-001-processor-runtime-helpers.md) — merged in `3d4e09b`
-- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md) — merged in `a9dd1cf`
+- [P8-002 Identity Resolver v1](./tasks/P8-002-identity-resolver-v1.md) — merged in `a9dd1cf` (salvaged from stalled worker; behavioral coverage closed by P8-002b)
+- [P8-002b Identity Resolver Behavioral Test Matrix](./tasks/P8-002b-identity-resolver-behavioral-tests.md) — merged in `<TBD>`
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md) — merged in `12a6670`
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md) — merged in `d8bf80d`
 
 ### P9 Destination Consumers
 
 - [P9-000 Shared Destination Normalization Package](./tasks/P9-000-shared-destination-normalize.md) — merged in `318afc0`
-- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — merged in `34c4fe8` (salvaged from worker that hit usage limit; behavioral test matrix is the follow-up)
+- [P9-001 Destination Consumer Runtime](./tasks/P9-001-destination-consumer-runtime.md) — merged in `34c4fe8` (salvaged from stalled worker; behavioral coverage closed by P9-001b)
+- [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
 
 ### P10 Observability and Operations
 
 - [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md) — merged in `d5ab28f`
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md) — merged in `f918b55`
 
-### P11 Deployment, Security, and Data Lifecycle (continued)
-
-- [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
-- [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
-
-### Salvage Behavioral Test Follow-ups
-
-- [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
-- [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
-
 ### P11 Deployment, Security, and Data Lifecycle
 
 - [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md) — merged in `28d6105`
+- [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
+- [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
+- [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
 
 ### P12 Release Readiness
 
