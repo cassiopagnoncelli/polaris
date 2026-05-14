@@ -26,6 +26,15 @@ export interface RegisterEventsRoutesOptions {
    * tuple is on `request.auth`.
    */
   readonly authPreHandler: preHandlerAsyncHookHandler;
+  /**
+   * Optional CORS origin allow-list `preHandler` returned by
+   * `createOriginGuardPreHandler`. When supplied, runs AFTER `authPreHandler`
+   * so it can scope on the resolved project/source/environment tuple.
+   * Cross-origin browsers with a disallowed `Origin` header are refused
+   * with HTTP 403 `origin_not_allowed`. Server-to-server callers (no
+   * `Origin` header) bypass the check.
+   */
+  readonly originPreHandler?: preHandlerAsyncHookHandler;
   /** Built ingest handler — composed at app startup. */
   readonly handler: IngestHandler;
 }
@@ -54,7 +63,11 @@ export function registerEventsRoutes(
   app: FastifyInstance,
   options: RegisterEventsRoutesOptions,
 ): void {
-  app.post("/v1/events", { preHandler: options.authPreHandler }, async (request, reply) => {
+  const preHandler: preHandlerAsyncHookHandler[] = [options.authPreHandler];
+  if (options.originPreHandler !== undefined) {
+    preHandler.push(options.originPreHandler);
+  }
+  app.post("/v1/events", { preHandler }, async (request, reply) => {
     if (request.auth === undefined) {
       // Defensive: the preHandler should have either set `request.auth` or
       // thrown a Problem. Treat the missing context as a server-side bug.

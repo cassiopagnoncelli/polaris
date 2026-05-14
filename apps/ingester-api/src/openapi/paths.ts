@@ -89,6 +89,29 @@ const PROBLEM_RESPONSES = {
       },
     },
   },
+  "403": {
+    description:
+      "The request `Origin` header is not on the per-source CORS allow-list. Browsers see the standard CORS error path (no `Access-Control-Allow-Origin` response header) and refuse the request; server-to-server callers (no `Origin` header) bypass the check. Operators manage the allow-list through the `source_allowed_origins` table.",
+    content: {
+      "application/problem+json": {
+        schema: { $ref: "#/components/schemas/ProblemBody" },
+        examples: {
+          originNotAllowed: {
+            summary: "Cross-origin browser request from a disallowed origin",
+            value: {
+              type: "https://docs.polaris/errors/origin_not_allowed",
+              title: "Origin not allowed",
+              status: 403,
+              code: "origin_not_allowed",
+              detail:
+                "The request `Origin` header is not on the per-source allow-list. Check the source's allowed origins in the control plane.",
+              request_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+            },
+          },
+        },
+      },
+    },
+  },
   "413": {
     description:
       "The batch exceeded the configured per-request event count or body size. The body limit is enforced by Fastify (see `config.http.bodyLimitBytes`); the per-batch event cap is enforced by the ingest handler. SDKs must split the batch and retry.",
@@ -294,6 +317,7 @@ const EVENTS_POST: PathItem = {
       },
       "400": PROBLEM_RESPONSES["400"],
       "401": PROBLEM_RESPONSES["401"],
+      "403": PROBLEM_RESPONSES["403"],
       "413": PROBLEM_RESPONSES["413"],
       "415": PROBLEM_RESPONSES["415"],
       "500": PROBLEM_RESPONSES["500"],

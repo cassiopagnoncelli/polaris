@@ -37,6 +37,13 @@ import { buildRedisOptions } from "./dedupe/redis.js";
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { IngestMetrics } from "./metrics/registry.js";
 import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
+import {
+  AllowedOriginsCache,
+  type AllowedOriginsRepository,
+  createOriginGuardPreHandler,
+  createPostgresAllowedOriginsRepository,
+  registerCorsPreflightRoute,
+} from "./origin/index.js";
 import { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";
 import { registerEventsRoutes } from "./routes/events.js";
 
@@ -67,6 +74,29 @@ export interface BuildIngesterAppOptions {
   readonly db?: Kysely<Database>;
   /** Pre-built API key repository. Takes precedence over `db`. */
   readonly apiKeyRepository?: ApiKeyRepository;
+  /**
+   * Optional hash verifier override. Tests pass a stub so the suite does
+   * not pay the argon2 cost; production lets the default `verifySecret`
+   * primitive from `@polaris/shared-secrets` handle verification.
+   */
+  readonly verifyHash?: (plaintext: string, hash: string, algorithm: string) => Promise<boolean>;
+  /**
+   * Pre-built CORS allow-list repository. When supplied, the app does NOT
+   * build one from `db`. Tests inject an in-memory adapter; production
+   * lets the app construct the PostgreSQL adapter from the shared `db`.
+   */
+  readonly originRepository?: AllowedOriginsRepository;
+  /**
+   * TTL for the in-memory CORS allow-list cache. Mirrors the API key
+   * cache shape from P2-002. Default: 60_000 ms (60 s).
+   */
+  readonly originCacheTtlMs?: number;
+  /**
+   * Skip origin guard wiring entirely. Tests that want to verify the
+   * pre-P11-006 behavior pass `true`; production always wires the guard
+   * in.
+   */
+  readonly disableOriginGuard?: boolean;
   /**
    * Pre-built Polaris producer. When supplied, the app does NOT call
    * `connect()` or `disconnect()`; the caller owns the lifecycle. Tests use
@@ -149,8 +179,29 @@ export async function buildIngesterApp(
     ttlMs: config.authCache.ttlMs,
     negativeTtlMs: config.authCache.negativeTtlMs,
   });
-  const authenticate = createAuthService({ repository: cache });
+  const authenticate = createAuthService({
+    repository: cache,
+    ...(options.verifyHash !== undefined ? { verifyHash: options.verifyHash } : {}),
+  });
   const authPreHandler: preHandlerAsyncHookHandler = createAuthPreHandler({ authenticate });
+
+  // ---- CORS origin allow-list (P11-006) -------------------------------
+  // The guard runs AFTER auth so it can scope by the resolved
+  // (project_id, source_id, environment) tuple. The repository defaults
+  // to the PostgreSQL adapter when `db` is available; tests inject an
+  // in-memory adapter through `originRepository`. Hosts can disable the
+  // guard entirely via `disableOriginGuard` for legacy callers, but the
+  // production posture is "always wired".
+  const originRepository =
+    options.originRepository ??
+    (db !== undefined ? createPostgresAllowedOriginsRepository(db) : undefined);
+  const originGuardEnabled = options.disableOriginGuard !== true && originRepository !== undefined;
+  const originCache = originGuardEnabled
+    ? new AllowedOriginsCache({
+        repository: originRepository as AllowedOriginsRepository,
+        ttlMs: options.originCacheTtlMs ?? 60_000,
+      })
+    : undefined;
 
   // ---- catalog + policy ------------------------------------------------
   const catalog = options.catalog ?? loadRuntimeCatalog();
@@ -254,7 +305,34 @@ export async function buildIngesterApp(
     ingestConfig: config.ingest,
   });
 
-  registerEventsRoutes(bootstrap.app, { authPreHandler, handler });
+  // ---- CORS allow-list wire-up ----------------------------------------
+  // Build the guard preHandler now that bootstrap has the Fastify app.
+  // Mount the preflight (OPTIONS) route alongside POST so browsers see
+  // a sane handshake before they ever try the actual POST.
+  let originPreHandler: preHandlerAsyncHookHandler | undefined;
+  if (originGuardEnabled && originCache !== undefined) {
+    originPreHandler = createOriginGuardPreHandler({
+      repository: originCache,
+      metrics,
+    });
+    registerCorsPreflightRoute(bootstrap.app);
+  }
+
+  // ---- HSTS (production only) ----------------------------------------
+  // Only emit Strict-Transport-Security in production: local dev usually
+  // runs over plain HTTP and an HSTS header would force HTTPS upgrades on
+  // the operator's browser long after the dev session ends.
+  if (config.service.environment === "production") {
+    bootstrap.app.addHook("onSend", async (_request, reply) => {
+      reply.header("strict-transport-security", "max-age=63072000; includeSubDomains; preload");
+    });
+  }
+
+  registerEventsRoutes(bootstrap.app, {
+    authPreHandler,
+    handler,
+    ...(originPreHandler !== undefined ? { originPreHandler } : {}),
+  });
 
   return bootstrap;
 }

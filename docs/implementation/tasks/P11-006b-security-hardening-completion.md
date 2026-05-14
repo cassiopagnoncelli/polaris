@@ -1,6 +1,6 @@
-# P11-006b: Security Hardening — Completion (Wire-up + Rate Limits + HSTS + Body Limit)
+# P11-006b: Security Hardening — Completion (Wire-up + HSTS + Body Limit + OpenAPI 403)
 
-Status: Ready
+Status: Partial — origin guard wire-up + HSTS + body-limit + OpenAPI 403 landed; rate-limit module deferred to [P11-006c](./P11-006c-rate-limit-module.md)
 
 ## Goal
 
