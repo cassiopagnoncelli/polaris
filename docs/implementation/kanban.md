@@ -12,6 +12,14 @@ This board is the coordination surface for implementation work.
 
 ## Ready
 
+Salvage follow-ups (highest priority — convert partial v1 deliveries into verified production-ready):
+
+- [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md)
+- [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md)
+- [P11-006b Security Hardening Completion (wire-up + rate limits + HSTS + body limit)](./tasks/P11-006b-security-hardening-completion.md)
+
+New work unblocked by the salvage:
+
 - [P6-000 Control-Plane API Shell](./tasks/P6-000-control-plane-api-shell.md)
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md)
@@ -20,12 +28,6 @@ This board is the coordination surface for implementation work.
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md)
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md)
 - [P11-001 Production Dockerfiles](./tasks/P11-001-production-dockerfiles.md)
-
-### Follow-ups from partial salvage (high priority before declaring P9-001/P7-001 production-ready)
-
-- **P9-001 follow-up**: behavioral test matrix for the runtime — consent_not_granted drop path → delivery_records row; mapper-throws → mapped_failed; deliverer transient throw → retry; deliverer permanent throw → DLQ + status=failed_permanent; replay suppression on/off; rate-limiter lease acquisition. Scaffold landed in `34c4fe8` but the 1,165-line runtime is essentially un-exercised by tests.
-- **P11-006 follow-up**: wire the origin guard into `apps/ingester-api/src/app.ts` (currently dormant code), ship the rate-limit module (only types.ts was salvageable; no implementation), HSTS header on production responses, body-size limit, OpenAPI 403/429 docs, `polaris sources origin-management` CLI. Origin allow-list scaffold landed in `b8b9741`.
-- **P7-001 follow-up**: behavioral tests for cancel/pause/resume runners against in-memory stores (the four hand-written runners are currently un-exercised by tests; replace the `(store as any).findById` cast pattern with a clean interface).
 
 ## Backlog
 
