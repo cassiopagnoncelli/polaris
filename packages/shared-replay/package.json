@@ -1,0 +1,40 @@
+{
+  "name": "@polaris/shared-replay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Replay planner for Polaris. Pure functions that turn a replay-job declaration into a deterministic plan (source topic, scope, time window, target processor/consumer/version, destination policy, risk flags, consumer group). The CLI dry-run command and the future executor (P7-003) consume this module; PostgreSQL stores the job row, this package owns the plan.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./planner": {
+      "types": "./dist/planner.d.ts",
+      "import": "./dist/planner.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage .tsbuildinfo"
+  }
+}

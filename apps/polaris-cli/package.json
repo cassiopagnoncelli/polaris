@@ -39,6 +39,7 @@
     "@polaris/shared-destinations": "workspace:*",
     "@polaris/shared-kafka": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-replay": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",
     "commander": "^14.0.2",
     "kysely": "^0.29.0",

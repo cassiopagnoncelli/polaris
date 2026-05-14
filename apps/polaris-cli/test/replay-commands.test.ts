@@ -34,6 +34,7 @@ import {
   replayCreateCommand,
   replayListCommand,
   replayPauseCommand,
+  replayPlanCommand,
   replayResumeCommand,
   replayShowCommand,
 } from "../src/commands/replay/index.js";
@@ -55,6 +56,7 @@ describe("polaris replay command group", () => {
     expect(replayCreateCommand.id).toBe("replay.create");
     expect(replayListCommand.id).toBe("replay.list");
     expect(replayShowCommand.id).toBe("replay.show");
+    expect(replayPlanCommand.id).toBe("replay.plan");
     expect(replayCancelCommand.id).toBe("replay.cancel");
     expect(replayPauseCommand.id).toBe("replay.pause");
     expect(replayResumeCommand.id).toBe("replay.resume");
@@ -71,6 +73,7 @@ describe("polaris replay command group", () => {
     expect(replayCommand.mutates).toBe(false);
     expect(replayListCommand.mutates).toBe(false);
     expect(replayShowCommand.mutates).toBe(false);
+    expect(replayPlanCommand.mutates).toBe(false);
   });
 
   it("exposes the closed-set constants the validators use", () => {

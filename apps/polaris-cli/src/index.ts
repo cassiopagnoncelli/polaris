@@ -262,6 +262,7 @@ export {
   replayCreateCommand,
   replayListCommand,
   replayPauseCommand,
+  replayPlanCommand,
   replayResumeCommand,
   replayShowCommand,
 } from "./commands/replay/index.js";
@@ -291,6 +292,11 @@ export {
   type ReplayPauseStore,
   type ReplayPauseStoreInput,
 } from "./commands/replay/pause.js";
+export {
+  buildReplayPlanRunner,
+  type ReplayPlanHooks,
+  type ReplayPlanStore,
+} from "./commands/replay/plan.js";
 export {
   buildReplayResumeRunner,
   type ReplayResumeHooks,

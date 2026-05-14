@@ -125,6 +125,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
+      '@polaris/shared-replay':
+        specifier: workspace:*
+        version: link:../../packages/shared-replay
       '@polaris/shared-secrets':
         specifier: workspace:*
         version: link:../../packages/shared-secrets
@@ -381,6 +384,8 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/shared-replay: {}
 
   packages/shared-schemas:
     dependencies:

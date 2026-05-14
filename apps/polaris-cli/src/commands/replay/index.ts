@@ -1,10 +1,11 @@
 /**
  * `polaris replay` command group.
  *
- * Surfaces six commands:
+ * Surfaces seven commands:
  *
  *   - `polaris replay list`                              mutates: false
  *   - `polaris replay show <replay_job_id>`              mutates: false
+ *   - `polaris replay plan <replay_job_id>`              mutates: false
  *   - `polaris replay create ...`                        mutates: true
  *   - `polaris replay cancel <replay_job_id> --reason`   mutates: true
  *   - `polaris replay pause  <replay_job_id> --reason`   mutates: true
@@ -14,31 +15,44 @@
  *
  *   The CLI MUST NOT define replay PLAN semantics. Plans (partitioning,
  *   chunking, transform overrides, topic routing) live in versioned code
- *   under the planner package shipped by P7-002. Every mutating command
- *   here runs `rejectReplayPlanArguments` against the parsed args before
- *   any DB work, so flags like `--partition-strategy` or `--transform-override`
- *   are refused with a usage error and never reach PostgreSQL.
+ *   under the planner package `@polaris/shared-replay` (P7-002). Every
+ *   mutating command here runs `rejectReplayPlanArguments` against the
+ *   parsed args before any DB work, so flags like `--partition-strategy`
+ *   or `--transform-override` are refused with a usage error and never
+ *   reach PostgreSQL.
+ *
+ *   `polaris replay plan` is the dry-run renderer. It reads the
+ *   operator-issued declaration from `replay_jobs` and hands it to the
+ *   planner; it performs no DB writes and never touches Redpanda. The
+ *   plan is the contract the future executor (P7-003) will consume —
+ *   operators run `plan` to pre-flight their replay before promoting
+ *   `mode` from `dry_run` to `live`.
  *
  * Bounded replay: replay is bounded to the operational retention window
  * (90 days for `raw.events` in v1). `replay create` enforces the bound on
  * `--from` with `replay_window_exceeded`. The migration deliberately does
  * NOT encode the bound (it would couple PostgreSQL to the Redpanda
- * retention config); the CLI is the gate.
+ * retention config); the CLI is the gate. The planner re-enforces the
+ * same retention window so a stale row that became out-of-window between
+ * create and plan time also rejects with `outside_retention_window`.
  *
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-001-replay-job-model-cli.md
+ * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
 import type { CommandDefinition } from "../../command.js";
 import { replayCancelCommand } from "./cancel.js";
 import { replayCreateCommand } from "./create.js";
 import { replayListCommand } from "./list.js";
 import { replayPauseCommand } from "./pause.js";
+import { replayPlanCommand } from "./plan.js";
 import { replayResumeCommand } from "./resume.js";
 import { replayShowCommand } from "./show.js";
 
 const CHILDREN: readonly CommandDefinition[] = [
   replayListCommand,
   replayShowCommand,
+  replayPlanCommand,
   replayCreateCommand,
   replayCancelCommand,
   replayPauseCommand,
@@ -52,7 +66,7 @@ export const replayCommand: CommandDefinition = {
     const group = parent
       .command("replay")
       .description(
-        "Manage replay jobs. PostgreSQL stores runtime state only; replay plans live in versioned code under the planner package (P7-002).",
+        "Manage replay jobs. PostgreSQL stores runtime state only; replay plans live in versioned code under @polaris/shared-replay (P7-002).",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);
@@ -65,6 +79,7 @@ export {
   replayCreateCommand,
   replayListCommand,
   replayPauseCommand,
+  replayPlanCommand,
   replayResumeCommand,
   replayShowCommand,
 };
