@@ -1,0 +1,82 @@
+{
+  "name": "@polaris/shared-destinations",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polaris destination consumer runtime: subscribes to analytics.events, composes the shared normalize step from @polaris/shared-destination-normalize, routes through a vendor mapper and deliverer, and writes delivery_records / DLQ entries. Vendor-AGNOSTIC; each consumers/<vendor>/v<N>/ wraps this runtime with its own mapper + deliverer.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./metrics": {
+      "types": "./dist/metrics.d.ts",
+      "import": "./dist/metrics.js"
+    },
+    "./rate-limiter": {
+      "types": "./dist/rate-limiter.d.ts",
+      "import": "./dist/rate-limiter.js"
+    },
+    "./idempotency": {
+      "types": "./dist/idempotency.d.ts",
+      "import": "./dist/idempotency.js"
+    },
+    "./dedupe": {
+      "types": "./dist/dedupe.d.ts",
+      "import": "./dist/dedupe.js"
+    },
+    "./dlq": {
+      "types": "./dist/dlq.d.ts",
+      "import": "./dist/dlq.js"
+    },
+    "./replay-suppression": {
+      "types": "./dist/replay-suppression.d.ts",
+      "import": "./dist/replay-suppression.js"
+    },
+    "./db/delivery-records": {
+      "types": "./dist/db/delivery-records.d.ts",
+      "import": "./dist/db/delivery-records.js"
+    },
+    "./db/destination-instance": {
+      "types": "./dist/db/destination-instance.d.ts",
+      "import": "./dist/db/destination-instance.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-destination-normalize": "workspace:*",
+    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-secrets": "workspace:*",
+    "kafkajs": "^2.2.4",
+    "kysely": "^0.29.0",
+    "uuid": "^14.0.0"
+  }
+}
