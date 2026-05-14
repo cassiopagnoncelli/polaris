@@ -30,6 +30,7 @@
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-kafka": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "zod": "^4.4.3"

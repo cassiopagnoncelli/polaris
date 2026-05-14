@@ -34,6 +34,8 @@ import {
   type RedisClientLike,
 } from "./dedupe/index.js";
 import { buildRedisOptions } from "./dedupe/redis.js";
+import { toPrometheusText } from "@polaris/shared-metrics";
+
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { IngestMetrics } from "./metrics/registry.js";
 import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
@@ -292,6 +294,12 @@ export async function buildIngesterApp(
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
     installShutdown: options.installShutdown ?? true,
     ...(options.shutdownExit !== undefined ? { shutdownExit: options.shutdownExit } : {}),
+    // Wire /metrics to the live IngestMetrics registry (P10-002). Each
+    // scrape walks the in-memory counter map and produces Prometheus
+    // text format on demand — no background thread, no buffering.
+    metrics: {
+      producer: () => toPrometheusText(metrics.getSamples()),
+    },
   });
 
   // ---- ingest handler + route -----------------------------------------

@@ -26,6 +26,7 @@ import {
   type SyncIsolationLookup,
 } from "@polaris/shared-kafka";
 import { createLogger, type Logger } from "@polaris/shared-logger";
+import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
   bootstrapService,
@@ -193,6 +194,10 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
     installShutdown: options.installShutdown ?? true,
     ...(options.shutdownExit !== undefined ? { shutdownExit: options.shutdownExit } : {}),
+    // Wire /metrics to the live ProcessorMetrics registry (P10-002).
+    metrics: {
+      producer: () => toPrometheusText(metrics.getSamples()),
+    },
   });
 
   if (options.startRuntime ?? true) {

@@ -1,6 +1,6 @@
 # P10-002: Metrics Standardization
 
-Status: Ready
+Status: Done (merged in `<TBD-this-commit>`)
 
 ## Goal
 

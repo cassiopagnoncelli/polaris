@@ -41,6 +41,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../packages/shared-metrics
       '@polaris/shared-policy':
         specifier: workspace:*
         version: link:../../packages/shared-policy
@@ -224,6 +227,8 @@ importers:
         specifier: ^10.3.1
         version: 10.3.1
 
+  packages/shared-metrics: {}
+
   packages/shared-policy:
     dependencies:
       '@polaris/shared-logger':
@@ -330,6 +335,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../packages/shared-metrics
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../../packages/shared-processor
@@ -351,6 +359,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../packages/shared-metrics
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../../packages/shared-processor
@@ -411,6 +422,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../packages/shared-metrics
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../../packages/shared-processor

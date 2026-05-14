@@ -1,0 +1,37 @@
+{
+  "name": "@polaris/shared-metrics",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Prometheus text-format serializer for Polaris's in-memory metric registries (IngestMetrics, ProcessorMetrics, DestinationMetrics). Hand-rolled, framework-free; the registries supply MetricSample[], this package turns it into the wire format Prometheus scrapes.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./prometheus": {
+      "types": "./dist/prometheus.d.ts",
+      "import": "./dist/prometheus.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage"
+  }
+}
