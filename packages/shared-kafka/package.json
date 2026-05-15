@@ -30,6 +30,10 @@
     "./dlq": {
       "types": "./dist/dlq.d.ts",
       "import": "./dist/dlq.js"
+    },
+    "./offset-range-reader": {
+      "types": "./dist/offset-range-reader.d.ts",
+      "import": "./dist/offset-range-reader.js"
     }
   },
   "files": [

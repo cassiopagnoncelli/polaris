@@ -117,6 +117,19 @@ export {
   type KafkaHooks,
 } from "./hooks.js";
 export {
+  createKafkaJsConsumerDriver,
+  type CreateKafkaJsConsumerDriverOptions,
+  OFFSET_RANGE_TERMINATION_REASONS,
+  type OffsetRangeBatch,
+  type OffsetRangeBatchMessage,
+  type OffsetRangeConsumerDriver,
+  type OffsetRangeEvent,
+  type OffsetRangeTerminationReason,
+  type ReadOffsetRangeInput,
+  type ReadOffsetRangeResult,
+  readOffsetRange,
+} from "./offset-range-reader.js";
+export {
   buildRawEventsPartitionKey,
   type PartitionKeyIdentity,
   type PartitionKeyIdentitySource,
