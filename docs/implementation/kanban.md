@@ -28,10 +28,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 - [P8-006 Processor Manifests and Golden Fixtures](./tasks/P8-006-processor-manifests-fixtures.md)
 
-### P9 Destination Consumers
-
-- [P9-006 Braze Consumer v1](./tasks/P9-006-braze-consumer-v1.md)
-
 ### P10 Observability and Operations
 
 - [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
@@ -147,6 +143,7 @@ No blocked cards.
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md) — merged in `c51bfce`
 - [P9-004 GA4 Consumer v1](./tasks/P9-004-ga4-consumer-v1.md) — merged in `682905d` (cherry-picked from worktree-agent branch — original `task/p9-004` was held by a dead Phase B worktree)
 - [P9-005 TikTok Consumer v1](./tasks/P9-005-tiktok-consumer-v1.md) — merged in `416441d`
+- [P9-006 Braze Consumer v1](./tasks/P9-006-braze-consumer-v1.md) — merged in `f75239e` (cherry-picked from `task/p9-006-impl` — original `task/p9-006` slot was held by a dead Phase B worktree; lockfile + docker-build inventory + infra/docker README conflicts resolved at integration time; unsigned because 1Password signer was unavailable)
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md) — merged in `b908cd9`
 
 ### P10 Observability and Operations
