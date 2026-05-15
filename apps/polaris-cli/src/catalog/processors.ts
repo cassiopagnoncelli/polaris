@@ -102,6 +102,45 @@ export const processorReplaySchema = z
 export type ProcessorReplay = z.infer<typeof processorReplaySchema>;
 
 /**
+ * Release status of a processor version. Mirrors the closed set defined by
+ * P8-006 in `packages/shared-processor/src/manifest.ts`; duplicated here
+ * because the CLI catalog deliberately forks the schema (the CLI is read-only
+ * over `processors/` and validates whatever exists on disk).
+ *
+ *   - `released`     production semantics; immutable per the architecture's
+ *                    "Processor Versioning" rule.
+ *   - `deprecated`   superseded by a newer version; replay-only.
+ *   - `experimental` opt-in, not promoted; production activations should not
+ *                    target it.
+ */
+export const PROCESSOR_RELEASE_STATUSES = ["released", "deprecated", "experimental"] as const;
+export const processorReleaseStatusSchema = z.enum(PROCESSOR_RELEASE_STATUSES);
+export type ProcessorReleaseStatus = z.infer<typeof processorReleaseStatusSchema>;
+
+/**
+ * Golden-fixture pair declared by a processor manifest. Mirrors P8-006's
+ * `packages/shared-processor` convention: each scenario carries one
+ * `<name>.input.json` and one `<name>.output.json` under the processor's
+ * test directory. Paths are relative to the manifest file. Optional on the
+ * schema so manifests predating P8-006 keep parsing.
+ */
+export const processorFixtureSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[a-z0-9][a-z0-9._-]*$/u, {
+        message: "fixture name must be lowercase, alphanumerics + `._-`",
+      }),
+    input: z.string().min(1).max(512),
+    output: z.string().min(1).max(512),
+    description: z.string().trim().min(1).max(2048).optional(),
+  })
+  .strict();
+export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
+
+/**
  * Operational defaults the runtime helpers fall back to when no activation
  * row overrides them. These are non-semantic per the architecture doc
  * ("Processor Configuration").
@@ -123,8 +162,11 @@ export type ProcessorDefaults = z.infer<typeof processorDefaultsSchema>;
  * Shape of `processors/<name>/v<n>/processor.manifest.yaml`.
  *
  * NOTE: this schema rejects unknown top-level keys via `.strict()`. New
- * fields land here as the architecture grows; for now we mirror what
- * P4-001 ships.
+ * fields land here as the architecture grows; the v1 baseline came from
+ * P4-001 and P8-006 added the three optional `release_status` /
+ * `replay_notes` / `fixtures` fields. The CLI catalog forks the schema
+ * (read-only over `processors/`); the canonical schema lives in
+ * `packages/shared-processor/src/manifest.ts`.
  */
 export const processorManifestSchema = z
   .object({
@@ -132,12 +174,15 @@ export const processorManifestSchema = z
     version: processorVersionSchema,
     owner: z.string().trim().min(1).max(128),
     description: z.string().trim().min(1).max(8192),
+    release_status: processorReleaseStatusSchema.optional(),
     mode: processorModeSchema,
     inputs: z.array(processorTopicSpecSchema).min(1),
     outputs: z.array(processorTopicSpecSchema).min(1),
     state_stores: z.array(z.string()).default([]),
     defaults: processorDefaultsSchema.optional(),
     replay: processorReplaySchema.optional(),
+    replay_notes: z.string().trim().min(1).max(8192).optional(),
+    fixtures: z.array(processorFixtureSchema).optional(),
   })
   .strict();
 export type ProcessorManifest = z.infer<typeof processorManifestSchema>;
