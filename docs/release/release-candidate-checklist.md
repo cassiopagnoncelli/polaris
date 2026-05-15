@@ -81,15 +81,15 @@ sanity; the order is not load-bearing.
 
 | Item | Evidence required | Owner role | Pass criteria | Notes |
 | --- | --- | --- | --- | --- |
-| **Product acceptance test** | Acceptance runbook walked end-to-end. See **Status** below. | Release captain + Engineering owner per service touched | Runbook exists, the captain executes every step, every step passes. | **Status: Blocked on [P12-003](../implementation/tasks/P12-003-product-acceptance-test.md).** The acceptance runbook (`docs/release/acceptance-test-runbook.md`) lands with P12-003. Until P12-003 ships, the RC captain marks this row `BLOCKED` and the release cannot promote. |
-| **Internal onboarding guide reviewed** | Captain walks `docs/onboarding/` end-to-end against the current local stack and confirms a fresh internal user can onboard. See **Status** below. | Engineering owner | Every onboarding step is reproducible against the current `main`. | **Status: Blocked on [P12-004](../implementation/tasks/P12-004-internal-onboarding-guide.md).** Until P12-004 ships, the captain notes the guide is missing and falls back to [`docs/development/getting-started.md`](../development/getting-started.md). The RC may proceed if the captain explicitly accepts onboarding-doc gap as a known limitation; see [Known Limitations](#known-limitations). |
+| **Product acceptance test** | `POLARIS_ACCEPTANCE_TEST=1 pnpm test:acceptance` exits 0 against the local compose stack. The runner is [`scripts/run-acceptance.mjs`](../../scripts/run-acceptance.mjs); the scenario lives at [`tests/acceptance/scenarios/full-pipeline.test.ts`](../../tests/acceptance/scenarios/full-pipeline.test.ts) and is described in [`docs/release/acceptance-test-runbook.md`](./acceptance-test-runbook.md). Captain walks every step in the runbook and confirms a clear pass/fail verdict. | Release captain + Engineering owner per service touched | Acceptance runner exits 0; every step in the runbook shows `PASS`. | The delivery step uses the webhook-sink consumer because Meta CAPI / TikTok / GA4 / Braze need vendor sandboxes; that's a documented scope decision, not a gap. |
+| **Internal onboarding guide reviewed** | Captain walks [`docs/onboarding/`](../onboarding/) end-to-end against the current local stack and confirms a fresh internal user can onboard. The 11-file guide covers project lifecycle, API keys, schemas, Web SDK, Node SDK, first-event verification, analytics, destinations, support/escalation, and troubleshooting. | Engineering owner | Every onboarding step is reproducible against the current `main`. | Org-specific operator/on-call channel names in `09-support-and-escalation.md` are deliberate placeholders pending org-level fill-in. |
 
 ### Operational runbooks
 
 | Item | Evidence required | Owner role | Pass criteria | Notes |
 | --- | --- | --- | --- | --- |
 | **Backup/restore runbook reviewed** | Captain reads [`docs/operations/backup-and-retention.md`](../operations/backup-and-retention.md) end-to-end; the quarterly drill log is up to date; the runbook's "Future Extensions" section has no open items that block the RC. | Operator-on-call | The most recent quarterly drill row in the runbook's drill log shows `outcome: ok`. Quarterly drill cadence is honored (no drill more than one quarter stale). | The runbook is the binding source on RPO/RTO. Disagreements between this runbook and `docs/architecture/11-production-readiness.md` resolve in favor of the architecture doc; fix the runbook in the same RC. |
-| **DLQ runbook reviewed** | Captain reads [`docs/operations/destination-dlq-triage.md`](../operations/destination-dlq-triage.md); SLA targets understood; `polaris deliveries list` and `polaris dlq list` CLI commands run against the local stack and return expected output. See **Status** below for general DLQ triage doc. | Operator-on-call | The destination-DLQ workflow is rehearsable from the runbook with no improvisation required. | **Note: The general DLQ triage runbook (`docs/operations/dlq-triage-runbook.md`) is [P10-006](../implementation/tasks/P10-006-dlq-triage-runbook.md), still backlog.** Today, the destination-DLQ runbook covers the destination path end-to-end; the per-topic / per-processor DLQ triage path lands with P10-006. Captain notes the gap if the RC includes a processor whose DLQ behavior is not yet documented. |
+| **DLQ runbook reviewed** | Captain reads [`docs/operations/dlq-triage-runbook.md`](../operations/dlq-triage-runbook.md) (the canonical operator playbook) AND [`docs/operations/destination-dlq-triage.md`](../operations/destination-dlq-triage.md) (destination-side details); SLA targets understood verbatim; `polaris dlq list`, `polaris dlq summary`, `polaris deliveries list` CLI commands run against the local stack and return expected output. | Operator-on-call | Both runbooks rehearsable with no improvisation; SLA targets internalised. | Processor DLQ CLI promotion + cross-vendor `--all` aggregate are documented future-work items in the runbook itself. |
 | **Topic-isolation runbook reviewed** | Captain reads [`docs/operations/topic-isolation-cutover.md`](../operations/topic-isolation-cutover.md) and confirms the four dashboards it depends on are live (per the [Dashboards available](#dashboards-available) row). | Operator-on-call | Cutover procedure is unambiguous; all four trigger dashboards under [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/) load against the local Grafana. | Only required if the RC enables isolation for any project. If isolation is not exercised in the RC scope, this row is `n/a`. |
 | **Replay dry-run verified** | Captain runs `polaris replay create --processor <name> --from <ts> --to <ts> --mode dry-run` to seed a row, then `polaris replay plan <replay_job_id>` and confirms the dry-run plan renders. See [`apps/polaris-cli/src/commands/replay/plan.ts`](../../apps/polaris-cli/src/commands/replay/plan.ts) and [P7-002](../implementation/tasks/P7-002-replay-planner-dry-run.md). | Engineering owner (replay) | `polaris replay plan` returns a deterministic plan for a known dry-run job; no production gate is hit because `replay plan` is read-only. | The CLI's `mutates: false` posture means `replay plan` bypasses the [P6-007](../implementation/tasks/P6-007-operator-tokens-and-mutation-gate.md) production gate. `replay create` does **not** bypass; the captain must hold a valid operator token if exercising mutation against `POLARIS_ENV=production`. |
 
@@ -97,16 +97,16 @@ sanity; the order is not load-bearing.
 
 | Item | Evidence required | Owner role | Pass criteria | Notes |
 | --- | --- | --- | --- | --- |
-| **SDK docs reviewed** | Captain reads [`docs/sdk/`](../sdk/) (README + installation + initialization + api-reference at minimum); the install snippets in [`docs/sdk/installation.md`](../sdk/installation.md) are byte-identical to the snippets the onboarding guide will reference once [P12-004](../implementation/tasks/P12-004-internal-onboarding-guide.md) lands. | SDK owner | Install snippets compile against the current workspace; reason codes documented in [`docs/sdk/retries-and-errors.md`](../sdk/retries-and-errors.md) match the strings emitted by the ingester. | Until P12-004 lands, the captain only validates SDK handbook internal consistency; the cross-doc identity is a future RC check. |
+| **SDK docs reviewed** | Captain reads [`docs/sdk/`](../sdk/) (README + installation + initialization + api-reference at minimum); the install snippets in [`docs/sdk/installation.md`](../sdk/installation.md) are byte-identical to the snippets quoted in [`docs/onboarding/04-install-web-sdk.md`](../onboarding/04-install-web-sdk.md) and [`docs/onboarding/05-install-node-sdk.md`](../onboarding/05-install-node-sdk.md). | SDK owner | Install snippets compile against the current workspace; reason codes documented in [`docs/sdk/retries-and-errors.md`](../sdk/retries-and-errors.md) match the strings emitted by the ingester; onboarding-guide snippets are byte-identical to the handbook. | The cross-doc identity check is now live (P12-001 + P12-004 both shipped). |
 | **API docs reviewed** | Captain reads [`docs/api/README.md`](../api/README.md); `pnpm openapi:check` exits 0 (proves `openapi.yaml`/`openapi.json` regenerates byte-identical from the Zod sources). | Engineering owner (ingester) | `pnpm openapi:check` is green on the RC commit; the committed `openapi.yaml` matches the Zod definitions in [`packages/shared-schemas`](../../packages/shared-schemas/). | `pnpm openapi:check` is the canonical drift detector. CI already runs `pnpm test`; `openapi:check` is currently an explicit step, not a workflow gate — the captain runs it locally for the RC. |
 
 ### Observability and alerting
 
 | Item | Evidence required | Owner role | Pass criteria | Notes |
 | --- | --- | --- | --- | --- |
-| **Dashboards available** | Captain brings up the local Grafana via `docker compose -f docker-compose.observability.yml up -d`, opens each dashboard JSON from [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/) (`polaris-overview`, `per-project-shared-topic-throughput`, `per-partition-skew`, `per-project-consumer-lag`, `per-project-schema-validation`), and confirms each panel has recent data when traffic is flowing. | Operator-on-call | Every committed dashboard JSON loads in Grafana; every panel shows non-empty data against the local stack with the smoke test traffic flowing. | The dashboards listed in [`docs/operations/topic-isolation-cutover.md`](../operations/topic-isolation-cutover.md) are the load-bearing set for isolation triggers; all four exist today. The canonical dashboards-doc index (`docs/operations/dashboards.md`) lands with [P10-003](../implementation/tasks/P10-003-grafana-dashboards.md) — until then the captain uses the directory listing directly. |
-| **Alert / runbook links available** | Captain spot-checks 3 alerts from the alerts doc and confirms each `runbook_url` resolves to an existing runbook section. See **Status** below. | Operator-on-call | Every `runbook_url` referenced in the alerts file resolves to an existing anchor in `docs/operations/`. | **Status: Blocked on [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md).** Until P10-005 ships, alerts exist only in the architecture doc ([`docs/architecture/08-observability-and-operations.md`](../architecture/08-observability-and-operations.md)). The captain marks this row `BLOCKED` and lists it under [Known Limitations](#known-limitations). The RC may proceed if the operator-on-call explicitly accepts the alert-coverage gap. |
-| **Logging pipeline reviewed** | Captain confirms the Loki ingestion path exists at [`infra/loki/loki.yaml`](../../infra/loki/loki.yaml) and that services emit structured JSON logs per the [Engineering Standards / Logging](../architecture/09-engineering-standards.md#logging) rules. See **Status** below. | Operator-on-call | Production services configured to push to Loki; no plaintext-payload logging in production builds. | **Status: Loki pipeline doc is [P10-004](../implementation/tasks/P10-004-loki-logging-pipeline.md), still backlog.** Until P10-004 ships, the captain validates the structural rule (JSON logs, redacted) against the shared logger package directly; the operational doc lands with P10-004. |
+| **Dashboards available** | Captain brings up the local Grafana via `docker compose -f docker-compose.observability.yml up -d`, opens each P10-003 service-level dashboard JSON from [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/) (`polaris-ingestion`, `polaris-redpanda`, `polaris-processors`, `polaris-destinations`, `polaris-clickhouse`) plus the P11-008 per-project drilldowns (`per-project-consumer-lag`, `per-project-schema-validation`, `per-partition-skew`, `per-project-shared-topic-throughput`), and confirms each panel has recent data when traffic is flowing. The canonical index is [`docs/operations/dashboards.md`](../operations/dashboards.md). | Operator-on-call | Every committed dashboard JSON loads in Grafana; every panel shows non-empty data against the local stack with the smoke test traffic flowing. | Some panels are placeholders pending a dedicated ClickHouse Prometheus exporter and histogram metrics; these gaps are listed verbatim in `docs/operations/dashboards.md`. |
+| **Alert / runbook links available** | Captain reads [`docs/operations/alerts.md`](../operations/alerts.md) (14 alert rules — 10 page + 4 warn), spot-checks 3 alerts and confirms each `runbook_url` resolves to an existing runbook anchor under [`docs/operations/`](../operations/). The recording-rule + alert-rule files are at [`infra/prometheus/rules/`](../../infra/prometheus/rules/). | Operator-on-call | Every `runbook_url` in `alerts.md` resolves to an existing anchor; SLOs in [`docs/operations/slos.md`](../operations/slos.md) match what the dashboards surface. | Six v1 metric placeholders are flagged as `_TODO_` in `alerts.md` with `vector(0) > N` guards so the alert never fires until the metric ships — the operator-on-call reviews the list. |
+| **Logging pipeline reviewed** | Captain reads [`docs/operations/logging.md`](../operations/logging.md), confirms the promtail config at [`infra/loki/promtail-config.yaml`](../../infra/loki/promtail-config.yaml) tails the Pino stdout streams, and verifies the four-label cardinality posture (`service`/`env`/`level`/`project_id` only). | Operator-on-call | Loki + promtail come up via the observability compose, services do not depend on them, and no plaintext-payload logging escapes the shared logger's redaction. | Redaction lives in `@polaris/shared-logger`; Loki sees what the logger emits. |
 
 ### Security and secrets
 
@@ -114,7 +114,7 @@ sanity; the order is not load-bearing.
 | --- | --- | --- | --- | --- |
 | **Secrets not stored in repo** | `rg -nE '(password|secret|token|key)\s*=\s*[\"'\''`]?[A-Za-z0-9+/=._-]{8,}' . --hidden -g '!node_modules' -g '!*.lock' -g '!*.md' -g '!docs/release/release-candidate-checklist.md'` returns no plaintext credentials. Manually inspect any hits — substrings like `secret_ref` or `api_key_id` are structural and acceptable; the offending pattern is a literal that looks credential-shaped. The only committed `.env*` template is [`db/.env.example`](../../db/.env.example), which holds a local-only password. | Security reviewer | Zero literal credentials in the repo. The `db/.env.example` template is the only `.env*` file and it documents that real values are never committed. | The grep is intentionally noisy. The reviewer reads every hit, not "approximately zero" hits. |
 | **Secrets not stored in PostgreSQL** | The control-plane schema stores `(secret_provider, secret_ref)` literals, never plaintext. Verified by inspecting [`packages/shared-secrets/src/index.ts`](../../packages/shared-secrets/src/index.ts) (`PostgreSQL stores references, never plaintext`) and the destination / API key migrations under [`db/migrations/`](../../db/migrations/) — `api_keys.hash` is argon2id, `operator_tokens.hash` is argon2id, `destinations.secret_ref` is a `provider:ref` literal. | Security reviewer | No PostgreSQL column holds a plaintext secret. argon2id hashes are the only credential-derived bytes in the DB. | The `shared-secrets` package documents this as the load-bearing platform rule. A regression here is a release-blocker. |
-| **Secret provider configured for production** | Production secret provider configured per the architecture rule. See **Status** below. | Security reviewer | Production deployment resolves `(secret_provider, secret_ref)` through Vault (or the architecturally-equivalent managed service). | **Status: Blocked on [P11-004](../implementation/tasks/P11-004-production-secret-provider.md).** Local development uses the `env` adapter ([`packages/shared-secrets/src/providers/`](../../packages/shared-secrets/src/providers/)); production needs the Vault adapter. The deployment doc (`docs/deployment/secret-provider-vault.md`) lands with P11-004. Until then, the security reviewer documents the production secret-resolution path manually and notes the gap. |
+| **Secret provider configured for production** | Production deployment resolves `(secret_provider, secret_ref)` through Vault. Production wiring guide at [`docs/deployment/secret-provider-vault.md`](../deployment/secret-provider-vault.md); operator rotation runbook at [`docs/operations/secret-rotation.md`](../operations/secret-rotation.md). | Security reviewer | `secret_provider="vault"` in the production env; Vault adapter authenticates via K8s service-account auth; cached secrets continue serving on Vault outage while `/ready` flips to degraded. | Local development uses the `env` adapter ([`packages/shared-secrets/src/providers/env.ts`](../../packages/shared-secrets/src/providers/env.ts)). The reserved `aws-secrets-manager` slot documents the extension contract for future cloud-native adapters. Vault Agent sidecar pattern is deferred to a follow-up. |
 | **Audit posture verified** | Captain confirms every state-changing CLI command writes an `audit_records` row by reading the runbook coverage in [`docs/development/audit-and-export.md`](../development/audit-and-export.md). For any service that introduces new mutations in the RC scope, the engineering owner confirms the corresponding `audit_records` write is in place. | Compliance operator | No mutation surface ships without a matching `audit_records` row. | The architectural rule: every `polaris` CLI mutation is audited. Tests cover the existing surface; new surface introduced in the RC needs explicit verification. |
 
 ### Release artifact discipline
@@ -123,7 +123,7 @@ sanity; the order is not load-bearing.
 | --- | --- | --- | --- | --- |
 | **Known limitations documented** | Captain reads [Known Limitations](#known-limitations) below and confirms every entry is current. Any new v1 caveat surfaced during this RC cycle is added to that section in the same commit. | Release captain | The section reflects the RC's actual gap surface; no gap is in production without being listed here. | This is the operator-readable view of the platform's "we know about this and it's not fixed in v1" surface. |
 | **Release notes drafted** | Captain has drafted the RC release notes pulling from this checklist's `BLOCKED` rows and the [Known Limitations](#known-limitations) section. | Release captain | Release notes name every known limitation an internal consumer will hit. | The release notes live wherever the team publishes them (PR description on the release branch, an internal page); the checklist does not own their location. |
-| **Versioning and build metadata** | Captain confirms the RC build embeds package version, git SHA, build timestamp, and image metadata per [Engineering Standards / Versioning](../architecture/09-engineering-standards.md#versioning-and-releases). See **Status** below. | Release captain | `/version` or equivalent endpoint on every shipped service returns the expected metadata. | **Status: Blocked on [P11-007](../implementation/tasks/P11-007-release-versioning-build-metadata.md).** Until P11-007 lands, the captain confirms manually that the build process at least stamps the git SHA on the container image; the standardised metadata endpoint is future work. |
+| **Versioning and build metadata** | Captain confirms every shipped service's `/health` returns `service`, `version`, `git_sha`, `build_time`, `release_label` per the hybrid versioning model in [`docs/deployment/versioning.md`](../deployment/versioning.md). The shared helper is `getBuildMetadata()` in [`packages/shared-service-bootstrap`](../../packages/shared-service-bootstrap/src/bootstrap/build-metadata.ts); image-side build args (`POLARIS_BUILD_VERSION` / `POLARIS_GIT_SHA` / `POLARIS_BUILD_TIME`) are injected by [`scripts/docker-build.mjs`](../../scripts/docker-build.mjs). | Release captain | `/health` on every service returns all five fields; `POLARIS_RELEASE_LABEL` is set per the rollout cadence; the same image rolls forward across releases with the label updating at container start. | `delivery_records.consumer_build_version` (operational stamp alongside the semantic consumer version) is a deferred gap; the rollout-timeline + release-label join is sufficient for v1. |
 
 ## Known Limitations
 
@@ -157,57 +157,20 @@ captain reviews this section every RC cycle and prunes / extends it.
   a quarterly human cadence. The automated nightly verification cron is
   follow-up work. Reference: same runbook section.
 
-### Operational doc surface
+### Observability stack v1 caveats
 
-- **Alerts and SLOs doc not yet published.** Alert thresholds are
-  defined structurally in
-  [`docs/architecture/08-observability-and-operations.md`](../architecture/08-observability-and-operations.md);
-  the operator-facing `docs/operations/alerts.md` and the
-  per-alert `runbook_url` linkage land with
-  [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md). Until
-  then, alerts exist as architectural intent, not as a live Prometheus
-  rule set. The RC captain explicitly accepts this gap or holds the
-  release.
-- **General DLQ triage runbook not yet published.** Destination-side
-  DLQ triage is covered by
-  [`docs/operations/destination-dlq-triage.md`](../operations/destination-dlq-triage.md);
-  the per-topic / per-processor DLQ triage doc lands with
-  [P10-006](../implementation/tasks/P10-006-dlq-triage-runbook.md).
-- **Loki ingestion doc not yet published.** Structural rule (JSON-only,
-  redacted) is enforced via the shared logger; the operator-facing
-  pipeline doc lands with
-  [P10-004](../implementation/tasks/P10-004-loki-logging-pipeline.md).
-- **Dashboards index doc not yet published.** Dashboard JSON exists
-  under [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/);
-  the dashboard catalog doc lands with
-  [P10-003](../implementation/tasks/P10-003-grafana-dashboards.md).
-- **Acceptance test runbook not yet published.** The product
-  acceptance scenario lands with
-  [P12-003](../implementation/tasks/P12-003-product-acceptance-test.md);
-  the RC captain marks the "Product acceptance test" row `BLOCKED`
-  until P12-003 ships.
-- **Onboarding guide not yet published.** Internal-team onboarding
-  reference lands with
-  [P12-004](../implementation/tasks/P12-004-internal-onboarding-guide.md).
-  Until then the captain falls back to
-  [`docs/development/getting-started.md`](../development/getting-started.md).
-
-### Secret and config management
-
-- **Production secret provider adapter not yet shipped.** The
-  architectural decision is locked on HashiCorp Vault; the Vault
-  adapter lands with
-  [P11-004](../implementation/tasks/P11-004-production-secret-provider.md).
-  The `env` adapter
-  ([`packages/shared-secrets/src/providers/`](../../packages/shared-secrets/src/providers/))
-  is the only adapter wired today.
-- **Production config templates not yet published.**
-  [P11-003](../implementation/tasks/P11-003-production-config-templates.md)
-  ships the canonical templates; the captain documents the
-  per-environment config surface manually until it lands.
-- **Release versioning metadata not yet standardised.** Per-service
-  `/version` endpoints arrive with
-  [P11-007](../implementation/tasks/P11-007-release-versioning-build-metadata.md).
+- **Six alert rules carry `_TODO_` metric placeholders.** Alert
+  thresholds are pinned by [`docs/operations/alerts.md`](../operations/alerts.md)
+  but six rules are wired with `vector(0) > N` guards because the
+  underlying metric does not exist in v1 (publish failure, ClickHouse
+  ingestion lag, ClickHouse MV state, replay job progress, operator
+  gate denial). They never fire today; the operator-on-call reviews
+  the `_TODO_` list each cycle to track what's still missing.
+- **Some dashboard panels are placeholders.** No histogram metrics in
+  v1 (the `_ms_last` gauges are the proxy), no dedicated
+  publish-failure metric, no native ClickHouse Prometheus exporter;
+  gaps documented verbatim in
+  [`docs/operations/dashboards.md`](../operations/dashboards.md).
 
 ### Per-consumer caveats (v1)
 
@@ -227,9 +190,16 @@ confirms each row matches the live consumer code.
   mappers are the structural template for future vendors but the
   webhook sink itself stays event-agnostic. See
   [`consumers/webhook-sink/v1/SPEC.md`](../../consumers/webhook-sink/v1/SPEC.md).
-- **GA4 v1 and Braze v1:** not yet shipped. References:
-  [P9-004](../implementation/tasks/P9-004-ga4-consumer-v1.md),
-  [P9-006](../implementation/tasks/P9-006-braze-consumer-v1.md).
+- **GA4 v1:** Same event-coverage gap as Meta/TikTok; uses GA4
+  Measurement Protocol with API-secret URL-redaction defense in the
+  deliverer summary. See
+  [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
+- **Braze v1:** Braze provides no vendor-side event dedupe; the
+  Polaris-side `(destination_id, delivery_key)` defense in
+  `@polaris/shared-destinations` is the canonical idempotency guard.
+  No `user_alias` mapping for email-only / phone-only identities; no
+  first/last-name slots (canonical envelope lacks them). See
+  [`consumers/braze/v1/SPEC.md`](../../consumers/braze/v1/SPEC.md).
 
 ### Open production decisions (wait-for-data)
 
@@ -246,9 +216,10 @@ references them when sizing the RC's operational expectations.
 - **Topic isolation activation thresholds.** Triggers are structural;
   the `>25% share` threshold and similar numeric tails are revisited
   after observed traffic.
-- **Initial alert thresholds and SLOs.** Defaults land with
-  [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md); they
-  tighten after observed traffic.
+- **Initial alert thresholds and SLOs.** Defaults shipped in
+  [`docs/operations/alerts.md`](../operations/alerts.md) and
+  [`docs/operations/slos.md`](../operations/slos.md) per the v1
+  posture; they tighten after observed traffic.
 
 Reference for this whole section:
 [Production Readiness / Open Production Decisions](../architecture/11-production-readiness.md#open-production-decisions).
@@ -264,11 +235,11 @@ provided every step lands.
    PostgreSQL primary + WAL streaming, ClickHouse Replicated engines +
    Keeper, Redis. Reference: [Data
    Classes](../deployment/data-classes.md) for store-level retention.
-2. **Provision secret references.** Populate Vault (or the equivalent
-   managed provider) with every `secret_ref` the production
-   `destinations` rows will name. Reference: [P11-004 task
-   card](../implementation/tasks/P11-004-production-secret-provider.md)
-   (until shipped); the architectural rule is in
+2. **Provision secret references.** Populate Vault with every
+   `secret_ref` the production `destinations` rows will name.
+   Reference: [Secret Provider (Vault) deployment guide](../deployment/secret-provider-vault.md)
+   and [Secret Rotation runbook](../operations/secret-rotation.md);
+   the architectural rule is in
    [Production Readiness / Secret Management](../architecture/11-production-readiness.md#secret-management).
 3. **Run migrations.** `pnpm db:migrate` against the production
    PostgreSQL; `pnpm clickhouse:migrate` against the production
@@ -290,9 +261,8 @@ provided every step lands.
 8. **Schedule operational cadence.** Wire the quarterly backup drill,
    the alert routing, and the on-call rotation. References:
    [Backup and Retention / Quarterly Recovery
-   Drills](../operations/backup-and-retention.md#quarterly-recovery-drills),
-   the alerts doc (when [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md)
-   lands).
+   Drills](../operations/backup-and-retention.md#quarterly-recovery-drills)
+   and [Alerts](../operations/alerts.md).
 
 ## See Also
 
