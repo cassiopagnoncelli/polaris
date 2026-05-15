@@ -16,6 +16,12 @@
 name: analytics-projector
 version: v1
 owner: platform-data
+# P8-006: closed-set release lifecycle flag. `released` means this version
+# is the production semantics; any output-changing fix is a new version
+# (v2/) per docs/architecture/05-processors-and-replay.md "Processor
+# Versioning". See docs/development/processor-manifests.md for the closed
+# set and the semantic-immutability rule.
+release_status: released
 description: |
   First Polaris processor in the workspace. Consumes the canonical
   raw.events topic and republishes each event onto analytics.events
@@ -63,3 +69,31 @@ defaults:
 replay:
   supported: true
   restrictions: []
+
+# P8-006: free-form replay notes for operators. The machine-readable
+# surface stays `replay.restrictions`; this block captures the prose so
+# the runbook and the manifest stay aligned without manual sync.
+replay_notes: |
+  Pure passthrough — replaying any raw.events range against a fixed
+  analytics-projector v1 build yields byte-identical analytics.events
+  output. The only field the projector itself adds (`processor.ran_at`)
+  is overridable in the runtime via the injected `now()` clock, so
+  replay harnesses can pin the stamp for byte-equality assertions.
+  No state store; no Redis windows; no PostgreSQL writes. The control
+  plane is free to target any retention-window slice without coordination.
+
+# P8-006: golden fixture pairs the test suite asserts against. Paths are
+# relative to this manifest file. The cross-cutting validator helper
+# (@polaris/shared-processor's validateProcessorFixtures) confirms each
+# file exists and parses as JSON; the processor's manifest.test.ts loads
+# it directly and asserts the byte-identical transform output.
+fixtures:
+  - name: payment-approved
+    input: test/golden/payment-approved.input.json
+    output: test/golden/payment-approved.output.json
+    description: |
+      Canonical payment.approved event from a backend SDK with a populated
+      identity.customer_id, null campaign block, and a present consent /
+      privacy block. Exercises the full envelope passthrough + the dual-
+      shape processor stamp (`processor: {...}` + flat
+      `processor_name`/`processor_version` columns for ClickHouse).

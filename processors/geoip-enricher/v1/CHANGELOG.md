@@ -7,6 +7,20 @@ meaning, fields, identity links, attribution outcomes, filtering behavior, or
 output schema requires a new version directory (v2/) — see
 `docs/architecture/05-processors-and-replay.md` "Processor Versioning".
 
+## v1 — manifest standardisation (P8-006, 2026-05-15)
+
+Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised
+across every released v1 processor: `release_status: released`,
+`replay_notes`, and the `fixtures` block referencing the golden
+InMemoryIPLookup hit input/output pair under `test/golden/`. No code,
+no transform, no IPLookup adapter changes, no SHA-256 hash drift, no
+emitted-event change. The enriched.events envelope shape stays byte-
+identical to the v1.0.0 release. The existing
+`test/fixtures/geoip-sample.json` (the InMemoryIPLookup database) stays
+where it is; the new golden pair is `test/golden/in-memory-ipv4-hit.{input,output}.json`.
+See `docs/development/processor-manifests.md` for the schema convergence
+plan and the semantic-immutability rule.
+
 ## v1.0.0 — initial release (P8-004)
 
 - First geoip-enricher in the Polaris workspace.

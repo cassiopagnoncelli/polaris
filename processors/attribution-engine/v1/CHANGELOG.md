@@ -8,6 +8,22 @@ delta detection, identifier preference order), output schema, or the
 touchpoint_id derivation requires a new version directory (v2/) — see
 `docs/architecture/05-processors-and-replay.md` "Processor Versioning".
 
+## v1 — manifest standardisation (P8-006, 2026-05-15)
+
+Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised
+across every released v1 processor: `release_status: released`,
+`replay_notes` (lifts the existing inline replay caveats into a typed
+field so the CLI / runbook render them without parsing YAML comments),
+and the `fixtures` block referencing the golden touchpoint-captured
+input/output pair under `test/golden/`. No code, no transform, no
+touchpoint_id derivation change, no first-touch / last-touch rule
+change, no emitted-event change. The attribution.events envelope shape
+stays byte-identical to the v1.0.0 release. The
+`replay.restrictions` array still carries `first_touch_replay_caveat`
+/ `last_touch_replay_caveat` as the machine-readable surface. See
+`docs/development/processor-manifests.md` for the schema convergence
+plan and the semantic-immutability rule.
+
 ## v1.0.0 — initial release (P8-005)
 
 - First attribution processor in the Polaris workspace.

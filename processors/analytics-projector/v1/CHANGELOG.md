@@ -7,6 +7,17 @@ meaning, fields, identity links, attribution outcomes, filtering behavior, or
 output schema requires a new version directory (v2/) — see
 `docs/architecture/05-processors-and-replay.md` "Processor Versioning".
 
+## v1 — manifest standardisation (P8-006, 2026-05-15)
+
+Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised
+across every released v1 processor: `release_status: released`,
+`replay_notes`, and the `fixtures` block referencing the golden
+input/output pair under `test/golden/`. No code, no transform, no
+emitted-event change. The processor stamp and the analytics.events
+envelope shape stay byte-identical to the v1.0.0 release. See
+`docs/development/processor-manifests.md` for the schema convergence
+plan and the semantic-immutability rule.
+
 ## v1.0.0 — initial release (P4-001)
 
 - First processor in the Polaris workspace; establishes the

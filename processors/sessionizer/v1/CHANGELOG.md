@@ -8,6 +8,18 @@ schema, or the inactivity-window value requires a new version directory
 (v2/) — see `docs/architecture/05-processors-and-replay.md` "Processor
 Versioning".
 
+## v1 — manifest standardisation (P8-006, 2026-05-15)
+
+Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised
+across every released v1 processor: `release_status: released`,
+`replay_notes`, and the `fixtures` block referencing the golden
+session-started input/output pair under `test/golden/`. No code, no
+transform, no session_id derivation change, no inactivity-window change
+(still 1800s as a SEMANTIC default — bumping requires v2), no emitted-
+event change. The session.events envelope shape stays byte-identical to
+the v1.0.0 release. See `docs/development/processor-manifests.md` for
+the schema convergence plan and the semantic-immutability rule.
+
 ## v1.0.0 — initial release (P8-003)
 
 - First sessionizer in the Polaris workspace.

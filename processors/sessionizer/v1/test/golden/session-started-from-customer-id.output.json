@@ -1,0 +1,44 @@
+{
+  "event_id": "018f1b9e-7b50-7b12-cccc-000000000001",
+  "event": "session.started",
+  "schema_version": 1,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-12T12:00:00.000Z",
+  "ingested_at": "2026-05-12T12:00:00.600Z",
+  "source": {
+    "type": "internal",
+    "id": "sessionizer",
+    "sdk": null,
+    "sdk_version": null
+  },
+  "identity": {
+    "anonymous_id": "anon-1",
+    "session_id": null,
+    "customer_id": "cus_1",
+    "device_id": null
+  },
+  "context": {
+    "ip": null,
+    "user_agent": null,
+    "locale": null,
+    "page": null,
+    "campaign": null
+  },
+  "properties": {
+    "session_id": "sess_8ee0489915fd75f27d2ed34b6c157f28",
+    "primary_identifier_kind": "customer_id",
+    "primary_identifier_value": "cus_1",
+    "started_at": "2026-05-12T12:00:00.000Z",
+    "source_event_id": "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+    "run_id": "run_golden_p8_006_002"
+  },
+  "processor": {
+    "name": "sessionizer",
+    "version": "v1",
+    "ran_at": "2026-05-12T12:00:00.600Z",
+    "run_id": "run_golden_p8_006_002"
+  },
+  "processor_name": "sessionizer",
+  "processor_version": "v1"
+}

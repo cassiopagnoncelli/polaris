@@ -16,6 +16,11 @@
 name: attribution-engine
 version: v1
 owner: platform-data
+# P8-006: closed-set release lifecycle flag. `released` means this version
+# is the production semantics; any output-changing fix is a new version
+# (v2/) per docs/architecture/05-processors-and-replay.md "Processor
+# Versioning". See docs/development/processor-manifests.md.
+release_status: released
 description: |
   First attribution processor in Polaris. Consumes `analytics.events`
   (the analytics-projector's downstream stream of canonical envelopes
@@ -151,3 +156,42 @@ replay:
   restrictions:
     - first_touch_replay_caveat
     - last_touch_replay_caveat
+
+# P8-006: free-form replay notes for operators. Mirrors the in-line
+# comments above; lifted into a typed manifest field so the CLI and
+# runbook can render them without parsing YAML comments.
+replay_notes: |
+  Replays of analytics.events produce identical touchpoint_captured events
+  byte-for-byte because the touchpoint_id derivation is a pure function of
+  (source_event_id, canonical_campaign_tuple). The first_touch_assigned
+  and last_touch_assigned events carry replay caveats: the in-memory chain
+  is rebuilt FROM THE BEGINNING of the replay slice, so a replay that
+  starts mid-chain will emit first_touch_assigned for whichever touchpoint
+  is first in the slice (not the identifier's lifetime-first touchpoint),
+  and will emit a delta last_touch_assigned for the slice's first
+  observation even if the live runtime had previously emitted the same
+  tuple. The restrictions array records these as
+  first_touch_replay_caveat / last_touch_replay_caveat. Downstream
+  attribution consumers should treat first_touch_assigned and
+  last_touch_assigned as authoritative ONLY when the replay window covers
+  the identifier's full lifetime; touchpoint_captured is the safe surface
+  for historical analysis.
+
+# P8-006: golden fixture pairs.
+fixtures:
+  - name: touchpoint-captured-google-cpc
+    input: test/golden/touchpoint-captured-google-cpc.input.json
+    output: test/golden/touchpoint-captured-google-cpc.output.json
+    description: |
+      First campaign-tagged observation for a new identifier — an
+      analytics.events envelope (analytics-projector-stamped) with a
+      populated `context.campaign` block (Google CPC). The expected
+      output is the FIRST event in the engine's burst sequence:
+      `attribution.touchpoint_captured`. The engine also emits
+      first_touch_assigned and last_touch_assigned for first
+      observations, but those follow the touchpoint_captured emission
+      and have their own tests in `test/emit.test.ts` and
+      `test/transform.test.ts`. A single-input golden fixture pins one
+      output event for byte-equality assertions; the multi-event burst
+      contract is asserted by the engine's regular transform / emit
+      tests.

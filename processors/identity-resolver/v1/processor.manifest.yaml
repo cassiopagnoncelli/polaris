@@ -16,6 +16,11 @@
 name: identity-resolver
 version: v1
 owner: platform-identity
+# P8-006: closed-set release lifecycle flag. `released` means this version
+# is the production semantics; any output-changing fix is a new version
+# (v2/) per docs/architecture/05-processors-and-replay.md "Processor
+# Versioning". See docs/development/processor-manifests.md.
+release_status: released
 description: |
   Canonical identity-graph resolver. Consumes `raw.events` and:
 
@@ -84,3 +89,31 @@ defaults:
 replay:
   supported: true
   restrictions: []
+
+# P8-006: free-form replay notes for operators. Machine-readable surface
+# stays `replay.restrictions`; this block captures the prose so the runbook
+# and the manifest stay aligned.
+replay_notes: |
+  Replays re-apply the explicit-overlap rule against the source raw.events
+  range. Idempotency is enforced by the partial unique index on
+  (project_id, environment, left_identifier, right_identifier,
+  evidence_type) WHERE superseded_at IS NULL, so re-running the same slice
+  emits no duplicate identity_links rows. The processor itself emits zero
+  or one identity.* event per input — replaying a slice that initially
+  produced identity.merged events will re-emit them in the same order; the
+  canonical graph in PostgreSQL is the durable source of truth and the
+  emitted events are best-effort observability for downstream consumers.
+
+# P8-006: golden fixture pairs. The merge/link/rotate decision is purely a
+# function of the source event's identity block, so each scenario maps a
+# single input event to a single expected output event.
+fixtures:
+  - name: anonymous-to-customer-link
+    input: test/golden/anonymous-to-customer-link.input.json
+    output: test/golden/anonymous-to-customer-link.output.json
+    description: |
+      Canonical user.identified event carrying both anonymous_id and
+      customer_id. The explicit-overlap rule yields one authoritative
+      identity.linked event whose properties.left_identifier and
+      properties.right_identifier capture the two strong identifiers, and
+      properties.evidence_type is `explicit_overlap`.

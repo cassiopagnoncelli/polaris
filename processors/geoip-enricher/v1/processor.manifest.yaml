@@ -16,6 +16,11 @@
 name: geoip-enricher
 version: v1
 owner: platform-data
+# P8-006: closed-set release lifecycle flag. `released` means this version
+# is the production semantics; any output-changing fix is a new version
+# (v2/) per docs/architecture/05-processors-and-replay.md "Processor
+# Versioning". See docs/development/processor-manifests.md.
+release_status: released
 description: |
   Reads `raw.events`, looks up `envelope.context.ip` against a swappable
   `IPLookup` backend, and republishes the geo result on `enriched.events`
@@ -87,3 +92,30 @@ defaults:
 replay:
   supported: true
   restrictions: []
+
+# P8-006: free-form replay notes for operators.
+replay_notes: |
+  GeoIP enrichment is deterministic for a fixed IPLookup backend.
+  Replaying the same raw.events range against a pinned backend produces
+  byte-identical enriched.geoip output. The backend identity is stamped on
+  `properties.source` (e.g. `in_memory:test-fixture`, `no_lookup`,
+  `maxmind:GeoLite2-City-20260512`), so an operator can confirm exactly
+  which dataset snapshot produced a given enrichment during lineage
+  queries. Swapping the backend between live and replay (e.g. live used
+  MaxMind v1, replay uses MaxMind v2) yields a different `source` stamp and
+  potentially different geo fields — the runbook documents the operator
+  decision: pin the backend snapshot or accept the difference. The raw IP
+  is hashed with SHA-256 and never appears on emitted events or logs, so
+  the replay output's `source_ip_hash` matches the live output's hash
+  byte-for-byte even though the IP itself was discarded.
+
+# P8-006: golden fixture pairs.
+fixtures:
+  - name: in-memory-ipv4-hit
+    input: test/golden/in-memory-ipv4-hit.input.json
+    output: test/golden/in-memory-ipv4-hit.output.json
+    description: |
+      Canonical raw event with `context.ip` populated to a value the
+      InMemoryIPLookup fixture knows about (8.8.8.8). Asserts the full
+      enriched.geoip envelope: geo fields from the backend, source = the
+      backend id, and `source_ip_hash` equal to the SHA-256 of the IP.

@@ -9,19 +9,20 @@
  * helpers read them on boot so they can route topic-family inputs/outputs,
  * size the consumer group, and expose the manifest in `/health` payloads.
  *
- * The Zod schema mirrors `apps/polaris-cli/src/catalog/processors.ts` so
- * both consumers parse the same on-disk shape. A follow-up task can
- * consolidate the duplication by re-exporting this schema from
- * `@polaris/shared-processor` and having the CLI import it; that change is
- * intentionally out of scope here because the CLI shipped before this
- * package and the consolidation is a cross-cut.
+ * The Zod schema mirrors `apps/polaris-cli/src/catalog/processors.ts` for
+ * the fields that shipped first; P8-006 adds the cross-cutting fields
+ * (`release_status`, `replay_notes`, `fixtures`) that the standardised
+ * processor-manifest contract needs. The CLI's copy of the schema stays
+ * `.strict()` and will surface those new fields as warnings until a
+ * follow-up consolidates the duplication. See
+ * `docs/development/processor-manifests.md` for the convergence plan.
  *
  * The loader rejects unknown top-level keys (`.strict()`) so a typo in a
  * manifest fails at boot rather than silently being ignored.
  */
 
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
@@ -106,8 +107,64 @@ export const processorDefaultsSchema = z
 export type ProcessorDefaults = z.infer<typeof processorDefaultsSchema>;
 
 /**
+ * Release status of a processor version. P8-006 standardises this as a
+ * closed set so tooling can reason about lifecycle without parsing prose.
+ *
+ *   - `released`     v1 production semantics. Immutable per the
+ *                    architecture's "Processor Versioning" rule.
+ *   - `deprecated`   superseded by a newer version. Still consumable for
+ *                    replay; no new processor runs should target it.
+ *   - `experimental` opt-in, not yet promoted. Tests and smoke harnesses
+ *                    may use it; production activations should not.
+ */
+export const PROCESSOR_RELEASE_STATUSES = ["released", "deprecated", "experimental"] as const;
+export const processorReleaseStatusSchema = z.enum(PROCESSOR_RELEASE_STATUSES);
+export type ProcessorReleaseStatus = z.infer<typeof processorReleaseStatusSchema>;
+
+/**
+ * Golden-fixture pair declared by a processor manifest. Mirrors the
+ * P8-006 convention: each scenario carries one `<name>.input.json` and one
+ * `<name>.output.json` under the processor's test directory. The paths are
+ * relative to the manifest file (so the loader can resolve them without
+ * knowing the repo root).
+ *
+ * Fixtures are intentionally OPTIONAL on the schema so existing manifests
+ * keep parsing during the rollout. Real v1 processors set this block; new
+ * processors without fixtures fail their own per-processor manifest test
+ * rather than the cross-cutting schema check.
+ */
+export const processorFixtureSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[a-z0-9][a-z0-9._-]*$/u, {
+        message: "fixture name must be lowercase, alphanumerics + `._-`",
+      }),
+    input: z.string().min(1).max(512),
+    output: z.string().min(1).max(512),
+    description: z.string().trim().min(1).max(2048).optional(),
+  })
+  .strict();
+export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
+
+/**
  * Shape of `processors/<name>/v<n>/processor.manifest.yaml`. Rejects
  * unknown top-level keys via `.strict()`.
+ *
+ * P8-006 adds three optional top-level fields to the v1 manifest contract:
+ *
+ *   - `release_status` — closed-set lifecycle flag for the version,
+ *   - `replay_notes`   — free-form prose summarising how this version
+ *                        behaves under replay; the `replay.restrictions`
+ *                        array remains the machine-readable surface,
+ *   - `fixtures`       — golden input/output pairs the processor's tests
+ *                        load as canonical contract examples.
+ *
+ * All three default to absent so prior manifests parse unchanged. New
+ * manifests are expected to set `release_status` and at least one fixture
+ * pair (the per-processor `manifest.test.ts` enforces it).
  */
 export const processorManifestSchema = z
   .object({
@@ -115,12 +172,15 @@ export const processorManifestSchema = z
     version: processorVersionSchema,
     owner: z.string().trim().min(1).max(128),
     description: z.string().trim().min(1).max(8192),
+    release_status: processorReleaseStatusSchema.optional(),
     mode: processorModeSchema,
     inputs: z.array(processorTopicSpecSchema).min(1),
     outputs: z.array(processorTopicSpecSchema).min(1),
     state_stores: z.array(z.string()).default([]),
     defaults: processorDefaultsSchema.optional(),
     replay: processorReplaySchema.optional(),
+    replay_notes: z.string().trim().min(1).max(8192).optional(),
+    fixtures: z.array(processorFixtureSchema).optional(),
   })
   .strict();
 export type ProcessorManifest = z.infer<typeof processorManifestSchema>;
@@ -235,4 +295,105 @@ function existsAsFile(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * One issue surfaced by `validateProcessorFixtures`. Carries the absolute
+ * path of the offending file so test failures and CI output point at the
+ * exact location.
+ */
+export interface ProcessorFixtureIssue {
+  /** Fixture entry's `name` slot, or `<root>` for shape-level problems. */
+  readonly fixture: string;
+  /** Absolute path of the file we expected to find / parse. */
+  readonly path: string;
+  /** Human-readable reason. */
+  readonly reason: string;
+}
+
+/** Result of `validateProcessorFixtures`. */
+export interface ProcessorFixtureValidation {
+  /** Absolute paths the validator resolved and confirmed. */
+  readonly resolvedPaths: readonly string[];
+  /** Issues — empty array means "OK". */
+  readonly issues: readonly ProcessorFixtureIssue[];
+}
+
+/**
+ * Options for `validateProcessorFixtures`. The fixture paths in the
+ * manifest are resolved against `manifestPath`'s parent directory unless
+ * they are absolute (which they should NOT be in checked-in YAML, but the
+ * resolver tolerates both for ad-hoc tooling).
+ */
+export interface ValidateProcessorFixturesOptions {
+  /** Absolute path to the manifest YAML file. */
+  readonly manifestPath: string;
+  /** Parsed manifest carrying the optional `fixtures` block. */
+  readonly manifest: Pick<ProcessorManifest, "fixtures">;
+}
+
+/**
+ * Walk the manifest's `fixtures` block and confirm each `input` / `output`
+ * pair points at a real, readable JSON file. Returns the resolved paths
+ * and an array of structured issues — callers can fail their test with a
+ * single message, or surface each issue individually.
+ *
+ * The helper does NOT compare input → expected-output values; processors
+ * own that assertion in their per-scenario transform tests. The helper
+ * only enforces the on-disk contract: a manifest that names a fixture
+ * must point at files that exist and parse as JSON.
+ *
+ * Manifests without a `fixtures` block return an empty issue list and an
+ * empty `resolvedPaths` array. The helper is lenient on absent fixtures
+ * because the rollout grandfathers existing manifests — per-processor
+ * tests assert presence where the processor opts in.
+ */
+export function validateProcessorFixtures(
+  options: ValidateProcessorFixturesOptions,
+): ProcessorFixtureValidation {
+  const fixtures = options.manifest.fixtures ?? [];
+  const baseDir = dirname(options.manifestPath);
+  const resolved: string[] = [];
+  const issues: ProcessorFixtureIssue[] = [];
+
+  const seenNames = new Set<string>();
+  for (const fixture of fixtures) {
+    if (seenNames.has(fixture.name)) {
+      issues.push({
+        fixture: fixture.name,
+        path: options.manifestPath,
+        reason: `duplicate fixture name "${fixture.name}" in manifest`,
+      });
+      continue;
+    }
+    seenNames.add(fixture.name);
+
+    for (const slot of ["input", "output"] as const) {
+      const relative = fixture[slot];
+      const absolute = isAbsolute(relative) ? relative : resolve(baseDir, relative);
+      if (!existsSync(absolute)) {
+        issues.push({
+          fixture: fixture.name,
+          path: absolute,
+          reason: `fixture ${slot} file does not exist (referenced as "${relative}")`,
+        });
+        continue;
+      }
+      try {
+        const text = readFileSync(absolute, "utf8");
+        JSON.parse(text);
+      } catch (cause) {
+        const reason = cause instanceof Error ? cause.message : String(cause);
+        issues.push({
+          fixture: fixture.name,
+          path: absolute,
+          reason: `fixture ${slot} file is not valid JSON: ${reason}`,
+        });
+        continue;
+      }
+      resolved.push(absolute);
+    }
+  }
+
+  return { resolvedPaths: resolved, issues };
 }

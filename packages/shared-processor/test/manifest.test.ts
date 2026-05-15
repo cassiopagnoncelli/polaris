@@ -10,10 +10,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  PROCESSOR_RELEASE_STATUSES,
   ProcessorManifestError,
   loadProcessorManifest,
-  tryLoadProcessorManifest,
   processorManifestSchema,
+  tryLoadProcessorManifest,
+  validateProcessorFixtures,
 } from "../src/manifest.js";
 
 const VALID_YAML = `
@@ -175,5 +177,226 @@ describe("processorManifestSchema", () => {
       outputs: [{ family: "analytics.events", schema_versions: "*" }],
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts the P8-006 release_status values", () => {
+    for (const status of PROCESSOR_RELEASE_STATUSES) {
+      const result = processorManifestSchema.safeParse({
+        name: "analytics-projector",
+        version: "v1",
+        owner: "owner",
+        description: "desc",
+        release_status: status,
+        mode: "streaming",
+        inputs: [{ family: "raw.events", schema_versions: "*" }],
+        outputs: [{ family: "analytics.events", schema_versions: "*" }],
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects release_status values outside the closed set", () => {
+    const result = processorManifestSchema.safeParse({
+      name: "analytics-projector",
+      version: "v1",
+      owner: "owner",
+      description: "desc",
+      release_status: "alpha",
+      mode: "streaming",
+      inputs: [{ family: "raw.events", schema_versions: "*" }],
+      outputs: [{ family: "analytics.events", schema_versions: "*" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a fixtures block with input/output pairs", () => {
+    const result = processorManifestSchema.safeParse({
+      name: "analytics-projector",
+      version: "v1",
+      owner: "owner",
+      description: "desc",
+      mode: "streaming",
+      inputs: [{ family: "raw.events", schema_versions: "*" }],
+      outputs: [{ family: "analytics.events", schema_versions: "*" }],
+      fixtures: [
+        {
+          name: "payment-approved",
+          input: "test/golden/payment-approved.input.json",
+          output: "test/golden/payment-approved.output.json",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects fixture entries with unknown extra keys", () => {
+    const result = processorManifestSchema.safeParse({
+      name: "analytics-projector",
+      version: "v1",
+      owner: "owner",
+      description: "desc",
+      mode: "streaming",
+      inputs: [{ family: "raw.events", schema_versions: "*" }],
+      outputs: [{ family: "analytics.events", schema_versions: "*" }],
+      fixtures: [
+        {
+          name: "payment-approved",
+          input: "test/golden/payment-approved.input.json",
+          output: "test/golden/payment-approved.output.json",
+          unexpected_key: true,
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts the replay_notes free-form string", () => {
+    const result = processorManifestSchema.safeParse({
+      name: "analytics-projector",
+      version: "v1",
+      owner: "owner",
+      description: "desc",
+      mode: "streaming",
+      inputs: [{ family: "raw.events", schema_versions: "*" }],
+      outputs: [{ family: "analytics.events", schema_versions: "*" }],
+      replay_notes:
+        "Deterministic passthrough; replaying the same raw.events slice yields the same analytics.events output byte-for-byte.",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("validateProcessorFixtures", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "polaris-fixture-"));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function writeFixture(relativeFromRoot: string, contents: unknown): void {
+    const absolute = join(root, relativeFromRoot);
+    mkdirSync(join(absolute, ".."), { recursive: true });
+    writeFileSync(absolute, JSON.stringify(contents, null, 2), "utf8");
+  }
+
+  it("resolves fixture paths relative to the manifest file and reports no issues when files parse", () => {
+    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    mkdirSync(join(manifestPath, ".."), { recursive: true });
+    writeFileSync(manifestPath, "# placeholder", "utf8");
+    writeFixture("processors/demo/v1/test/golden/case.input.json", { ok: true });
+    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+
+    const result = validateProcessorFixtures({
+      manifestPath,
+      manifest: {
+        fixtures: [
+          {
+            name: "case",
+            input: "test/golden/case.input.json",
+            output: "test/golden/case.output.json",
+          },
+        ],
+      },
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(result.resolvedPaths).toHaveLength(2);
+    expect(result.resolvedPaths[0]).toContain("case.input.json");
+    expect(result.resolvedPaths[1]).toContain("case.output.json");
+  });
+
+  it("reports a structured issue when the input file is missing", () => {
+    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    mkdirSync(join(manifestPath, ".."), { recursive: true });
+    writeFileSync(manifestPath, "# placeholder", "utf8");
+    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+
+    const result = validateProcessorFixtures({
+      manifestPath,
+      manifest: {
+        fixtures: [
+          {
+            name: "case",
+            input: "test/golden/case.input.json",
+            output: "test/golden/case.output.json",
+          },
+        ],
+      },
+    });
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.fixture).toBe("case");
+    expect(result.issues[0]?.reason).toMatch(/input file does not exist/);
+  });
+
+  it("reports a structured issue when the JSON does not parse", () => {
+    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    mkdirSync(join(manifestPath, ".."), { recursive: true });
+    writeFileSync(manifestPath, "# placeholder", "utf8");
+    mkdirSync(join(root, "processors", "demo", "v1", "test", "golden"), { recursive: true });
+    writeFileSync(
+      join(root, "processors", "demo", "v1", "test", "golden", "case.input.json"),
+      "{ not valid",
+      "utf8",
+    );
+    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+
+    const result = validateProcessorFixtures({
+      manifestPath,
+      manifest: {
+        fixtures: [
+          {
+            name: "case",
+            input: "test/golden/case.input.json",
+            output: "test/golden/case.output.json",
+          },
+        ],
+      },
+    });
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.reason).toMatch(/not valid JSON/);
+  });
+
+  it("flags duplicate fixture names", () => {
+    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    mkdirSync(join(manifestPath, ".."), { recursive: true });
+    writeFileSync(manifestPath, "# placeholder", "utf8");
+    writeFixture("processors/demo/v1/test/golden/case.input.json", { ok: true });
+    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+
+    const result = validateProcessorFixtures({
+      manifestPath,
+      manifest: {
+        fixtures: [
+          {
+            name: "case",
+            input: "test/golden/case.input.json",
+            output: "test/golden/case.output.json",
+          },
+          {
+            name: "case",
+            input: "test/golden/case.input.json",
+            output: "test/golden/case.output.json",
+          },
+        ],
+      },
+    });
+
+    expect(result.issues.some((i) => i.reason.includes("duplicate fixture name"))).toBe(true);
+  });
+
+  it("returns an empty result when the manifest has no fixtures block", () => {
+    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    mkdirSync(join(manifestPath, ".."), { recursive: true });
+    writeFileSync(manifestPath, "# placeholder", "utf8");
+
+    const result = validateProcessorFixtures({ manifestPath, manifest: {} });
+    expect(result.issues).toEqual([]);
+    expect(result.resolvedPaths).toEqual([]);
   });
 });

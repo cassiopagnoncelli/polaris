@@ -16,6 +16,11 @@
 name: sessionizer
 version: v1
 owner: platform-data
+# P8-006: closed-set release lifecycle flag. `released` means this version
+# is the production semantics; any output-changing fix is a new version
+# (v2/) per docs/architecture/05-processors-and-replay.md "Processor
+# Versioning". See docs/development/processor-manifests.md.
+release_status: released
 description: |
   First sessionizer processor in Polaris. Consumes `raw.events` and
   maintains an in-memory inactivity window per
@@ -93,3 +98,28 @@ defaults:
 replay:
   supported: true
   restrictions: []
+
+# P8-006: free-form replay notes for operators.
+replay_notes: |
+  The sessionizer is fully replayable from raw.events. session_id derives
+  deterministically from (primary_identifier_kind, primary_identifier_value,
+  started_at_iso) via SHA-256, so the same input slice produces byte-
+  identical session.started / session.ended events on replay. The
+  in-memory state store is rebuilt FROM THE BEGINNING of the replay slice.
+  A replay that starts AFTER an identifier's original session.started will
+  emit a NEW session.started for whichever event first crosses the
+  inactivity boundary in the slice. Downstream analytics should join
+  session events back to raw events on (project_id, environment,
+  primary_identifier, occurred_at) so the join is stable across replays.
+
+# P8-006: golden fixture pairs.
+fixtures:
+  - name: session-started-from-customer-id
+    input: test/golden/session-started-from-customer-id.input.json
+    output: test/golden/session-started-from-customer-id.output.json
+    description: |
+      First event in a brand-new session for a customer with no prior
+      window: exercises the session.started emission path, the
+      deterministic session_id derivation, and the
+      primary_identifier_kind = `customer_id` branch of the
+      preference-order resolver.
