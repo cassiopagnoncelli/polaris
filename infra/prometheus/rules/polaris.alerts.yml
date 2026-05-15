@@ -301,35 +301,35 @@ groups:
   - name: polaris-replay
     interval: 30s
     rules:
-      # _TODO_: replay coordinator does not yet emit a progress gauge.
-      # The future polaris_replay_job_progress_offset metric is
-      # expected to expose the last-committed Kafka offset per
-      # `(replay_job_id, status)`; combined with the
-      # `polaris_replay_job_status{status="running"}` gauge it lets
-      # the expression be:
-      #
-      #   (max by (replay_job_id) (polaris_replay_job_status{status="running"}) > 0)
-      #   and on (replay_job_id)
-      #   (changes(polaris_replay_job_progress_offset[30m]) == 0)
-      #
-      # Until those metrics land this rule is documented but never
-      # fires.
+      # `polaris_replay_job_progress_offset{replay_job_id}` and
+      # `polaris_replay_job_status{replay_job_id, status}` are emitted
+      # by the replay executor via the
+      # `ReplayExecutorMetricsSink` seam (3S3YY2PG). The alert fires
+      # when a job whose status is `running` has not advanced its
+      # progress offset for 30 minutes. NOTE: the executor only emits
+      # in-process; the v1 CLI invocation has no `/metrics` endpoint,
+      # so the alert can fire only when a long-running scraper (e.g.
+      # the future replay-coordinator service, or a `replay_jobs`-row
+      # poller in the control-plane API) wires the sink to its
+      # registry. The metric names + alert expression are stable
+      # contracts; the scraper is a separate scope.
       - alert: PolarisReplayJobStuck
-        expr: vector(0) > 0
+        expr: |
+          (max by (replay_job_id) (polaris_replay_job_status{status="running"}) > 0)
+          and on (replay_job_id)
+          (changes(polaris_replay_job_progress_offset[30m]) == 0)
         for: 30m
         labels:
           severity: page
           service: replay-coordinator
           team: platform-data
         annotations:
-          summary: "Replay job has not advanced in 30 min (TODO metric)"
+          summary: "Replay job has not advanced in 30 min"
           description: |
-            Placeholder for the v1 threshold "replay job stuck page
-            when no progress for 30 min on an executing job." The
-            replay coordinator does not yet emit a progress gauge;
-            this rule is wired for the threshold but will never fire
-            until the metric lands. Tracked in
-            docs/operations/alerts.md.
+            Replay job {{ $labels.replay_job_id }} has been `running`
+            for 30 minutes without its progress offset changing. The
+            executor either deadlocked on a chunk fetch, a downstream
+            broker dropped, or the store adapter is stuck.
           runbook_url: docs/operations/runbook-replay-stuck.md
 
   # ---------------------------------------------------------------

@@ -361,6 +361,53 @@ const NOOP_LOGGER: ReplayExecutorLogger = {
 };
 
 // ---------------------------------------------------------------------------
+// Metrics sink (3S3YY2PG)
+// ---------------------------------------------------------------------------
+
+/**
+ * Stable metric names emitted by the executor when a {@link ReplayExecutorMetricsSink}
+ * is supplied. The names are stable contracts for the
+ * `PolarisReplayJobStuck` alert — see
+ * `infra/prometheus/rules/polaris.alerts.yml`.
+ */
+export const METRIC_REPLAY_JOB_PROGRESS_OFFSET = "polaris_replay_job_progress_offset";
+export const METRIC_REPLAY_JOB_STATUS = "polaris_replay_job_status";
+
+/** Closed set of status values the executor records via the metrics sink. */
+export const REPLAY_JOB_STATUS_VALUES = ["running", "completed", "failed", "aborted"] as const;
+export type ReplayJobStatusValue = (typeof REPLAY_JOB_STATUS_VALUES)[number];
+
+/**
+ * Sink the executor calls on each lifecycle transition + chunk
+ * commit. The contract:
+ *
+ *   - `observeStatus({ replay_job_id, status })` is called when the
+ *     row's status becomes `running` (executor start), and again with
+ *     the terminal status (`completed`, `failed`, `aborted`).
+ *   - `observeProgress({ replay_job_id, progress_offset })` is called
+ *     after every chunk's recordChunkProgress; `progress_offset` is
+ *     the cumulative emitted count, which advances monotonically.
+ *
+ * The sink is optional — replay's hot path does not depend on it. The
+ * shape mirrors the operator-gate sink (`OperatorGateMetricsSink`):
+ * keep the executor pure and let the host decide where the gauges
+ * land. The CLI runner today does not wire a sink because the CLI
+ * has no `/metrics` endpoint; the metric is meaningful in a
+ * long-running scraper component (control-plane API or a future
+ * replay-coordinator service) that reads `replay_jobs` rows and
+ * emits these gauges per-row.
+ */
+export interface ReplayExecutorMetricsSink {
+  observeProgress(input: { readonly replay_job_id: string; readonly progress_offset: number }): void;
+  observeStatus(input: { readonly replay_job_id: string; readonly status: ReplayJobStatusValue }): void;
+}
+
+const NOOP_METRICS_SINK: ReplayExecutorMetricsSink = {
+  observeProgress: () => {},
+  observeStatus: () => {},
+};
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -389,6 +436,14 @@ export interface ExecuteReplayInput {
   readonly now?: () => Date;
   /** Optional structured logger. Defaults to a no-op. */
   readonly logger?: ReplayExecutorLogger;
+  /**
+   * Optional metrics sink (3S3YY2PG). When supplied, the executor
+   * emits `polaris_replay_job_status` and
+   * `polaris_replay_job_progress_offset` gauges on lifecycle
+   * transitions. The sink is invoked synchronously; implementations
+   * must not block.
+   */
+  readonly metrics?: ReplayExecutorMetricsSink;
   /**
    * Override that lets tests inject a synthetic `events_planned` count
    * before any chunk has been read. Production callers omit this; the
@@ -445,6 +500,7 @@ export interface ExecuteReplayOutcome {
 export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteReplayOutcome> {
   const { plan } = input;
   const logger = input.logger ?? NOOP_LOGGER;
+  const metrics = input.metrics ?? NOOP_METRICS_SINK;
   const nowFn = input.now ?? ((): Date => new Date());
 
   // ---- pre-flight refusals -------------------------------------------
@@ -498,6 +554,9 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
       `replay job ${plan.replay_job_id} is already ${transition.status}`,
     );
   }
+
+  metrics.observeStatus({ replay_job_id: plan.replay_job_id, status: "running" });
+  metrics.observeProgress({ replay_job_id: plan.replay_job_id, progress_offset: 0 });
 
   logger.info(
     {
@@ -568,6 +627,10 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
         cumulative_failed: cumulativeFailed,
         now: nowFn(),
       });
+      metrics.observeProgress({
+        replay_job_id: plan.replay_job_id,
+        progress_offset: cumulativeEmitted,
+      });
 
       logger.debug(
         {
@@ -622,6 +685,7 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
       error_message: summary.error_message,
       now: finishedAt,
     });
+    metrics.observeStatus({ replay_job_id: plan.replay_job_id, status: "failed" });
     logger.error(
       {
         component: "replay.executor",
@@ -646,6 +710,7 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
 
   // ---- finish --------------------------------------------------------
   if (aborted) {
+    metrics.observeStatus({ replay_job_id: plan.replay_job_id, status: "aborted" });
     logger.warn(
       {
         component: "replay.executor",
@@ -675,6 +740,7 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
     events_failed: cumulativeFailed,
     now: completedAt,
   });
+  metrics.observeStatus({ replay_job_id: plan.replay_job_id, status: "completed" });
   logger.info(
     {
       component: "replay.executor",

@@ -64,6 +64,7 @@ import {
   type ReplayExecutorProducer,
   type ReplayExecutorSource,
   type ReplayExecutorStore,
+  type ReplayJobStatusValue,
   type ReplayMarkCompletedInput,
   type ReplayMarkFailedInput,
   type ReplayMarkRunningInput,
@@ -729,6 +730,84 @@ describe("ReplayExecutorError", () => {
     expect(err.code).toBe("plan_is_dry_run");
     expect(err.name).toBe("ReplayExecutorError");
     expect(err).toBeInstanceOf(Error);
+  });
+});
+
+describe("executeReplay — metrics sink (3S3YY2PG)", () => {
+  it("emits status and progress observations on the happy path", async () => {
+    const p = plan();
+    const src = makeSource([
+      [event({ event_id: "ev_a" })],
+      [event({ event_id: "ev_b" })],
+      [event({ event_id: "ev_c" })],
+      [event({ event_id: "ev_d" })],
+      [event({ event_id: "ev_e" })],
+      [event({ event_id: "ev_f" })],
+      [event({ event_id: "ev_g" })],
+    ]);
+    const prod = makeProducer();
+    const store = makeStore();
+
+    const statuses: Array<{ replay_job_id: string; status: string }> = [];
+    const progresses: Array<{ replay_job_id: string; progress_offset: number }> = [];
+    const metrics = {
+      observeStatus: (input: { replay_job_id: string; status: ReplayJobStatusValue }) => {
+        statuses.push(input);
+      },
+      observeProgress: (input: { replay_job_id: string; progress_offset: number }) => {
+        progresses.push(input);
+      },
+    };
+
+    await executeReplay({
+      plan: p,
+      source: src.source,
+      producer: prod.producer,
+      store: store.adapter,
+      metrics,
+      now: () => NOW,
+    });
+
+    // First and last status observations: `running` then `completed`.
+    expect(statuses[0]).toEqual({ replay_job_id: JOB_ID, status: "running" });
+    expect(statuses.at(-1)).toEqual({ replay_job_id: JOB_ID, status: "completed" });
+    // Initial progress is 0; final cumulative_emitted is monotonically
+    // non-decreasing across observations.
+    expect(progresses[0]).toEqual({ replay_job_id: JOB_ID, progress_offset: 0 });
+    const offsets = progresses.map((o) => o.progress_offset);
+    for (let i = 1; i < offsets.length; i += 1) {
+      expect(offsets[i]).toBeGreaterThanOrEqual(offsets[i - 1] ?? 0);
+    }
+  });
+
+  it("emits `failed` status when an adapter throws", async () => {
+    const p = plan();
+    const src: ReplayExecutorSource = {
+      async fetchChunk() {
+        throw new Error("broker down");
+      },
+    };
+    const prod = makeProducer();
+    const store = makeStore();
+    const statuses: Array<{ replay_job_id: string; status: string }> = [];
+    const metrics = {
+      observeStatus: (input: { replay_job_id: string; status: ReplayJobStatusValue }) => {
+        statuses.push(input);
+      },
+      observeProgress: () => {},
+    };
+
+    await executeReplay({
+      plan: p,
+      source: src,
+      producer: prod.producer,
+      store: store.adapter,
+      metrics,
+      now: () => NOW,
+    });
+
+    expect(statuses[0]?.status).toBe("running");
+    expect(statuses.at(-1)?.status).toBe("failed");
   });
 });
 

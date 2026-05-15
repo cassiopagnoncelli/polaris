@@ -47,24 +47,31 @@ Alertmanager routing tree consumes that label to decide who and how.
 
 Severity distribution: **10 page, 4 warn**, 14 alerts total.
 
-## V1 metric gaps
+## V1 metric coverage
 
-Several v1 thresholds in the task card target metrics that do NOT
-exist in the codebase yet. The corresponding alerts are wired with
-the correct threshold but use a `vector(0)` placeholder expression
-that never fires; they become live once the metric is emitted. **Do
-not delete the rules** — they document the v1 threshold and are the
-acceptance signal for the metric work that follows.
+All 14 alert rules now reference real metrics; none use a
+`vector(0)` placeholder. The metrics close out as follows:
 
-| Alert | Expected metric | Owner work |
-|---|---|---|
-| `PolarisReplayJobStuck` | `polaris_replay_job_progress_offset{replay_job_id,status}` + `polaris_replay_job_status{status="running"}` | replay coordinator (P5 / P7 work) |
-
-These gaps do NOT block the v1 alerts story — the runbooks for each
-alert (a) document the threshold, (b) walk through the operator
-discovery paths that work without the metric (CLI queries, direct
-SQL into ClickHouse `system.*`, Loki searches), and (c) point at the
-metric backfill plan.
+- **Ingester** (`PolarisRedpandaPublishFailureRate`): emitted by
+  `apps/ingester-api/src/metrics/registry.ts` via
+  `polaris_ingest_publish_failed_total` /
+  `polaris_ingest_publish_success_total` (MKEF1I9G).
+- **ClickHouse** (`PolarisClickHouseIngestionLagWarn`/`...Page`,
+  `PolarisClickHouseMVFailure`): emitted by the analytics-projector
+  via the ClickHouse probe poller (PI2CRFZC). The poller queries
+  `system.kafka_consumers` and `system.materialized_views` on a 30s
+  cadence.
+- **Operator gate** (`PolarisOperatorGateDenialRate`): emitted by
+  `enforceProductionMutationGate` via the `OperatorGateMetricsSink`
+  the control-plane API wires (2JZZXTMY).
+- **Replay** (`PolarisReplayJobStuck`): emitted by the replay
+  executor via the `ReplayExecutorMetricsSink` seam (3S3YY2PG).
+  Caveat: the v1 CLI invocation has no `/metrics` endpoint, so the
+  metric is in-process only. A long-running scraper component (e.g.
+  a future replay-coordinator service or a `replay_jobs`-row poller
+  in the control-plane API) is needed to surface the gauges to
+  Prometheus. The metric names + alert expression are stable
+  contracts; the scraper is a separate scope.
 
 ## Recording rules
 
