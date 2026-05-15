@@ -37,9 +37,8 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P11 Deployment, Security, and Data Lifecycle
 
-- [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md)
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
-- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) (waiting on P11-001 + P8-006)
+- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) (waiting on P8-006)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
@@ -154,6 +153,7 @@ No blocked cards.
 ### P11 Deployment, Security, and Data Lifecycle
 
 - [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md) — merged in `28d6105`
+- [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md) — merged in `20fb6da` (cherry-picked from `worktree-agent-a720e5774bd34b47b`; no plaintext secrets; `infra/k8s/` and Vault wiring intentionally deferred to P11-004; signer unavailable so commit is unsigned)
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
 - [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
 - [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
