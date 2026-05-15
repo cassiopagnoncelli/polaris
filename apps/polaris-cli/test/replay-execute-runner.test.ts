@@ -52,6 +52,15 @@
  */
 
 import {
+  type OffsetRangeBatch,
+  type OffsetRangeConsumerDriver,
+  POLARIS_HEADER_ENVIRONMENT,
+  POLARIS_HEADER_EVENT_ID,
+  POLARIS_HEADER_EVENT_NAME,
+  POLARIS_HEADER_OCCURRED_AT,
+  POLARIS_HEADER_PROJECT_ID,
+} from "@polaris/shared-kafka";
+import {
   REPLAY_HEADER_FLAG,
   REPLAY_HEADER_JOB_ID,
   type ReplayChunkProgress,
@@ -65,6 +74,7 @@ import {
 } from "@polaris/shared-replay";
 import { describe, expect, it } from "vitest";
 
+import { buildKafkaReplaySource } from "../src/commands/replay/kafka-adapters.js";
 import {
   buildReplayExecuteRunner,
   type CommandContext,
@@ -610,6 +620,170 @@ describe("replay execute runner — cooperative cancel", () => {
     const after = store.rows.get("polaris_rpj_exec");
     expect(after?.status).toBe("cancelled");
     expect(after?.events_replayed).toBe(1);
+  });
+});
+
+describe("replay execute runner — offset-range reader wire-up (Q0EGTY5V)", () => {
+  it("threads the offset-range reader's events through the executor and into the producer", async () => {
+    // Synthesise a single-partition batch carrying Polaris-shaped
+    // headers. The kafka-adapter resolves chunk.from/to via the
+    // injected fetchOffsetsForWindow, then drives the reader against
+    // this in-memory driver. The reader projects the headers; the
+    // adapter filters by plan scope; the executor stamps the replay
+    // headers; the recording producer captures the outcome.
+    const batch: OffsetRangeBatch = {
+      topic: "raw.events",
+      partition: 0,
+      highWatermark: "5",
+      messages: [
+        {
+          offset: "100",
+          key: "storefront.development.user.42",
+          value: Buffer.from("payload-a"),
+          headers: {
+            [POLARIS_HEADER_EVENT_ID]: "ev_a",
+            [POLARIS_HEADER_EVENT_NAME]: "purchase",
+            [POLARIS_HEADER_PROJECT_ID]: "storefront",
+            [POLARIS_HEADER_ENVIRONMENT]: "development",
+            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
+          },
+        },
+        {
+          offset: "101",
+          key: "storefront.development.user.43",
+          value: Buffer.from("payload-b"),
+          headers: {
+            [POLARIS_HEADER_EVENT_ID]: "ev_b",
+            [POLARIS_HEADER_EVENT_NAME]: "purchase",
+            [POLARIS_HEADER_PROJECT_ID]: "storefront",
+            [POLARIS_HEADER_ENVIRONMENT]: "development",
+            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
+          },
+        },
+      ],
+    };
+
+    function makeDriver(): OffsetRangeConsumerDriver {
+      let served = false;
+      return {
+        async assign() {},
+        async seek() {},
+        async pullNextBatch() {
+          if (served) return null;
+          served = true;
+          return batch;
+        },
+        async release() {},
+      };
+    }
+
+    const source = buildKafkaReplaySource({
+      topic: "raw.events",
+      driverFactory: makeDriver,
+      async fetchOffsetsForWindow() {
+        // Single-partition window covering offsets 100..101 inclusive.
+        return [{ partition: 0, startOffset: "100", endOffset: "101" }];
+      },
+    });
+
+    const store = new InMemoryExecuteStore();
+    store.seed(seedRow());
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams);
+    const { producer, records } = makeRecordingProducer();
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => source,
+      producer: () => producer,
+      now: () => NOW,
+    });
+
+    await runner({ replayJobId: "polaris_rpj_exec" }, ctx);
+
+    const after = store.rows.get("polaris_rpj_exec");
+    expect(after?.status).toBe("completed");
+    expect(after?.events_replayed).toBe(2);
+    // The reader's events flowed through to the producer with the
+    // executor's replay headers stamped on top.
+    expect(records).toHaveLength(2);
+    expect(records[0]?.source_event_id).toBe("ev_a");
+    expect(records[0]?.headers[REPLAY_HEADER_FLAG]).toBe("true");
+    expect(records[0]?.headers[REPLAY_HEADER_JOB_ID]).toBe("polaris_rpj_exec");
+    expect(records[1]?.source_event_id).toBe("ev_b");
+  });
+
+  it("filters reader events by plan scope (project_id, environment, event_name)", async () => {
+    // Reader returns two events: one matches the plan, one doesn't.
+    const batch: OffsetRangeBatch = {
+      topic: "raw.events",
+      partition: 0,
+      highWatermark: "3",
+      messages: [
+        {
+          offset: "10",
+          key: "storefront.development.user.1",
+          value: Buffer.from("p1"),
+          headers: {
+            [POLARIS_HEADER_EVENT_ID]: "ev_keep",
+            [POLARIS_HEADER_EVENT_NAME]: "purchase",
+            [POLARIS_HEADER_PROJECT_ID]: "storefront",
+            [POLARIS_HEADER_ENVIRONMENT]: "development",
+            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
+          },
+        },
+        {
+          offset: "11",
+          key: "other-project.development.user.2",
+          value: Buffer.from("p2"),
+          headers: {
+            [POLARIS_HEADER_EVENT_ID]: "ev_drop",
+            [POLARIS_HEADER_EVENT_NAME]: "purchase",
+            [POLARIS_HEADER_PROJECT_ID]: "other-project",
+            [POLARIS_HEADER_ENVIRONMENT]: "development",
+            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
+          },
+        },
+      ],
+    };
+
+    function makeDriver(): OffsetRangeConsumerDriver {
+      let served = false;
+      return {
+        async assign() {},
+        async seek() {},
+        async pullNextBatch() {
+          if (served) return null;
+          served = true;
+          return batch;
+        },
+        async release() {},
+      };
+    }
+
+    const source = buildKafkaReplaySource({
+      topic: "raw.events",
+      driverFactory: makeDriver,
+      async fetchOffsetsForWindow() {
+        return [{ partition: 0, startOffset: "10", endOffset: "11" }];
+      },
+    });
+
+    const store = new InMemoryExecuteStore();
+    store.seed(seedRow());
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams);
+    const { producer, records } = makeRecordingProducer();
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => source,
+      producer: () => producer,
+      now: () => NOW,
+    });
+
+    await runner({ replayJobId: "polaris_rpj_exec" }, ctx);
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.source_event_id).toBe("ev_keep");
   });
 });
 
