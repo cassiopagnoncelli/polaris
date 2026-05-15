@@ -35,6 +35,7 @@ import {
   type RetryProducer,
 } from "../src/commands/dlq/retry.js";
 import { buildDlqShowRunner } from "../src/commands/dlq/show.js";
+import { buildDlqSummaryRunner } from "../src/commands/dlq/summary.js";
 import { UsageError } from "../src/errors.js";
 
 // ---------------------------------------------------------------------------
@@ -673,5 +674,161 @@ describe("polaris dlq retry", () => {
     // Mark-resolved must NOT have run — the row should stay unresolved so
     // the operator can retry.
     expect(markCalled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// polaris dlq summary (P10-006)
+// ---------------------------------------------------------------------------
+
+describe("polaris dlq summary", () => {
+  it("requires exactly one of --destination or --vendor", async () => {
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({ list: async () => [], close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await expect(runner({}, makeContext(capture.streams))).rejects.toBeInstanceOf(UsageError);
+    await expect(
+      runner(
+        { destination: "polaris_dst_meta", vendor: "meta-capi" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toBeInstanceOf(UsageError);
+  });
+
+  it("renders 'no dlq entries' when the scope is empty", async () => {
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({ list: async () => [], close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await runner({ vendor: "meta-capi" }, makeContext(capture.streams));
+    expect(capture.stdout.join("")).toContain("no dlq entries for vendor meta-capi");
+  });
+
+  it("aggregates rows by error_class and reason with counts and bounds", async () => {
+    const rows: DlqRecord[] = [
+      makeDlqRecord({
+        dlq_id: "polaris_dlq_a",
+        error_class: "auth",
+        reason: "auth_failed",
+        published_at: new Date("2026-05-14T08:00:00.000Z"),
+      }),
+      makeDlqRecord({
+        dlq_id: "polaris_dlq_b",
+        error_class: "auth",
+        reason: "auth_failed",
+        published_at: new Date("2026-05-14T10:00:00.000Z"),
+      }),
+      makeDlqRecord({
+        dlq_id: "polaris_dlq_c",
+        error_class: "permanent",
+        reason: "vendor_400",
+        published_at: new Date("2026-05-14T09:00:00.000Z"),
+      }),
+    ];
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({ list: async () => rows, close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await runner({ vendor: "meta-capi" }, jsonContext(capture.streams));
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed.scope).toEqual({ vendor: "meta-capi" });
+    expect(parsed.total).toBe(3);
+    expect(parsed.truncated).toBe(false);
+    expect(parsed.oldest).toBe("2026-05-14T08:00:00.000Z");
+    expect(parsed.newest).toBe("2026-05-14T10:00:00.000Z");
+    // by_error_class is sorted by count desc, then label asc.
+    expect(parsed.by_error_class).toEqual([
+      {
+        error_class: "auth",
+        count: 2,
+        oldest: "2026-05-14T08:00:00.000Z",
+        newest: "2026-05-14T10:00:00.000Z",
+      },
+      {
+        error_class: "permanent",
+        count: 1,
+        oldest: "2026-05-14T09:00:00.000Z",
+        newest: "2026-05-14T09:00:00.000Z",
+      },
+    ]);
+    expect(parsed.by_reason).toEqual([
+      {
+        reason: "auth_failed",
+        count: 2,
+        oldest: "2026-05-14T08:00:00.000Z",
+        newest: "2026-05-14T10:00:00.000Z",
+      },
+      {
+        reason: "vendor_400",
+        count: 1,
+        oldest: "2026-05-14T09:00:00.000Z",
+        newest: "2026-05-14T09:00:00.000Z",
+      },
+    ]);
+    // Defense: aggregate output must not echo secret-shaped strings.
+    expect(JSON.stringify(parsed)).not.toMatch(/secret|bearer/i);
+  });
+
+  it("forwards scope and window filters to the store", async () => {
+    let observedScope: unknown;
+    let observedFilter: unknown;
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({
+        list: async (scope, filter) => {
+          observedScope = scope;
+          observedFilter = filter;
+          return [];
+        },
+        close: async () => {},
+      }),
+    });
+    const capture = captureOutput();
+    await runner(
+      {
+        destination: "polaris_dst_meta",
+        since: "2026-05-14T00:00:00.000Z",
+        until: "2026-05-15T00:00:00.000Z",
+        includeResolved: true,
+      },
+      makeContext(capture.streams),
+    );
+    expect(observedScope).toEqual({
+      kind: "destination",
+      destination_id: "polaris_dst_meta",
+    });
+    expect(observedFilter).toEqual({
+      since: new Date("2026-05-14T00:00:00.000Z"),
+      until: new Date("2026-05-15T00:00:00.000Z"),
+      includeResolved: true,
+      limit: 1000,
+    });
+  });
+
+  it("marks truncated=true when the result hits the 1000-row cap", async () => {
+    const rows: DlqRecord[] = Array.from({ length: 1000 }, (_, idx) =>
+      makeDlqRecord({
+        dlq_id: `polaris_dlq_${idx}`,
+        published_at: new Date(`2026-05-14T${String(idx % 24).padStart(2, "0")}:00:00.000Z`),
+      }),
+    );
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({ list: async () => rows, close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await runner({ vendor: "meta-capi" }, jsonContext(capture.streams));
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed.total).toBe(1000);
+    expect(parsed.truncated).toBe(true);
+  });
+
+  it("rejects --since with a malformed ISO timestamp", async () => {
+    const runner = buildDlqSummaryRunner({
+      openStore: () => ({ list: async () => [], close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await expect(
+      runner({ vendor: "meta-capi", since: "not-a-date" }, makeContext(capture.streams)),
+    ).rejects.toBeInstanceOf(UsageError);
   });
 });

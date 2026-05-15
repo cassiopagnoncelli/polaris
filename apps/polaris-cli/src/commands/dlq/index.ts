@@ -1,9 +1,10 @@
 /**
- * `polaris dlq` command group (P9-007).
+ * `polaris dlq` command group (P9-007 + P10-006).
  *
  * Operator triage surface for destination DLQ records:
  *
  *   - `polaris dlq list`                   mutates: false  — by destination or vendor
+ *   - `polaris dlq summary`                mutates: false  — aggregate volume by error_class + reason (P10-006)
  *   - `polaris dlq show <dlq_id>`          mutates: false
  *   - `polaris dlq retry <dlq_id>`         mutates: true   — republish + mark resolved
  *   - `polaris dlq mark-resolved <dlq_id>` mutates: true
@@ -23,16 +24,20 @@
  *     payload (to keep the audit row small and side-effect-free).
  *
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
+ * @see docs/operations/dlq-triage-runbook.md
  * @see docs/implementation/tasks/P9-007-destination-dlq-triage.md
+ * @see docs/implementation/tasks/P10-006-dlq-triage-runbook.md
  */
 import type { CommandDefinition } from "../../command.js";
 import { dlqListCommand } from "./list.js";
 import { dlqMarkResolvedCommand } from "./mark-resolved.js";
 import { dlqRetryCommand } from "./retry.js";
 import { dlqShowCommand } from "./show.js";
+import { dlqSummaryCommand } from "./summary.js";
 
 const CHILDREN: readonly CommandDefinition[] = [
   dlqListCommand,
+  dlqSummaryCommand,
   dlqShowCommand,
   dlqRetryCommand,
   dlqMarkResolvedCommand,
@@ -53,4 +58,10 @@ export const dlqCommand: CommandDefinition = {
   },
 };
 
-export { dlqListCommand, dlqMarkResolvedCommand, dlqRetryCommand, dlqShowCommand };
+export {
+  dlqListCommand,
+  dlqMarkResolvedCommand,
+  dlqRetryCommand,
+  dlqShowCommand,
+  dlqSummaryCommand,
+};
