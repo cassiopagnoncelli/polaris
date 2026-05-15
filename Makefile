@@ -1,15 +1,36 @@
 # Polaris monorepo task entrypoints.
 #
-# Thin wrapper around pnpm and docker compose. The pnpm workspace
-# (see package.json) is the source of truth; targets here exist so the common
-# workflows show up in `make help` and so per-package commands have stable
-# repo-root aliases.
+# Bare-metal-first: targets assume Redpanda, PostgreSQL, Redis, and ClickHouse
+# are reachable at their default localhost endpoints. `docker-*` targets bring
+# those up via docker-compose.yml for developers who don't run native infra.
+#
+# The pnpm workspace (see package.json) is the source of truth; targets here
+# exist so the common workflows show up in `make help` and so per-package
+# commands have stable repo-root aliases.
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup install lint style format check typecheck dev build \
-        test tests ci stats up down ps logs cli clean nuke \
-        db-migrate db-rollback db-status
+# Pull `.env.local` (if present) into every `make` subprocess as real
+# environment variables. shared-config's `.env`-file resolution is cwd-based,
+# so a single repo-root `.env.local` wouldn't otherwise be visible when
+# services run from `apps/*` / `processors/*/v1` / `consumers/*/v1`. Doing the
+# load here in Make is the cheapest way to make `make dev`, `make db-migrate`,
+# and `make clickhouse-bootstrap` all see the same local config.
+#
+# Format: simple `KEY=VALUE` lines, no quotes, no shell expansion. Comments
+# (`#`) are supported. See `.env.local.example`.
+ifneq (,$(wildcard ./.env.local))
+include .env.local
+export
+endif
+
+.PHONY: help setup install lint style format check typecheck \
+        dev dev-all dev-ingester dev-control-plane \
+        build build-packages test tests ci stats \
+        docker-up docker-down docker-ps docker-logs docker-nuke \
+        cli clean \
+        db-migrate db-rollback db-status \
+        clickhouse-bootstrap clickhouse-migrate
 
 # Code surfaces tracked by `make stats`. Mirrors the architecture docs:
 # apps/, packages/, processors/, consumers/ hold runtime code; catalog/ holds
@@ -34,9 +55,9 @@ help: ## Show this help
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Targets:"
-	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install up db-migrate ## Bootstrap a local environment (install + containers up + migrations)
+setup: install build-packages db-migrate clickhouse-bootstrap ## Bare-metal bootstrap (install + build shared packages + postgres migrations + clickhouse bootstrap). Assumes infra is running.
 
 install: ## Install pnpm workspace dependencies
 	pnpm install
@@ -56,11 +77,26 @@ check: ## Run Biome lint + format checks
 typecheck: ## Run tsc --noEmit across the workspace
 	pnpm typecheck
 
-dev: ## Run per-package "dev" scripts bare metal
-	pnpm -r --if-present run dev
+dev: build-packages ## Run the two HTTP APIs bare-metal with tsx watch (ingester + control-plane)
+	pnpm --parallel --filter @polaris/ingester-api --filter @polaris/control-plane-api run dev
+
+dev-all: build-packages ## Run every service bare-metal in parallel (apps + processors + consumers)
+	pnpm -r --parallel --if-present run dev
+
+dev-ingester: build-packages ## Run only the ingester API bare-metal
+	pnpm --filter @polaris/ingester-api run dev
+
+dev-control-plane: build-packages ## Run only the control-plane API bare-metal
+	pnpm --filter @polaris/control-plane-api run dev
 
 build: ## Build all workspace packages
 	pnpm build
+
+# Workspace packages export only ./dist/* — tsx watch in the apps imports
+# from those dists, so they must exist before `make dev`. `tsc --incremental`
+# makes the no-op case fast (~3-5s) so this is cheap to keep as a dev dep.
+build-packages: ## Build shared packages so workspace imports resolve at runtime
+	pnpm -r --filter './packages/*' run build
 
 test: ## Run the Vitest suite
 	pnpm test
@@ -76,25 +112,25 @@ stats: ## Show project LOC (current tree + historical churn)
 		awk '($$1 ~ /^[0-9]+$$/ && $$2 ~ /^[0-9]+$$/) { total += $$1 + $$2 } END { print total + 0 }') && \
 	printf "  Historical: %s\n" "$$historical_loc"
 
-up: ## Start the local stack with docker compose (daemonised, waits for health)
+docker-up: ## Start the local infra stack with docker compose (daemonised, waits for health)
 	docker compose up -d --wait
 
-down: ## Stop the docker compose stack (preserves named volumes)
+docker-down: ## Stop the docker compose stack (preserves named volumes)
 	docker compose down
 
-ps: ## Show docker compose service status
+docker-ps: ## Show docker compose service status
 	docker compose ps
 
-logs: ## Tail docker compose logs (Ctrl-C to exit)
+docker-logs: ## Tail docker compose logs (Ctrl-C to exit)
 	docker compose logs -f
 
-nuke: ## Stop docker compose and wipe named volumes (destructive)
+docker-nuke: ## Stop docker compose and wipe named volumes (destructive)
 	docker compose down -v
 
 cli: ## Open the polaris CLI console (apps/polaris-cli)
 	pnpm --filter @polaris/polaris-cli run start
 
-db-migrate: ## Apply pending PostgreSQL migrations (dbmate up)
+db-migrate: ## Apply pending PostgreSQL migrations (dbmate up — creates DB if missing)
 	pnpm db:migrate
 
 db-rollback: ## Roll back the most recent PostgreSQL migration
@@ -102,6 +138,12 @@ db-rollback: ## Roll back the most recent PostgreSQL migration
 
 db-status: ## Show PostgreSQL migration status
 	pnpm db:status
+
+clickhouse-bootstrap: ## Create local ClickHouse DB + apply DDL + local-only users
+	pnpm clickhouse:bootstrap-local
+
+clickhouse-migrate: ## Apply ClickHouse SQL migrations only (no local-user init)
+	pnpm clickhouse:migrate
 
 clean: ## Remove built artefacts (per-package "clean" scripts)
 	pnpm clean
