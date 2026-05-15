@@ -103,6 +103,14 @@ test: ## Run the Vitest suite
 
 tests: test ## Alias for test
 
+benchmark: ## Run benchmark suites across the workspace (no-op if no package defines a `benchmark` script)
+	@matches=$$(find . -maxdepth 4 -name package.json -not -path "*/node_modules/*" -exec grep -lE '"benchmark"[[:space:]]*:' {} + 2>/dev/null); \
+	if [ -n "$$matches" ]; then \
+		pnpm -r run benchmark --if-present; \
+	else \
+		echo "No benchmark scripts defined yet — skipping."; \
+	fi
+
 ci: lint typecheck test ## Run the CI flow: lint, typecheck, tests
 
 stats: ## Show project LOC (current tree + historical churn)
