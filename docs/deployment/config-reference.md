@@ -1,0 +1,320 @@
+# Polaris Configuration Reference
+
+Per-service inventory of runtime environment variables, separated into
+required vs optional. The variable definitions and validation rules
+live in the Zod schemas at
+[`packages/shared-config/src/schemas/`](../../packages/shared-config/src/schemas/);
+this page is operator-facing and reproduces the inventory for quick
+scanning. If the two ever drift, the schemas win and this page is fixed
+in the same PR.
+
+The shared blocks below are composed per service. A service's runtime
+config is "shared blocks it composes" + "its own block". The
+[`.env.example`](../../.env.example) file at the repo root is the single
+template that covers every variable below — copy and trim to the
+service you are deploying.
+
+> **Convention.** Variables marked **required** throw at startup if
+> missing. Variables marked **optional** carry a default in the Zod
+> schema. Secret-bearing variables are listed with an `OBTAIN FROM`
+> note in `.env.example`; never commit a real value.
+
+## Shared blocks
+
+These compose into every service.
+
+### service (shared)
+
+[`packages/shared-config/src/schemas/service.ts`](../../packages/shared-config/src/schemas/service.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_SERVICE_NAME` | required | Identifier on logs / `/health` / metrics labels. |
+| `POLARIS_ENV` | required | `local` / `development` / `staging` / `production`. |
+| `POLARIS_SERVICE_VERSION` | optional | Defaults to `0.0.0`; set by Docker build args. |
+| `POLARIS_LOG_LEVEL` | optional | Pino level; defaults to `info`. |
+| `POLARIS_LOG_PRETTY` | optional | Bool; defaults to true only when `POLARIS_ENV=local`. |
+| `POLARIS_GIT_SHA` | optional | Stamped by Docker build. |
+| `POLARIS_BUILD_TIME` | optional | Stamped by Docker build. |
+
+### http (shared, Fastify-backed services)
+
+[`packages/shared-config/src/schemas/http.ts`](../../packages/shared-config/src/schemas/http.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_HTTP_HOST` | optional | Defaults to `0.0.0.0`. |
+| `POLARIS_HTTP_PORT` | optional | Defaults to `3000`; per-service Dockerfile pins a canonical port (see [`infra/docker/README.md`](../../infra/docker/README.md)). |
+| `POLARIS_HTTP_BODY_LIMIT_BYTES` | optional | Defaults to 1 MiB (`1048576`). |
+| `POLARIS_HTTP_REQUEST_TIMEOUT_MS` | optional | Defaults to `15000`. |
+| `POLARIS_HTTP_KEEPALIVE_TIMEOUT_MS` | optional | Defaults to `5000`. |
+
+### postgres (shared, any service that hits PostgreSQL)
+
+[`packages/shared-config/src/schemas/postgres.ts`](../../packages/shared-config/src/schemas/postgres.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_POSTGRES_HOST` | required | |
+| `POLARIS_POSTGRES_DATABASE` | required | |
+| `POLARIS_POSTGRES_USER` | required | |
+| `POLARIS_POSTGRES_PASSWORD` | required (secret) | OBTAIN FROM secret provider. |
+| `POLARIS_POSTGRES_PORT` | optional | Defaults to `5432`. |
+| `POLARIS_POSTGRES_SSL` | optional | Defaults to false; set true in production. |
+| `POLARIS_POSTGRES_POOL_MAX` | optional | Defaults to `10`. |
+| `POLARIS_POSTGRES_CONNECT_TIMEOUT_MS` | optional | Defaults to `10000`. |
+| `POLARIS_POSTGRES_IDLE_TIMEOUT_MS` | optional | Defaults to `30000`. |
+
+### redis (shared, ingester today)
+
+[`packages/shared-config/src/schemas/redis.ts`](../../packages/shared-config/src/schemas/redis.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_REDIS_HOST` | required | |
+| `POLARIS_REDIS_PORT` | optional | Defaults to `6379`. |
+| `POLARIS_REDIS_DB` | optional | `0..15`; defaults to `0`. |
+| `POLARIS_REDIS_USERNAME` | optional | |
+| `POLARIS_REDIS_PASSWORD` | optional (secret) | OBTAIN FROM secret provider. |
+| `POLARIS_REDIS_CONNECT_TIMEOUT_MS` | optional | Defaults to `5000`. |
+| `POLARIS_REDIS_KEY_PREFIX` | optional | |
+
+### redpanda (shared, any service that produces or consumes events)
+
+[`packages/shared-config/src/schemas/redpanda.ts`](../../packages/shared-config/src/schemas/redpanda.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_REDPANDA_BROKERS` | required | Comma-separated `host:port`. |
+| `POLARIS_REDPANDA_CLIENT_ID` | required | |
+| `POLARIS_REDPANDA_SSL` | optional | Defaults to false; set true in production. |
+| `POLARIS_REDPANDA_SASL_MECHANISM` | optional | If set, USERNAME and PASSWORD must both be set. |
+| `POLARIS_REDPANDA_SASL_USERNAME` | conditional | Required when SASL_MECHANISM is set. |
+| `POLARIS_REDPANDA_SASL_PASSWORD` | conditional (secret) | OBTAIN FROM secret provider. |
+| `POLARIS_REDPANDA_CONNECTION_TIMEOUT_MS` | optional | Defaults to `10000`. |
+| `POLARIS_REDPANDA_REQUEST_TIMEOUT_MS` | optional | Defaults to `30000`. |
+
+### clickhouse (shared, operator/CLI; future analytics services)
+
+[`packages/shared-config/src/schemas/clickhouse.ts`](../../packages/shared-config/src/schemas/clickhouse.ts)
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_CLICKHOUSE_URL` | required | `http://` or `https://`. |
+| `POLARIS_CLICKHOUSE_DATABASE` | required | |
+| `POLARIS_CLICKHOUSE_SERVICE_USER` | required | SELECT-only role. |
+| `POLARIS_CLICKHOUSE_SERVICE_PASSWORD` | required (secret) | OBTAIN FROM secret provider. |
+| `POLARIS_CLICKHOUSE_OPERATOR_USER` | optional | Set as a pair with PASSWORD; required for operator commands. |
+| `POLARIS_CLICKHOUSE_OPERATOR_PASSWORD` | conditional (secret) | OBTAIN FROM secret provider. |
+| `POLARIS_CLICKHOUSE_REQUEST_TIMEOUT_MS` | optional | Defaults to `30000`. |
+| `POLARIS_CLICKHOUSE_MAX_OPEN_CONNECTIONS` | optional | Defaults to `10`. |
+
+## Services
+
+### ingester-api
+
+Source: [`apps/ingester-api/src/config.ts`](../../apps/ingester-api/src/config.ts).
+
+Composes: **service + http + postgres + redpanda + redis** plus the local
+blocks below.
+
+#### authCache
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_AUTH_CACHE_MAX_ENTRIES` | optional | `1024` |
+| `POLARIS_AUTH_CACHE_TTL_MS` | optional | `60000` |
+| `POLARIS_AUTH_CACHE_NEGATIVE_TTL_MS` | optional | `5000` |
+
+#### ingest
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC` | optional | `900` (15 min) |
+| `POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC` | optional | `86400` (24 h) |
+| `POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS` | optional | empty; `project_id=seconds,...` |
+| `POLARIS_INGEST_REDIS_KEY_PREFIX` | optional | `polaris:ingest:dedupe` |
+| `POLARIS_INGEST_REDIS_OP_TIMEOUT_MS` | optional | `50` |
+| `POLARIS_INGEST_MAX_BATCH_EVENTS` | optional | `1000` |
+
+#### rateLimit
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` | optional | `1000` (0 disables, fail-open) |
+| `POLARIS_RATE_LIMIT_WINDOW_SECONDS` | optional | `1` |
+| `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES` | optional | empty; `project_id=rps,...` |
+| `POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX` | optional | `polaris:ingest:rl` |
+| `POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS` | optional | `50` |
+
+### control-plane-api
+
+Source: [`apps/control-plane-api/src/config.ts`](../../apps/control-plane-api/src/config.ts).
+
+Composes: **service + http + postgres**. No Redpanda or Redis in v1.
+
+### processors
+
+All processors compose **service + http + redpanda** plus their own block.
+The `identity-resolver` is the only one that also composes **postgres** today.
+
+#### analytics-projector v1
+
+Source: [`processors/analytics-projector/v1/src/config.ts`](../../processors/analytics-projector/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP` | optional | `polaris-analytics-projector-v1` |
+| `POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY` | optional | `1` |
+
+#### identity-resolver v1
+
+Source: [`processors/identity-resolver/v1/src/config.ts`](../../processors/identity-resolver/v1/src/config.ts).
+
+Also composes **postgres** (writes `identity_links`).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP` | optional | `polaris-identity-resolver-v1` |
+| `POLARIS_IDENTITY_RESOLVER_CONCURRENCY` | optional | `1` |
+
+#### sessionizer v1
+
+Source: [`processors/sessionizer/v1/src/config.ts`](../../processors/sessionizer/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_SESSIONIZER_CONSUMER_GROUP` | optional | `polaris-sessionizer-v1` |
+| `POLARIS_SESSIONIZER_CONCURRENCY` | optional | `1` |
+| `POLARIS_SESSIONIZER_INACTIVITY_SECONDS` | optional (semantic) | `1800` |
+
+`INACTIVITY_SECONDS` is **semantic**: the runtime accepts the env var
+only to mirror the manifest default; changing the value requires a v2
+processor directory + manifest, not a deployment override.
+
+#### geoip-enricher v1
+
+Source: [`processors/geoip-enricher/v1/src/config.ts`](../../processors/geoip-enricher/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_GEOIP_ENRICHER_CONSUMER_GROUP` | optional | `polaris-geoip-enricher-v1` |
+| `POLARIS_GEOIP_ENRICHER_CONCURRENCY` | optional | `1` |
+
+`POLARIS_GEOIP_DB_PATH` is reserved in `.env.example` but the v1
+processor does not read it; the follow-up MaxMind adapter task will.
+
+#### attribution-engine v1
+
+Source: [`processors/attribution-engine/v1/src/config.ts`](../../processors/attribution-engine/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP` | optional | `polaris-attribution-engine-v1` |
+| `POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY` | optional | `1` |
+
+### consumers (destinations)
+
+All destination consumers compose **service + http + redpanda + postgres** plus
+their own block.
+
+#### webhook-sink v1
+
+Source: [`consumers/webhook-sink/v1/src/config.ts`](../../consumers/webhook-sink/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_WEBHOOK_SINK_CONSUMER_GROUP` | optional | `polaris-webhook-sink-v1` |
+| `POLARIS_WEBHOOK_SINK_CONCURRENCY` | optional | `4` |
+| `POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS` | optional | `5000` |
+| `POLARIS_WEBHOOK_SINK_ALLOW_REPLAY` | optional | `false` |
+
+#### meta-capi v1
+
+Source: [`consumers/meta-capi/v1/src/config.ts`](../../consumers/meta-capi/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_META_CAPI_CONSUMER_GROUP` | optional | `polaris-meta-capi-v1` |
+| `POLARIS_META_CAPI_CONCURRENCY` | optional | `4` |
+| `POLARIS_META_CAPI_REQUEST_TIMEOUT_MS` | optional | `5000` |
+| `POLARIS_META_CAPI_ALLOW_REPLAY` | optional | `false` |
+| `POLARIS_META_CAPI_GRAPH_HOST` | optional | `graph.facebook.com` |
+
+#### tiktok v1
+
+Source: [`consumers/tiktok/v1/src/config.ts`](../../consumers/tiktok/v1/src/config.ts).
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_TIKTOK_CONSUMER_GROUP` | optional | `polaris-tiktok-v1` |
+| `POLARIS_TIKTOK_CONCURRENCY` | optional | `4` |
+| `POLARIS_TIKTOK_REQUEST_TIMEOUT_MS` | optional | `5000` |
+| `POLARIS_TIKTOK_ALLOW_REPLAY` | optional | `false` |
+| `POLARIS_TIKTOK_API_HOST` | optional | `business-api.tiktok.com` |
+
+### polaris CLI
+
+Source: [`apps/polaris-cli/src/config.ts`](../../apps/polaris-cli/src/config.ts).
+
+Operator tool, not a service. Reads its own ad-hoc variables for the
+control-plane API client + operator-token gate.
+
+| Variable | Status | Notes |
+| --- | --- | --- |
+| `POLARIS_API_URL` | required when no profile is selected | Control-plane API base URL. |
+| `POLARIS_TOKEN` | required for default profile (secret) | Bearer token for control-plane API. |
+| `POLARIS_OPERATOR_TOKEN` | required for production mutations (secret) | Operator token; checked by the gate. |
+| `POLARIS_PROFILE` | optional | Active profile from `~/.polaris/config.toml`. |
+| `POLARIS_OUTPUT` | optional | `human` or `json`. |
+| `POLARIS_LOG_LEVEL` | optional | Defaults to `warn`. |
+| `POLARIS_DEBUG` | optional | `1` prints stack traces. |
+| `POLARIS_CATALOG_ROOT` | optional | Repo root; the CLI walks upward from cwd by default. |
+| `POLARIS_DATABASE_URL` | optional | CLI-specific override; falls back to `DATABASE_URL`. |
+| `POLARIS_ENV` | optional | Effective environment for the production-mutation gate. |
+| `POLARIS_GIT_SHA` / `POLARIS_BUILD_TIME` | optional | Shown by `polaris --version`. |
+
+The CLI never stores its bearer token in the config file. The TOML at
+`~/.polaris/config.toml` points each profile at the **env-var name**
+that holds the token; the token itself lives only in the operator's
+shell environment.
+
+## Secret-bearing variables (full list)
+
+Every variable that may carry a secret is named below. None of these
+should ever appear in `.env.example` with a real value. The production
+deployment's secret provider (today `env`; Vault from
+[P11-004](../implementation/tasks/P11-004-production-secret-provider.md))
+injects them at boot.
+
+| Variable | Used by |
+| --- | --- |
+| `POLARIS_POSTGRES_PASSWORD` | every service touching PostgreSQL |
+| `POLARIS_REDIS_PASSWORD` | ingester-api (optional unless Redis ACL is on) |
+| `POLARIS_REDPANDA_SASL_PASSWORD` | every service touching Redpanda (when SASL is enabled) |
+| `POLARIS_CLICKHOUSE_SERVICE_PASSWORD` | operators / future analytics services |
+| `POLARIS_CLICKHOUSE_OPERATOR_PASSWORD` | operators / replay-rebuild workflows |
+| `POLARIS_TOKEN` | `polaris` CLI |
+| `POLARIS_OPERATOR_TOKEN` | `polaris` CLI for production mutations |
+
+The platform also stores **destination credentials** (Meta CAPI tokens,
+TikTok keys, generic webhook secrets, etc.) as `(secret_provider,
+secret_ref)` pairs in PostgreSQL. Those are not Polaris-platform
+variables and not listed in `.env.example`. The secret provider
+resolves them at delivery time inside the consumer process.
+
+## Composition map (cheat sheet)
+
+```text
+                    service  http  postgres  redis  redpanda  ingester  proc   consumer  + local
+ingester-api          x       x       x        x       x         x                       authCache, ingest, rateLimit
+control-plane-api     x       x       x                                                  (none)
+analytics-projector   x       x                        x                  x              projector
+identity-resolver     x       x       x                x                  x              resolver
+sessionizer           x       x                        x                  x              sessionizer
+geoip-enricher        x       x                        x                  x              enricher
+attribution-engine    x       x                        x                  x              attributionEngine
+webhook-sink          x       x       x                x                          x      sink
+meta-capi             x       x       x                x                          x      meta
+tiktok                x       x       x                x                          x      tiktok
+```
