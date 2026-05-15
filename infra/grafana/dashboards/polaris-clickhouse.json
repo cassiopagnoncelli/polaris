@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Polaris ClickHouse v1: Kafka-engine ingestion lag and analytics insert health, proxied via the analytics-projector processor metrics. Also surfaces operator-escape-hatch usage. Most native ClickHouse internals (MV failed_state, query p99, parts count) are NOT exposed in v1 — see About panel for gaps and the path to a native exporter.",
+  "description": "Polaris ClickHouse v1: Kafka-engine ingestion lag and materialized-view state from the analytics-projector's probe poller (PI2CRFZC); analytics insert health, proxied via the analytics-projector processor metrics; operator-escape-hatch usage. Native query-rate / query-p99 / parts-count panels are still gaps — see About panel.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -25,7 +25,7 @@
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The signals on this dashboard are derived from the **analytics-projector** processor, which is Polaris's ClickHouse inserter, plus the operator-escape-hatch counter from `packages/shared-clickhouse/src/raw.ts`.\n\n**Available metrics**:\n\n- `polaris_processor_lag_ms_last{processor_name=\"analytics-projector\"}` — proxy for Kafka-engine → analytics insert lag\n- `polaris_processor_events_consumed_total{processor_name=\"analytics-projector\"}` — proxy for the rate of rows landing in `analytics.events`\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` — proxy for materialized-view / insert failures (`reason` carries the failure class)\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` — events the inserter sent to DLQ after retry exhaustion\n- `polaris_clickhouse_operator_raw_query_total{caller}` — every operator escape-hatch raw query (audit signal)\n\n**Known gaps** (P10-003):\n\n- **No native ClickHouse Prometheus exporter** is wired in v1. To get `ClickHouseAsyncMetrics_ReplicasMaxQueueSize`, `failed_state` counts on materialized views, `Query` rate, query latency histograms, parts count, and disk usage, add a `clickhouse-exporter` (or the ClickHouse built-in `system.metrics` exporter) and a scrape stanza in `infra/prometheus/prometheus.yml`. Until that lands, this dashboard uses the proxies above and the panels for query-rate-by-table and query p99 are placeholders.\n- **Projection table freshness** is owned by `event-daily-counts` and similar ClickHouse projections. There is no v1 metric for projection freshness; placeholder panel calls it out.",
+        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The dashboard's signals come from two places: the **analytics-projector** processor (Polaris's canonical ClickHouse inserter) and the projector's **probe poller** (PI2CRFZC), which periodically queries ClickHouse `system.*` views and re-publishes the rows as Polaris gauges.\n\n**Available metrics**:\n\n- `polaris_clickhouse_kafka_ingestion_lag_seconds{database, table}` — Kafka-engine consumer lag, from `system.kafka_consumers` (PI2CRFZC).\n- `polaris_clickhouse_mv_state{view, state}` — materialized-view state, from `system.materialized_views` (PI2CRFZC). `state=\"failed\"` powers the page alert.\n- `polaris_processor_lag_ms_last{processor_name=\"analytics-projector\"}` — proxy for the Kafka→analytics insert lag at the inserter.\n- `polaris_processor_events_consumed_total{processor_name=\"analytics-projector\"}` — rate of rows landing in `analytics.events`.\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` — inserter-side failure class.\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` — events DLQ'd after retry exhaustion.\n- `polaris_clickhouse_operator_raw_query_total{caller}` — operator escape-hatch raw queries (audit signal).\n\n**Known gaps**:\n\n- **No native query-rate / query-p99 / parts-count metrics.** These come from `ClickHouseProfileEvents_Query` / `ClickHouseProfileEvents_QueryTimeMicroseconds` and would require either a `clickhouse-exporter` sidecar or extending the probe poller to read `system.metrics`. Not in v1.\n- **No projection-freshness metric.** No v1 emitter for projections like `event-daily-counts`.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -203,15 +203,75 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 30 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 30 },
       "id": 7,
       "options": {
-        "content": "## Query rate by table / query p99 latency — gap (placeholder)\n\nNot available in v1 — ClickHouse is not scraped by Prometheus. When the native exporter lands (see About panel), the panels become:\n\n- `sum by (database, table) (rate(ClickHouseProfileEvents_Query[5m]))` — query rate by table\n- `histogram_quantile(0.99, sum by (le) (rate(ClickHouseProfileEvents_QueryTimeMicroseconds[5m])))` — query p99 latency\n\n## Projection table freshness — gap (placeholder)\n\nProjections like `event-daily-counts` need a freshness metric (e.g. `max(updated_at) - now`). No emitter exists in v1.",
-        "mode": "markdown"
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "pluginVersion": "11.4.0",
-      "title": "Query rate / p99 / projection freshness (gaps)",
-      "type": "text"
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds)",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka-engine ingestion lag (seconds, per table)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            { "options": { "0": { "color": "green", "text": "OK" } }, "type": "value" },
+            { "options": { "1": { "color": "red", "text": "FAILED" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 30 },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "max by (view) (polaris_clickhouse_mv_state{state=\"failed\"})",
+          "legendFormat": "{{view}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Materialized views in failed state",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

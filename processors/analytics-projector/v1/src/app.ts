@@ -21,6 +21,8 @@
  * Redpanda broker.
  */
 
+import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/shared-clickhouse";
+import { clickhouseEnvSchema } from "@polaris/shared-config";
 import {
   createKafkaClient,
   createPolarisConsumer,
@@ -40,6 +42,11 @@ import {
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 
+import { ClickHouseProbeMetrics } from "./clickhouse-probe-metrics.js";
+import {
+  type ClickHouseProbePoller,
+  createClickHouseProbePoller,
+} from "./clickhouse-probe-poller.js";
 import type { AnalyticsProjectorRuntimeConfig } from "./config.js";
 import { type AnalyticsProjectorRuntime, createRuntime } from "./runtime.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
@@ -151,6 +158,59 @@ export async function buildAnalyticsProjectorApp(
   // without touching the call sites.
   const metrics = new ProcessorMetrics();
 
+  // ---- optional ClickHouse probe poller (PI2CRFZC) ---------------------
+  // When `POLARIS_CLICKHOUSE_URL` is set in the deployment env, the
+  // projector also runs a periodic probe loop that re-publishes
+  // ClickHouse's `system.*` health signals as Polaris Prometheus gauges.
+  // The probes power the three v1 ClickHouse alerts
+  // (PolarisClickHouseIngestionLagWarn / ...Page / ...MVFailure). When
+  // the env is absent the poller is skipped — local-only test or dev
+  // runs do not need it.
+  const probeMetrics = new ClickHouseProbeMetrics();
+  let probeClient: ClickHouseOperatorClient | null = null;
+  let probePoller: ClickHouseProbePoller | null = null;
+  if (process.env["POLARIS_CLICKHOUSE_URL"] !== undefined) {
+    try {
+      const clickhouseConfig = clickhouseEnvSchema.parse(process.env);
+      if (clickhouseConfig.operator !== undefined) {
+        const builtClient = createClickHouseClient({
+          role: "operator",
+          url: clickhouseConfig.url,
+          database: clickhouseConfig.database,
+          credential: {
+            username: clickhouseConfig.operator.user,
+            password: clickhouseConfig.operator.password,
+          },
+          requestTimeoutMs: clickhouseConfig.requestTimeoutMs,
+          maxOpenConnections: clickhouseConfig.maxOpenConnections,
+          application: PROCESSOR_NAME,
+        });
+        probeClient = builtClient;
+        probePoller = createClickHouseProbePoller({
+          probes: builtClient.probes,
+          metrics: probeMetrics,
+          logger: processorLogger,
+          database: clickhouseConfig.database,
+        });
+      } else {
+        processorLogger.info(
+          { component: "analytics-projector.clickhouse-probe" },
+          "POLARIS_CLICKHOUSE_OPERATOR_{USER,PASSWORD} not set; probe poller skipped",
+        );
+      }
+    } catch (err) {
+      processorLogger.warn(
+        { component: "analytics-projector.clickhouse-probe", err: errSummary(err) },
+        "ClickHouse probe config invalid; probe poller skipped",
+      );
+    }
+  } else {
+    processorLogger.info(
+      { component: "analytics-projector.clickhouse-probe" },
+      "POLARIS_CLICKHOUSE_URL not set; probe poller skipped",
+    );
+  }
+
   // ---- consumer + producer --------------------------------------------
   const { producer, ownsProducer } = buildProducer(config, options.producer, processorLogger);
   const { consumer, ownsConsumer } = buildConsumer(config, options.consumer, processorLogger);
@@ -205,6 +265,30 @@ export async function buildAnalyticsProjectorApp(
       );
     }
   });
+  if (probePoller !== null) {
+    shutdownTasks.push(async () => {
+      try {
+        await probePoller!.stop();
+      } catch (err) {
+        processorLogger.warn(
+          { component: "analytics-projector.clickhouse-probe", err: errSummary(err) },
+          "probe poller stop error during shutdown",
+        );
+      }
+    });
+  }
+  if (probeClient !== null) {
+    shutdownTasks.push(async () => {
+      try {
+        await probeClient!.close();
+      } catch (err) {
+        processorLogger.warn(
+          { component: "analytics-projector.clickhouse-probe", err: errSummary(err) },
+          "probe ClickHouse client close error during shutdown",
+        );
+      }
+    });
+  }
   if (ownsConsumer) {
     shutdownTasks.push(async () => {
       try {
@@ -263,11 +347,20 @@ export async function buildAnalyticsProjectorApp(
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
     installShutdown: options.installShutdown ?? true,
     ...(options.shutdownExit !== undefined ? { shutdownExit: options.shutdownExit } : {}),
-    // Wire /metrics to the live ProcessorMetrics registry (P10-002).
+    // Wire /metrics to the live ProcessorMetrics + ClickHouseProbeMetrics
+    // registries (P10-002 / PI2CRFZC). Probe samples are appended after
+    // the processor samples so a future `_TYPE`/`_HELP` header from
+    // ProcessorMetrics never lands between the probe series.
     metrics: {
-      producer: () => toPrometheusText(metrics.getSamples()),
+      producer: () =>
+        toPrometheusText([...metrics.getSamples(), ...probeMetrics.getSamples()]),
     },
   });
+
+  // ---- start probe poller ---------------------------------------------
+  if (probePoller !== null) {
+    probePoller.start();
+  }
 
   // ---- start runtime ---------------------------------------------------
   if (options.startRuntime ?? true) {

@@ -58,9 +58,6 @@ acceptance signal for the metric work that follows.
 
 | Alert | Expected metric | Owner work |
 |---|---|---|
-| `PolarisClickHouseIngestionLagWarn` | `polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}` | polaris-clickhouse-exporter (future) |
-| `PolarisClickHouseIngestionLagPage` | `polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}` | polaris-clickhouse-exporter (future) |
-| `PolarisClickHouseMVFailure` | `polaris_clickhouse_mv_state{view=...,state="failed"}` | polaris-clickhouse-exporter (future) |
 | `PolarisReplayJobStuck` | `polaris_replay_job_progress_offset{replay_job_id,status}` + `polaris_replay_job_status{status="running"}` | replay coordinator (P5 / P7 work) |
 
 These gaps do NOT block the v1 alerts story — the runbooks for each

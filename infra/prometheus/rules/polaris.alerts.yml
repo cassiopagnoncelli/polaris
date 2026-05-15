@@ -241,80 +241,58 @@ groups:
   - name: polaris-clickhouse
     interval: 30s
     rules:
-      # _TODO_: no polaris_clickhouse_kafka_ingestion_lag_seconds
-      # metric exists yet. The future
-      # polaris-clickhouse-exporter scrapes
-      # system.kafka_consumers and exposes:
-      #
-      #   polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}
-      #
-      # Once that lands the expression becomes:
-      #
-      #   max by (table, environment) (
-      #     polaris_clickhouse_kafka_ingestion_lag_seconds
-      #   ) > 120  (warn)  /  > 600 (page)
-      #
-      # Until then these rules are documented but never fire.
+      # `polaris_clickhouse_kafka_ingestion_lag_seconds{database, table}`
+      # is emitted by the analytics-projector's probe poller (PI2CRFZC).
+      # The probe loop reads `system.kafka_consumers` once per scrape
+      # interval; the projector re-publishes the per-(database, table)
+      # max lag-seconds value as a Polaris gauge.
       - alert: PolarisClickHouseIngestionLagWarn
-        expr: vector(0) > 120
+        expr: max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds) > 120
         for: 5m
         labels:
           severity: warn
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse Kafka ingestion lag >2 min (TODO metric)"
+          summary: "ClickHouse Kafka ingestion lag >2 min"
           description: |
-            Placeholder for the v1 threshold "ClickHouse Kafka
-            ingestion lag warn at 2 min, page at 10 min." A Polaris
-            ClickHouse exporter does not yet expose the lag metric;
-            this rule is wired for the threshold but will never fire
-            until the exporter lands. Tracked in
-            docs/operations/alerts.md.
+            ClickHouse Kafka-Engine ingestion lag for table
+            {{ $labels.table }} has been above 2 minutes for 5 minutes.
+            Triage with the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
       - alert: PolarisClickHouseIngestionLagPage
-        expr: vector(0) > 600
+        expr: max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds) > 600
         for: 5m
         labels:
           severity: page
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse Kafka ingestion lag >10 min (TODO metric)"
+          summary: "ClickHouse Kafka ingestion lag >10 min"
           description: |
-            Placeholder for the v1 threshold "ClickHouse Kafka
-            ingestion lag warn at 2 min, page at 10 min." See the warn
-            rule for the metric backfill plan.
+            ClickHouse Kafka-Engine ingestion lag for table
+            {{ $labels.table }} has been above 10 minutes for 5 minutes.
+            Triage with the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
-      # _TODO_: no polaris_clickhouse_mv_failed_total metric exists.
-      # The future polaris-clickhouse-exporter scrapes
-      # system.materialized_views and exposes:
-      #
-      #   polaris_clickhouse_mv_state{view=...,state=...}
-      #
-      # Once that lands the expression becomes:
-      #
-      #   max by (view, environment) (
-      #     polaris_clickhouse_mv_state{state="failed"}
-      #   ) > 0
+      # `polaris_clickhouse_mv_state{view, state}` is also emitted by
+      # the analytics-projector's probe poller (PI2CRFZC). The probe
+      # loop emits a sample of value 1 per observed (view, state) tuple;
+      # the alert fires when any view's `failed` series is present.
       - alert: PolarisClickHouseMVFailure
-        expr: vector(0) > 0
+        expr: max by (view) (polaris_clickhouse_mv_state{state="failed"}) > 0
         for: 1m
         labels:
           severity: page
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse materialized view in failed state (TODO metric)"
+          summary: "ClickHouse materialized view in failed state"
           description: |
-            Placeholder for the v1 threshold "ClickHouse MV failure
-            page on any MV in failed state." The Polaris ClickHouse
-            exporter that surfaces system.materialized_views state has
-            not landed yet; this rule is wired for the threshold but
-            will never fire until the exporter lands. Tracked in
-            docs/operations/alerts.md.
+            Materialized view {{ $labels.view }} is reporting state
+            `failed`. Inspect `system.materialized_views.last_exception`
+            in the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
   # ---------------------------------------------------------------
