@@ -20,9 +20,6 @@ _(no cards — all Ready picks merged in the 7-task batch P11-006c · P6-000 · 
 
 _(no remaining backlog — all P6 tasks Ready or Done)_
 
-### P7 Replay System
-
-- [P7-005 ClickHouse Rebuild Workflows](./tasks/P7-005-clickhouse-rebuild-workflows.md)
 
 ### P10 Observability and Operations
 
@@ -108,6 +105,7 @@ No blocked cards.
 - [P7-001b Replay CLI Behavioral Tests + Store Surface Cleanup](./tasks/P7-001b-replay-cli-behavioral-tests.md) — merged in `a7d7e1e`
 - [P7-002 Replay Planner Dry Run](./tasks/P7-002-replay-planner-dry-run.md) — merged in `f017da8`
 - [P7-003 Processor Replay Executor](./tasks/P7-003-processor-replay-executor.md) — merged in `138bf65` (cherry-picked from `task/p7-003-impl` — original `task/p7-003` slot was held by a dead Phase B worktree; default CLI source/producer remain no-op stubs awaiting offset-range reader from `@polaris/shared-kafka`)
+- [P7-005 ClickHouse Rebuild Workflows](./tasks/P7-005-clickhouse-rebuild-workflows.md) — merged in `1033a27` (cherry-picked from `worktree-agent-a1739fe2681f30835`; full job scaffolding — Postgres migration `20260515000001_create_clickhouse_rebuild_jobs.sql` with 7-state status enum + error-pair / status-consistency CHECKs, planner under `packages/shared-clickhouse/src/rebuild/` with rejection codes `unknown_projection` / `invalid_range` / `range_empty` / `clickhouse_unreachable`, five CLI commands (`plan`/`list`/`show`/`create`/`abort`); closed projection set today is `event_daily_counts`; executor explicitly deferred — non-dry-run `create` persists pending row + audit row then exits with `clickhouse_rebuild_executor_not_implemented`; +71 tests) (cherry-picked from `task/p7-003-impl` — original `task/p7-003` slot was held by a dead Phase B worktree; default CLI source/producer remain no-op stubs awaiting offset-range reader from `@polaris/shared-kafka`)
 - [P7-004 Destination Replay Guardrails](./tasks/P7-004-destination-replay-guardrails.md) — merged in `e0b1e3d` (planner-extension follow-up deferred to P11-008 or later)
 
 ### P8 Production Processors
