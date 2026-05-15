@@ -37,7 +37,7 @@ the recovery procedure for each row of this table lives in
 | `replay_jobs` | PostgreSQL | 2 years | operational | Platform operator |
 | `delivery_records` | PostgreSQL | 180 days | operational | Destination owner |
 | `audit_records` | PostgreSQL | 2 years | regulatory | Compliance operator |
-| `identity_links` | PostgreSQL | identity policy (see [P8-002](../implementation/tasks/P8-002-identity-resolver-v1.md)) | pseudonymized PII | Identity / privacy owner |
+| `identity_links` | PostgreSQL | identity policy (see [P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)) | pseudonymized PII | Identity / privacy owner |
 | `analytics_ingest_log` | ClickHouse | 30 days (TTL) | analytical | Platform operator |
 | `analytics_raw` | ClickHouse | 400 days (TTL) | analytical (contains pseudonymized PII) | Platform operator |
 | Projection tables | ClickHouse | per projection (default 400 days, TTL) | analytical | Projection owner |

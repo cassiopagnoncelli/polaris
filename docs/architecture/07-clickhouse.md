@@ -252,7 +252,7 @@ The `packages/shared-clickhouse/` workspace package is the only sanctioned in-pr
 - operator-profile methods including `argMax`-based reads against `analytics_raw` (`replay.argMaxByEventKey`, `replay.countDistinctEvents`)
 - an operator-only `raw.query` escape hatch that emits a metric and structured log line on every call, so escape-hatch usage is observable
 
-A workspace-level import rule prevents code outside `shared-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See [P0-010](../implementation/tasks/P0-010-shared-clickhouse-client.md).
+A workspace-level import rule prevents code outside `shared-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See [P0-010](../../agents/pm/kanban/done/P0-010-shared-clickhouse-client-package.md).
 
 ### Ad-hoc operator SQL
 

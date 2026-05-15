@@ -139,7 +139,7 @@ Adding `consumer_build_version` / `processor_build_version` columns to
 the runtime tables is **deferred** — it duplicates information the rollout
 timeline already carries, would invalidate every existing index, and
 would force a write-coordination change on every record-writing path. See
-`docs/implementation/tasks/P11-007-release-versioning-build-metadata.md`
+`agents/pm/kanban/done/P11-007-release-versioning-and-build-metadata.md`
 "Known gaps".
 
 ## When does each axis bump?

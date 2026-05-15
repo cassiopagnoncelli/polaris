@@ -284,7 +284,7 @@ shell environment.
 Every variable that may carry a secret is named below. None of these
 should ever appear in `.env.example` with a real value. The production
 deployment's secret provider (today `env`; Vault from
-[P11-004](../implementation/tasks/P11-004-production-secret-provider.md))
+[P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md))
 injects them at boot.
 
 | Variable | Used by |

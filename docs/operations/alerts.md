@@ -9,7 +9,7 @@ Binding architecture reference:
 [Observability and Operations](../architecture/08-observability-and-operations.md).
 
 The v1 default thresholds are pinned by
-[`docs/implementation/tasks/P10-005-alerts-runbooks.md`](../implementation/tasks/P10-005-alerts-runbooks.md);
+[`agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md`](../../agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md);
 they start permissive enough to avoid alert fatigue on a fresh
 deployment and are tightened after observed traffic. **Thresholds are
 initial defaults subject to revision.**

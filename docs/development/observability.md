@@ -106,7 +106,7 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 ```
 
 The actual OTel SDK wiring in Polaris services lands with
-[P10-002 Metrics Standardization](../implementation/tasks/P10-002-metrics-standardization.md).
+[P10-002 Metrics Standardization](../../agents/pm/kanban/done/P10-002-metrics-standardization.md).
 Today the variables above are forward-compatible: setting them does
 not break anything, and the collector ignores empty intake.
 
@@ -138,7 +138,7 @@ in-process registries
 (`apps/ingester-api/src/metrics/registry.ts`,
 `packages/shared-processor/src/metrics.ts`). The Prometheus
 text-format exposition that surfaces them at `/metrics` is the job of
-[P10-002 Metrics Standardization](../implementation/tasks/P10-002-metrics-standardization.md);
+[P10-002 Metrics Standardization](../../agents/pm/kanban/done/P10-002-metrics-standardization.md);
 until that lands, the scrape will succeed but return an empty
 metrics body.
 
@@ -150,7 +150,7 @@ On a fresh start you'll see one dashboard: **Polaris Overview
 (placeholder)**, intentionally a no-op so the provider doesn't log
 a 'no dashboards found' warning.
 
-[P10-003 Grafana Dashboards](../implementation/tasks/P10-003-grafana-dashboards.md)
+[P10-003 Grafana Dashboards](../../agents/pm/kanban/done/P10-003-grafana-dashboards.md)
 replaces the placeholder with the real Polaris dashboards
 (Ingestion, Processors, Destinations, ClickHouse, Redpanda). To add
 a dashboard in the meantime, drop its JSON export into
@@ -168,7 +168,7 @@ Polaris service is actually shipping logs to Loki — they emit Pino
 JSON to stdout and the Docker container logs are the source of
 truth.
 
-[P10-004 Loki Logging Pipeline](../implementation/tasks/P10-004-loki-logging-pipeline.md)
+[P10-004 Loki Logging Pipeline](../../agents/pm/kanban/done/P10-004-loki-logging-pipeline.md)
 wires the structured logs through the OTel collector's `loki`
 exporter (already configured in [`infra/otel/collector.yaml`](../../infra/otel/collector.yaml)).
 Until that lands, use `docker compose logs -f <service>` for
@@ -204,11 +204,11 @@ GRAFANA_ADMIN_PASSWORD='changeit' \
 | Task                                                                                     | Owns                                                                            |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | P10-001 (this task)                                                                      | Compose file, infra configs, this doc.                                          |
-| [P10-002 Metrics Standardization](../implementation/tasks/P10-002-metrics-standardization.md) | Actual `polaris_*` metric names, label conventions, `/metrics` exposition.       |
-| [P10-003 Grafana Dashboards](../implementation/tasks/P10-003-grafana-dashboards.md)      | Real dashboards in `infra/grafana/dashboards/`.                                  |
-| [P10-004 Loki Logging Pipeline](../implementation/tasks/P10-004-loki-logging-pipeline.md) | Pino → OTLP → Loki wiring, label extraction, derived fields in Grafana.          |
-| [P10-005 Alerts and Runbooks](../implementation/tasks/P10-005-alerts-runbooks.md)        | Prometheus alerting rules in `infra/prometheus/rules/`, Alertmanager config.      |
-| [P10-006 DLQ Triage Runbook](../implementation/tasks/P10-006-dlq-triage-runbook.md)      | The operator runbook for working DLQs end to end.                                |
+| [P10-002 Metrics Standardization](../../agents/pm/kanban/done/P10-002-metrics-standardization.md) | Actual `polaris_*` metric names, label conventions, `/metrics` exposition.       |
+| [P10-003 Grafana Dashboards](../../agents/pm/kanban/done/P10-003-grafana-dashboards.md)      | Real dashboards in `infra/grafana/dashboards/`.                                  |
+| [P10-004 Loki Logging Pipeline](../../agents/pm/kanban/done/P10-004-loki-logging-pipeline.md) | Pino → OTLP → Loki wiring, label extraction, derived fields in Grafana.          |
+| [P10-005 Alerts and Runbooks](../../agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md)        | Prometheus alerting rules in `infra/prometheus/rules/`, Alertmanager config.      |
+| [P10-006 DLQ Triage Runbook](../../agents/pm/kanban/done/P10-006-dlq-triage-runbook.md)      | The operator runbook for working DLQs end to end.                                |
 
 ## Troubleshooting
 

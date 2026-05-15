@@ -9,7 +9,7 @@ Before coding, read:
 - /Users/cassio/src/polaris/docs/README.md
 - /Users/cassio/src/polaris/docs/instructions/claude.md
 - /Users/cassio/src/polaris/docs/implementation/README.md
-- /Users/cassio/src/polaris/docs/implementation/kanban.md
+- /Users/cassio/src/polaris/agents/pm/README.md (file-backed kanban; run `python3 agents/pm/bin/cards.py report` for board state)
 - /Users/cassio/src/polaris/docs/implementation/delivery-roadmap.md
 - /Users/cassio/src/polaris/docs/implementation/coverage-matrix.md
 - the task card assigned below

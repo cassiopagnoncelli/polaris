@@ -103,7 +103,7 @@ The CLI is a thin client that talks to a small Polaris control-plane API service
 - Operators don't need direct PostgreSQL network reach; only the control-plane API service does.
 - A future admin UI reuses the same API.
 
-The control-plane API service lives in `apps/control-plane-api/` and exposes the same operations the CLI invokes. The implementation choice is reconfirmed in [P6-001](../implementation/tasks/P6-001-cli-shell.md).
+The control-plane API service lives in `apps/control-plane-api/` and exposes the same operations the CLI invokes. The implementation choice is reconfirmed in [P6-001](../../agents/pm/kanban/done/P6-001-control-plane-cli-shell.md).
 
 The CLI should use libraries/services that a future admin API or UI can reuse. No admin UI is required in v1.
 

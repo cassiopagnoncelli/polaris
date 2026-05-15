@@ -13,7 +13,7 @@ plus the ClickHouse access enforcement from
 
 The integration workflow is opt-in on PRs because the service matrix is slow
 and still stabilising. Once the vertical-slice smoke test is reliable
-(see [P5-001](../implementation/tasks/P5-001-vertical-slice-smoke.md)),
+(see [P5-001](../../agents/pm/kanban/done/P5-001-vertical-slice-smoke-test.md)),
 the per-service jobs may graduate to required gates.
 
 ## Required PR gates
@@ -107,8 +107,8 @@ The integration workflow stands up real services and runs whatever
 end-to-end suite is defined in the workspace. As of this writing, the
 suite is a placeholder owned by:
 
-- [P4-002 ClickHouse Ingestion Integration](../implementation/tasks/P4-002-clickhouse-ingestion.md)
-- [P5-001 Vertical Slice Smoke Test](../implementation/tasks/P5-001-vertical-slice-smoke.md)
+- [P4-002 ClickHouse Ingestion Integration](../../agents/pm/kanban/done/P4-002-clickhouse-ingestion-integration.md)
+- [P5-001 Vertical Slice Smoke Test](../../agents/pm/kanban/done/P5-001-vertical-slice-smoke-test.md)
 
 ### Opting into integration on a PR
 

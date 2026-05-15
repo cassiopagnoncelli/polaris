@@ -28,7 +28,7 @@ This is the canonical table. It mirrors and binds to
 | --- | --- | --- | --- | --- |
 | PostgreSQL | audit, replay jobs, processor runs, destination instances, operator tokens, API key hashes, schema/source registry, topic isolations, identity links | 5 min | 1 h | daily `pg_dump --format=custom` + continuous WAL streaming; 7-day point-in-time recovery |
 | ClickHouse `analytics_raw` | deduped analytical facts | 24 h | 4 h (recent partitions) | daily `BACKUP TABLE` to object storage |
-| ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time | no backup; rebuild via [P7-005](../implementation/tasks/P7-005-clickhouse-rebuild-workflows.md) |
+| ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time | no backup; rebuild via [P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md) |
 | ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly `BACKUP TABLE`, monthly cold archive |
 | Redpanda | canonical event topics | 0 (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster replication factor; tiered storage future work |
 | Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss is acceptable transient duplicate increase, downstream idempotency handles |
@@ -45,7 +45,7 @@ Rules baked into the runbook:
   PostgreSQL rows. The 5-minute RPO targets exactly those rows.
 - ClickHouse projection tables are deliberately not backed up. The
   rebuild path runs through the standard replay/rebuild workflow
-  ([P7-005](../implementation/tasks/P7-005-clickhouse-rebuild-workflows.md)).
+  ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)).
 - Secret values never appear in backups. PostgreSQL stores
   `secret_provider` and `secret_ref`, not secret values
   ([Production Readiness / Secret Management](../architecture/11-production-readiness.md#secret-management)).
@@ -72,7 +72,7 @@ schema covers:
 | `processor_runs` | per-run record (timestamps, metrics, status) | 1 year | operational |
 | `audit_records` | one row per state-changing CLI command | 2 years | regulatory |
 | `operator_tokens` | argon2id hashes of CLI credentials | active lifetime + 2 years after revoke | sensitive (hash-only, no plaintext) |
-| `identity_links` | append-only identity edges from the identity resolver | identity retention policy ([P8-002](../implementation/tasks/P8-002-identity-resolver-v1.md)) | pseudonymized PII |
+| `identity_links` | append-only identity edges from the identity resolver | identity retention policy ([P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)) | pseudonymized PII |
 
 `replay_jobs` and `delivery_records` land with P7-* and P9-007 and
 follow the same backup model. They are listed in
@@ -369,7 +369,7 @@ The rationale for "rebuild not restore" lives in
 and is reinforced by Production Readiness:
 
 > ClickHouse projection rebuilds run through the standard replay/rebuild
-> workflow ([P7-005](../implementation/tasks/P7-005-clickhouse-rebuild-workflows.md)),
+> workflow ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)),
 > not as ad-hoc SQL.
 
 ### Verifying TTL is honored
@@ -526,15 +526,15 @@ Operational notes:
 - Unresolved DLQ records are never auto-purged. A growing DLQ is a
   signal, not a cost problem.
 - Resolution is recorded via the destination-DLQ triage runbook
-  ([P10-006](../implementation/tasks/P10-006-dlq-triage-runbook.md)
+  ([P10-006](../../agents/pm/kanban/done/P10-006-dlq-triage-runbook.md)
   and the destination DLQ work in
-  [P9-007](../implementation/tasks/P9-007-destination-dlq-triage.md)).
+  [P9-007](../../agents/pm/kanban/done/P9-007-destination-delivery-records-and-dlq-triage.md)).
 - The 30-day post-resolution retention exists so an operator can
   re-investigate a "we marked this fixed but it's still broken"
   case before the record is dropped.
 
 DLQ records carry no plaintext secrets. The destination consumer
-runtime ([P9-001](../implementation/tasks/P9-001-destination-consumer-runtime.md))
+runtime ([P9-001](../../agents/pm/kanban/done/P9-001-destination-consumer-runtime.md))
 is responsible for redacting secret material before any DLQ write.
 
 ## Audit retention policy

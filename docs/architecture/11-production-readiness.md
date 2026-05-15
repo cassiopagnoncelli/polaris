@@ -280,7 +280,7 @@ Rules:
 - The backup strategy lives in code and infrastructure templates, not runbook prose.
 - Restore validation is exercised in staging at least quarterly.
 - Audit records and operator tokens are the most operationally sensitive Postgres rows; losing them creates compliance gaps. The 5-minute RPO targets this.
-- ClickHouse projection rebuilds run through the standard replay/rebuild workflow ([P7-005](../implementation/tasks/P7-005-clickhouse-rebuild-workflows.md)), not as ad-hoc SQL.
+- ClickHouse projection rebuilds run through the standard replay/rebuild workflow ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)), not as ad-hoc SQL.
 - Secret provider backups are the provider's responsibility; Polaris stores only references.
 
 ## Open Production Decisions
@@ -290,7 +290,7 @@ These are wait-for-data items. Each has a structural decision locked and a numer
 - **Redpanda retention byte caps and tiered storage.** Time-based retention is locked (90 days for `raw.events`). Byte caps as a backstop and tiered storage offload are evaluated when first-project disk usage data exists.
 - **Per-project ingress dedupe window overrides.** Default 15 min is locked. Per-project opt-ins up to 24h are evaluated when a project demonstrates a producer-side reliability need.
 - **Topic isolation activation thresholds.** Triggers are locked structurally (volume share, retention divergence, lag isolation, schema risk, operational quarantine — see [Redpanda Topics](./03-redpanda-topics.md)). The `>25%` threshold and similar numbers are revisited after observed traffic.
-- **Alert thresholds and SLOs.** Initial defaults are locked in [P10-005](../implementation/tasks/P10-005-alerts-runbooks.md); tightened after observed traffic.
+- **Alert thresholds and SLOs.** Initial defaults are locked in [P10-005](../../agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md); tightened after observed traffic.
 
 ## Methodology Decisions (No Single Lock)
 
@@ -302,9 +302,9 @@ These are not single decisions — they are processes that produce decisions per
 
 ## Locked Decisions That Previously Sat Here
 
-- Production secret manager: **HashiCorp Vault** (see [P11-004](../implementation/tasks/P11-004-production-secret-provider.md)).
+- Production secret manager: **HashiCorp Vault** (see [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md)).
 - ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
-- Identity graph schema: file-flexible (see [P8-002](../implementation/tasks/P8-002-identity-resolver-v1.md)).
+- Identity graph schema: file-flexible (see [P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)).
 - Regional posture: single-region in v1; PII residency not a v1 constraint.
 - OIDC IdP for `cli_oidc`: Keycloak when implemented (P11+ stretch).
 - GeoIP backend: MaxMind GeoLite2 with operator-provided files.

@@ -91,7 +91,7 @@ A few platform invariants:
   file is read from disk on a production host; the orchestrator
   injects every `POLARIS_*` variable directly.
 - Secrets are referenced, not written. The secret provider (today
-  `env`; Vault from [P11-004](../implementation/tasks/P11-004-production-secret-provider.md))
+  `env`; Vault from [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md))
   injects values into the process environment at boot. PostgreSQL
   stores the reference; never the plaintext.
 - Build metadata flows through to `/health` via the three Docker build
@@ -107,7 +107,7 @@ described here through their existing manifest tooling.
 Polaris stores `(secret_provider, secret_ref)` pairs in PostgreSQL,
 never plaintext. The secret provider abstraction lives in
 [`packages/shared-secrets/`](../../packages/shared-secrets/). It ships
-the `env` adapter; the Vault adapter is [P11-004](../implementation/tasks/P11-004-production-secret-provider.md).
+the `env` adapter; the Vault adapter is [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md).
 
 Three rules apply at deployment time:
 
@@ -155,7 +155,7 @@ The recovery-objective table is also reproduced in
   follow-up task will land `infra/k8s/` once a real production
   deployment shape is in flight.
 - **No Vault wiring.** The `env` secret provider is the only adapter in
-  v1. [P11-004](../implementation/tasks/P11-004-production-secret-provider.md)
+  v1. [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md)
   ships the Vault adapter; `.env.example` does not pre-template Vault
   variables to avoid documenting unwired code.
 - **GeoIP database.** `POLARIS_GEOIP_DB_PATH` is reserved in
