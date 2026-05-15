@@ -32,7 +32,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 ### P9 Destination Consumers
 
 - [P9-004 GA4 Consumer v1](./tasks/P9-004-ga4-consumer-v1.md)
-- [P9-005 TikTok Consumer v1](./tasks/P9-005-tiktok-consumer-v1.md)
 - [P9-006 Braze Consumer v1](./tasks/P9-006-braze-consumer-v1.md)
 
 ### P10 Observability and Operations
@@ -147,6 +146,7 @@ No blocked cards.
 - [P9-001b Destination Consumer Runtime Behavioral Test Matrix](./tasks/P9-001b-destination-runtime-behavioral-tests.md) — merged in `f6318c3`
 - [P9-002 Webhook Sink Consumer v1](./tasks/P9-002-webhook-sink-consumer-v1.md) — merged in `b1cf534`
 - [P9-003 Meta CAPI Consumer v1](./tasks/P9-003-meta-capi-consumer-v1.md) — merged in `c51bfce`
+- [P9-005 TikTok Consumer v1](./tasks/P9-005-tiktok-consumer-v1.md) — merged in `416441d`
 - [P9-007 Destination Delivery Records and DLQ Triage](./tasks/P9-007-destination-dlq-triage.md) — merged in `b908cd9`
 
 ### P10 Observability and Operations
