@@ -109,7 +109,21 @@ Every alert carries:
   defend.
 - Runbooks: every alert links to one of the seven runbook files
   under `docs/operations/`.
+- [Dashboards index](dashboards.md) — the P10-003 service-level
+  Grafana dashboards (`polaris-ingestion`, `polaris-redpanda`,
+  `polaris-processors`, `polaris-destinations`, `polaris-clickhouse`)
+  are the visual companion to these alert rules; the per-project
+  dashboards from P11-008 stay for project-level drilldown.
+- [Logging](logging.md) — the Loki pipeline; LogQL queries
+  referenced from the runbooks live in this guide.
+- [DLQ Triage Runbook](dlq-triage-runbook.md) — the canonical
+  operator playbook for DLQ inspection / classification / retry /
+  resolution; `runbook-dlq-growth.md` is the alert entry point,
+  this is the deep workflow.
 - [Topic Isolation Cutover](topic-isolation-cutover.md) — sustained
   per-project warns are the cutover signal.
 - [Destination DLQ Triage](destination-dlq-triage.md) — the
   destination-side detailed surface.
+- [Secret Rotation](secret-rotation.md) — when `error_class='auth'`
+  drives DLQ growth, secret rotation is the standard mitigation
+  path.
