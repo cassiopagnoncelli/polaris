@@ -24,10 +24,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 - [P7-005 ClickHouse Rebuild Workflows](./tasks/P7-005-clickhouse-rebuild-workflows.md)
 
-### P8 Production Processors
-
-- [P8-006 Processor Manifests and Golden Fixtures](./tasks/P8-006-processor-manifests-fixtures.md)
-
 ### P10 Observability and Operations
 
 - [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
@@ -38,7 +34,7 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 ### P11 Deployment, Security, and Data Lifecycle
 
 - [P11-004 Production Secret Provider Adapter](./tasks/P11-004-production-secret-provider.md)
-- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) (waiting on P8-006)
+- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
@@ -131,6 +127,7 @@ No blocked cards.
 - [P8-003 Sessionizer v1](./tasks/P8-003-sessionizer-v1.md) — merged in `12a6670`
 - [P8-004 GeoIP Enricher v1](./tasks/P8-004-geoip-enricher-v1.md) — merged in `d8bf80d`
 - [P8-005 Attribution Engine v1](./tasks/P8-005-attribution-engine-v1.md) — merged in `30cbdd4`
+- [P8-006 Processor Manifests and Golden Fixtures](./tasks/P8-006-processor-manifests-fixtures.md) — merged in `c8c1103` (cherry-picked from `worktree-agent-a7df7ac6a2133d8fd`; standardised `release_status` / `replay_notes` / `fixtures` across all five v1 processors + shared validator helper + `docs/development/processor-manifests.md` semantic-immutability rule; CLI catalog schema fork mirrored in follow-up `7d00421` to close the runtime regression flagged in the handoff)
 
 ### P9 Destination Consumers
 
