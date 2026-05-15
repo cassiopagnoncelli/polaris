@@ -33,6 +33,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@polaris/shared-clickhouse": "workspace:*",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-control-plane": "workspace:*",
     "@polaris/shared-db": "workspace:*",

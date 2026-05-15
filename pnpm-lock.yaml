@@ -107,6 +107,9 @@ importers:
 
   apps/polaris-cli:
     dependencies:
+      '@polaris/shared-clickhouse':
+        specifier: workspace:*
+        version: link:../../packages/shared-clickhouse
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config

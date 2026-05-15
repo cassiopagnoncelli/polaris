@@ -19,6 +19,7 @@
  */
 import type { CommandDefinition } from "../command.js";
 import { auditCommand } from "./audit/index.js";
+import { clickhouseRebuildCommand } from "./clickhouse-rebuild/index.js";
 import { deliveriesCommand } from "./deliveries/index.js";
 import { destinationsCommand } from "./destinations/index.js";
 import { dlqCommand } from "./dlq/index.js";
@@ -46,10 +47,12 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   deliveriesCommand,
   dlqCommand,
   topicsCommand,
+  clickhouseRebuildCommand,
 ];
 
 export {
   auditCommand,
+  clickhouseRebuildCommand,
   deliveriesCommand,
   destinationsCommand,
   dlqCommand,

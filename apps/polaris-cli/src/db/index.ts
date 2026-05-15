@@ -23,6 +23,22 @@ export {
   listAuditRecords,
   type ListAuditRecordsFilter,
 } from "./audit-records.js";
+export {
+  ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
+  abortClickhouseRebuildJob,
+  CLICKHOUSE_REBUILD_JOB_STATUSES,
+  type ClickhouseRebuildJobRow,
+  type ClickhouseRebuildJobsTable,
+  type ClickhouseRebuildJobStatus,
+  findClickhouseRebuildJobById,
+  insertClickhouseRebuildJob,
+  type InsertClickhouseRebuildJobInput,
+  isAbortableClickhouseRebuildStatus,
+  isTerminalClickhouseRebuildStatus,
+  listClickhouseRebuildJobs,
+  type ListClickhouseRebuildJobsFilter,
+  TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
+} from "./clickhouse-rebuild-jobs.js";
 export { type ConnectDbOptions, type DbHandle, connectDb } from "./connect.js";
 export {
   disableDestination,

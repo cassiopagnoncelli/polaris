@@ -62,3 +62,26 @@ export type {
   RawQueryResult,
   TimeRange,
 } from "./types.js";
+
+// ---------------------------------------------------------------------------
+// Rebuild planner (P7-005). Pure functions; no I/O surface of its own — the
+// CLI wires the partitions-reader adapter to the operator client.
+// ---------------------------------------------------------------------------
+export type {
+  ClickhouseProjectionDescriptor,
+  ClickhouseRebuildDeclaration,
+  ClickhouseRebuildPlan,
+  ClickhouseRebuildPlanned,
+  ClickhouseRebuildRejected,
+  ClickhouseRebuildRejectionCode,
+  PartsSummary,
+  PlanClickhouseRebuildOptions,
+} from "./rebuild/index.js";
+export {
+  CLICKHOUSE_REBUILD_REJECTION_CODES,
+  findRebuildableProjection,
+  planClickhouseRebuild,
+  REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
+  REBUILDABLE_CLICKHOUSE_PROJECTIONS,
+  renderClickhouseRebuildPlanHuman,
+} from "./rebuild/index.js";

@@ -46,6 +46,7 @@ export {
 export {
   auditCommand,
   BUILTIN_COMMANDS,
+  clickhouseRebuildCommand,
   destinationsCommand,
   exportCommand,
   keysCommand,
@@ -56,6 +57,46 @@ export {
   topicsCommand,
   versionCommand,
 } from "./commands/index.js";
+export {
+  clickhouseRebuildAbortCommand,
+  clickhouseRebuildCreateCommand,
+  clickhouseRebuildListCommand,
+  clickhouseRebuildPlanCommand,
+  clickhouseRebuildShowCommand,
+} from "./commands/clickhouse-rebuild/index.js";
+export {
+  buildClickhouseRebuildAbortRunner,
+  type ClickhouseRebuildAbortHooks,
+  type ClickhouseRebuildAbortOutcome,
+  type ClickhouseRebuildAbortStore,
+  type ClickhouseRebuildAbortStoreInput,
+} from "./commands/clickhouse-rebuild/abort.js";
+export {
+  buildClickhouseRebuildCreateRunner,
+  CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
+  type ClickhouseRebuildCreateAuditPayload,
+  type ClickhouseRebuildCreateHooks,
+  type ClickhouseRebuildCreateStore,
+  type ClickhouseRebuildJobAuditSnapshot,
+} from "./commands/clickhouse-rebuild/create.js";
+export {
+  CLICKHOUSE_REBUILD_JOB_ID_PREFIX,
+  generateClickhouseRebuildJobId,
+} from "./commands/clickhouse-rebuild/id.js";
+export {
+  buildClickhouseRebuildListRunner,
+  type ClickhouseRebuildListHooks,
+  type ClickhouseRebuildListStore,
+} from "./commands/clickhouse-rebuild/list.js";
+export {
+  buildClickhouseRebuildPlanRunner,
+  type ClickhouseRebuildPlanHooks,
+} from "./commands/clickhouse-rebuild/plan.js";
+export {
+  buildClickhouseRebuildShowRunner,
+  type ClickhouseRebuildShowHooks,
+  type ClickhouseRebuildShowStore,
+} from "./commands/clickhouse-rebuild/show.js";
 export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
 export {
   buildAuditListRunner,
@@ -424,6 +465,8 @@ export {
   type Environment,
 } from "./catalog/index.js";
 export {
+  ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
+  abortClickhouseRebuildJob,
   type ApiKeyRow,
   AUDIT_ACTOR_SOURCES,
   AUDIT_ENVIRONMENTS,
@@ -431,6 +474,10 @@ export {
   type AuditEnvironment,
   type AuditRecordRow,
   type AuditRecordsTable,
+  CLICKHOUSE_REBUILD_JOB_STATUSES,
+  type ClickhouseRebuildJobRow,
+  type ClickhouseRebuildJobsTable,
+  type ClickhouseRebuildJobStatus,
   connectDb,
   type ConnectDbOptions,
   type DbHandle,
@@ -446,20 +493,27 @@ export {
   findActivationByKey,
   findApiKeyById,
   findAuditRecordById,
+  findClickhouseRebuildJobById,
   findDestinationById,
   insertApiKey,
   insertAuditRecord,
+  insertClickhouseRebuildJob,
   insertDestination,
   type InsertApiKeyInput,
   type InsertAuditRecordInput,
+  type InsertClickhouseRebuildJobInput,
   type InsertDestinationInput,
+  isAbortableClickhouseRebuildStatus,
+  isTerminalClickhouseRebuildStatus,
   listActivationsForProcessor,
   listAllActivations,
   listAllDestinations,
   listApiKeysByProjectEnv,
   listAuditRecords,
+  listClickhouseRebuildJobs,
   listDestinationsByProjectEnv,
   type ListAuditRecordsFilter,
+  type ListClickhouseRebuildJobsFilter,
   findOperatorTokenAuthRowById,
   findOperatorTokenById,
   insertOperatorToken,
@@ -474,6 +528,7 @@ export {
   type ProcessorActivationRow,
   revokeApiKey,
   revokeOperatorToken,
+  TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
   touchOperatorTokenLastUsedAt,
   updateDestinationOps,
   type UpdateDestinationOpsInput,
