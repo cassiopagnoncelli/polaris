@@ -5,6 +5,7 @@ import {
   enforceProductionMutationGate,
   type GateEnvironment,
   isGateEnvironment,
+  type OperatorGateDenialLabels,
   PRODUCTION_GATE_DENIED_REASON,
   ProductionMutationRefusedError,
   type ResolvedActor,
@@ -70,6 +71,34 @@ describe("enforceProductionMutationGate", () => {
         }),
       ).not.toThrow();
     }
+  });
+
+  it("increments the gate-denial metric on refusal and skips it on allow", () => {
+    const events: OperatorGateDenialLabels[] = [];
+    const metrics = {
+      incrementGateDenial(labels: OperatorGateDenialLabels): void {
+        events.push(labels);
+      },
+    };
+
+    expect(() =>
+      enforceProductionMutationGate({
+        command: { id: "destinations.disable", mutates: true },
+        environment: "production",
+        actor: ACTORS.cli,
+        metrics,
+      }),
+    ).toThrow(ProductionMutationRefusedError);
+    expect(events).toEqual([{ actor: "cli", reason: PRODUCTION_GATE_DENIED_REASON }]);
+
+    // Allowed call — metric must not increment.
+    enforceProductionMutationGate({
+      command: { id: "destinations.disable", mutates: true },
+      environment: "production",
+      actor: ACTORS.declared,
+      metrics,
+    });
+    expect(events).toHaveLength(1);
   });
 
   it("includes the command id and the canonical reason code in the refusal", () => {

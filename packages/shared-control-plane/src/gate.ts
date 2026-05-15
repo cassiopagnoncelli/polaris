@@ -29,6 +29,7 @@
  * @see docs/architecture/11-production-readiness.md "Control-Plane Permissions"
  */
 import type { ActorSource, ResolvedActor } from "./actor.js";
+import type { OperatorGateMetricsSink } from "./metrics.js";
 
 /**
  * Stable denial-reason code for the gate. Picked once here so the recorder
@@ -67,6 +68,13 @@ export interface GateInput {
   readonly command: GateCommand;
   readonly environment: GateEnvironment | undefined;
   readonly actor: ResolvedActor;
+  /**
+   * Optional metrics sink. When supplied, the gate calls
+   * `incrementGateDenial` once on every denial before throwing.
+   * Allows the alert pipeline to observe gate denials without
+   * the gate itself depending on a metrics package.
+   */
+  readonly metrics?: OperatorGateMetricsSink;
 }
 
 /**
@@ -117,6 +125,11 @@ export function enforceProductionMutationGate(input: GateInput): void {
   if (!input.command.mutates) return;
   if (input.environment !== "production") return;
   if (input.actor.source === "declared") return;
+
+  input.metrics?.incrementGateDenial({
+    actor: input.actor.source,
+    reason: PRODUCTION_GATE_DENIED_REASON,
+  });
 
   throw new ProductionMutationRefusedError({
     commandId: input.command.id,

@@ -311,6 +311,11 @@ async function processOneEvent(
       isolation,
       partitionKey,
     });
+    deps.metrics.incrementPublishSuccess({
+      project_id: envelope.project_id,
+      environment: envelope.environment,
+      topic: TOPIC_FAMILY_RAW_EVENTS,
+    });
     deps.metrics.incrementAccepted({
       project_id: envelope.project_id,
       environment: envelope.environment,
@@ -346,6 +351,12 @@ async function processOneEvent(
       },
       "raw.events publish failed",
     );
+    deps.metrics.incrementPublishFailed({
+      project_id: envelope.project_id,
+      environment: envelope.environment,
+      topic: TOPIC_FAMILY_RAW_EVENTS,
+      reason: error.name || "UnknownError",
+    });
     deps.metrics.incrementRejected({
       project_id: envelope.project_id,
       environment: envelope.environment,

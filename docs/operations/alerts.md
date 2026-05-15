@@ -58,12 +58,10 @@ acceptance signal for the metric work that follows.
 
 | Alert | Expected metric | Owner work |
 |---|---|---|
-| `PolarisRedpandaPublishFailureRate` | `polaris_ingest_publish_failed_total` / `polaris_ingest_publish_success_total` | ingester-api Kafka publisher |
 | `PolarisClickHouseIngestionLagWarn` | `polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}` | polaris-clickhouse-exporter (future) |
 | `PolarisClickHouseIngestionLagPage` | `polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}` | polaris-clickhouse-exporter (future) |
 | `PolarisClickHouseMVFailure` | `polaris_clickhouse_mv_state{view=...,state="failed"}` | polaris-clickhouse-exporter (future) |
 | `PolarisReplayJobStuck` | `polaris_replay_job_progress_offset{replay_job_id,status}` + `polaris_replay_job_status{status="running"}` | replay coordinator (P5 / P7 work) |
-| `PolarisOperatorGateDenialRate` | `polaris_operator_gate_denied_total{environment,command_id}` | control-plane gate (P6-007 work) |
 
 These gaps do NOT block the v1 alerts story — the runbooks for each
 alert (a) document the threshold, (b) walk through the operator

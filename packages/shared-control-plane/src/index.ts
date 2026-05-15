@@ -62,3 +62,9 @@ export {
   type ParsedOperatorToken,
   parseOperatorToken,
 } from "./token-format.js";
+
+export {
+  METRIC_OPERATOR_GATE_DENIED_TOTAL,
+  type OperatorGateDenialLabels,
+  type OperatorGateMetricsSink,
+} from "./metrics.js";

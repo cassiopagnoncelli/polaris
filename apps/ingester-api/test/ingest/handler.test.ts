@@ -26,6 +26,8 @@ import {
   METRIC_INGEST_DEDUPE_HIT_TOTAL,
   METRIC_INGEST_DEDUPE_SKIPPED_TOTAL,
   METRIC_INGEST_DEPRECATED_SCHEMA_VERSION_TOTAL,
+  METRIC_INGEST_PUBLISH_FAILED_TOTAL,
+  METRIC_INGEST_PUBLISH_SUCCESS_TOTAL,
 } from "../../src/metrics/registry.js";
 import { createPolicyResolver } from "../../src/policy/loader.js";
 
@@ -411,6 +413,50 @@ describe("ingest handler — publish failures", () => {
         reason: BATCH_REASON_PUBLISH_FAILED,
       }),
     ).toBe(1);
+    expect(
+      metrics.getCounter(METRIC_INGEST_PUBLISH_FAILED_TOTAL, {
+        project_id: "checkout",
+        environment: "production",
+        topic: "raw.events",
+        reason: "Error",
+      }),
+    ).toBe(1);
+    expect(
+      metrics.getCounter(METRIC_INGEST_PUBLISH_SUCCESS_TOTAL, {
+        project_id: "checkout",
+        environment: "production",
+        topic: "raw.events",
+      }),
+    ).toBe(1);
+  });
+
+  it("increments publish_failed exactly once per failure (no double counting per call)", async () => {
+    const producer = new RecordingProducer();
+    const first = buildEnvelopePayload();
+    const second = buildEnvelopePayload({ event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f561" });
+    const { handler, metrics } = deps({ producer });
+
+    producer.throwOnPublish = new Error("broker unavailable");
+    await handler.handle({ events: [first] }, context());
+    producer.throwOnPublish = new Error("broker unavailable");
+    await handler.handle({ events: [second] }, context());
+
+    // Two failures, two increments — never more, never less.
+    expect(
+      metrics.getCounter(METRIC_INGEST_PUBLISH_FAILED_TOTAL, {
+        project_id: "checkout",
+        environment: "production",
+        topic: "raw.events",
+        reason: "Error",
+      }),
+    ).toBe(2);
+    expect(
+      metrics.getCounter(METRIC_INGEST_PUBLISH_SUCCESS_TOTAL, {
+        project_id: "checkout",
+        environment: "production",
+        topic: "raw.events",
+      }),
+    ).toBe(0);
   });
 });
 

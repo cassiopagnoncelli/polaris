@@ -20,6 +20,7 @@ import {
   enforceProductionMutationGate,
   type GateEnvironment,
   isGateEnvironment,
+  type OperatorGateMetricsSink,
   PRODUCTION_GATE_DENIED_REASON,
   ProductionMutationRefusedError,
 } from "@polaris/shared-control-plane";
@@ -33,6 +34,8 @@ export interface MutationGateOptions {
   readonly mutates: boolean;
   /** Service environment string read from runtime config. */
   readonly environment: string;
+  /** Sink for `polaris_operator_gate_denied_total`. Optional during transition. */
+  readonly metrics?: OperatorGateMetricsSink;
 }
 
 /**
@@ -73,6 +76,7 @@ export function createMutationGatePreHandler(
         command: { id: options.commandId, mutates: options.mutates },
         environment: env,
         actor,
+        ...(options.metrics !== undefined ? { metrics: options.metrics } : {}),
       });
     } catch (err) {
       if (err instanceof ProductionMutationRefusedError) {

@@ -83,41 +83,32 @@ groups:
   - name: polaris-redpanda
     interval: 30s
     rules:
-      # _TODO_: ingester-api emits no publish-failure counter yet.
-      # When `polaris_ingest_publish_failed_total` lands (alongside the
-      # ingester Kafka publisher), the expression becomes:
-      #
-      #   sum by (project_id, environment, topic) (
-      #     rate(polaris_ingest_publish_failed_total[1m])
-      #   )
-      #   /
-      #   clamp_min(
-      #     sum by (project_id, environment, topic) (
-      #       rate(polaris_ingest_publish_failed_total[1m])
-      #       + rate(polaris_ingest_publish_success_total[1m])
-      #     ),
-      #     1
-      #   ) > 0.005
-      #
-      # Until then this rule is documented + disabled (vector(0) keeps
-      # rule-syntax validity without firing).
       - alert: PolarisRedpandaPublishFailureRate
-        expr: vector(0) > 0.005
+        expr: |
+          sum by (project_id, environment, topic) (
+            rate(polaris_ingest_publish_failed_total[1m])
+          )
+          /
+          clamp_min(
+            sum by (project_id, environment, topic) (
+              rate(polaris_ingest_publish_failed_total[1m])
+              + rate(polaris_ingest_publish_success_total[1m])
+            ),
+            1
+          ) > 0.005
         for: 1m
         labels:
           severity: page
           service: ingester-api
           team: platform-data
         annotations:
-          summary: "Redpanda publish failure rate above 0.5% (TODO metric)"
+          summary: "Redpanda publish failure rate above 0.5%"
           description: |
-            Placeholder for the v1 threshold "Redpanda publish failure
-            rate page when >0.5% over 1 minute." The ingester does not
-            yet emit polaris_ingest_publish_failed_total /
-            polaris_ingest_publish_success_total; this alert is wired
-            for the threshold but will never fire until the ingester
-            publisher lands the metric. Tracked in
-            docs/operations/alerts.md.
+            More than 0.5% of ingester publish attempts to Redpanda
+            failed over the last minute for {{ $labels.project_id }} /
+            {{ $labels.environment }} on topic {{ $labels.topic }}.
+            Common causes: broker unavailability, topic ACL drift,
+            authentication failures. See the runbook for triage.
           runbook_url: docs/operations/runbook-redpanda-publish-failures.md
 
       # Consumer lag (warn at 5 min, page at 15 min). Polaris emits
@@ -369,32 +360,18 @@ groups:
   - name: polaris-operator
     interval: 30s
     rules:
-      # _TODO_: P6-007 production-gate denial counter does not exist
-      # as a `polaris_*` metric in v1. The control plane logs each
-      # denial; the future polaris_operator_gate_denied_total counter
-      # (one increment per dispatcher rejection) lets the expression
-      # be:
-      #
-      #   sum by (environment, command_id) (
-      #     rate(polaris_operator_gate_denied_total[1m])
-      #   ) * 60 > 5
-      #
-      # Until the metric lands this rule is documented but never
-      # fires.
       - alert: PolarisOperatorGateDenialRate
-        expr: vector(0) > 5
+        expr: sum by (actor, reason) (rate(polaris_operator_gate_denied_total[1m])) * 60 > 5
         for: 5m
         labels:
           severity: warn
           service: control-plane
           team: platform-data
         annotations:
-          summary: "Operator gate denial rate >5/min (TODO metric)"
+          summary: "Operator gate denial rate >5/min"
           description: |
-            Placeholder for the v1 threshold "operator gate denial
-            rate warn when sustained >5/min (suggests credential
-            confusion)." The P6-007 production gate has not landed
-            the per-denial counter yet; this rule is wired for the
-            threshold but will never fire until the metric lands.
-            Tracked in docs/operations/alerts.md.
+            Operator gate denials sustained above 5/min for actor
+            {{ $labels.actor }} (reason {{ $labels.reason }}).
+            Suggests credential confusion or a script wielding stale
+            tokens. See the runbook to investigate.
           runbook_url: docs/operations/runbook-replay-stuck.md

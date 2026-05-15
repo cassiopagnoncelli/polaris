@@ -7,6 +7,8 @@ import {
   METRIC_INGEST_DEDUPE_HIT_TOTAL,
   METRIC_INGEST_DEDUPE_SKIPPED_TOTAL,
   METRIC_INGEST_DEPRECATED_SCHEMA_VERSION_TOTAL,
+  METRIC_INGEST_PUBLISH_FAILED_TOTAL,
+  METRIC_INGEST_PUBLISH_SUCCESS_TOTAL,
 } from "../../src/metrics/registry.js";
 
 describe("IngestMetrics", () => {
@@ -65,6 +67,33 @@ describe("IngestMetrics", () => {
         environment: "prod",
         reason: "pii_card",
         pattern: "luhn_pan",
+      }),
+    ).toBe(1);
+  });
+
+  it("counts publish success and failure per (project_id, environment, topic[, reason])", () => {
+    const m = new IngestMetrics();
+    m.incrementPublishSuccess({ project_id: "p", environment: "prod", topic: "raw.events" });
+    m.incrementPublishSuccess({ project_id: "p", environment: "prod", topic: "raw.events" });
+    m.incrementPublishFailed({
+      project_id: "p",
+      environment: "prod",
+      topic: "raw.events",
+      reason: "KafkaJSConnectionError",
+    });
+    expect(
+      m.getCounter(METRIC_INGEST_PUBLISH_SUCCESS_TOTAL, {
+        project_id: "p",
+        environment: "prod",
+        topic: "raw.events",
+      }),
+    ).toBe(2);
+    expect(
+      m.getCounter(METRIC_INGEST_PUBLISH_FAILED_TOTAL, {
+        project_id: "p",
+        environment: "prod",
+        topic: "raw.events",
+        reason: "KafkaJSConnectionError",
       }),
     ).toBe(1);
   });
