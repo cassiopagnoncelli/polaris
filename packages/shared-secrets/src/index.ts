@@ -57,7 +57,18 @@ export {
   type PolarisHashAlgorithm,
   verifySecret,
 } from "./hashing.js";
-export { EnvSecretProvider, type EnvSecretProviderOptions } from "./providers/index.js";
+export {
+  createVaultProvider,
+  DEFAULT_K8S_SA_TOKEN_PATH,
+  DEFAULT_VAULT_CACHE_TTL_MS,
+  DEFAULT_VAULT_K8S_AUTH_MOUNT,
+  DEFAULT_VAULT_KV_MOUNT,
+  EnvSecretProvider,
+  type EnvSecretProviderOptions,
+  type VaultProbeResult,
+  type VaultProviderOptions,
+  VaultSecretProvider,
+} from "./providers/index.js";
 export { formatSecretReference, parseSecretReference } from "./reference.js";
 export { SecretResolver, type SecretResolverOptions } from "./resolver.js";
 export {

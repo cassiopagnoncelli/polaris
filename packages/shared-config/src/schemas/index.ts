@@ -5,3 +5,4 @@ export * from "./postgres.js";
 export * from "./redis.js";
 export * from "./redpanda.js";
 export * from "./clickhouse.js";
+export * from "./secret-provider.js";
