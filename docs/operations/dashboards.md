@@ -55,17 +55,15 @@ Panels and the metric each uses:
 | Edge controls (5m) | `polaris_ingest_origin_rejected_total`, `polaris_ingest_rate_limit_rejected_total`, `polaris_ingest_rate_limit_skipped_total` |
 | Pattern-based redactions (5m) | `sum by (pattern, reason) (rate(polaris_ingest_redacted_pattern_total[5m]))` |
 | Deprecated `schema_version` usage (5m) | `sum by (event, schema_version) (rate(polaris_ingest_deprecated_schema_version_total[5m]))` |
-| Latency / body size (gap) | placeholder — no metric in v1 |
+| Accept latency p50/p99/p999 (5m) | `histogram_quantile(0.99, sum by (le) (rate(polaris_ingest_accept_duration_seconds_bucket[5m])))` |
 
 **Known gaps:**
 
 - **No request-rate metric.** The v1 ingester does not emit an HTTP-level
   request rate. Accept/reject sum is used as the proxy.
-- **No accept latency p50/p99/p999.** No histogram exists. P10-002
-  (`@polaris/shared-metrics`) owns the histogram migration; the dashboard's
-  "Latency / body size" panel is a placeholder until then.
-- **No body-size distribution.** Same story — no metric, placeholder panel.
-- **No publish-failure counter** distinct from `polaris_ingest_batch_rejected_total{reason="publish_failed"}`. The Redpanda dashboard re-uses that signal as its publish-failure proxy.
+- **No body-size distribution.** No histogram for envelope body size; the
+  next round of metrics could add one alongside the accept-duration
+  histogram from CSH8YAL6.
 
 ## Redpanda
 
@@ -122,14 +120,15 @@ Panels and the metric each uses:
 | Per-message handler duration (ms, last observed) | `max by (processor_name) (polaris_processor_handler_duration_ms_last)` |
 | DLQ growth rate by processor (15m) | `sum by (processor_name) (rate(polaris_processor_events_dlq_total[15m]))` |
 
+**Latency.** `polaris_processor_lag_seconds` and
+`polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the
+dashboard's bottom row uses `histogram_quantile(0.99, ...)` over the
+`_bucket` series for real p50/p99 panels. The legacy `_ms_last` gauges remain
+in place during the transition so existing `max`/`lastNotNull` panels keep
+working — favour the histogram panels for new consumers.
+
 **Known gaps:**
 
-- **Lag and handler duration are gauges (`_ms_last`), not histograms.** Panels
-  report `max` and `lastNotNull` — they do not provide a real p50/p99/p999.
-  Until P10-002 swaps the registry implementation for a histogram-aware
-  backend, the percentile panels are a placeholder. See
-  [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts)
-  comments around `observeLagMs` / `observeHandlerDurationMs`.
 - **DLQ growth is a rate, not a backlog gauge.** For a true backlog count,
   query `polaris_dlq_records` directly via the
   [destination DLQ triage runbook](./destination-dlq-triage.md). A dedicated
@@ -156,12 +155,15 @@ Panels and the metric each uses:
 | Drops by reason (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_dropped_total[5m]))` |
 | Delivery duration (ms, last observed) | `max by (vendor) (polaris_destination_delivery_duration_ms_last)` |
 | Rate-limit lease wait (ms, last observed) | `max by (vendor) (polaris_destination_rate_limit_wait_ms_last)` |
+| Delivery duration p50/p99 per vendor (5m) | `histogram_quantile(0.99, sum by (le, vendor) (rate(polaris_destination_delivery_duration_seconds_bucket[5m])))` |
+
+**Latency.** `polaris_destination_delivery_duration_seconds` and
+`polaris_destination_rate_limit_wait_seconds` are histograms (CSH8YAL6); the
+p50/p99 panel uses them via `histogram_quantile`. The legacy `_ms_last`
+gauges remain in place during the transition for the `max` panel.
 
 **Known gaps:**
 
-- **Delivery duration and rate-limit-wait are gauges, not histograms.** Same
-  story as the Processors dashboard — `max` is the best v1 signal; P10-002
-  owns the histogram swap.
 - **DLQ growth is a rate, not a backlog count.** The
   [destination DLQ triage runbook](./destination-dlq-triage.md) covers
   per-destination backlog inspection from `polaris_dlq_records`.

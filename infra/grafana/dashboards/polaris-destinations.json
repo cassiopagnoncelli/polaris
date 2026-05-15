@@ -25,7 +25,7 @@
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "content": "# Polaris Destinations\n\nMetrics from `packages/shared-destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `packages/shared-destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Known gaps** (P10-003):\n\n- `polaris_destination_delivery_duration_ms_last` is a **gauge** (last observation), not a histogram — panel shows `max` / `lastNotNull` as the best v1 signal. P10-002 owns the histogram migration.\n- DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `polaris_dlq_records` table via the DLQ triage runbook (P10-006).",
+        "content": "# Polaris Destinations\n\nMetrics from `packages/shared-destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `packages/shared-destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_destination_delivery_duration_seconds` is a histogram (CSH8YAL6); the p50/p99 panel at the bottom of the dashboard uses it. The legacy `_ms_last` gauge is kept alongside during the transition for the `max` / `lastNotNull` panel.\n\n**DLQ backlog.** DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `polaris_dlq_records` table via the DLQ triage runbook (P10-006).",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -254,6 +254,40 @@
         }
       ],
       "title": "Rate-limit lease wait (ms, last observed)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
+      "id": 9,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.5, sum by (le, vendor) (rate(polaris_destination_delivery_duration_seconds_bucket{vendor=~\"$vendor\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p50 {{vendor}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.99, sum by (le, vendor) (rate(polaris_destination_delivery_duration_seconds_bucket{vendor=~\"$vendor\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p99 {{vendor}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Delivery duration p50/p99 per vendor (5m, seconds)",
       "type": "timeseries"
     }
   ],

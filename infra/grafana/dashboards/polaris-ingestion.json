@@ -25,7 +25,7 @@
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "content": "# Polaris Ingestion\n\nMetrics from `apps/ingester-api/src/metrics/registry.ts`, exposed at the ingester `/metrics` endpoint and scraped by Prometheus (job `polaris-ingester`).\n\n**Reject reasons** are the closed set from `packages/shared-schemas/src/reason-codes.ts`:\n\n- `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope` — schema family\n- `forbidden_field_rejected` — forbidden-field policy reject tier\n- `duplicate` — short-window dedupe hit (event is _not_ counted as accepted)\n- `publish_failed` — accepted but Redpanda publish failed (used as the proxy for Redpanda publish-failure rate; see Redpanda dashboard)\n- `invalid_request` — malformed batch envelope\n\n**Known gaps** (P10-003):\n\n- No request-rate, accept-latency p50/p99/p999, or body-size histogram metric exists in v1; the request-rate panel uses `accepted_total + rejected_total` as a proxy and there is no latency panel. P10-002 owns the histogram swap.\n- No Redpanda publish-failure metric; this dashboard surfaces it as `rate(polaris_ingest_batch_rejected_total{reason=\"publish_failed\"})`.",
+        "content": "# Polaris Ingestion\n\nMetrics from `apps/ingester-api/src/metrics/registry.ts`, exposed at the ingester `/metrics` endpoint and scraped by Prometheus (job `polaris-ingester`).\n\n**Reject reasons** are the closed set from `packages/shared-schemas/src/reason-codes.ts`:\n\n- `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope` — schema family\n- `forbidden_field_rejected` — forbidden-field policy reject tier\n- `duplicate` — short-window dedupe hit (event is _not_ counted as accepted)\n- `publish_failed` — accepted but Redpanda publish failed; see also `polaris_ingest_publish_failed_total` (MKEF1I9G) for the per-topic counter\n- `invalid_request` — malformed batch envelope\n\n**Accept-latency panel** uses `polaris_ingest_accept_duration_seconds` histogram (CSH8YAL6). The corresponding `_ms_last` gauge is intentionally retained during the transition for legacy panels; v2 dashboards consume the histogram directly via `histogram_quantile(...)`.\n\n**Body size histogram** is still a gap and tracked separately.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -275,15 +275,43 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 40 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 40 },
       "id": 9,
       "options": {
-        "content": "## Latency and body size — not available in v1\n\nNo histogram for **accept latency** or **body size** exists in the v1 ingester. P10-002 owns the histogram migration (`@polaris/shared-metrics`). When that lands, this panel becomes a `histogram_quantile(...)` over the new buckets.",
-        "mode": "markdown"
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "pluginVersion": "11.4.0",
-      "title": "Latency / body size (gap)",
-      "type": "text"
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(polaris_ingest_accept_duration_seconds_bucket{environment=\"$environment\"}[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(polaris_ingest_accept_duration_seconds_bucket{environment=\"$environment\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.999, sum by (le) (rate(polaris_ingest_accept_duration_seconds_bucket{environment=\"$environment\"}[5m])))",
+          "legendFormat": "p999",
+          "refId": "C"
+        }
+      ],
+      "title": "Accept latency (5m, seconds)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

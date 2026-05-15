@@ -25,7 +25,7 @@
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. The v1 scrape config (`infra/prometheus/prometheus.yml`) lists `analytics-projector` explicitly; future processors join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`, `attribution-engine`. Pick `All` to see the fleet aggregate.\n\n**Known gaps** (P10-003):\n\n- `polaris_processor_lag_ms_last` and `polaris_processor_handler_duration_ms_last` are **gauges**, not histograms — they show the most recent observation, not real percentiles. Panels report `max` and `lastNotNull` as the best v1 signal. P10-002 owns the histogram migration.\n- DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `polaris_dlq_records` table directly via the DLQ triage runbook (P10-006).",
+        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. The v1 scrape config (`infra/prometheus/prometheus.yml`) lists `analytics-projector` explicitly; future processors join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`, `attribution-engine`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels — feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `polaris_dlq_records` table directly via the DLQ triage runbook (P10-006).",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -250,6 +250,74 @@
       ],
       "title": "DLQ growth rate by processor (15m, ops)",
       "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 40 },
+      "id": 9,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.5, sum by (le, processor_name) (rate(polaris_processor_lag_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p50 {{processor_name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.99, sum by (le, processor_name) (rate(polaris_processor_lag_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p99 {{processor_name}}",
+          "refId": "B"
+        }
+      ],
+      "title": "End-to-end (raw→analytics) lag p50/p99 (5m, seconds)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 40 },
+      "id": 10,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.5, sum by (le, processor_name) (rate(polaris_processor_handler_duration_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p50 {{processor_name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "histogram_quantile(0.99, sum by (le, processor_name) (rate(polaris_processor_handler_duration_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "p99 {{processor_name}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Per-message handler duration p50/p99 (5m, seconds)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
