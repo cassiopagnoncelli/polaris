@@ -16,22 +16,7 @@ _(no cards — all Ready picks merged in the 7-task batch P11-006c · P6-000 · 
 
 ## Backlog
 
-### P6 Control-Plane CLI
-
-_(no remaining backlog — all P6 tasks Ready or Done)_
-
-
-### P10 Observability and Operations
-
-
-
-(P11-005 Backup and Retention Runbooks moved to Done.)
-
-(P11-002 CI Workflow moved to Done.)
-
-### P12 Release Readiness
-
-- [P12-005 Release Candidate Checklist](./tasks/P12-005-release-candidate-checklist.md) (waiting on P10-005)
+_(empty — every implementation card P0–P12 is in Done. Future work is tracked outside this kanban.)_
 
 ## In Progress
 
@@ -157,4 +142,5 @@ No blocked cards.
 - [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md) — merged in `9d80fb7`
 - [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md) — merged in `b27d15e`
 - [P12-003 Product Acceptance Test](./tasks/P12-003-product-acceptance-test.md) — merged in `476de75` (cherry-picked from `worktree-agent-a6bebf41f324f93d4`; vitest scenario gated by `POLARIS_ACCEPTANCE_TEST=1` mirroring the vertical-slice smoke pattern, 836-line step runner driving the production-shipped surfaces only (CLI binary, Node SDK, ingester HTTP, ClickHouse, webhook-sink), `pnpm test:acceptance` runner script with preflight, operator runbook at `docs/release/acceptance-test-runbook.md` and engineering reference at `docs/development/acceptance-test.md`; delivery step uses webhook-sink because Meta/TikTok/GA4/Braze need vendor sandboxes)
-- [P12-004 Internal Onboarding Guide](./tasks/P12-004-internal-onboarding-guide.md) — merged in `f2b952f` (cherry-picked from `task/p12-004`; org-specific operator/on-call channel names left as placeholders; one parenthetical mention of `polaris schemas validate` kept conditional because the subcommand is referenced in architecture docs but not present in the CLI source)
+- [P12-004 Internal Onboarding Guide](./tasks/P12-004-internal-onboarding-guide.md) — merged in `f2b952f`
+- [P12-005 Release Candidate Checklist](./tasks/P12-005-release-candidate-checklist.md) — merged in `025a5d6` (cherry-picked from `worktree-agent-acf98895be3ffd720`; `docs/release/release-candidate-checklist.md` covering CI / vertical-slice smoke / acceptance / runbooks / SDK & API docs / dashboards & alerts / secrets / versioning / release-notes / known-limitations / pre-launch deployment order with sign-off roles named for each gate. Follow-up `fced00a` rewrote seven rows the agent had marked BLOCKED because its worktree base predated this session's P10-003 / P10-004 / P10-005 / P10-006 / P11-003 / P11-004 / P11-007 / P12-003 / P12-004 / P9-004 / P9-006 commits; pruned the corresponding Known-Limitations entries; rewrote the GA4/Braze "not shipped" caveat as per-consumer entries.) (cherry-picked from `task/p12-004`; org-specific operator/on-call channel names left as placeholders; one parenthetical mention of `polaris schemas validate` kept conditional because the subcommand is referenced in architecture docs but not present in the CLI source)
