@@ -1,0 +1,118 @@
+# Polaris v1 Prometheus recording rules.
+#
+# These pre-aggregate the rate-ratio expressions that the alert rules
+# (and the operator runbooks) lean on, so the alerts read clearly and
+# multiple alerts on the same ratio don't re-derive the same `rate(...)
+# / (rate(...) + rate(...))` shape. Cardinality stays bounded because
+# every recording series is grouped to a small label set; the original
+# per-instance series stay in raw form for the dashboards.
+#
+# Naming follows the Prometheus convention:
+#   `polaris:<scope>_<measurement>:<window>`
+#
+# Updated whenever a new alert needs a ratio that isn't recorded here.
+#
+# See:
+#   docs/operations/alerts.md (alerts index)
+#   docs/architecture/08-observability-and-operations.md
+groups:
+  - name: polaris-recording
+    interval: 30s
+    rules:
+      # --- Ingestion -------------------------------------------------
+      # Per-project share of rejected ingest batches over 5 minutes.
+      # Denominator is the full batch outcome (accepted + rejected) so
+      # the ratio is bounded to [0, 1]. The series is split by
+      # (project_id, environment) so per-project alerts can pivot
+      # without re-deriving the ratio.
+      - record: polaris:ingest_batch_rejection_ratio:rate5m
+        expr: |
+          sum by (project_id, environment) (
+            rate(polaris_ingest_batch_rejected_total[5m])
+          )
+          /
+          clamp_min(
+            sum by (project_id, environment) (
+              rate(polaris_ingest_batch_rejected_total[5m])
+              + rate(polaris_ingest_batch_accepted_total[5m])
+            ),
+            1
+          )
+
+      # Per-project schema-shape rejection ratio over 5 minutes. The
+      # `reason` label values follow the ingester's rejection-reason
+      # catalogue: schema validation failures match `schema_.*`.
+      - record: polaris:ingest_schema_rejection_ratio:rate5m
+        expr: |
+          sum by (project_id, environment) (
+            rate(polaris_ingest_batch_rejected_total{reason=~"schema_.*"}[5m])
+          )
+          /
+          clamp_min(
+            sum by (project_id, environment) (
+              rate(polaris_ingest_batch_rejected_total[5m])
+              + rate(polaris_ingest_batch_accepted_total[5m])
+            ),
+            1
+          )
+
+      # Per-project forbidden-field rejection ratio over 5 minutes.
+      # The ingester emits `reason="forbidden_field_present"` when the
+      # policy guard rejects a batch (see
+      # apps/ingester-api + @polaris/shared-policy).
+      - record: polaris:ingest_forbidden_field_rejection_ratio:rate5m
+        expr: |
+          sum by (project_id, environment) (
+            rate(polaris_ingest_batch_rejected_total{reason="forbidden_field_present"}[5m])
+          )
+          /
+          clamp_min(
+            sum by (project_id, environment) (
+              rate(polaris_ingest_batch_rejected_total[5m])
+              + rate(polaris_ingest_batch_accepted_total[5m])
+            ),
+            1
+          )
+
+      # --- Processors ------------------------------------------------
+      # Per-processor DLQ growth rate (events/minute). Group by the
+      # processor identity and the project label so the alert can fire
+      # per pivot without re-deriving the rate.
+      - record: polaris:processor_dlq_growth:rate1m
+        expr: |
+          sum by (processor_name, processor_version, project_id, environment) (
+            rate(polaris_processor_events_dlq_total[1m])
+          ) * 60
+
+      # Per-processor consumed throughput; denominator for failure
+      # ratios and a sanity baseline for the lag/growth alerts.
+      - record: polaris:processor_consumed:rate5m
+        expr: |
+          sum by (processor_name, processor_version, project_id, environment) (
+            rate(polaris_processor_events_consumed_total[5m])
+          )
+
+      # --- Destinations ---------------------------------------------
+      # Per-destination-instance delivery failure ratio over 5 minutes.
+      # Pivot is the immutable instance identity
+      # (`vendor`, `consumer_version`, `destination_id`); project and
+      # environment ride along for routing.
+      - record: polaris:destination_delivery_failure_ratio:rate5m
+        expr: |
+          sum by (vendor, consumer_version, destination_id, project_id, environment) (
+            rate(polaris_destination_events_failed_total[5m])
+          )
+          /
+          clamp_min(
+            sum by (vendor, consumer_version, destination_id, project_id, environment) (
+              rate(polaris_destination_events_consumed_total[5m])
+            ),
+            1
+          )
+
+      # Per-destination-instance DLQ growth rate (events/minute).
+      - record: polaris:destination_dlq_growth:rate1m
+        expr: |
+          sum by (vendor, consumer_version, destination_id, project_id, environment) (
+            rate(polaris_destination_events_dlq_total[1m])
+          ) * 60

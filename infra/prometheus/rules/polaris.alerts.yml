@@ -1,0 +1,400 @@
+# Polaris v1 Prometheus alert rules.
+#
+# Thresholds are the v1 defaults from `docs/implementation/tasks/
+# P10-005-alerts-runbooks.md` (Initial alert thresholds). They start
+# permissive enough to avoid alert fatigue on a fresh deployment and
+# are tightened after observed traffic.
+#
+# Every alert carries:
+#   - `severity` — `page` (wake the on-call) or `warn` (visible in
+#     dashboards, opens a ticket, no page).
+#   - `service` — the human-readable service surface the alert covers.
+#   - `team` — `platform-data` (the Polaris on-call rotation).
+#
+# Annotations:
+#   - `summary` — single-line headline.
+#   - `description` — operator-facing one-paragraph context with the
+#     metric expression.
+#   - `runbook_url` — relative path into `docs/operations/`. The
+#     Alertmanager template is expected to compose the absolute URL
+#     from this; tests at the runbook-index level assert every URL
+#     points to a real file.
+#
+# Metric gaps (`_TODO_:` lines below) are documented in
+# `docs/operations/alerts.md` and in the P10-005 commit body. They
+# will land alongside the corresponding service work:
+#
+#   * Redpanda publish failure rate    → ingester-api Kafka publisher
+#   * ClickHouse Kafka ingestion lag   → polaris-clickhouse-exporter (future)
+#   * ClickHouse MV failure            → polaris-clickhouse-exporter (future)
+#   * replay job stuck                 → replay coordinator (P5/P7 work)
+#   * operator gate denial rate        → polaris-cli / control-plane gate
+#
+# See:
+#   docs/operations/alerts.md
+#   docs/architecture/08-observability-and-operations.md
+groups:
+  # ---------------------------------------------------------------
+  # Ingestion
+  # ---------------------------------------------------------------
+  - name: polaris-ingestion
+    interval: 30s
+    rules:
+      - alert: PolarisIngestionSchemaRejectionRate
+        expr: polaris:ingest_schema_rejection_ratio:rate5m > 0.05
+        for: 5m
+        labels:
+          severity: page
+          service: ingester-api
+          team: platform-data
+        annotations:
+          summary: "Ingestion schema rejection rate above 5% for {{ $labels.project_id }}/{{ $labels.environment }}"
+          description: |
+            Schema-shape rejections account for more than 5% of ingest
+            batch outcomes for project {{ $labels.project_id }} in
+            environment {{ $labels.environment }}, sustained for 5
+            minutes. Common causes: an SDK rolled out an event whose
+            envelope drifted from the registered schema, or a producer
+            forgot to bump the schema version after a contract change.
+          runbook_url: docs/operations/runbook-ingestion-rejection-spike.md
+
+      - alert: PolarisIngestionForbiddenFieldRejectionRate
+        expr: polaris:ingest_forbidden_field_rejection_ratio:rate5m > 0.01
+        for: 5m
+        labels:
+          severity: page
+          service: ingester-api
+          team: platform-data
+        annotations:
+          summary: "Ingestion forbidden-field rejection rate above 1% for {{ $labels.project_id }}/{{ $labels.environment }}"
+          description: |
+            More than 1% of ingest batches from project
+            {{ $labels.project_id }} in environment
+            {{ $labels.environment }} are rejected because the policy
+            guard found a forbidden field. Producers should redact at
+            the SDK; a spike usually means a freshly-deployed integration
+            is leaking PII or credential-shaped values into the payload.
+            Do NOT widen the policy without security review.
+          runbook_url: docs/operations/runbook-ingestion-rejection-spike.md
+
+  # ---------------------------------------------------------------
+  # Redpanda
+  # ---------------------------------------------------------------
+  - name: polaris-redpanda
+    interval: 30s
+    rules:
+      # _TODO_: ingester-api emits no publish-failure counter yet.
+      # When `polaris_ingest_publish_failed_total` lands (alongside the
+      # ingester Kafka publisher), the expression becomes:
+      #
+      #   sum by (project_id, environment, topic) (
+      #     rate(polaris_ingest_publish_failed_total[1m])
+      #   )
+      #   /
+      #   clamp_min(
+      #     sum by (project_id, environment, topic) (
+      #       rate(polaris_ingest_publish_failed_total[1m])
+      #       + rate(polaris_ingest_publish_success_total[1m])
+      #     ),
+      #     1
+      #   ) > 0.005
+      #
+      # Until then this rule is documented + disabled (vector(0) keeps
+      # rule-syntax validity without firing).
+      - alert: PolarisRedpandaPublishFailureRate
+        expr: vector(0) > 0.005
+        for: 1m
+        labels:
+          severity: page
+          service: ingester-api
+          team: platform-data
+        annotations:
+          summary: "Redpanda publish failure rate above 0.5% (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "Redpanda publish failure
+            rate page when >0.5% over 1 minute." The ingester does not
+            yet emit polaris_ingest_publish_failed_total /
+            polaris_ingest_publish_success_total; this alert is wired
+            for the threshold but will never fire until the ingester
+            publisher lands the metric. Tracked in
+            docs/operations/alerts.md.
+          runbook_url: docs/operations/runbook-redpanda-publish-failures.md
+
+      # Consumer lag (warn at 5 min, page at 15 min). Polaris emits
+      # `polaris_processor_lag_ms_last` per (processor_name,
+      # processor_version, project_id, environment, topic_family,
+      # concrete_topic, partition). 5 min = 300_000 ms; 15 min =
+      # 900_000 ms.
+      - alert: PolarisRedpandaConsumerLagWarn
+        expr: max by (processor_name, processor_version, project_id, environment, topic_family, concrete_topic, partition) (polaris_processor_lag_ms_last) > 300000
+        for: 5m
+        labels:
+          severity: warn
+          service: redpanda
+          team: platform-data
+        annotations:
+          summary: "Consumer lag >5 min on {{ $labels.processor_name }} / {{ $labels.concrete_topic }} (project={{ $labels.project_id }})"
+          description: |
+            Processor {{ $labels.processor_name }}@{{ $labels.processor_version }}
+            for project {{ $labels.project_id }} is lagging
+            {{ $labels.concrete_topic }} by more than 5 minutes.
+            Often a transient catch-up after a deploy or a temporary
+            slow downstream; if it persists, see the runbook.
+          runbook_url: docs/operations/runbook-processor-lag.md
+
+      - alert: PolarisRedpandaConsumerLagPage
+        expr: max by (processor_name, processor_version, project_id, environment, topic_family, concrete_topic, partition) (polaris_processor_lag_ms_last) > 900000
+        for: 5m
+        labels:
+          severity: page
+          service: redpanda
+          team: platform-data
+        annotations:
+          summary: "Consumer lag >15 min on {{ $labels.processor_name }} / {{ $labels.concrete_topic }} (project={{ $labels.project_id }})"
+          description: |
+            Processor {{ $labels.processor_name }}@{{ $labels.processor_version }}
+            for project {{ $labels.project_id }} is lagging
+            {{ $labels.concrete_topic }} by more than 15 minutes,
+            sustained for 5 minutes. End-to-end latency is now
+            measurably degraded. Wake the on-call.
+          runbook_url: docs/operations/runbook-processor-lag.md
+
+  # ---------------------------------------------------------------
+  # Processors
+  # ---------------------------------------------------------------
+  - name: polaris-processors
+    interval: 30s
+    rules:
+      - alert: PolarisProcessorDLQGrowthWarn
+        expr: polaris:processor_dlq_growth:rate1m > 100
+        for: 5m
+        labels:
+          severity: warn
+          service: processor
+          team: platform-data
+        annotations:
+          summary: "Processor DLQ growing >100/min on {{ $labels.processor_name }} (project={{ $labels.project_id }})"
+          description: |
+            Processor {{ $labels.processor_name }}@{{ $labels.processor_version }}
+            for project {{ $labels.project_id }} is DLQ-ing more than
+            100 events/minute. One of: a producer rolled out a
+            malformed event, an upstream dependency is unhealthy, or
+            a handler regression slipped. Drains to the processor DLQ
+            topic; triage with `polaris dlq list --vendor ...` or the
+            processor-specific surface.
+          runbook_url: docs/operations/runbook-dlq-growth.md
+
+      - alert: PolarisProcessorDLQGrowthPage
+        expr: polaris:processor_dlq_growth:rate1m > 1000
+        for: 5m
+        labels:
+          severity: page
+          service: processor
+          team: platform-data
+        annotations:
+          summary: "Processor DLQ growing >1000/min on {{ $labels.processor_name }} (project={{ $labels.project_id }})"
+          description: |
+            Processor {{ $labels.processor_name }}@{{ $labels.processor_version }}
+            for project {{ $labels.project_id }} is DLQ-ing more than
+            1000 events/minute, sustained for 5 minutes. Almost always
+            a producer-side regression or a fully-broken downstream;
+            wake the on-call.
+          runbook_url: docs/operations/runbook-dlq-growth.md
+
+  # ---------------------------------------------------------------
+  # Destinations
+  # ---------------------------------------------------------------
+  - name: polaris-destinations
+    interval: 30s
+    rules:
+      - alert: PolarisDestinationDeliveryFailureRate
+        expr: polaris:destination_delivery_failure_ratio:rate5m > 0.01
+        for: 5m
+        labels:
+          severity: page
+          service: destination
+          team: platform-data
+        annotations:
+          summary: "Destination delivery failure rate >1% for {{ $labels.vendor }} / {{ $labels.destination_id }}"
+          description: |
+            Destination instance {{ $labels.destination_id }} (vendor
+            {{ $labels.vendor }}, consumer
+            {{ $labels.consumer_version }}) is failing more than 1% of
+            delivery attempts over 5 minutes for project
+            {{ $labels.project_id }} in environment
+            {{ $labels.environment }}. Inspect `polaris deliveries
+            list <destination_id>` and the destination-DLQ runbook.
+          runbook_url: docs/operations/runbook-destination-api-failure.md
+
+      - alert: PolarisDestinationDLQGrowth
+        expr: polaris:destination_dlq_growth:rate1m > 50
+        for: 5m
+        labels:
+          severity: page
+          service: destination
+          team: platform-data
+        annotations:
+          summary: "Destination DLQ growing >50/min for {{ $labels.vendor }} / {{ $labels.destination_id }}"
+          description: |
+            Destination instance {{ $labels.destination_id }} (vendor
+            {{ $labels.vendor }}, consumer
+            {{ $labels.consumer_version }}) is DLQ-ing more than 50
+            events/minute. Triage with `polaris dlq list --destination
+            {{ $labels.destination_id }}` and follow the
+            destination-DLQ runbook.
+          runbook_url: docs/operations/runbook-dlq-growth.md
+
+  # ---------------------------------------------------------------
+  # ClickHouse
+  # ---------------------------------------------------------------
+  - name: polaris-clickhouse
+    interval: 30s
+    rules:
+      # _TODO_: no polaris_clickhouse_kafka_ingestion_lag_seconds
+      # metric exists yet. The future
+      # polaris-clickhouse-exporter scrapes
+      # system.kafka_consumers and exposes:
+      #
+      #   polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}
+      #
+      # Once that lands the expression becomes:
+      #
+      #   max by (table, environment) (
+      #     polaris_clickhouse_kafka_ingestion_lag_seconds
+      #   ) > 120  (warn)  /  > 600 (page)
+      #
+      # Until then these rules are documented but never fire.
+      - alert: PolarisClickHouseIngestionLagWarn
+        expr: vector(0) > 120
+        for: 5m
+        labels:
+          severity: warn
+          service: clickhouse
+          team: platform-data
+        annotations:
+          summary: "ClickHouse Kafka ingestion lag >2 min (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "ClickHouse Kafka
+            ingestion lag warn at 2 min, page at 10 min." A Polaris
+            ClickHouse exporter does not yet expose the lag metric;
+            this rule is wired for the threshold but will never fire
+            until the exporter lands. Tracked in
+            docs/operations/alerts.md.
+          runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
+
+      - alert: PolarisClickHouseIngestionLagPage
+        expr: vector(0) > 600
+        for: 5m
+        labels:
+          severity: page
+          service: clickhouse
+          team: platform-data
+        annotations:
+          summary: "ClickHouse Kafka ingestion lag >10 min (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "ClickHouse Kafka
+            ingestion lag warn at 2 min, page at 10 min." See the warn
+            rule for the metric backfill plan.
+          runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
+
+      # _TODO_: no polaris_clickhouse_mv_failed_total metric exists.
+      # The future polaris-clickhouse-exporter scrapes
+      # system.materialized_views and exposes:
+      #
+      #   polaris_clickhouse_mv_state{view=...,state=...}
+      #
+      # Once that lands the expression becomes:
+      #
+      #   max by (view, environment) (
+      #     polaris_clickhouse_mv_state{state="failed"}
+      #   ) > 0
+      - alert: PolarisClickHouseMVFailure
+        expr: vector(0) > 0
+        for: 1m
+        labels:
+          severity: page
+          service: clickhouse
+          team: platform-data
+        annotations:
+          summary: "ClickHouse materialized view in failed state (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "ClickHouse MV failure
+            page on any MV in failed state." The Polaris ClickHouse
+            exporter that surfaces system.materialized_views state has
+            not landed yet; this rule is wired for the threshold but
+            will never fire until the exporter lands. Tracked in
+            docs/operations/alerts.md.
+          runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
+
+  # ---------------------------------------------------------------
+  # Replay
+  # ---------------------------------------------------------------
+  - name: polaris-replay
+    interval: 30s
+    rules:
+      # _TODO_: replay coordinator does not yet emit a progress gauge.
+      # The future polaris_replay_job_progress_offset metric is
+      # expected to expose the last-committed Kafka offset per
+      # `(replay_job_id, status)`; combined with the
+      # `polaris_replay_job_status{status="running"}` gauge it lets
+      # the expression be:
+      #
+      #   (max by (replay_job_id) (polaris_replay_job_status{status="running"}) > 0)
+      #   and on (replay_job_id)
+      #   (changes(polaris_replay_job_progress_offset[30m]) == 0)
+      #
+      # Until those metrics land this rule is documented but never
+      # fires.
+      - alert: PolarisReplayJobStuck
+        expr: vector(0) > 0
+        for: 30m
+        labels:
+          severity: page
+          service: replay-coordinator
+          team: platform-data
+        annotations:
+          summary: "Replay job has not advanced in 30 min (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "replay job stuck page
+            when no progress for 30 min on an executing job." The
+            replay coordinator does not yet emit a progress gauge;
+            this rule is wired for the threshold but will never fire
+            until the metric lands. Tracked in
+            docs/operations/alerts.md.
+          runbook_url: docs/operations/runbook-replay-stuck.md
+
+  # ---------------------------------------------------------------
+  # Operator gate
+  # ---------------------------------------------------------------
+  - name: polaris-operator
+    interval: 30s
+    rules:
+      # _TODO_: P6-007 production-gate denial counter does not exist
+      # as a `polaris_*` metric in v1. The control plane logs each
+      # denial; the future polaris_operator_gate_denied_total counter
+      # (one increment per dispatcher rejection) lets the expression
+      # be:
+      #
+      #   sum by (environment, command_id) (
+      #     rate(polaris_operator_gate_denied_total[1m])
+      #   ) * 60 > 5
+      #
+      # Until the metric lands this rule is documented but never
+      # fires.
+      - alert: PolarisOperatorGateDenialRate
+        expr: vector(0) > 5
+        for: 5m
+        labels:
+          severity: warn
+          service: control-plane
+          team: platform-data
+        annotations:
+          summary: "Operator gate denial rate >5/min (TODO metric)"
+          description: |
+            Placeholder for the v1 threshold "operator gate denial
+            rate warn when sustained >5/min (suggests credential
+            confusion)." The P6-007 production gate has not landed
+            the per-denial counter yet; this rule is wired for the
+            threshold but will never fire until the metric lands.
+            Tracked in docs/operations/alerts.md.
+          runbook_url: docs/operations/runbook-replay-stuck.md

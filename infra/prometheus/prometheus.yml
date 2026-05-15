@@ -31,10 +31,12 @@ global:
   external_labels:
     cluster: polaris-local
 
-# Alerting rules live with P10-005 (Alerts and Runbooks). When that
-# task lands it drops files into infra/prometheus/rules/*.yml and adds
-# a `rule_files:` entry here.
-rule_files: []
+# Alert + recording rules from P10-005 (Alerts and Runbooks). Files
+# live under `infra/prometheus/rules/`; the glob picks up future
+# additions automatically. The operator-facing index of every alert is
+# `docs/operations/alerts.md`.
+rule_files:
+  - rules/*.yml
 
 scrape_configs:
   # ---------------------------------------------------------------
