@@ -1,0 +1,35 @@
+{
+  "event_id": "evt_01HZZA0YJK0M2R8D8VYV4QH4XR",
+  "event": "checkout.started",
+  "schema_version": 1,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:00.500Z",
+  "source": { "id": "storefront-web", "type": "frontend" },
+  "identity": {
+    "customer_id": "cust_12345",
+    "anonymous_id": "anon_abc"
+  },
+  "context": {
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US",
+    "page": {
+      "url": "https://storefront.example/checkout",
+      "path": "/checkout",
+      "title": "Checkout",
+      "referrer": "https://storefront.example/cart"
+    }
+  },
+  "properties": {
+    "cart_id": "cart_42",
+    "total": 19995,
+    "currency": "USD",
+    "items": [
+      { "sku": "sku-1", "name": "Widget", "quantity": 2, "unit_price": 4999 },
+      { "sku": "sku-2", "name": "Gadget", "quantity": 1, "unit_price": 9997 }
+    ]
+  },
+  "consent": { "marketing": true, "analytics": true, "personalization": true }
+}

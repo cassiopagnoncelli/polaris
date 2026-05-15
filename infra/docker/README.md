@@ -17,6 +17,7 @@ next to each service:
 | `webhook-sink v1`                        | `consumers/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
 | `meta-capi v1`                           | `consumers/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
 | `tiktok v1`                              | `consumers/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
+| `ga4 v1`                                 | `consumers/ga4/v1/Dockerfile`                         | `polaris/consumer-ga4-v1`                        | 5002 |
 
 The polaris-cli image is a CLI bin, not a long-running server — it has no
 exposed port and no `HEALTHCHECK`.

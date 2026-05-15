@@ -95,6 +95,11 @@ const services = [
     dockerfile: "consumers/tiktok/v1/Dockerfile",
     image: "polaris/consumer-tiktok-v1",
   },
+  {
+    name: "ga4",
+    dockerfile: "consumers/ga4/v1/Dockerfile",
+    image: "polaris/consumer-ga4-v1",
+  },
 ];
 
 /**

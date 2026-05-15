@@ -1,0 +1,80 @@
+# Canonical consumer manifest for the ga4 v1 destination consumer.
+#
+# Mirrors the shape of consumers/meta-capi/v1/consumer.manifest.yaml and
+# consumers/tiktok/v1/consumer.manifest.yaml.
+# The manifest is the SEMANTIC config — what canonical events this
+# consumer delivers, which vendor versions, which normalization profile.
+# Runtime state (per-instance enable/disable, secret_ref, max_rps,
+# retry_policy) lives in the PostgreSQL `destinations` table managed by
+# `polaris destinations` CLI commands. The manifest never carries runtime
+# knobs.
+
+name: ga4
+version: v1
+
+vendor: ga4
+# GA4 Measurement Protocol does not carry a numeric API version on the
+# wire. The endpoint `https://www.google-analytics.com/mp/collect` is the
+# single GA contract for server-side event ingestion; Google evolves it
+# in place. We pin the conceptual contract name (`mp`) so the
+# descriptor + manifest stay symmetrical with the other consumers.
+vendor_api_version: mp
+owner: platform-data
+
+description: |
+  Posts canonical Polaris events into Google Analytics 4 via the
+  Measurement Protocol (https://www.google-analytics.com/mp/collect)
+  with the canonical `customer_id` mapped to `user_id`, the canonical
+  `anonymous_id` mapped to `client_id`, and `transaction_id` carried
+  on purchase events so GA4 can deduplicate cross-channel attempts
+  against the same purchase.
+
+inputs:
+  - analytics.events
+
+outputs:
+  # GA4 consumers do not emit Polaris events back into the
+  # platform. Delivery is recorded in PostgreSQL `delivery_records` by
+  # the destination runtime.
+  []
+
+mode: streaming
+
+# Per-stage versions stamped onto every delivery_records row.
+normalize_version: v1
+mapper_version: v1
+deliverer_version: v1
+
+required_consent:
+  # GA4 carries analytics payloads. Polaris gates on the `analytics`
+  # consent dimension for GA4 (marketing is the TikTok/Meta gate). v1
+  # keeps the gate narrow to `analytics` so the consumer doesn't drop
+  # events that opted out of marketing but allowed analytics; future
+  # minor versions may surface ad-personalization (`marketing`) as a
+  # `_consent` slot mapping into the GA4 payload directly.
+  marketing: false
+  analytics: true
+  personalization: false
+
+identity_hashing:
+  # GA4 Measurement Protocol does NOT require hashed identifiers — it
+  # consumes `client_id` / `user_id` as raw opaque strings. The shared
+  # normalize layer still produces `email_sha256` / `phone_sha256`
+  # slots when callers ship raw email or phone, but the GA4 mapper
+  # never reads them. Identity hashing flags stay off so the normalize
+  # layer doesn't burn CPU on a slot we never emit.
+  email: false
+  phone: false
+
+dlq_topic_family: destination.ga4.v1.dlq
+
+defaults:
+  # GA4 Measurement Protocol rate limit profile: documented as up to
+  # 200,000 hits per property per day with bursts up to 60 events per
+  # request; the production destination row tunes per-instance max_rps
+  # below that. Defaults below are per-attempt operational knobs the
+  # host may override via env.
+  request_timeout_ms: 5000
+  retry_backoff_base_ms: 250
+  retry_backoff_max_seconds: 300
+  max_attempts: 8
