@@ -47,7 +47,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 ### P12 Release Readiness
 
 - [P12-003 Product Acceptance Test](./tasks/P12-003-product-acceptance-test.md)
-- [P12-004 Internal Onboarding Guide](./tasks/P12-004-internal-onboarding-guide.md)
 - [P12-005 Release Candidate Checklist](./tasks/P12-005-release-candidate-checklist.md)
 
 ## In Progress
@@ -165,3 +164,4 @@ No blocked cards.
 
 - [P12-001 SDK Handbook](./tasks/P12-001-sdk-handbook.md) — merged in `9d80fb7`
 - [P12-002 API Docs and OpenAPI Publishing](./tasks/P12-002-api-docs-openapi.md) — merged in `b27d15e`
+- [P12-004 Internal Onboarding Guide](./tasks/P12-004-internal-onboarding-guide.md) — merged in `f2b952f` (cherry-picked from `task/p12-004`; org-specific operator/on-call channel names left as placeholders; one parenthetical mention of `polaris schemas validate` kept conditional because the subcommand is referenced in architecture docs but not present in the CLI source)
