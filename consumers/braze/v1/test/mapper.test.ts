@@ -1,0 +1,354 @@
+/**
+ * Behavioral tests for the braze v1 mappers.
+ *
+ * Each mapper is pure — no I/O, no clock, no PII reach. Pinned:
+ *
+ *   - per-canonical-event family selection (events vs purchases vs attributes)
+ *   - external_id resolution from user_id → anonymous_id fallback chain
+ *   - external_id lowercased + trimmed
+ *   - time is ISO 8601 passthrough (not Unix seconds)
+ *   - currency / value minor → major conversion
+ *   - skip outcomes when required slots (currency, amount, product_id,
+ *     external_id) are missing
+ *   - dedupe_key = canonical event_id (audit-only — Braze ignores it)
+ *   - user.identified emits raw email/phone (NOT hashed) +
+ *     _update_existing_only=false
+ *
+ * @see consumers/braze/v1/src/mapper.ts
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  BRAZE_EVENT_CHECKOUT_STARTED,
+  CANONICAL_TO_BRAZE_FAMILY,
+  checkoutStartedMapper,
+  paymentApprovedMapper,
+  resolveExternalId,
+  userIdentifiedMapper,
+} from "../src/mapper.js";
+import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
+
+describe("checkoutStartedMapper", () => {
+  it("returns an events[] entry with name='checkout_started' + dedupe_key = event_id", () => {
+    const ctx = fixtureMapperContext();
+    const result = checkoutStartedMapper(ctx);
+
+    expect(result.kind).toBe("mapped");
+    if (result.kind !== "mapped") return;
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+    expect(result.payload.events).toHaveLength(1);
+    expect(result.payload.purchases).toBeUndefined();
+    expect(result.payload.attributes).toBeUndefined();
+    const event = result.payload.events?.[0];
+    expect(event?.name).toBe(BRAZE_EVENT_CHECKOUT_STARTED);
+    expect(event?.external_id).toBe("cust_12345");
+  });
+
+  it("passes occurred_at through as ISO 8601 (Braze accepts ISO, not Unix seconds)", () => {
+    const ctx = fixtureMapperContext({
+      occurred_at: "2026-05-14T12:00:00.500Z",
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.events?.[0]?.time).toBe("2026-05-14T12:00:00.500Z");
+  });
+
+  it("builds properties with currency + value (minor → major) + cart_id + num_items + page_url", () => {
+    const ctx = fixtureMapperContext();
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const props = result.payload.events?.[0]?.properties;
+    expect(props?.currency).toBe("USD");
+    expect(props?.value).toBe(199.95);
+    expect(props?.cart_id).toBe("cart_42");
+    expect(props?.num_items).toBe(3);
+    expect(props?.page_url).toBe("https://storefront.example/checkout");
+  });
+
+  it("omits value when currency is missing", () => {
+    const normalized = fixtureNormalizedEvent();
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        properties: { ...normalized.properties, currency: undefined },
+      },
+    };
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.events?.[0]?.properties?.value).toBeUndefined();
+  });
+
+  it("handles zero-decimal currencies (JPY) without dividing", () => {
+    const normalized = fixtureNormalizedEvent();
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        properties: { ...normalized.properties, currency: "JPY", total: 19995 },
+      },
+    };
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.events?.[0]?.properties?.currency).toBe("JPY");
+    expect(result.payload.events?.[0]?.properties?.value).toBe(19995);
+  });
+
+  it("omits properties entirely when no relevant slot is present and no page_url", () => {
+    const normalized = fixtureNormalizedEvent();
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        properties: {},
+        context: { ...normalized.context, page_url: null },
+      },
+    };
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.events?.[0]?.properties).toBeUndefined();
+  });
+
+  it("skips when no external_id can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "buyer@storefront.example",
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = checkoutStartedMapper(ctx);
+    expect(result.kind).toBe("skip");
+    if (result.kind !== "skip") return;
+    expect(result.reason).toContain("external_id");
+  });
+});
+
+describe("paymentApprovedMapper", () => {
+  it("returns a purchases[] entry with price + currency + product_id + time", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: { amount_minor: 4999, currency: "USD", order_id: "ord_1" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.purchases).toHaveLength(1);
+    expect(result.payload.events).toBeUndefined();
+    expect(result.payload.attributes).toBeUndefined();
+    const purchase = result.payload.purchases?.[0];
+    expect(purchase?.external_id).toBe("cust_12345");
+    expect(purchase?.price).toBe(49.99);
+    expect(purchase?.currency).toBe("USD");
+    expect(purchase?.product_id).toBe("ord_1");
+    expect(purchase?.time).toBe(ctx.normalized.occurred_at);
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+
+  it("prefers cart_id over order_id / transaction_id for product_id", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: {
+        amount_minor: 4999,
+        currency: "USD",
+        cart_id: "cart_99",
+        order_id: "ord_1",
+        transaction_id: "tx_777",
+      },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.purchases?.[0]?.product_id).toBe("cart_99");
+  });
+
+  it("falls back to transaction_id when cart_id and order_id are absent", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: {
+        amount_minor: 4999,
+        currency: "USD",
+        transaction_id: "tx_777",
+      },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.purchases?.[0]?.product_id).toBe("tx_777");
+  });
+
+  it("accepts `amount` as an alias for `amount_minor` (legacy producers)", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: { amount: 4999, currency: "USD", cart_id: "cart_99" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.purchases?.[0]?.price).toBe(49.99);
+  });
+
+  it("skips when currency is missing (Braze requires currency on every purchase)", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: { amount_minor: 4999, cart_id: "cart_99" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    expect(result.kind).toBe("skip");
+    if (result.kind !== "skip") return;
+    expect(result.reason).toContain("currency_or_amount");
+  });
+
+  it("skips when amount is missing (Braze requires price on every purchase)", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: { currency: "USD", cart_id: "cart_99" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    expect(result.kind).toBe("skip");
+  });
+
+  it("skips when no product_id can be derived", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: { currency: "USD", amount_minor: 4999 },
+    });
+    const result = paymentApprovedMapper(ctx);
+    expect(result.kind).toBe("skip");
+    if (result.kind !== "skip") return;
+    expect(result.reason).toContain("product_id");
+  });
+
+  it("skips when no external_id can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "buyer@storefront.example",
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+      properties: { amount_minor: 4999, currency: "USD", cart_id: "cart_99" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    expect(result.kind).toBe("skip");
+    if (result.kind !== "skip") return;
+    expect(result.reason).toContain("external_id");
+  });
+});
+
+describe("userIdentifiedMapper", () => {
+  it("returns an attributes[] entry with _update_existing_only=false + raw email/phone + language", () => {
+    const ctx = fixtureMapperContext({ event: "user.identified" });
+    const result = userIdentifiedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.attributes).toHaveLength(1);
+    expect(result.payload.events).toBeUndefined();
+    expect(result.payload.purchases).toBeUndefined();
+    const attribute = result.payload.attributes?.[0];
+    expect(attribute?.external_id).toBe("cust_12345");
+    expect(attribute?._update_existing_only).toBe(false);
+    // Braze consumes RAW email/phone — NOT hashed.
+    expect(attribute?.email).toBe("buyer@storefront.example");
+    expect(attribute?.phone).toBe("+15555550199");
+    expect(attribute?.language).toBe("en-US");
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+
+  it("omits email/phone when the normalized identity has them null", () => {
+    const ctx = fixtureMapperContext({
+      event: "user.identified",
+      identity: {
+        user_id: "cust_456",
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = userIdentifiedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0];
+    expect(attribute?.email).toBeUndefined();
+    expect(attribute?.phone).toBeUndefined();
+    expect(attribute?.external_id).toBe("cust_456");
+  });
+
+  it("skips when no external_id can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      event: "user.identified",
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "buyer@storefront.example",
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = userIdentifiedMapper(ctx);
+    expect(result.kind).toBe("skip");
+    if (result.kind !== "skip") return;
+    expect(result.reason).toContain("external_id");
+  });
+});
+
+describe("resolveExternalId", () => {
+  it("prefers user_id (canonical customer_id)", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(resolveExternalId(normalized)).toBe("cust_12345");
+  });
+
+  it("falls back to anonymous_id when user_id is null", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: "anon_xyz",
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    expect(resolveExternalId(normalized)).toBe("anon_xyz");
+  });
+
+  it("lowercases + trims the resolved id (Braze documents case-insensitive comparison)", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: "  CUST_UPPER  ",
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    expect(resolveExternalId(normalized)).toBe("cust_upper");
+  });
+
+  it("returns null when both user_id and anonymous_id are null", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "buyer@storefront.example",
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    expect(resolveExternalId(normalized)).toBeNull();
+  });
+});
+
+describe("CANONICAL_TO_BRAZE_FAMILY", () => {
+  it("pins the v1 family matrix", () => {
+    expect(CANONICAL_TO_BRAZE_FAMILY["checkout.started"]).toBe("events");
+    expect(CANONICAL_TO_BRAZE_FAMILY["payment.approved"]).toBe("purchases");
+    expect(CANONICAL_TO_BRAZE_FAMILY["user.identified"]).toBe("attributes");
+  });
+});

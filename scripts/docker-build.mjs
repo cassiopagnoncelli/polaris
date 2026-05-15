@@ -100,6 +100,11 @@ const services = [
     dockerfile: "consumers/ga4/v1/Dockerfile",
     image: "polaris/consumer-ga4-v1",
   },
+  {
+    name: "braze",
+    dockerfile: "consumers/braze/v1/Dockerfile",
+    image: "polaris/consumer-braze-v1",
+  },
 ];
 
 /**

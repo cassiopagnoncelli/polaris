@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "external_id": "cust_12345",
+      "name": "checkout_started",
+      "time": "2026-05-14T12:00:00.000Z",
+      "properties": {
+        "currency": "USD",
+        "value": 199.95,
+        "cart_id": "cart_42",
+        "num_items": 3,
+        "page_url": "https://storefront.example/checkout"
+      }
+    }
+  ]
+}

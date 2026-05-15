@@ -1,0 +1,118 @@
+/**
+ * Runtime configuration for the braze v1 destination consumer.
+ *
+ * Mirrors the tiktok v1 shape (`consumers/tiktok/v1/src/config.ts`):
+ * service + http + redpanda + postgres + a small consumer-specific
+ * block. Per-destination instance knobs (status, mode, max_rps,
+ * retry_policy, dead_letter_threshold) live in the PostgreSQL
+ * `destinations` row and are read at delivery time by the runtime;
+ * this config only carries service-level toggles.
+ *
+ * Env var inventory (consumer-scoped):
+ *
+ *   POLARIS_BRAZE_CONSUMER_GROUP            KafkaJS consumer group identifier
+ *                                           default: "polaris-braze-v1"
+ *   POLARIS_BRAZE_CONCURRENCY               `partitionsConsumedConcurrently`
+ *                                           default: 4
+ *   POLARIS_BRAZE_REQUEST_TIMEOUT_MS        HTTP fetch timeout per attempt
+ *                                           default: 5000 (per manifest)
+ *   POLARIS_BRAZE_ALLOW_REPLAY              Toggle replay-suppression bypass
+ *                                           default: false
+ *   POLARIS_BRAZE_API_HOST                  Braze REST host template
+ *                                           default: "rest.{instance}.braze.com"
+ *                                           The `{instance}` literal is
+ *                                           substituted with the
+ *                                           resolved-secret instance slug.
+ */
+
+import { z } from "zod";
+
+import {
+  booleanFromStringSchema,
+  composeConfigSchema,
+  httpEnvSchema,
+  loadConfigWithDefaults,
+  nonEmptyStringSchema,
+  positiveIntSchema,
+  postgresEnvSchema,
+  redpandaEnvSchema,
+  serviceEnvSchema,
+  type HttpConfig,
+  type PostgresConfig,
+  type RedpandaConfig,
+  type ServiceConfig,
+} from "@polaris/shared-config";
+
+/**
+ * Default service name surfaced when `POLARIS_SERVICE_NAME` is omitted.
+ * Matches the manifest `name` field.
+ */
+export const CONSUMER_SERVICE_NAME = "braze" as const;
+
+/**
+ * Default Braze REST host template. The `{instance}` literal is
+ * substituted with the resolved-secret `instance` slug at delivery
+ * time. Override via `POLARIS_BRAZE_API_HOST` for test environments or
+ * sandbox endpoints.
+ */
+export const DEFAULT_BRAZE_API_HOST = "rest.{instance}.braze.com" as const;
+
+/** Consumer-specific tuning knobs. */
+export const brazeEnvSchema = z
+  .object({
+    POLARIS_BRAZE_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-braze-v1"),
+    POLARIS_BRAZE_CONCURRENCY: positiveIntSchema.default(4),
+    POLARIS_BRAZE_REQUEST_TIMEOUT_MS: positiveIntSchema.default(5000),
+    POLARIS_BRAZE_ALLOW_REPLAY: booleanFromStringSchema.default(false),
+    POLARIS_BRAZE_API_HOST: nonEmptyStringSchema.default(DEFAULT_BRAZE_API_HOST),
+  })
+  .transform(
+    (parsed): BrazeConfig => ({
+      consumerGroup: parsed["POLARIS_BRAZE_CONSUMER_GROUP"],
+      partitionsConsumedConcurrently: parsed["POLARIS_BRAZE_CONCURRENCY"],
+      requestTimeoutMs: parsed["POLARIS_BRAZE_REQUEST_TIMEOUT_MS"],
+      allowReplay: parsed["POLARIS_BRAZE_ALLOW_REPLAY"],
+      apiHost: parsed["POLARIS_BRAZE_API_HOST"],
+    }),
+  );
+
+export interface BrazeConfig {
+  readonly consumerGroup: string;
+  readonly partitionsConsumedConcurrently: number;
+  readonly requestTimeoutMs: number;
+  readonly allowReplay: boolean;
+  readonly apiHost: string;
+}
+
+export const brazeEnvKeys = [
+  "POLARIS_BRAZE_CONSUMER_GROUP",
+  "POLARIS_BRAZE_CONCURRENCY",
+  "POLARIS_BRAZE_REQUEST_TIMEOUT_MS",
+  "POLARIS_BRAZE_ALLOW_REPLAY",
+  "POLARIS_BRAZE_API_HOST",
+] as const;
+
+export interface BrazeRuntimeConfig {
+  readonly service: ServiceConfig;
+  readonly http: HttpConfig;
+  readonly redpanda: RedpandaConfig;
+  readonly postgres: PostgresConfig;
+  readonly braze: BrazeConfig;
+}
+
+export function brazeConfigSchema() {
+  return composeConfigSchema({
+    service: serviceEnvSchema,
+    http: httpEnvSchema,
+    redpanda: redpandaEnvSchema,
+    postgres: postgresEnvSchema,
+    braze: brazeEnvSchema,
+  });
+}
+
+export function loadBrazeConfig(): BrazeRuntimeConfig {
+  return loadConfigWithDefaults({
+    serviceName: CONSUMER_SERVICE_NAME,
+    schema: brazeConfigSchema(),
+  });
+}

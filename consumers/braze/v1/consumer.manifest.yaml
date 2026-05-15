@@ -1,0 +1,76 @@
+# Canonical consumer manifest for the braze v1 destination consumer.
+#
+# Mirrors the shape of consumers/meta-capi/v1/consumer.manifest.yaml and
+# consumers/tiktok/v1/consumer.manifest.yaml. The manifest is the SEMANTIC
+# config — what canonical events this consumer delivers, which vendor
+# versions, which normalization profile. Runtime state (per-instance
+# enable/disable, secret_ref, max_rps, retry_policy) lives in the
+# PostgreSQL `destinations` table managed by `polaris destinations` CLI
+# commands. The manifest never carries runtime knobs.
+
+name: braze
+version: v1
+
+vendor: braze
+# Braze REST API. Unlike Meta or TikTok, Braze publishes the customer-
+# facing REST surface without a discrete versioned namespace — the
+# `/users/track` endpoint is the canonical surface. We record
+# `vendor_api_version: rest` to signal "the REST contract at the time
+# this consumer shipped"; a future v2 of this consumer would bump if
+# Braze breaks the contract semantically.
+vendor_api_version: rest
+owner: platform-data
+
+description: |
+  Posts canonical Polaris events into Braze's REST API
+  (rest.<instance>.braze.com/users/track) with external-id-keyed
+  attribute / event / purchase arrays. Braze does not provide a generic
+  vendor-side event dedupe — Polaris's delivery-key idempotency is the
+  canonical guard against double-delivery; consumers/braze/v1/SPEC.md
+  documents the divergence in full.
+
+inputs:
+  - analytics.events
+
+outputs:
+  # Braze consumers do not emit Polaris events back into the platform.
+  # Delivery is recorded in PostgreSQL `delivery_records` by the
+  # destination runtime.
+  []
+
+mode: streaming
+
+# Per-stage versions stamped onto every delivery_records row.
+normalize_version: v1
+mapper_version: v1
+deliverer_version: v1
+
+required_consent:
+  # Braze carries lifecycle marketing payloads (push, email, in-app).
+  # Polaris gates on the `marketing` consent dimension; analytics and
+  # personalization slots remain at receiver discretion.
+  marketing: true
+  analytics: false
+  personalization: false
+
+identity_hashing:
+  # Braze's REST API consumes raw external_id / email / phone — it does
+  # NOT require sha256-hashed identifiers (Braze hashes server-side for
+  # its own deduplication). The shared normalize layer still computes
+  # `email_sha256` / `phone_sha256` for downstream consumers; this
+  # consumer reads raw slots from the canonical envelope.
+  email: false
+  phone: false
+
+dlq_topic_family: destination.braze.v1.dlq
+
+defaults:
+  # Braze REST API rate-limit profile: documented as up to 250k requests
+  # per hour per workspace, with per-endpoint sub-limits. The production
+  # destination row tunes per-instance max_rps below that.
+  # Defaults below are per-attempt operational knobs the host may
+  # override via env.
+  request_timeout_ms: 5000
+  retry_backoff_base_ms: 250
+  retry_backoff_max_seconds: 300
+  max_attempts: 8
