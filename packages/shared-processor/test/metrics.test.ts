@@ -78,13 +78,22 @@ describe("ProcessorMetrics", () => {
     expect(m.getGauge(METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST, LABELS)).toBe(5);
   });
 
-  it("getSamples returns a stable snapshot of counters and gauges", () => {
+  it("getSamples returns a stable snapshot of counters, gauges, and histogram series", () => {
     const m = new ProcessorMetrics();
     m.incrementConsumed(LABELS);
     m.observeLagMs(LABELS, 100);
-    const samples = m.getSamples();
-    const names = samples.map((s) => s.name).sort();
-    expect(names).toEqual([METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL, METRIC_PROCESSOR_LAG_MS_LAST]);
+    const names = new Set(m.getSamples().map((s) => s.name));
+    expect(names.has(METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL)).toBe(true);
+    expect(names.has(METRIC_PROCESSOR_LAG_MS_LAST)).toBe(true);
+    // CSH8YAL6: `observeLagMs` now also feeds the `*_seconds` histogram.
+    // `getSamples()` emits the canonical Prometheus families (`_bucket`,
+    // `_sum`, `_count`); assert at least one bucket variant is present.
+    const hasHistogramBucket = [...names].some((n) => n.endsWith("_bucket"));
+    const hasHistogramSum = [...names].some((n) => n.endsWith("_sum"));
+    const hasHistogramCount = [...names].some((n) => n.endsWith("_count"));
+    expect(hasHistogramBucket).toBe(true);
+    expect(hasHistogramSum).toBe(true);
+    expect(hasHistogramCount).toBe(true);
   });
 
   it("reset clears all counters and gauges", () => {

@@ -25,6 +25,17 @@ import {
  *   - `polaris_ingest_deprecated_schema_version_total`: event × schema_version (small)
  *
  * Both stay well under any reasonable Prometheus alert threshold.
+ *
+ * **Accept latency histogram (CSH8YAL6).** The ingester did not previously
+ * emit an accept-latency gauge — the `_ms_last` siblings the task card
+ * references only existed in the processor and destination registries.
+ * Per the card's acceptance criterion (`ingester accept latency p99
+ * panel`), a `polaris_ingest_accept_duration_seconds` histogram is added
+ * here with buckets sized against the v1 SLO surface in
+ * `docs/operations/slos.md` (200ms p99, 500ms p999). Observations are in
+ * seconds per Prometheus convention. `getSamples()` emits the canonical
+ * three series families (`_bucket{le="..."}`, `_sum`, `_count`);
+ * `histogram_quantile()` in Grafana works on the bucket series directly.
  */
 
 /** Stable metric names emitted by the ingester. */
@@ -40,6 +51,29 @@ export const METRIC_INGEST_RATE_LIMIT_REJECTED_TOTAL = "polaris_ingest_rate_limi
 export const METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL = "polaris_ingest_rate_limit_skipped_total";
 export const METRIC_INGEST_PUBLISH_FAILED_TOTAL = "polaris_ingest_publish_failed_total";
 export const METRIC_INGEST_PUBLISH_SUCCESS_TOTAL = "polaris_ingest_publish_success_total";
+
+/**
+ * Histogram base name for ingester accept latency (per-request wall-clock
+ * duration of `POST /v1/events`). Observations are in **seconds**. The
+ * registry emits three series families:
+ *
+ *   - `polaris_ingest_accept_duration_seconds_bucket{le="..."}`
+ *   - `polaris_ingest_accept_duration_seconds_sum`
+ *   - `polaris_ingest_accept_duration_seconds_count`
+ */
+export const METRIC_INGEST_ACCEPT_DURATION_SECONDS = "polaris_ingest_accept_duration_seconds";
+
+/**
+ * Bucket boundaries (seconds, upper-inclusive) for the accept latency
+ * histogram. Sized against the v1 SLO surface in
+ * `docs/operations/slos.md`: p99 ≤ 200ms, p999 ≤ 500ms. The buckets span
+ * well below and well above the SLO so the panel surfaces both healthy
+ * and saturated regimes — `0.005`–`0.1` cover sub-SLO ingest, `0.2`/`0.5`
+ * straddle the SLO thresholds, and `1`–`5` cover the saturated tail.
+ */
+export const INGEST_ACCEPT_DURATION_BUCKETS_SECONDS: readonly number[] = Object.freeze([
+  0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2, 5,
+]);
 
 export interface DeprecatedSchemaVersionLabels {
   readonly event: string;
@@ -78,6 +112,17 @@ export interface PublishFailedLabels {
   readonly environment: string;
   readonly topic: string;
   readonly reason: string;
+}
+
+/**
+ * Label tuple carried by the accept-duration histogram. `environment` is
+ * the only label so cardinality stays bounded across project growth —
+ * adding `project_id` here would explode bucket cardinality (10 buckets ×
+ * N projects × 3 environments). Per-project breakdowns are available
+ * through the per-project topic-isolation dashboards from P11-008.
+ */
+export interface AcceptDurationLabels {
+  readonly environment: string;
 }
 
 /**
