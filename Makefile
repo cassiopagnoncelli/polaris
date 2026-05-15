@@ -29,7 +29,7 @@ endif
         build build-packages test tests ci stats \
         docker-up docker-down docker-ps docker-logs docker-nuke \
         cli clean \
-        db-migrate db-rollback db-status \
+        db-bootstrap db-migrate db-rollback db-status \
         clickhouse-bootstrap clickhouse-migrate
 
 # Code surfaces tracked by `make stats`. Mirrors the architecture docs:
@@ -57,7 +57,7 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install build-packages db-migrate clickhouse-bootstrap ## Bare-metal bootstrap (install + build shared packages + postgres migrations + clickhouse bootstrap). Assumes infra is running.
+setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap). Assumes infra is running at default endpoints.
 
 install: ## Install pnpm workspace dependencies
 	pnpm install
@@ -137,6 +137,9 @@ docker-nuke: ## Stop docker compose and wipe named volumes (destructive)
 
 cli: ## Open the polaris CLI console (apps/polaris-cli)
 	pnpm --filter @polaris/polaris-cli run start
+
+db-bootstrap: ## Create the polaris role + database on the local PostgreSQL (idempotent; bare-metal only)
+	pnpm db:bootstrap-local
 
 db-migrate: ## Apply pending PostgreSQL migrations (dbmate up — creates DB if missing)
 	pnpm db:migrate

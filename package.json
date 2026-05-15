@@ -24,6 +24,7 @@
     "test:scripts": "vitest run --root scripts --passWithNoTests",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "clean": "pnpm -r --if-present run clean",
+    "db:bootstrap-local": "node scripts/postgres-bootstrap-local.mjs",
     "db:migrate": "pnpm --filter @polaris/shared-db db:migrate",
     "db:rollback": "pnpm --filter @polaris/shared-db db:rollback",
     "db:status": "pnpm --filter @polaris/shared-db db:status",
