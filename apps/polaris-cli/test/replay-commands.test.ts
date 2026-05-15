@@ -32,6 +32,7 @@ import {
   replayCancelCommand,
   replayCommand,
   replayCreateCommand,
+  replayExecuteCommand,
   replayListCommand,
   replayPauseCommand,
   replayPlanCommand,
@@ -54,6 +55,7 @@ describe("polaris replay command group", () => {
   it("registers under the expected command ids", () => {
     expect(replayCommand.id).toBe("replay");
     expect(replayCreateCommand.id).toBe("replay.create");
+    expect(replayExecuteCommand.id).toBe("replay.execute");
     expect(replayListCommand.id).toBe("replay.list");
     expect(replayShowCommand.id).toBe("replay.show");
     expect(replayPlanCommand.id).toBe("replay.plan");
@@ -64,6 +66,7 @@ describe("polaris replay command group", () => {
 
   it("flags every mutating command as mutates: true", () => {
     expect(replayCreateCommand.mutates).toBe(true);
+    expect(replayExecuteCommand.mutates).toBe(true);
     expect(replayCancelCommand.mutates).toBe(true);
     expect(replayPauseCommand.mutates).toBe(true);
     expect(replayResumeCommand.mutates).toBe(true);

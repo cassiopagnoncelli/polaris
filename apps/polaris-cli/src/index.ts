@@ -276,6 +276,7 @@ export {
   replayCancelCommand,
   replayCommand,
   replayCreateCommand,
+  replayExecuteCommand,
   replayListCommand,
   replayPauseCommand,
   replayPlanCommand,
@@ -296,6 +297,11 @@ export {
   type ReplayCreateStore,
   type ReplayJobAuditSnapshot,
 } from "./commands/replay/create.js";
+export {
+  buildReplayExecuteRunner,
+  type ReplayExecuteHooks,
+  type ReplayExecuteStore,
+} from "./commands/replay/execute.js";
 export {
   buildReplayListRunner,
   type ReplayListHooks,

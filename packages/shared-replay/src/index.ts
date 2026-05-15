@@ -55,3 +55,33 @@ export {
 } from "./planner.js";
 
 export { renderPlanHuman } from "./render.js";
+
+export {
+  REPLAY_EXECUTOR_REFUSAL_CODES,
+  REPLAY_HEADER_FLAG,
+  REPLAY_HEADER_JOB_ID,
+  ReplayExecutorError,
+  buildProduceRecord,
+  executeReplay,
+  matchesPlanScope,
+} from "./executor.js";
+export type {
+  ExecuteReplayInput,
+  ExecuteReplayOutcome,
+  ExecuteReplayOutcomeStatus,
+  ReplayChunkOutcome,
+  ReplayChunkProgress,
+  ReplayClockStamp,
+  ReplayCurrentStatus,
+  ReplayExecutorLogger,
+  ReplayExecutorProducer,
+  ReplayExecutorRefusalCode,
+  ReplayExecutorSource,
+  ReplayExecutorStore,
+  ReplayFetchChunkInput,
+  ReplayMarkCompletedInput,
+  ReplayMarkFailedInput,
+  ReplayMarkRunningInput,
+  ReplayProduceRecord,
+  ReplaySourceEvent,
+} from "./executor.js";

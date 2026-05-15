@@ -1,12 +1,13 @@
 /**
  * `polaris replay` command group.
  *
- * Surfaces seven commands:
+ * Surfaces eight commands:
  *
  *   - `polaris replay list`                              mutates: false
  *   - `polaris replay show <replay_job_id>`              mutates: false
  *   - `polaris replay plan <replay_job_id>`              mutates: false
  *   - `polaris replay create ...`                        mutates: true
+ *   - `polaris replay execute <replay_job_id>`           mutates: true
  *   - `polaris replay cancel <replay_job_id> --reason`   mutates: true
  *   - `polaris replay pause  <replay_job_id> --reason`   mutates: true
  *   - `polaris replay resume <replay_job_id> --reason`   mutates: true
@@ -43,6 +44,7 @@
 import type { CommandDefinition } from "../../command.js";
 import { replayCancelCommand } from "./cancel.js";
 import { replayCreateCommand } from "./create.js";
+import { replayExecuteCommand } from "./execute.js";
 import { replayListCommand } from "./list.js";
 import { replayPauseCommand } from "./pause.js";
 import { replayPlanCommand } from "./plan.js";
@@ -54,6 +56,7 @@ const CHILDREN: readonly CommandDefinition[] = [
   replayShowCommand,
   replayPlanCommand,
   replayCreateCommand,
+  replayExecuteCommand,
   replayCancelCommand,
   replayPauseCommand,
   replayResumeCommand,
@@ -77,6 +80,7 @@ export const replayCommand: CommandDefinition = {
 export {
   replayCancelCommand,
   replayCreateCommand,
+  replayExecuteCommand,
   replayListCommand,
   replayPauseCommand,
   replayPlanCommand,

@@ -133,6 +133,8 @@ const SEED_ROW: ReplayJobRow = {
   events_planned: 0,
   events_replayed: 0,
   events_failed: 0,
+  error_class: null,
+  error_message: null,
 };
 
 function seedRow(overrides: Partial<ReplayJobRow> = {}): ReplayJobRow {
@@ -183,6 +185,8 @@ class InMemoryReplayStore {
           events_planned: 0,
           events_replayed: 0,
           events_failed: 0,
+          error_class: null,
+          error_message: null,
         });
       },
       close: async () => {

@@ -113,6 +113,11 @@ export function isTerminalReplayStatus(status: ReplayJobStatus): boolean {
  * side (CLI surface narrows them to `number` because Polaris v1 caps
  * realistic replay windows well below 2^53 events — see
  * `toRow` for the explicit narrowing).
+ *
+ * The `error_class` / `error_message` columns are stamped by the
+ * executor when it marks a row `failed` (P7-003). The CHECK
+ * `replay_jobs_error_only_when_failed` enforces the columns are NULL
+ * unless `status='failed'`; the typed surface admits NULL accordingly.
  */
 export interface ReplayJobsTable {
   replay_job_id: string;
@@ -146,6 +151,8 @@ export interface ReplayJobsTable {
     bigint | number | string | undefined,
     bigint | number | string
   >;
+  error_class: ColumnType<string | null, string | null | undefined, string | null>;
+  error_message: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 declare module "@polaris/shared-db" {
@@ -180,6 +187,16 @@ export interface ReplayJobRow {
   readonly events_planned: number;
   readonly events_replayed: number;
   readonly events_failed: number;
+  /**
+   * Error class persisted by the executor when it marks a row `failed`
+   * (P7-003). `null` for any non-failed row.
+   */
+  readonly error_class: string | null;
+  /**
+   * Error message persisted by the executor when it marks a row
+   * `failed` (P7-003). `null` for any non-failed row.
+   */
+  readonly error_message: string | null;
 }
 
 /**
@@ -387,6 +404,8 @@ function toRow(row: {
   readonly events_planned: bigint | number | string;
   readonly events_replayed: bigint | number | string;
   readonly events_failed: bigint | number | string;
+  readonly error_class: string | null;
+  readonly error_message: string | null;
 }): ReplayJobRow {
   return {
     replay_job_id: row.replay_job_id,
@@ -408,6 +427,8 @@ function toRow(row: {
     events_planned: toCounter(row.events_planned),
     events_replayed: toCounter(row.events_replayed),
     events_failed: toCounter(row.events_failed),
+    error_class: row.error_class,
+    error_message: row.error_message,
   };
 }
 
@@ -415,4 +436,149 @@ function toCounter(value: bigint | number | string): number {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") return Number(value);
   return Number.parseInt(value, 10);
+}
+
+// ---------------------------------------------------------------------------
+// Executor-owned setters (P7-003)
+// ---------------------------------------------------------------------------
+
+/**
+ * Input accepted by {@link markReplayJobRunning}. The executor calls
+ * this once when it picks up a row; the function transitions
+ * `pending|planning` rows to `running` and stamps `started_at`.
+ */
+export interface MarkReplayJobRunningInput {
+  readonly replay_job_id: string;
+  readonly events_planned: number;
+  readonly started_at: Date;
+}
+
+/**
+ * Transition a `pending` or `planning` replay-job row to `running` and
+ * stamp `started_at` + `events_planned`. Returns the row's post-update
+ * status so the executor can detect a peer setter having flipped it to
+ * `paused` or `cancelled` first.
+ *
+ * Returns `null` when the row no longer exists. The status field is
+ * read from a follow-up SELECT so a no-op UPDATE (the row was already
+ * in `running`/`paused`/`cancelled`) still surfaces the current state.
+ */
+export async function markReplayJobRunning(
+  db: Kysely<Database>,
+  input: MarkReplayJobRunningInput,
+): Promise<ReplayJobRow | null> {
+  await db
+    .updateTable("replay_jobs")
+    .set({
+      status: "running",
+      started_at: input.started_at,
+      events_planned: input.events_planned,
+    })
+    .where("replay_job_id", "=", input.replay_job_id)
+    .where("status", "in", ["pending", "planning"])
+    .executeTakeFirst();
+  return findReplayJobById(db, input.replay_job_id);
+}
+
+/**
+ * Input accepted by {@link recordReplayChunkProgress}. The executor
+ * calls this once per chunk to advance the planner counters.
+ */
+export interface RecordReplayChunkProgressInput {
+  readonly replay_job_id: string;
+  readonly cumulative_emitted: number;
+  readonly cumulative_failed: number;
+  readonly now: Date;
+}
+
+/**
+ * Stamp cumulative emitted / failed counters on a `running` replay job.
+ * The cumulative values are absolute — the caller passes the running
+ * total across all completed chunks — so a re-execution of a chunk does
+ * not double-count.
+ *
+ * Returns the row AFTER the update so the executor can see whether a
+ * peer setter (cancel / pause) raced.
+ */
+export async function recordReplayChunkProgress(
+  db: Kysely<Database>,
+  input: RecordReplayChunkProgressInput,
+): Promise<ReplayJobRow | null> {
+  await db
+    .updateTable("replay_jobs")
+    .set({
+      events_replayed: input.cumulative_emitted,
+      events_failed: input.cumulative_failed,
+    })
+    .where("replay_job_id", "=", input.replay_job_id)
+    .where("status", "=", "running")
+    .executeTakeFirst();
+  // The `now` arg is unused today but kept on the signature so a future
+  // `last_progress_at` column can land without changing the public type.
+  void input.now;
+  return findReplayJobById(db, input.replay_job_id);
+}
+
+export interface CompleteReplayJobInput {
+  readonly replay_job_id: string;
+  readonly events_replayed: number;
+  readonly events_failed: number;
+  readonly finished_at: Date;
+}
+
+/**
+ * Transition a `running` row to `completed` and stamp `finished_at`.
+ * Returns whether the transition fired.
+ */
+export async function completeReplayJob(
+  db: Kysely<Database>,
+  input: CompleteReplayJobInput,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("replay_jobs")
+    .set({
+      status: "completed",
+      finished_at: input.finished_at,
+      events_replayed: input.events_replayed,
+      events_failed: input.events_failed,
+    })
+    .where("replay_job_id", "=", input.replay_job_id)
+    .where("status", "=", "running")
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
+}
+
+export interface FailReplayJobInput {
+  readonly replay_job_id: string;
+  readonly events_replayed: number;
+  readonly events_failed: number;
+  readonly finished_at: Date;
+  readonly error_class: string;
+  readonly error_message: string;
+}
+
+/**
+ * Transition a `running` row to `failed`, stamp `finished_at`, and
+ * persist the error class + message. The CHECK
+ * `replay_jobs_error_only_when_failed` keeps the schema consistent.
+ * Returns whether the transition fired.
+ */
+export async function failReplayJob(
+  db: Kysely<Database>,
+  input: FailReplayJobInput,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("replay_jobs")
+    .set({
+      status: "failed",
+      finished_at: input.finished_at,
+      events_replayed: input.events_replayed,
+      events_failed: input.events_failed,
+      error_class: input.error_class,
+      error_message: input.error_message,
+    })
+    .where("replay_job_id", "=", input.replay_job_id)
+    .where("status", "=", "running")
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
 }
