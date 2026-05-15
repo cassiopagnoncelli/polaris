@@ -40,6 +40,21 @@ export type {
   EventDailyCountsReader,
   ProjectionReaders,
 } from "./projections/index.js";
+export type {
+  ClickHouseHealthProbes,
+  KafkaIngestionLagInput,
+  KafkaIngestionLagRow,
+  MaterializedViewStateRow,
+  MaterializedViewStatesInput,
+  PartsHealthRow,
+  PartsSummaryInput,
+} from "./probes/index.js";
+export {
+  buildKafkaIngestionLagSql,
+  buildMaterializedViewStatesSql,
+  buildPartsSummarySql,
+  createClickHouseHealthProbes,
+} from "./probes/index.js";
 export type { OperatorRaw } from "./raw.js";
 export { ESCAPE_HATCH_METRIC } from "./raw.js";
 // ---------------------------------------------------------------------------

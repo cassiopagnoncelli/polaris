@@ -28,6 +28,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@polaris/shared-clickhouse": "workspace:*",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-kafka": "workspace:*",
     "@polaris/shared-logger": "workspace:*",

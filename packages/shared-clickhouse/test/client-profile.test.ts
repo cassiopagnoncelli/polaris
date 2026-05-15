@@ -59,6 +59,7 @@ describe("createClickHouseClient: role guard", () => {
     expect(client.role).toBe("operator");
     expect(client.replay).toBeDefined();
     expect(client.raw).toBeDefined();
+    expect(client.probes).toBeDefined();
   });
 
   it("refuses to construct without a declared role", () => {
@@ -85,7 +86,7 @@ describe("createClickHouseClient: role guard", () => {
 });
 
 describe("service profile: no analytics_raw surface", () => {
-  it("does not expose `replay` or `raw` namespaces", () => {
+  it("does not expose `replay`, `raw`, or `probes` namespaces", () => {
     const client = createClickHouseClient({
       url: "http://localhost:8123",
       role: "service",
@@ -93,6 +94,7 @@ describe("service profile: no analytics_raw surface", () => {
     });
     expect((client as unknown as Record<string, unknown>).replay).toBeUndefined();
     expect((client as unknown as Record<string, unknown>).raw).toBeUndefined();
+    expect((client as unknown as Record<string, unknown>).probes).toBeUndefined();
   });
 
   it("never queries analytics_raw across all service-profile readers", async () => {
@@ -308,6 +310,95 @@ describe("operator profile: escape hatch is observable", () => {
         },
       ),
     ).rejects.toBeInstanceOf(ClickHouseEscapeHatchUnauthorizedError);
+  });
+});
+
+describe("operator profile: ClickHouse health probes", () => {
+  it("partsSummary issues a system.parts query and decodes rows", async () => {
+    setQueryRows([
+      { database: "polaris", table: "analytics_raw", parts: 142, bytes_on_disk: "987654321" },
+      { database: "polaris", table: "event_daily_counts", parts: 7, bytes_on_disk: "1234" },
+    ]);
+
+    const client = createClickHouseClient({
+      url: "http://localhost:8123",
+      role: "operator",
+      credential: { username: "polaris_operator", password: "p" },
+    });
+
+    const rows = await client.probes.partsSummary();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    const sql = String(queryMock.mock.calls[0]?.[0].query);
+    expect(sql).toMatch(/FROM\s+system\.parts/);
+    expect(rows).toEqual([
+      { database: "polaris", table: "analytics_raw", parts: 142, bytes_on_disk: "987654321" },
+      { database: "polaris", table: "event_daily_counts", parts: 7, bytes_on_disk: "1234" },
+    ]);
+  });
+
+  it("materializedViewStates issues a system.view_refreshes query and decodes rows", async () => {
+    setQueryRows([
+      { database: "polaris", view: "mv_raw_to_event_daily_counts", state: "Running", last_exception: "" },
+      { database: "polaris", view: "mv_broken", state: "failed", last_exception: "Cannot insert" },
+    ]);
+
+    const client = createClickHouseClient({
+      url: "http://localhost:8123",
+      role: "operator",
+      credential: { username: "polaris_operator", password: "p" },
+    });
+
+    const rows = await client.probes.materializedViewStates();
+    const sql = String(queryMock.mock.calls[0]?.[0].query);
+    expect(sql).toMatch(/FROM\s+system\.view_refreshes/);
+    expect(rows).toEqual([
+      {
+        database: "polaris",
+        view: "mv_raw_to_event_daily_counts",
+        state: "Running",
+        last_exception: "",
+      },
+      {
+        database: "polaris",
+        view: "mv_broken",
+        state: "failed",
+        last_exception: "Cannot insert",
+      },
+    ]);
+  });
+
+  it("kafkaIngestionLag issues a system.kafka_consumers query and decodes rows", async () => {
+    setQueryRows([
+      {
+        database: "polaris",
+        table: "analytics_events_queue",
+        lag_seconds: 7,
+        is_currently_used: 1,
+        last_exception: "",
+      },
+    ]);
+
+    const client = createClickHouseClient({
+      url: "http://localhost:8123",
+      role: "operator",
+      credential: { username: "polaris_operator", password: "p" },
+    });
+
+    const rows = await client.probes.kafkaIngestionLag();
+    const sql = String(queryMock.mock.calls[0]?.[0].query);
+    expect(sql).toMatch(/FROM\s+system\.kafka_consumers/);
+    expect(rows[0]?.lag_seconds).toBe(7);
+    expect(rows[0]?.table).toBe("analytics_events_queue");
+  });
+
+  it("rejects an out-of-range limit", async () => {
+    const client = createClickHouseClient({
+      url: "http://localhost:8123",
+      role: "operator",
+      credential: { username: "polaris_operator", password: "p" },
+    });
+    await expect(client.probes.partsSummary({ limit: 0 })).rejects.toThrow(/limit must be an integer/);
+    await expect(client.probes.partsSummary({ limit: 10_001 })).rejects.toThrow(/limit must be an integer/);
   });
 });
 

@@ -22,6 +22,7 @@ import {
 import { ClickHouseConfigError, ClickHouseConnectionError } from "./errors.js";
 import { createHealthChecker, type HealthChecker } from "./health.js";
 import { createIngestLogReader, type IngestLogReader } from "./ingest-log.js";
+import { createClickHouseHealthProbes, type ClickHouseHealthProbes } from "./probes/index.js";
 import { createProjectionReaders, type ProjectionReaders } from "./projections/index.js";
 import { createOperatorRaw, type OperatorRaw } from "./raw.js";
 import { createReplayReader, type ReplayReader } from "./replay.js";
@@ -51,6 +52,14 @@ export interface ClickHouseOperatorClient {
   readonly health: HealthChecker;
   readonly replay: ReplayReader;
   readonly raw: OperatorRaw;
+  /**
+   * Typed probes for `system.parts`, `system.materialized_views`, and
+   * `system.kafka_consumers`. Operator-scoped because `system.*` reads
+   * require the broader `polaris_operator` grants; the v1 dashboards/alerts
+   * surface these signals through the analytics-projector's
+   * proxy-via-canonical-consumer pattern (`docs/operations/dashboards.md`).
+   */
+  readonly probes: ClickHouseHealthProbes;
   close(): Promise<void>;
 }
 
@@ -199,13 +208,16 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
   }
 
   // Operator profile. The replay namespace generates argMax SQL; the raw
-  // namespace is the audited escape hatch.
+  // namespace is the audited escape hatch; the probes namespace exposes
+  // typed wrappers over `system.*` views for canonical-consumer
+  // dashboard/alert proxying.
   const replay = createReplayReader({ underlying });
   const raw = createOperatorRaw({
     underlying,
     ...(logger ? { logger } : {}),
     ...(options.metrics ? { metrics: options.metrics } : {}),
   });
+  const probes = createClickHouseHealthProbes({ underlying });
 
   const operator: ClickHouseOperatorClient = {
     role: "operator",
@@ -214,6 +226,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
     health,
     replay,
     raw,
+    probes,
     close,
   };
   return operator;
