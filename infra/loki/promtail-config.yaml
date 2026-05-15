@@ -1,0 +1,211 @@
+# Polaris local Promtail configuration.
+#
+# Mounted read-only into the `promtail` container by
+# docker-compose.observability.yml. Promtail tails the Docker engine
+# socket, picks up every Polaris container's stdout/stderr, parses the
+# Pino JSON envelope emitted by `@polaris/shared-logger`, and pushes
+# the lines into the local single-binary Loki.
+#
+# Why promtail (not the OTel collector log path) for v1 local dev:
+#
+#   - Polaris services emit Pino JSON to stdout. The OTel collector's
+#     `loki` exporter (in infra/otel/collector.yaml) sits on the OTLP
+#     ingress — it requires services to push logs as OTLP records.
+#     Today services do not; they write JSON to a file descriptor.
+#   - Promtail with Docker service discovery tails the container's
+#     stdout via the Docker engine. That is the cheapest possible
+#     adapter for the existing logger contract: zero application
+#     changes, zero per-service config, just a docker.sock mount.
+#   - A future task can flip the path to OTLP push (an in-process
+#     pino-otel transport) without touching this file — promtail can
+#     coexist or be retired then.
+#
+# Label cardinality posture:
+#
+#   Only `service`, `env`, `level`, `project_id` are promoted to Loki
+#   stream labels. Everything else stays inside the log line and is
+#   filterable with LogQL grep (`|=`, `| json`, `| __error__=""`),
+#   not via the index. This is intentional:
+#
+#     * `event_id`, `request_id`, `trace_id`, `offset`, `partition`,
+#       `processor_run_id`, `replay_job_id` — high or unbounded
+#       cardinality. As Loki labels they would explode the index.
+#     * `source_id`, `processor_name`, `consumer_name`,
+#       `destination_id` — bounded but not needed for stream-level
+#       routing. Keep them as line content.
+#
+#   The four chosen labels match what Polaris dashboards already key
+#   off in Prometheus (see infra/prometheus/prometheus.yml and the
+#   P10-003 dashboards under infra/grafana/dashboards/), so a
+#   metric→log pivot in Grafana works without label translation.
+#
+# Redaction posture:
+#
+#   Promtail does NOT redact. Redaction is owned by the application
+#   logger via `packages/shared-logger/src/redaction.ts`
+#   (`DEFAULT_REDACTION_PATHS`). Loki sees what the logger emits.
+#   Do not add Loki-side `replace` stages as a substitute for in-app
+#   redaction — they would be a silent second copy of the policy that
+#   drifts from the source.
+#
+# See:
+#   docs/operations/logging.md                                  operator guide
+#   docs/architecture/08-observability-and-operations.md        logging posture
+#   docs/architecture/09-engineering-standards.md               pino + redaction
+#   packages/shared-logger/src/redaction.ts                     redaction list
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+# Positions file persists the last byte offset promtail has read per
+# container so a restart does not re-ingest. Lives on the named
+# volume mounted at /var/lib/promtail.
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    # Local Loki has no tenant separation; the X-Scope-OrgID is fixed
+    # to match Loki's `auth_enabled: false` posture.
+    tenant_id: polaris-local
+    # Modest backoff so a restarted Loki doesn't get hammered.
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+    batchwait: 1s
+    batchsize: 1048576
+
+scrape_configs:
+  # ---------------------------------------------------------------
+  # Docker service discovery. Promtail polls the Docker engine for
+  # running containers and tails each one's stdout/stderr stream.
+  # We filter to Polaris containers only — the docker-compose
+  # `name: polaris` project name puts every container under the
+  # `com.docker.compose.project=polaris` label.
+  # ---------------------------------------------------------------
+  - job_name: polaris-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        # Discover only containers in the `polaris` compose project.
+        # `refresh_interval` controls how quickly newly-started
+        # containers show up; 5s is fine for local dev.
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=polaris"]
+
+    relabel_configs:
+      # The compose service name (`ingester-api`, `analytics-projector`,
+      # `redpanda`, ...) becomes the `service` label. This matches the
+      # `service` binding emitted by @polaris/shared-logger so logs
+      # from JSON-aware services line up with logs from infrastructure
+      # containers (redpanda, postgres, clickhouse) that don't emit
+      # Pino JSON.
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+
+      # Container name kept as a non-indexed structured metadata-like
+      # field via the line itself; not promoted to a label to keep
+      # cardinality bounded.
+      - source_labels: ["__meta_docker_container_name"]
+        target_label: container
+
+      # Stream (stdout vs stderr) is useful for separating fatal
+      # crash output from regular logs, and it is bounded (two
+      # values) so it is cheap as a label.
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+
+      # Fixed env label. Local-dev value; real deployments override
+      # via promtail's `-config.expand-env=true` mode plus
+      # ${POLARIS_ENV}. Matches the `env` binding in the application
+      # logger output.
+      - target_label: env
+        replacement: local
+
+    pipeline_stages:
+      # ---------------------------------------------------------
+      # Docker engine wraps each line as
+      #   {"log":"<original-line>","stream":"stdout","time":"..."}
+      # Strip that wrapper so downstream stages see the raw
+      # service log line (the Pino JSON envelope, or whatever the
+      # infra container emitted).
+      # ---------------------------------------------------------
+      - docker: {}
+
+      # ---------------------------------------------------------
+      # Try to parse the unwrapped line as Pino JSON. Fields we
+      # care about for stream routing get extracted; if the line
+      # is not JSON (e.g. Redpanda's plaintext startup log,
+      # Postgres' default logger), the json stage records an
+      # error in `__error__` and downstream stages skip cleanly.
+      # ---------------------------------------------------------
+      - json:
+          expressions:
+            level: level
+            time: time
+            message: message
+            # `service` from the log body would clobber the
+            # relabel-configured `service` label from the
+            # container's compose-service name. Keep them
+            # aligned: the logger emits `service` and the
+            # container is named after the same service, so
+            # one source of truth is fine.
+            log_service: service
+            log_env: env
+            project_id: project_id
+
+      # ---------------------------------------------------------
+      # Use the Pino `time` ISO-8601 UTC timestamp as the Loki
+      # entry timestamp when present. Falls back to the docker
+      # engine timestamp for non-JSON lines.
+      # ---------------------------------------------------------
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+          action_on_failure: skip
+
+      # ---------------------------------------------------------
+      # Promote ONLY the small, bounded fields to Loki labels.
+      #
+      #   - level      bounded set (fatal/error/warn/info/debug/trace)
+      #   - project_id bounded by the project list — empty for
+      #                infra logs and for logs emitted before a
+      #                request enters project scope. Loki tolerates
+      #                empty values as a single "no-project" stream.
+      #
+      # The `service` and `env` labels come from relabel_configs
+      # above (container metadata), not from this pipeline,
+      # because non-JSON infra containers still need them.
+      # ---------------------------------------------------------
+      - labels:
+          level:
+          project_id:
+
+      # ---------------------------------------------------------
+      # Hand the original (unwrapped) line to Loki. We do NOT
+      # collapse it to just `message` because operators routinely
+      # want to grep `event_id`, `request_id`, `processor_name`,
+      # etc. out of the body via `| json` in LogQL.
+      # ---------------------------------------------------------
+      - output:
+          source: ""
+
+  # ---------------------------------------------------------------
+  # Promtail's own stdout. Tailing itself is the operator's only
+  # signal when the ingest path silently breaks (e.g. malformed
+  # JSON spamming __error__). The promtail container labels itself
+  # so it's discoverable with `{service="promtail"}` in Grafana.
+  # ---------------------------------------------------------------
+  - job_name: promtail-self
+    static_configs:
+      - targets: [localhost]
+        labels:
+          service: promtail
+          env: local
+          __path__: /var/log/promtail/*.log

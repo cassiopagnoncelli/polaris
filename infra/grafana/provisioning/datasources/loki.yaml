@@ -1,0 +1,79 @@
+# Grafana Loki datasource provisioning.
+#
+# Owned by P10-004 (Loki Logging Pipeline). Lives in its own file so
+# changes to the Loki ingest path (label set, derived-field links,
+# trace-correlation wiring) do not collide with the Prometheus
+# datasource owned by P10-001.
+#
+# Grafana reads every *.yml under /etc/grafana/provisioning/datasources/
+# at start and reconciles datasources by name. The Loki datasource
+# defined here corresponds to the local single-binary Loki started
+# by docker-compose.observability.yml; production wires a separate
+# datasource against the distributed Loki deployment.
+#
+# Label posture (must match infra/loki/promtail-config.yaml):
+#
+#   service, env, level, project_id  -> Loki labels (low cardinality)
+#   event_id, request_id, trace_id,
+#   offset, partition, processor_*,
+#   consumer_*, replay_job_id,
+#   destination_id, source_id        -> in log line body, queried with
+#                                       LogQL `| json` extraction
+#
+# Operator examples and LogQL recipes live in
+# docs/operations/logging.md.
+
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: polaris-loki
+    access: proxy
+    # Compose-network DNS — `loki` is the container_name of the
+    # single-binary Loki service in docker-compose.observability.yml.
+    url: http://loki:3100
+    # Local Loki has no tenant separation; the X-Scope-OrgID header
+    # promtail sends matches this fixed value. Both sides must agree
+    # or Loki rejects the push.
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+      maxLines: 1000
+      # Derived fields pull structured identifiers out of the JSON
+      # log body and surface them as one-click chips in the Grafana
+      # log details panel. We DO NOT expose them as labels (would
+      # blow up cardinality); we extract them at query time from the
+      # raw log line.
+      #
+      # Each entry pairs:
+      #   - matcherRegex: regex applied to the raw log line
+      #   - name:         what shows up in the Grafana UI
+      #   - url:          target URL when the operator clicks the chip
+      #                   (Grafana supports ${__value.raw} interpolation)
+      #
+      # `internalLink: false` keeps these as plain text chips — no
+      # cross-datasource trace lookup until a Tempo/Jaeger task lands.
+      derivedFields:
+        - matcherRegex: '"event_id"\s*:\s*"([0-9a-f-]+)"'
+          name: event_id
+          url: ""
+          internalLink: false
+        - matcherRegex: '"request_id"\s*:\s*"([0-9a-f-]+)"'
+          name: request_id
+          url: ""
+          internalLink: false
+        - matcherRegex: '"replay_job_id"\s*:\s*"([0-9a-f-]+)"'
+          name: replay_job_id
+          url: ""
+          internalLink: false
+        - matcherRegex: '"processor_name"\s*:\s*"([A-Za-z0-9_-]+)"'
+          name: processor_name
+          url: ""
+          internalLink: false
+        - matcherRegex: '"consumer_name"\s*:\s*"([A-Za-z0-9_-]+)"'
+          name: consumer_name
+          url: ""
+          internalLink: false
+    secureJsonData:
+      httpHeaderValue1: polaris-local
+    editable: false

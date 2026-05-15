@@ -15,6 +15,10 @@
 #                      credentials are local-only; production uses an SSO
 #                      frontproxy. See docs/development/observability.md.
 #   - loki             Single-binary log store. 7d local retention.
+#   - promtail         Tails Docker container stdout (Pino JSON from
+#                      Polaris services + plaintext from infra containers)
+#                      via Docker SD and pushes to Loki. Owned by P10-004;
+#                      see docs/operations/logging.md.
 #   - otel-collector   OpenTelemetry Collector. Receives OTLP from Polaris
 #                      services, forwards metrics to Prometheus via
 #                      remote-write, logs to Loki. Traces exporter is a
@@ -27,8 +31,9 @@
 #               services (Prometheus scrape targets become live).
 #   * P10-003 — Grafana dashboards (JSON files dropped into
 #               infra/grafana/dashboards/).
-#   * P10-004 — Loki ingest pipeline (Pino JSON → Loki labels via the
-#               OTel collector or promtail).
+#   * P10-004 — Loki ingest pipeline (Pino JSON → Loki labels via
+#               promtail Docker SD). See infra/loki/promtail-config.yaml
+#               and docs/operations/logging.md.
 #   * P10-005 — alerts + incident runbooks (Prometheus alerting rules,
 #               Alertmanager wiring).
 #
@@ -48,6 +53,7 @@
 #   Prometheus       http://localhost:9090
 #   Grafana          http://localhost:3000   (admin/admin, local-only)
 #   Loki             http://localhost:3100
+#   Promtail         http://localhost:9080   (status / targets)
 #   OTLP gRPC        localhost:4317
 #   OTLP HTTP        http://localhost:4318
 #
@@ -163,6 +169,50 @@ services:
     networks:
       - polaris
 
+  promtail:
+    # Tails Docker container stdout (Pino JSON for Polaris services,
+    # plaintext for redpanda/postgres/redis/clickhouse) via Docker
+    # service discovery and pushes to Loki. The application logger
+    # keeps writing JSON to stdout exactly as before — Loki ingest is
+    # an out-of-band tail, so no Polaris service depends on promtail
+    # or loki being up to start.
+    #
+    # The config in infra/loki/promtail-config.yaml documents the
+    # label-cardinality posture: only `service`, `env`, `level`,
+    # `project_id` are promoted to Loki labels. Everything else
+    # (`event_id`, `request_id`, `processor_name`, ...) stays in the
+    # log line body and is queryable via LogQL `| json` extraction.
+    #
+    # See:
+    #   docs/operations/logging.md          operator guide + example LogQL
+    #   docs/architecture/08-observability-and-operations.md
+    image: grafana/promtail:3.3.0
+    container_name: polaris-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    ports:
+      - "${PROMTAIL_HOST_PORT:-9080}:9080"
+    volumes:
+      - ./infra/loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      # Docker engine socket for container discovery + log tail.
+      # Read-only mount: promtail only reads container metadata and
+      # log streams, it never issues mutating engine calls.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Positions file lives on a named volume so a promtail restart
+      # does not re-ingest already-shipped lines.
+      - promtail-data:/var/lib/promtail
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9080/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    networks:
+      - polaris
+
   otel-collector:
     # OpenTelemetry Collector (contrib build for the lokiexporter +
     # prometheusremotewrite exporters). Receives OTLP from Polaris
@@ -202,6 +252,7 @@ volumes:
   prometheus-data:
   grafana-data:
   loki-data:
+  promtail-data:
 
 networks:
   polaris:
