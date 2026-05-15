@@ -99,6 +99,9 @@ export async function buildBrazeApp(options: BuildAppOptions): Promise<BuiltBraz
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
   const consumerLogger = logger.child({
     component: "braze.runtime",
@@ -218,6 +221,9 @@ export async function buildBrazeApp(options: BuildAppOptions): Promise<BuiltBraz
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger: consumerLogger,
     fastify: {
