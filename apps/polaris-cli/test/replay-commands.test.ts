@@ -18,16 +18,10 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-
-import {
-  REPLAY_JOB_MODES,
-  REPLAY_JOB_STATUSES,
-  REPLAY_JOB_TARGETS,
-} from "../src/db/replay-jobs.js";
 import {
   replayCancelCommand,
   replayCommand,
@@ -43,6 +37,11 @@ import {
   FORBIDDEN_REPLAY_PLAN_FLAG_TOKENS,
   rejectReplayPlanArguments,
 } from "../src/commands/replay/validation.js";
+import {
+  REPLAY_JOB_MODES,
+  REPLAY_JOB_STATUSES,
+  REPLAY_JOB_TARGETS,
+} from "../src/db/replay-jobs.js";
 import { UsageError } from "../src/errors.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

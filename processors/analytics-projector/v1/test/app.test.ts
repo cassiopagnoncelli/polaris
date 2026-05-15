@@ -11,9 +11,8 @@
  *   - shutdown tasks tear the runtime down deterministically.
  */
 
-import { describe, expect, it, vi } from "vitest";
-
 import type { PolarisConsumer, PolarisProducer, PublishEventInput } from "@polaris/shared-kafka";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildAnalyticsProjectorApp } from "../src/app.js";
 import type { AnalyticsProjectorRuntimeConfig } from "../src/config.js";

@@ -31,15 +31,15 @@
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 
-import type { EachMessagePayload, RecordMetadata } from "kafkajs";
 import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-kafka";
+import type { EachMessagePayload, RecordMetadata } from "kafkajs";
 
 import {
   type DeliveryRecordErrorClass,
   isDeliveryRecordErrorClass,
 } from "./db/delivery-records.js";
-import type { DlqRecord, DlqRecordRepository } from "./db/dlq-records.js";
 import type { DestinationInstance } from "./db/destination-instance.js";
+import type { DlqRecord, DlqRecordRepository } from "./db/dlq-records.js";
 import type { ConsumerIdentity, NormalizableEnvelope } from "./types.js";
 
 /**

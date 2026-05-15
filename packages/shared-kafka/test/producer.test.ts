@@ -1,14 +1,13 @@
 import type { Kafka, Producer, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
-
-import { createPolarisProducer } from "../src/producer.js";
-import { sharedOnlyIsolationLookup, staticIsolationLookup } from "../src/topic-family.js";
-import { TOPIC_FAMILY_RAW_EVENTS } from "../src/topics.js";
 import {
   POLARIS_HEADER_EVENT_ID,
   POLARIS_HEADER_PRODUCER,
   POLARIS_HEADER_TOPIC_FAMILY,
 } from "../src/headers.js";
+import { createPolarisProducer } from "../src/producer.js";
+import { sharedOnlyIsolationLookup, staticIsolationLookup } from "../src/topic-family.js";
+import { TOPIC_FAMILY_RAW_EVENTS } from "../src/topics.js";
 
 function fakeProducer(): { producer: Producer; sent: ProducerRecord[] } {
   const sent: ProducerRecord[] = [];

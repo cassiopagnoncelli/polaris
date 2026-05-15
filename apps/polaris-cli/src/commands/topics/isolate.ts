@@ -45,7 +45,7 @@ import {
   connectDb,
   insertAuditRecord,
 } from "../../db/index.js";
-import { insertTopicIsolation, type InsertTopicIsolationInput } from "../../db/topic-isolations.js";
+import { type InsertTopicIsolationInput, insertTopicIsolation } from "../../db/topic-isolations.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 

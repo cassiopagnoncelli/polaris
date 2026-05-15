@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { ExitCode } from "../errors.js";
 /**
  * `polaris` binary entry point.
  *
@@ -15,7 +16,6 @@
  * resolved, so the process still terminates cleanly.
  */
 import { run } from "../program.js";
-import { ExitCode } from "../errors.js";
 
 // Pino flush helper: gives the logger a chance to drain to stderr before the
 // process exits. Pino is synchronous by default, so this is effectively a

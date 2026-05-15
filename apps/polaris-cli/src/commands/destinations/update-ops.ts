@@ -30,12 +30,12 @@ import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   type AuditEnvironment,
-  type DestinationRow,
   connectDb,
+  type DestinationRow,
   findDestinationById,
   insertAuditRecord,
-  updateDestinationOps,
   type UpdateDestinationOpsInput,
+  updateDestinationOps,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

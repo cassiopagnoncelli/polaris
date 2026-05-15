@@ -35,9 +35,9 @@ import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
+  type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
-  type BootstrappedService,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
@@ -45,8 +45,8 @@ import {
 import type { GeoipEnricherRuntimeConfig } from "./config.js";
 import type { IPLookup } from "./lookup.js";
 import { NoOpIPLookup } from "./lookup.js";
-import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 import { createRuntime, type GeoipEnricherRuntime } from "./runtime.js";
+import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 
 /**
  * Options accepted by `buildGeoipEnricherApp`.

@@ -47,23 +47,23 @@
  * stamped onto delivery records.
  */
 
-import type { EachMessagePayload } from "kafkajs";
-
-import {
-  decodeEvent,
-  type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisProducer,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  consumerTopicsForFamily,
-} from "@polaris/shared-kafka";
-import type { Logger } from "@polaris/shared-logger";
 import {
   type NormalizableEnvelope,
   type NormalizedEvent,
   normalizeForDestination,
 } from "@polaris/shared-destination-normalize";
+
+import {
+  consumerTopicsForFamily,
+  decodeEvent,
+  type PolarisConsumer,
+  type PolarisEachMessageHandler,
+  type PolarisProducer,
+  TOPIC_FAMILY_ANALYTICS_EVENTS,
+} from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
 import type { SecretResolver } from "@polaris/shared-secrets";
+import type { EachMessagePayload } from "kafkajs";
 
 import {
   type DeliveryRecord,
@@ -72,13 +72,13 @@ import {
   type DeliveryRecordStatus,
   truncateSummary,
 } from "./db/delivery-records.js";
-import type { DlqRecordRepository } from "./db/dlq-records.js";
 import type { DestinationInstance, DestinationInstanceReader } from "./db/destination-instance.js";
+import type { DlqRecordRepository } from "./db/dlq-records.js";
+import { type DestinationDedupe, InMemoryDestinationDedupe } from "./dedupe.js";
 import { publishToDestinationDlq } from "./dlq.js";
+import { buildDeliveryKey } from "./idempotency.js";
 import { DestinationMetrics } from "./metrics.js";
 import { DestinationRateLimiter } from "./rate-limiter.js";
-import { buildDeliveryKey } from "./idempotency.js";
-import { InMemoryDestinationDedupe, type DestinationDedupe } from "./dedupe.js";
 import { applyReplayPolicy, readReplayContext } from "./replay-suppression.js";
 import type {
   ConsumerIdentity,

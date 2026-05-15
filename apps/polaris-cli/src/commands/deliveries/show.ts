@@ -8,12 +8,12 @@
  *
  * `mutates: false`: bypasses the production gate from P6-007.
  */
-import type { Command } from "commander";
 
 import {
-  type DeliveryRecord,
   createKyselyDeliveryRecordRepository,
+  type DeliveryRecord,
 } from "@polaris/shared-destinations";
+import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb } from "../../db/index.js";

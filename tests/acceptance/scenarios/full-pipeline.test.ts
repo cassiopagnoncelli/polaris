@@ -29,9 +29,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
-  runAcceptanceScenario,
   type AcceptanceStepResult,
   type AcceptanceVerdict,
+  runAcceptanceScenario,
 } from "../lib/scenario.mjs";
 
 // Generous wall-clock cap: the per-step polls inside the scenario are

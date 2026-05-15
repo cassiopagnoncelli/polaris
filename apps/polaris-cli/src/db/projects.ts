@@ -10,8 +10,8 @@
  */
 import type { Database, Environment } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
-import type { ProjectFile, SourceFile } from "../catalog/types.js";
 import type { ProjectRow, SourceRow } from "../catalog/sync.js";
+import type { ProjectFile, SourceFile } from "../catalog/types.js";
 
 export async function fetchAllProjects(db: Kysely<Database>): Promise<ProjectRow[]> {
   const rows = await db

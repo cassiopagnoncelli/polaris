@@ -7,11 +7,12 @@
  * operators can inspect declarations on a fresh laptop before any sync has
  * happened.
  */
-import type { CommandContext, CommandDefinition } from "../../command.js";
-import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
+
 import type { ProjectFile } from "../../catalog/index.js";
-import { connectDb, fetchAllProjects } from "../../db/index.js";
+import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
 import type { ProjectRow } from "../../catalog/sync.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
+import { connectDb, fetchAllProjects } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 
 interface ProjectsListArgs {

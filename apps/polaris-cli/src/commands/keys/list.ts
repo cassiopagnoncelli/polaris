@@ -16,7 +16,7 @@
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { connectDb, listApiKeysByProjectEnv, type ApiKeyRow } from "../../db/index.js";
+import { type ApiKeyRow, connectDb, listApiKeysByProjectEnv } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 

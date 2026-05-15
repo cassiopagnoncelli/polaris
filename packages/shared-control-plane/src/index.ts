@@ -32,27 +32,9 @@
 export {
   ACTOR_SOURCES,
   type ActorSource,
-  type ResolvedActor,
   isActorSource,
+  type ResolvedActor,
 } from "./actor.js";
-
-export {
-  formatOperatorToken,
-  OPERATOR_TOKEN_ID_PREFIX,
-  OPERATOR_TOKEN_SEPARATOR,
-  parseOperatorToken,
-  type ParsedOperatorToken,
-} from "./token-format.js";
-
-export {
-  CLI_FALLBACK_LABEL,
-  OPERATOR_TOKEN_ENV_VAR,
-  type OperatorTokenRepository,
-  type OperatorTokenRow,
-  type ResolveActorOptions,
-  resolveActor,
-} from "./resolver.js";
-
 export {
   enforceProductionMutationGate,
   GATE_ENVIRONMENTS,
@@ -64,3 +46,19 @@ export {
   type ProductionGateDeniedReason,
   ProductionMutationRefusedError,
 } from "./gate.js";
+
+export {
+  CLI_FALLBACK_LABEL,
+  OPERATOR_TOKEN_ENV_VAR,
+  type OperatorTokenRepository,
+  type OperatorTokenRow,
+  type ResolveActorOptions,
+  resolveActor,
+} from "./resolver.js";
+export {
+  formatOperatorToken,
+  OPERATOR_TOKEN_ID_PREFIX,
+  OPERATOR_TOKEN_SEPARATOR,
+  type ParsedOperatorToken,
+  parseOperatorToken,
+} from "./token-format.js";

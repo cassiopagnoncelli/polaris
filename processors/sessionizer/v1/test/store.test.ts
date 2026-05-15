@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { InMemorySessionStore, buildContinuedRecord, buildOpenedRecord } from "../src/store.js";
+import { buildContinuedRecord, buildOpenedRecord, InMemorySessionStore } from "../src/store.js";
 import type { SessionRecord } from "../src/transform.js";
 
 function makeRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {

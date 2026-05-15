@@ -12,14 +12,13 @@
  *     route registered only in this test)
  */
 
+import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
 import { describe, expect, it } from "vitest";
 
-import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
-
 import { buildControlPlaneApp } from "../src/app.js";
-import type { ControlPlaneConfig } from "../src/config.js";
-import { InMemoryAuditRecorder, type AuditRecorder } from "../src/audit/recorder.js";
+import { type AuditRecorder, InMemoryAuditRecorder } from "../src/audit/recorder.js";
 import { createMutationGatePreHandler } from "../src/auth/gate.js";
+import type { ControlPlaneConfig } from "../src/config.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures

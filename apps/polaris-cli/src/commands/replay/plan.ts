@@ -28,17 +28,18 @@
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
-import type { Command } from "commander";
+
 import {
-  planReplay,
   type PlanReplayOptions,
+  planReplay,
   type ReplayJobDeclaration,
   type ReplayPlan,
   ReplayPlanError,
   renderPlanHuman,
 } from "@polaris/shared-replay";
+import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { type ReplayJobRow, connectDb, findReplayJobById } from "../../db/index.js";
+import { connectDb, findReplayJobById, type ReplayJobRow } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
 import { rejectReplayPlanArguments } from "./validation.js";

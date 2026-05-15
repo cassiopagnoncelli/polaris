@@ -11,32 +11,32 @@
  */
 
 export {
-  buildGeoipEnricherApp,
   type BuildAppOptions,
   type BuiltGeoipEnricherApp,
+  buildGeoipEnricherApp,
 } from "./app.js";
 export {
-  PROCESSOR_SERVICE_NAME,
+  type GeoipEnricherConfig,
+  type GeoipEnricherRuntimeConfig,
   geoipEnricherConfigSchema,
   geoipEnricherEnvKeys,
   geoipEnricherEnvSchema,
   loadGeoipEnricherConfig,
-  type GeoipEnricherConfig,
-  type GeoipEnricherRuntimeConfig,
+  PROCESSOR_SERVICE_NAME,
 } from "./config.js";
 export {
-  buildGeoipEnvelope,
   type BuildGeoipEnvelopeOptions,
+  buildGeoipEnvelope,
   type GeoipEnvelope,
   type GeoipEventName,
 } from "./emit.js";
 export { hashIp, parseIp } from "./ip.js";
 export {
   fromFixture,
-  InMemoryIPLookup,
-  NoOpIPLookup,
   type GeoResult,
+  InMemoryIPLookup,
   type IPLookup,
+  NoOpIPLookup,
 } from "./lookup.js";
 export {
   createRuntime,
@@ -44,14 +44,14 @@ export {
   type GeoipEnricherRuntimeDeps,
 } from "./runtime.js";
 export {
+  decideEnrichment,
+  decisionToProperties,
+  type EnrichmentDecision,
   PROCESSOR_IDENTITY,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
   SOURCE_NO_IP,
   SOURCE_NO_LOOKUP,
-  decideEnrichment,
-  decisionToProperties,
-  type EnrichmentDecision,
 } from "./transform.js";
 export type {
   RawEventContext,

@@ -31,29 +31,32 @@
  * streaming runtime here.
  */
 
-import type { Logger } from "@polaris/shared-logger";
 import {
+  buildRawEventsPartitionKey,
+  consumerTopicsForFamily,
+  decodeEvent,
   type PolarisConsumer,
   type PolarisEachMessageHandler,
   type PolarisMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
-  decodeEvent,
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_ANALYTICS_EVENTS,
   TOPIC_FAMILY_RAW_EVENTS,
-  consumerTopicsForFamily,
 } from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
 import {
-  type ProcessorMetricLabels,
-  type ProcessorRetryClassification,
-  ProcessorMetrics,
   classifyError,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+  type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
-
-import { type RawEventEnvelope, transformToAnalyticsEvent } from "./transform.js";
-import { PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
+import {
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
+  type RawEventEnvelope,
+  transformToAnalyticsEvent,
+} from "./transform.js";
 
 /**
  * Dependencies for the runtime. The factory accepts already-built

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Polaris product-acceptance runner — P12-003.
 //
 // Operator entry point invoked as `pnpm test:acceptance`. Wraps the
@@ -28,10 +29,10 @@
 // @see tests/acceptance/scenarios/full-pipeline.test.ts
 // @see docs/release/acceptance-test-runbook.md
 
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 
 import { readRepoVersion, resolveRepoArtifacts } from "../tests/acceptance/lib/scenario.mjs";
 

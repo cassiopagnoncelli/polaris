@@ -9,11 +9,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DEFAULT_INACTIVITY_SECONDS,
-  PRIMARY_IDENTIFIER_KINDS,
   buildSessionStoreKey,
+  DEFAULT_INACTIVITY_SECONDS,
   decideSession,
   deriveSessionId,
+  PRIMARY_IDENTIFIER_KINDS,
   resolvePrimaryIdentifier,
   type SessionRecord,
 } from "../src/transform.js";

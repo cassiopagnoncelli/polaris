@@ -8,9 +8,12 @@
  * sufficient and faster than running the full normalize pipeline per test.
  */
 
-import type { DelivererContext, MapperContext } from "@polaris/shared-destinations";
-import type { DestinationInstance } from "@polaris/shared-destinations";
 import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
+import type {
+  DelivererContext,
+  DestinationInstance,
+  MapperContext,
+} from "@polaris/shared-destinations";
 
 import type { WebhookPayload } from "../../src/types.js";
 

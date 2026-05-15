@@ -34,9 +34,7 @@ import { readFile } from "node:fs/promises";
  * Minimal fetch surface this module depends on. Mirrors the global
  * `fetch`/`Response` shape; tests inject a stub.
  */
-export interface VaultHttp {
-  (input: string, init: VaultHttpInit): Promise<VaultHttpResponse>;
-}
+export type VaultHttp = (input: string, init: VaultHttpInit) => Promise<VaultHttpResponse>;
 
 export interface VaultHttpInit {
   readonly method: "GET" | "POST" | "PUT" | "DELETE";

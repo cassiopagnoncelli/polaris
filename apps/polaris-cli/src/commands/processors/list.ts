@@ -15,16 +15,17 @@
  *
  * `mutates: false`: bypasses the production gate from P6-007.
  */
-import type { CommandContext, CommandDefinition } from "../../command.js";
+
 import {
   type DiscoveredProcessorManifest,
+  loadProcessorManifests,
   type ProcessorManifest,
   type ProcessorManifestScan,
   type ProcessorManifestWarning,
-  loadProcessorManifests,
   resolveCatalogRoot,
 } from "../../catalog/index.js";
-import { type ProcessorActivationRow, connectDb, listAllActivations } from "../../db/index.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
+import { connectDb, listAllActivations, type ProcessorActivationRow } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 import { rejectProcessorRuleArguments } from "./validation.js";
 

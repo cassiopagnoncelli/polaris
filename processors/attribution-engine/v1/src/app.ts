@@ -30,17 +30,17 @@ import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
+  type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
-  type BootstrappedService,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
+import { type AttributionEngineRuntime, createRuntime } from "./runtime.js";
 import { InMemoryTouchpointStore, type TouchpointStore } from "./store.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
-import { createRuntime, type AttributionEngineRuntime } from "./runtime.js";
 
 export interface BuildAppOptions {
   readonly config: AttributionEngineRuntimeConfig;

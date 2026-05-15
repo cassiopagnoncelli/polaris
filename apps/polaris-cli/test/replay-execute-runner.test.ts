@@ -51,8 +51,6 @@
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
  */
 
-import { describe, expect, it } from "vitest";
-
 import {
   REPLAY_HEADER_FLAG,
   REPLAY_HEADER_JOB_ID,
@@ -65,6 +63,7 @@ import {
   type ReplayProduceRecord,
   type ReplaySourceEvent,
 } from "@polaris/shared-replay";
+import { describe, expect, it } from "vitest";
 
 import {
   buildReplayExecuteRunner,

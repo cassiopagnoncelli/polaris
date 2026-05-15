@@ -26,13 +26,13 @@
  * vendor's policy.
  */
 
-import type { DestinationDescriptor, Mapper, MapperMap } from "@polaris/shared-destinations";
 import type {
   IdentityHashingOptions,
   RequiredConsent,
 } from "@polaris/shared-destination-normalize";
+import type { DestinationDescriptor, Mapper, MapperMap } from "@polaris/shared-destinations";
 
-import { buildWebhookDeliverer, type BuildDelivererOptions } from "./deliverer.js";
+import { type BuildDelivererOptions, buildWebhookDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import { webhookPassthroughMapper } from "./mapper.js";
 import type { WebhookPayload } from "./types.js";

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  SECRET_PROVIDERS,
-  SecretReferenceParseError,
   formatSecretReference,
   isSecretProvider,
   parseSecretReference,
+  SECRET_PROVIDERS,
+  SecretReferenceParseError,
 } from "../src/index.js";
 
 describe("isSecretProvider", () => {

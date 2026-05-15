@@ -23,7 +23,33 @@
  * `documentedExceptions` entry.
  */
 
+export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
 export {
+  formatPolicyInspection,
+  inspectPolicy,
+  type PolicyInspection,
+} from "./inspect.js";
+export { type MergeResult, mergePolicy, PolicyMergeError } from "./merge.js";
+export {
+  emitAllRedactionMetrics,
+  emitRedactionMetric,
+  type PatternRedactionMetricIncrement,
+  type PatternRedactionMetricLabels,
+  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
+  type RedactionEmissionContext,
+  type RedactionEmissionDeps,
+} from "./metrics.js";
+export {
+  AWS_ACCESS_KEY_PATTERN,
+  DEFAULT_PATTERN_RULES,
+  GITHUB_TOKEN_PATTERN,
+  HIGH_ENTROPY_SECRET_PATTERN,
+  JWT_PATTERN,
+  LUHN_PAN_PATTERN,
+} from "./patterns.js";
+export { PLATFORM_DEFAULT_POLICY } from "./policy.js";
+export {
+  isPolicyReasonCode,
   POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
   POLICY_REASON_CODES,
   POLICY_REASON_LENGTH,
@@ -33,9 +59,7 @@ export {
   POLICY_REASON_PII_SECRET,
   POLICY_REASON_POLICY,
   type PolicyReasonCode,
-  isPolicyReasonCode,
 } from "./reason-codes.js";
-
 export type {
   AcceptDecision,
   EvaluateOptions,
@@ -49,34 +73,3 @@ export type {
   RedactionAction,
   RejectDecision,
 } from "./types.js";
-
-export {
-  AWS_ACCESS_KEY_PATTERN,
-  DEFAULT_PATTERN_RULES,
-  GITHUB_TOKEN_PATTERN,
-  HIGH_ENTROPY_SECRET_PATTERN,
-  JWT_PATTERN,
-  LUHN_PAN_PATTERN,
-} from "./patterns.js";
-
-export { PLATFORM_DEFAULT_POLICY } from "./policy.js";
-
-export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
-
-export { PolicyMergeError, mergePolicy, type MergeResult } from "./merge.js";
-
-export {
-  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
-  emitAllRedactionMetrics,
-  emitRedactionMetric,
-  type PatternRedactionMetricIncrement,
-  type PatternRedactionMetricLabels,
-  type RedactionEmissionContext,
-  type RedactionEmissionDeps,
-} from "./metrics.js";
-
-export {
-  formatPolicyInspection,
-  inspectPolicy,
-  type PolicyInspection,
-} from "./inspect.js";

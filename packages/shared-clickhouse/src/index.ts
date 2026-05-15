@@ -42,27 +42,6 @@ export type {
 } from "./projections/index.js";
 export type { OperatorRaw } from "./raw.js";
 export { ESCAPE_HATCH_METRIC } from "./raw.js";
-export type { ReplayReader } from "./replay.js";
-export type {
-  AnalyticsIngestLogRow,
-  AnalyticsRawRow,
-  ArgMaxByEventKeyFilter,
-  ClickHouseCredential,
-  ClickHouseRole,
-  CountDistinctEventsFilter,
-  CredentialRef,
-  EventDailyCountRow,
-  EventDailyCountsFilter,
-  EventKey,
-  HealthCheckResult,
-  IngestLogFilter,
-  Logger,
-  MetricsRecorder,
-  RawQueryContext,
-  RawQueryResult,
-  TimeRange,
-} from "./types.js";
-
 // ---------------------------------------------------------------------------
 // Rebuild planner (P7-005). Pure functions; no I/O surface of its own — the
 // CLI wires the partitions-reader adapter to the operator client.
@@ -85,3 +64,23 @@ export {
   REBUILDABLE_CLICKHOUSE_PROJECTIONS,
   renderClickhouseRebuildPlanHuman,
 } from "./rebuild/index.js";
+export type { ReplayReader } from "./replay.js";
+export type {
+  AnalyticsIngestLogRow,
+  AnalyticsRawRow,
+  ArgMaxByEventKeyFilter,
+  ClickHouseCredential,
+  ClickHouseRole,
+  CountDistinctEventsFilter,
+  CredentialRef,
+  EventDailyCountRow,
+  EventDailyCountsFilter,
+  EventKey,
+  HealthCheckResult,
+  IngestLogFilter,
+  Logger,
+  MetricsRecorder,
+  RawQueryContext,
+  RawQueryResult,
+  TimeRange,
+} from "./types.js";

@@ -34,7 +34,7 @@
  *   - docs/architecture/05-processors-and-replay.md
  *   - processors/analytics-projector/v1/processor.manifest.yaml
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";

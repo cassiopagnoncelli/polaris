@@ -7,8 +7,8 @@
  * parsing prose.
  */
 import type { Command } from "commander";
-import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchAllProjects } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

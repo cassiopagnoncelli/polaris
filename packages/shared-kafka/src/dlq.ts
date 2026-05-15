@@ -26,12 +26,12 @@
 
 import type { Message, ProducerRecord, RecordMetadata } from "kafkajs";
 import {
-  type MessageHeaders,
-  type RetryHeaderInput,
   buildRetryHeaders,
+  type MessageHeaders,
   mergeHeaders,
-  readHeaderNumber,
   POLARIS_HEADER_RETRY_ATTEMPTS,
+  type RetryHeaderInput,
+  readHeaderNumber,
 } from "./headers.js";
 import type { PolarisProducer } from "./producer.js";
 import { dlqTopicName, retryTopicName } from "./topics.js";

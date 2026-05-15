@@ -15,7 +15,6 @@
  * array; the `mutates` flag is captured at registration time so a
  * future route can opt out by simply omitting the wrapper.
  */
-import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 import {
   enforceProductionMutationGate,
@@ -25,6 +24,7 @@ import {
   ProductionMutationRefusedError,
 } from "@polaris/shared-control-plane";
 import { ProblemError } from "@polaris/shared-service-bootstrap";
+import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 export interface MutationGateOptions {
   /** Stable command id used in the refusal message + audit row. */

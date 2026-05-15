@@ -36,7 +36,7 @@
  * tweaks land here without changing the package surface.
  */
 
-import { PLATFORM_DEFAULT_POLICY, type ForbiddenFieldPolicy } from "@polaris/shared-policy";
+import { type ForbiddenFieldPolicy, PLATFORM_DEFAULT_POLICY } from "@polaris/shared-policy";
 
 /**
  * Platform-default forbidden-field policy. The ingester loads this file

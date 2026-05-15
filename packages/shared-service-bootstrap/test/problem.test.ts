@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   COMMON_PROBLEM_CODES,
-  DEFAULT_PROBLEM_TYPE_BASE,
-  PROBLEM_CONTENT_TYPE,
-  ProblemError,
   commonProblems,
   createProblem,
+  DEFAULT_PROBLEM_TYPE_BASE,
   isProblemError,
+  PROBLEM_CONTENT_TYPE,
+  ProblemError,
 } from "../src/index.js";
 
 describe("createProblem", () => {

@@ -29,10 +29,10 @@ import type {
   OriginLookupInput,
 } from "../../src/origin/index.js";
 import {
-  InMemoryApiKeyRepository,
-  RecordingProducer,
   buildEnvelopePayload,
   buildTestCatalog,
+  InMemoryApiKeyRepository,
+  RecordingProducer,
   testConfig,
 } from "../fixtures.js";
 

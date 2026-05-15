@@ -48,30 +48,29 @@
  * from `@polaris/shared-processor`.
  */
 
-import type { ProducerRecord, RecordMetadata } from "kafkajs";
-import { v7 as uuidv7 } from "uuid";
-
-import type { Logger } from "@polaris/shared-logger";
 import {
-  type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
-  type PolarisProducer,
-  type SyncIsolationLookup,
   buildEventHeaders,
   buildRawEventsPartitionKey,
   consumerTopicsForFamily,
   decodeEvent,
   encodeEvent,
+  type PolarisConsumer,
+  type PolarisEachMessageHandler,
+  type PolarisMessageContext,
+  type PolarisProducer,
+  type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
 import {
-  type ProcessorMetricLabels,
-  type ProcessorRetryClassification,
-  ProcessorMetrics,
   classifyError,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+  type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import type { ProducerRecord, RecordMetadata } from "kafkajs";
+import { v7 as uuidv7 } from "uuid";
 
 import {
   buildSessionEndedEnvelope,
@@ -83,11 +82,11 @@ import {
 } from "./emit.js";
 import { buildContinuedRecord, buildOpenedRecord, type SessionStore } from "./store.js";
 import {
+  buildSessionStoreKey,
   DEFAULT_INACTIVITY_SECONDS,
+  decideSession,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
-  buildSessionStoreKey,
-  decideSession,
   resolvePrimaryIdentifier,
 } from "./transform.js";
 import type { RawEventEnvelope } from "./types.js";
@@ -600,7 +599,7 @@ async function publishSessionEnvelope(input: {
 // Exports for tests / replay
 // ---------------------------------------------------------------------------
 
-export type { SessionEventName, SessionEventEnvelope };
+export type { SessionEventEnvelope, SessionEventName };
 
 // ---------------------------------------------------------------------------
 // Helpers

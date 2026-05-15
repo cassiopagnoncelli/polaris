@@ -1,5 +1,3 @@
-import { beforeEach, describe, expect, it } from "vitest";
-
 import { createLogger } from "@polaris/shared-logger";
 import {
   POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
@@ -10,13 +8,15 @@ import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
   BATCH_REASON_PUBLISH_FAILED,
+  envelopeSchema,
   SCHEMA_REASON_INVALID_PROPERTIES,
   SCHEMA_REASON_SUNSET,
   SCHEMA_REASON_UNSUPPORTED_VERSION,
-  envelopeSchema,
 } from "@polaris/shared-schemas";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthenticatedRequestContext } from "../../src/auth/index.js";
+import type { IngesterConfig } from "../../src/config.js";
 import { InMemoryDedupeStore } from "../../src/dedupe/index.js";
 import { createIngestHandler } from "../../src/ingest/handler.js";
 import {
@@ -28,13 +28,12 @@ import {
   METRIC_INGEST_DEPRECATED_SCHEMA_VERSION_TOTAL,
 } from "../../src/metrics/registry.js";
 import { createPolicyResolver } from "../../src/policy/loader.js";
-import type { IngesterConfig } from "../../src/config.js";
 
 import {
-  RecordingDedupeStore,
-  RecordingProducer,
   buildEnvelopePayload,
   buildTestCatalog,
+  RecordingDedupeStore,
+  RecordingProducer,
   testConfig,
 } from "../fixtures.js";
 

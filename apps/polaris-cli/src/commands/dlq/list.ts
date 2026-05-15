@@ -22,12 +22,12 @@
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 import {
+  createKyselyDlqRecordRepository,
   DELIVERY_RECORD_ERROR_CLASSES,
   type DeliveryRecordErrorClass,
   type DlqRecord,
-  type ListDlqRecordsFilter,
-  createKyselyDlqRecordRepository,
   isDeliveryRecordErrorClass,
+  type ListDlqRecordsFilter,
 } from "@polaris/shared-destinations";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

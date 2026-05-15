@@ -16,15 +16,13 @@
  * @see docs/implementation/tasks/P7-005-clickhouse-rebuild-workflows.md
  */
 import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-
-import { describe, expect, it } from "vitest";
-
+import { fileURLToPath } from "node:url";
 import {
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   REBUILDABLE_CLICKHOUSE_PROJECTIONS,
 } from "@polaris/shared-clickhouse/rebuild";
+import { describe, expect, it } from "vitest";
 
 import {
   CLICKHOUSE_REBUILD_JOB_ID_PREFIX,

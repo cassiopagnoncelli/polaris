@@ -6,14 +6,13 @@
  */
 
 import {
-  defaultSchemaBindings,
   buildCatalog,
-  envelopeSchema,
+  defaultSchemaBindings,
   type EventCatalog,
+  envelopeSchema,
 } from "@polaris/shared-schemas";
-
-import type { IngesterConfig } from "../src/config.js";
 import type { ApiKeyRecord, ApiKeyRepository } from "../src/auth/repository.js";
+import type { IngesterConfig } from "../src/config.js";
 import type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "../src/dedupe/index.js";
 
 export const testConfig: IngesterConfig = {

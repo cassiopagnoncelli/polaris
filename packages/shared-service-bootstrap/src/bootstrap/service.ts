@@ -1,10 +1,9 @@
+import { createLogger, type Logger } from "@polaris/shared-logger";
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
   type FastifyServerOptions,
 } from "fastify";
-
-import { createLogger, type Logger } from "@polaris/shared-logger";
 
 import {
   createProblemErrorHandler,
@@ -12,22 +11,22 @@ import {
   type ProblemErrorHandlerOptions,
 } from "./error-handler.js";
 import {
-  registerHealthRoutes,
   type HealthPluginOptions,
   type ReadinessProbe,
+  registerHealthRoutes,
   type ServiceInfo,
 } from "./health.js";
 import {
-  registerMetricsRoute,
   type MetricsPluginOptions,
   type MetricsProducer,
+  registerMetricsRoute,
 } from "./metrics.js";
 import { NOOP_OPENAPI_SETUP, type OpenApiMetadata, type OpenApiSetup } from "./openapi.js";
 import { genReqId, installRequestIdHook } from "./request-id-hook.js";
 import {
   DEFAULT_SHUTDOWN_SIGNALS,
-  installGracefulShutdown,
   type GracefulShutdownOptions,
+  installGracefulShutdown,
   type ShutdownTask,
 } from "./shutdown.js";
 
@@ -200,12 +199,11 @@ export async function bootstrapService(
 }
 
 /**
+ * Re-export `MetricsProducer` for caller convenience.
+ */
+export type { MetricsProducer };
+/**
  * Re-export the default signal list so callers can compose their own
  * shutdown wiring without re-importing the underlying module.
  */
 export { DEFAULT_SHUTDOWN_SIGNALS };
-
-/**
- * Re-export `MetricsProducer` for caller convenience.
- */
-export type { MetricsProducer };

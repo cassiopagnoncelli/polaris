@@ -1,12 +1,3 @@
-import type { Logger } from "@polaris/shared-logger";
-import {
-  applyRedactions,
-  emitAllRedactionMetrics,
-  evaluate,
-  POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
-  type PatternRedactionMetricIncrement,
-  type PolicyDecision,
-} from "@polaris/shared-policy";
 import {
   buildRawEventsPartitionKey,
   type PolarisProducer,
@@ -14,6 +5,15 @@ import {
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
+import {
+  applyRedactions,
+  emitAllRedactionMetrics,
+  evaluate,
+  type PatternRedactionMetricIncrement,
+  POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
+  type PolicyDecision,
+} from "@polaris/shared-policy";
 import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
@@ -27,11 +27,10 @@ import {
   type EventCatalog,
   validateCatalogEvent,
 } from "@polaris/shared-schemas";
-
+import type { IngestConfig } from "../config.js";
 import type { DedupeStore } from "../dedupe/index.js";
 import type { IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
-import type { IngestConfig } from "../config.js";
 import { batchRequestSchema, type IngestRequestContext } from "./types.js";
 
 /**

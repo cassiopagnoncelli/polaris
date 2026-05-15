@@ -24,7 +24,7 @@
  * The loader does NOT touch PostgreSQL — that's the sync command's job. Tests
  * exercise it directly against a temp directory.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { z } from "zod";
@@ -32,8 +32,8 @@ import { UsageError } from "../errors.js";
 import {
   type LoadedCatalog,
   type ProjectFile,
-  type SourceFile,
   projectFileSchema,
+  type SourceFile,
   sourceFileSchema,
 } from "./types.js";
 

@@ -28,7 +28,7 @@ const input = (
 
 describe("createMemoryRateLimiter", () => {
   it("allows requests up to the per-key allowance and refuses the (allowance+1)th", async () => {
-    let now = 1_000_000;
+    const now = 1_000_000;
     const limiter = createMemoryRateLimiter({
       allowanceFor: () => 3,
       windowSeconds: 1,
@@ -70,7 +70,7 @@ describe("createMemoryRateLimiter", () => {
   });
 
   it("keys per-apiKeyId so two keys don't share a bucket", async () => {
-    let now = 1_000_000;
+    const now = 1_000_000;
     const limiter = createMemoryRateLimiter({
       allowanceFor: () => 2,
       windowSeconds: 1,

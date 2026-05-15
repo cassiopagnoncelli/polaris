@@ -36,77 +36,33 @@
  */
 
 export {
+  classifyError,
+  PROCESSOR_RETRY_REASONS,
+  type ProcessorRetryClassification,
+  type ProcessorRetryReason,
+} from "./classify.js";
+export { type PublishToDlqInput, publishToDlq } from "./dlq.js";
+export {
   type ProcessorIdentity,
   type ProcessorLogContextInput,
   processorLogContext,
 } from "./identity.js";
-
 export {
-  type CanonicalEnvelopeInput,
-  type ProcessorStamp,
-  type StampedEnvelope,
-  type StampProcessorMetadataOptions,
-  stampProcessorMetadata,
-} from "./metadata.js";
-
-export {
-  type CancelRunInput,
-  type CompleteRunInput,
-  type FailRunInput,
-  type InMemoryProcessorRunRepositoryOptions,
-  type KyselyProcessorRunRepositoryOptions,
-  type ProcessorRunCounters,
-  type ProcessorRunRecord,
-  type ProcessorRunRepository,
-  type ProcessorRunStatus,
-  type RegisterRunInput,
-  type UpdateRunInput,
-  InMemoryProcessorRunRepository,
-  InvalidRunTransitionError,
-  PROCESSOR_RUN_STATUSES,
-  createKyselyProcessorRunRepository,
-} from "./runs.js";
-
-export {
-  type ProcessorRetryClassification,
-  type ProcessorRetryReason,
-  PROCESSOR_RETRY_REASONS,
-  classifyError,
-} from "./classify.js";
-
-export { type PublishToDlqInput, publishToDlq } from "./dlq.js";
-
-export {
-  type MetricSample,
-  type ProcessorFailureLabels,
-  type ProcessorMetricLabels,
-  METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL,
-  METRIC_PROCESSOR_EVENTS_DLQ_TOTAL,
-  METRIC_PROCESSOR_EVENTS_EMITTED_TOTAL,
-  METRIC_PROCESSOR_EVENTS_FAILED_TOTAL,
-  METRIC_PROCESSOR_EVENTS_RETRY_TOTAL,
-  METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST,
-  METRIC_PROCESSOR_LAG_MS_LAST,
-  ProcessorMetrics,
-} from "./metrics.js";
-
-export {
-  type LoadProcessorManifestOptions,
   type LoadedProcessorManifest,
+  type LoadProcessorManifestOptions,
+  loadProcessorManifest,
+  PROCESSOR_MODES,
+  PROCESSOR_RELEASE_STATUSES,
   type ProcessorDefaults,
   type ProcessorFixture,
   type ProcessorFixtureIssue,
   type ProcessorFixtureValidation,
   type ProcessorManifest,
+  ProcessorManifestError,
   type ProcessorMode,
   type ProcessorReleaseStatus,
   type ProcessorReplay,
   type ProcessorTopicSpec,
-  type ValidateProcessorFixturesOptions,
-  PROCESSOR_MODES,
-  PROCESSOR_RELEASE_STATUSES,
-  ProcessorManifestError,
-  loadProcessorManifest,
   processorDefaultsSchema,
   processorFixtureSchema,
   processorManifestSchema,
@@ -117,5 +73,44 @@ export {
   processorTopicSpecSchema,
   processorVersionSchema,
   tryLoadProcessorManifest,
+  type ValidateProcessorFixturesOptions,
   validateProcessorFixtures,
 } from "./manifest.js";
+export {
+  type CanonicalEnvelopeInput,
+  type ProcessorStamp,
+  type StampedEnvelope,
+  type StampProcessorMetadataOptions,
+  stampProcessorMetadata,
+} from "./metadata.js";
+
+export {
+  METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_DLQ_TOTAL,
+  METRIC_PROCESSOR_EVENTS_EMITTED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_FAILED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_RETRY_TOTAL,
+  METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST,
+  METRIC_PROCESSOR_LAG_MS_LAST,
+  type MetricSample,
+  type ProcessorFailureLabels,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+} from "./metrics.js";
+export {
+  type CancelRunInput,
+  type CompleteRunInput,
+  createKyselyProcessorRunRepository,
+  type FailRunInput,
+  InMemoryProcessorRunRepository,
+  type InMemoryProcessorRunRepositoryOptions,
+  InvalidRunTransitionError,
+  type KyselyProcessorRunRepositoryOptions,
+  PROCESSOR_RUN_STATUSES,
+  type ProcessorRunCounters,
+  type ProcessorRunRecord,
+  type ProcessorRunRepository,
+  type ProcessorRunStatus,
+  type RegisterRunInput,
+  type UpdateRunInput,
+} from "./runs.js";

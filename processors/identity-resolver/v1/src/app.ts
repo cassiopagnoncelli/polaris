@@ -16,6 +16,8 @@
  * `BuildAppOptions` slots so they can drive the runtime without a real
  * Redpanda or PostgreSQL.
  */
+
+import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createKafkaClient,
   createPolarisConsumer,
@@ -26,12 +28,11 @@ import {
 } from "@polaris/shared-kafka";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
+  type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
-  type BootstrappedService,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";

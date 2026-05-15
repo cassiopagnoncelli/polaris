@@ -39,9 +39,9 @@
  * @see docs/implementation/tasks/P10-006-dlq-triage-runbook.md
  */
 import {
+  createKyselyDlqRecordRepository,
   type DlqRecord,
   type ListDlqRecordsFilter,
-  createKyselyDlqRecordRepository,
 } from "@polaris/shared-destinations";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

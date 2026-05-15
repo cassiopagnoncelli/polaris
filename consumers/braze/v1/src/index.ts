@@ -11,31 +11,31 @@
  */
 
 export {
-  buildBrazeApp,
   type BuildAppOptions,
   type BuiltBrazeApp,
+  buildBrazeApp,
 } from "./app.js";
 export {
+  type BrazeConfig,
+  type BrazeRuntimeConfig,
   brazeConfigSchema,
   brazeEnvKeys,
   brazeEnvSchema,
   CONSUMER_SERVICE_NAME,
   DEFAULT_BRAZE_API_HOST,
   loadBrazeConfig,
-  type BrazeConfig,
-  type BrazeRuntimeConfig,
 } from "./config.js";
 export {
+  type BuildDelivererOptions,
   buildBrazeDeliverer,
   buildUsersTrackUrl,
   classifyRetryableStatus,
   isRetryableStatus,
   parseResolvedSecret,
-  type BuildDelivererOptions,
 } from "./deliverer.js";
 export {
-  createBrazeDescriptor,
   type CreateBrazeDescriptorOptions,
+  createBrazeDescriptor,
 } from "./descriptor.js";
 export {
   CONSUMER_IDENTITY,

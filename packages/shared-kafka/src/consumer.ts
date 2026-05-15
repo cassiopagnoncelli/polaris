@@ -14,23 +14,23 @@
  * to retry vs send to DLQ — that policy is processor/consumer-specific.
  */
 
+import type { Logger } from "@polaris/shared-logger";
 import type {
   Consumer,
   ConsumerConfig,
-  ConsumerSubscribeTopics,
   ConsumerRunConfig,
+  ConsumerSubscribeTopics,
   EachMessagePayload,
   Kafka,
 } from "kafkajs";
-import type { Logger } from "@polaris/shared-logger";
 import {
+  POLARIS_HEADER_ENVIRONMENT,
   POLARIS_HEADER_EVENT_ID,
   POLARIS_HEADER_PROJECT_ID,
-  POLARIS_HEADER_ENVIRONMENT,
   POLARIS_HEADER_TOPIC_FAMILY,
   readHeaderString,
 } from "./headers.js";
-import { type KafkaHookPayload, type KafkaHooks, emitHook } from "./hooks.js";
+import { emitHook, type KafkaHookPayload, type KafkaHooks } from "./hooks.js";
 
 function baseHookPayload(
   payload: EachMessagePayload,

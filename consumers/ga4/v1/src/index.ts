@@ -11,32 +11,32 @@
  */
 
 export {
-  buildGa4App,
   type BuildAppOptions,
   type BuiltGa4App,
+  buildGa4App,
 } from "./app.js";
 export {
   CONSUMER_SERVICE_NAME,
   DEFAULT_GA4_API_HOST,
-  loadGa4Config,
+  type Ga4Config,
+  type Ga4RuntimeConfig,
   ga4ConfigSchema,
   ga4EnvKeys,
   ga4EnvSchema,
-  type Ga4Config,
-  type Ga4RuntimeConfig,
+  loadGa4Config,
 } from "./config.js";
 export {
+  type BuildDelivererOptions,
   buildGa4Deliverer,
   buildMeasurementProtocolUrl,
   buildRequestBody,
   classifyRetryableStatus,
   isRetryableStatus,
   parseResolvedSecret,
-  type BuildDelivererOptions,
 } from "./deliverer.js";
 export {
-  createGa4Descriptor,
   type CreateGa4DescriptorOptions,
+  createGa4Descriptor,
 } from "./descriptor.js";
 export {
   CONSUMER_IDENTITY,

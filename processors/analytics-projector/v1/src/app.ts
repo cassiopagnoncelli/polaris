@@ -33,16 +33,16 @@ import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
 import {
+  type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
-  type BootstrappedService,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 
 import type { AnalyticsProjectorRuntimeConfig } from "./config.js";
+import { type AnalyticsProjectorRuntime, createRuntime } from "./runtime.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
-import { createRuntime, type AnalyticsProjectorRuntime } from "./runtime.js";
 
 /**
  * Options accepted by `buildAnalyticsProjectorApp`.

@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-
 import { createLogger } from "@polaris/shared-logger";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   buildDedupeKey,

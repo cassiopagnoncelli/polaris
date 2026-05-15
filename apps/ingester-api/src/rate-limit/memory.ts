@@ -15,8 +15,8 @@
  * elapses automatically) but with no I/O — perfect for tests.
  */
 
-import type { RateLimitAcquireInput, RateLimitDecision, RateLimiter } from "./types.js";
 import { DEFAULT_RATE_LIMIT_WINDOW_SECONDS, type RateLimitAllowanceResolver } from "./redis.js";
+import type { RateLimitAcquireInput, RateLimitDecision, RateLimiter } from "./types.js";
 
 export interface CreateMemoryRateLimiterOptions {
   /** Allowance resolver per acquire. */

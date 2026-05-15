@@ -27,9 +27,9 @@
  * allowed to add per-mapper overrides; v1 keeps the inference uniform.
  */
 
+import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 import { minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 
 import type {
   MetaActionSource,

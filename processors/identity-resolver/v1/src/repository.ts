@@ -26,9 +26,9 @@
  * @see db/migrations/20260512000010_create_identity_links.sql
  */
 
-import { v7 as uuidv7 } from "uuid";
-import type { Kysely } from "kysely";
 import type { Database, IdentityLinkConfidence } from "@polaris/shared-db";
+import type { Kysely } from "kysely";
+import { v7 as uuidv7 } from "uuid";
 
 /**
  * Persisted row shape returned by the repository. The fields mirror the

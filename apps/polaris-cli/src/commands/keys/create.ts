@@ -24,9 +24,9 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  type InsertApiKeyInput,
   insertApiKey,
   insertAuditRecord,
-  type InsertApiKeyInput,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

@@ -36,8 +36,8 @@ import {
   type KeysRotateStore,
   type OutputStreams,
   type PackageMeta,
-  run,
   type RotateStoreInput,
+  run,
 } from "../src/index.js";
 
 const META: PackageMeta = {

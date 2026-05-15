@@ -47,7 +47,7 @@
  * lives in versioned files and code per the architecture docs.
  */
 
-export * from "./errors.js";
 export * from "./env.js";
+export * from "./errors.js";
 export * from "./loader.js";
 export * from "./schemas/index.js";

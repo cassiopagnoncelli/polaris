@@ -15,14 +15,13 @@
  * want operators to see schema updates the moment a new build deploys.
  */
 
-import type { FastifyInstance } from "fastify";
-
 import type { OpenApiSetup } from "@polaris/shared-service-bootstrap";
+import type { FastifyInstance } from "fastify";
 
 import {
   buildOpenApiDocument,
-  PUBLISHED_OPENAPI_SERVERS,
   type OpenApiDocument,
+  PUBLISHED_OPENAPI_SERVERS,
 } from "./document.js";
 
 /**

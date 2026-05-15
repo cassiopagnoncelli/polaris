@@ -15,21 +15,22 @@
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
+
+import type { Environment } from "@polaris/shared-db";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
-import type { Environment } from "@polaris/shared-db";
-import type { CommandContext, CommandDefinition } from "../../command.js";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   type AuditEnvironment,
-  type EnableProcessorActivationInput,
-  type ProcessorActivationKey,
-  type ProcessorActivationRow,
   connectDb,
+  type EnableProcessorActivationInput,
   enableProcessorActivation,
   findActivationByKey,
   insertAuditRecord,
+  type ProcessorActivationKey,
+  type ProcessorActivationRow,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

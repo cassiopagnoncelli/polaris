@@ -14,9 +14,9 @@
 export { AllowedOriginsCache, type AllowedOriginsCacheOptions } from "./cache.js";
 export {
   createOriginGuardPreHandler,
-  registerCorsPreflightRoute,
   ORIGIN_NOT_ALLOWED_CODE,
   type OriginGuardDeps,
+  registerCorsPreflightRoute,
 } from "./guard.js";
 export { createPostgresAllowedOriginsRepository } from "./repository.js";
 export type {
@@ -30,4 +30,5 @@ export type {
 // queries. Without this import the repository's `db.selectFrom(...)` won't
 // know the table exists.
 import "./db.js";
+
 export type { SourceAllowedOriginsTable } from "./db.js";

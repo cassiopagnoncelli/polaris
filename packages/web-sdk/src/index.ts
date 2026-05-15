@@ -59,9 +59,9 @@ export {
 } from "./identity/index.js";
 export { ValidationError } from "./internal/validation.js";
 export {
+  type DrainQueueOptions,
   drainLoaderQueue,
   INLINE_LOADER_SNIPPET,
-  type DrainQueueOptions,
   type LoaderCommand,
   type LoaderQueue,
 } from "./loader.js";
@@ -92,9 +92,9 @@ export type {
   IdentityManagerOptions,
   IdentityStore,
   PersistedIdentity,
+  QueuedEventPayload,
   QueueEntry,
   QueueLayer,
-  QueuedEventPayload,
   ResetOptions,
   RetryPolicy,
   StorageLayer,

@@ -46,38 +46,38 @@
  * from `@polaris/shared-processor`.
  */
 
-import { v7 as uuidv7 } from "uuid";
-
-import type { Logger } from "@polaris/shared-logger";
 import {
+  buildRawEventsPartitionKey,
+  consumerTopicsForFamily,
+  decodeEvent,
   type PolarisConsumer,
   type PolarisEachMessageHandler,
   type PolarisMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
-  decodeEvent,
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_ANALYTICS_EVENTS,
   TOPIC_FAMILY_ATTRIBUTION_EVENTS,
 } from "@polaris/shared-kafka";
+
+import type { Logger } from "@polaris/shared-logger";
 import {
-  type ProcessorMetricLabels,
-  type ProcessorRetryClassification,
-  ProcessorMetrics,
   classifyError,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+  type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import { v7 as uuidv7 } from "uuid";
 
 import {
   type AttributionEventEnvelope,
   type AttributionEventName,
-  type FirstTouchAssignedProperties,
-  type LastTouchAssignedProperties,
-  type TouchpointCapturedProperties,
   buildFirstTouchAssignedEnvelope,
   buildLastTouchAssignedEnvelope,
   buildTouchpointCapturedEnvelope,
+  type FirstTouchAssignedProperties,
+  type LastTouchAssignedProperties,
+  type TouchpointCapturedProperties,
 } from "./emit.js";
 import {
   buildDeltaRecord,
@@ -86,10 +86,10 @@ import {
   type TouchpointStore,
 } from "./store.js";
 import {
-  PROCESSOR_NAME,
-  PROCESSOR_VERSION,
   buildTouchpointStoreKey,
   decideAttribution,
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
   resolvePrimaryIdentifier,
 } from "./transform.js";
 import type { AnalyticsEventEnvelope } from "./types.js";
@@ -548,7 +548,7 @@ async function publishAttributionEnvelope(input: {
 // Exports for tests / replay
 // ---------------------------------------------------------------------------
 
-export type { AttributionEventName, AttributionEventEnvelope };
+export type { AttributionEventEnvelope, AttributionEventName };
 
 // ---------------------------------------------------------------------------
 // Helpers

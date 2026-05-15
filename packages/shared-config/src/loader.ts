@@ -1,6 +1,6 @@
-import { z, type ZodType } from "zod";
+import { type ZodType, z } from "zod";
+import { type EnvSource, type LoadEnvOptions, loadEnv } from "./env.js";
 import { ConfigValidationError } from "./errors.js";
-import { type EnvSource, loadEnv, type LoadEnvOptions } from "./env.js";
 
 /**
  * Options accepted by `loadConfig`.

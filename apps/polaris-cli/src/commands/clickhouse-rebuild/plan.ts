@@ -27,10 +27,10 @@
  */
 import {
   type ClickhouseRebuildPlanned,
+  type PlanClickhouseRebuildOptions,
   planClickhouseRebuild,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
-  type PlanClickhouseRebuildOptions,
 } from "@polaris/shared-clickhouse/rebuild";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";

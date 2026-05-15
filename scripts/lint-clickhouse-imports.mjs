@@ -22,7 +22,7 @@
 // Or, for CI-tailored use, set POLARIS_CLICKHOUSE_LINT_ROOT to scan a
 // fixture tree (used by the unit test).
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 

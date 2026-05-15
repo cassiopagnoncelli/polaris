@@ -27,9 +27,8 @@
  * @see docs/architecture/01-event-contract.md "Trusted Metadata"
  */
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-
 import { ProblemError } from "@polaris/shared-service-bootstrap";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { API_KEY_HEADER, type AuthenticatedRequestContext } from "./api-key.js";
 import { AUTH_PROBLEM_CODES } from "./errors.js";

@@ -42,13 +42,13 @@ import {
   type IsolateInsertOutcome,
   type OutputStreams,
   type PackageMeta,
+  run,
   TOPIC_ISOLATION_ID_PREFIX,
   type TopicIsolationRow,
   type TopicsDeisolateStore,
   type TopicsIsolateStore,
   type TopicsListFilter,
   type TopicsListStore,
-  run,
 } from "../src/index.js";
 
 const META: PackageMeta = {

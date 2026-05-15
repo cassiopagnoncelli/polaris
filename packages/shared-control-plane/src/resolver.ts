@@ -31,7 +31,7 @@
  * best-effort — a failure does NOT block the command. This mirrors the
  * `api_keys.last_used_at` coalescing pattern from P2-002.
  */
-import { verifySecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/shared-secrets";
 import type { ActorSource, ResolvedActor } from "./actor.js";
 import { parseOperatorToken } from "./token-format.js";
 

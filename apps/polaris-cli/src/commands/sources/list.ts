@@ -5,10 +5,11 @@
  * when `--project` is set. Falls back to reading catalog files with
  * `--from-catalog` so operators can inspect declarations without a DB.
  */
-import type { CommandContext, CommandDefinition } from "../../command.js";
-import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
+
 import type { SourceFile } from "../../catalog/index.js";
+import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
 import type { SourceRow } from "../../catalog/sync.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchAllSources, fetchSourcesByProject } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 

@@ -72,6 +72,7 @@ export const processorsCommand: CommandDefinition = {
   },
 };
 
+export { processorsRunsListCommand, processorsRunsShowCommand } from "./runs.js";
 export {
   processorsDisableCommand,
   processorsEnableCommand,
@@ -79,4 +80,3 @@ export {
   processorsRunsCommand,
   processorsShowCommand,
 };
-export { processorsRunsListCommand, processorsRunsShowCommand } from "./runs.js";

@@ -34,9 +34,9 @@ import {
   type AuditEnvironment,
   connectDb,
   findApiKeyById,
+  type InsertApiKeyInput,
   insertApiKey,
   insertAuditRecord,
-  type InsertApiKeyInput,
   revokeApiKey,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";

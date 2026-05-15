@@ -9,10 +9,10 @@
  */
 
 export {
-  buildMetadataLogBindings,
-  getBuildMetadata,
   type BuildMetadata,
+  buildMetadataLogBindings,
   type GetBuildMetadataOptions,
+  getBuildMetadata,
 } from "./build-metadata.js";
 export {
   createProblemErrorHandler,
@@ -20,24 +20,19 @@ export {
   type ProblemErrorHandlerOptions,
 } from "./error-handler.js";
 export {
-  registerHealthRoutes,
   type HealthPluginOptions,
   type ReadinessProbe,
   type ReadinessProbeResult,
+  registerHealthRoutes,
   type ServiceInfo,
 } from "./health.js";
 export {
-  PROMETHEUS_CONTENT_TYPE,
-  registerMetricsRoute,
   type MetricsPluginOptions,
   type MetricsProducer,
+  PROMETHEUS_CONTENT_TYPE,
+  registerMetricsRoute,
 } from "./metrics.js";
 export { NOOP_OPENAPI_SETUP, type OpenApiMetadata, type OpenApiSetup } from "./openapi.js";
-export {
-  genReqId,
-  installRequestIdHook,
-  RESPONSE_REQUEST_ID_HEADER,
-} from "./request-id-hook.js";
 export {
   newRequestId,
   normalizeIncomingRequestId,
@@ -46,13 +41,18 @@ export {
   resolveRequestId,
 } from "./request-id.js";
 export {
-  bootstrapService,
-  DEFAULT_SHUTDOWN_SIGNALS,
+  genReqId,
+  installRequestIdHook,
+  RESPONSE_REQUEST_ID_HEADER,
+} from "./request-id-hook.js";
+export {
   type BootstrappedService,
   type BootstrapServiceOptions,
+  bootstrapService,
+  DEFAULT_SHUTDOWN_SIGNALS,
 } from "./service.js";
 export {
-  installGracefulShutdown,
   type GracefulShutdownOptions,
+  installGracefulShutdown,
   type ShutdownTask,
 } from "./shutdown.js";

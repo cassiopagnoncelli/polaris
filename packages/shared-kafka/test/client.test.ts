@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_RETRY_OPTIONS, createKafkaClient } from "../src/client.js";
+import { createKafkaClient, DEFAULT_RETRY_OPTIONS } from "../src/client.js";
 
 const REDPANDA_BASE = {
   brokers: ["localhost:9092"],

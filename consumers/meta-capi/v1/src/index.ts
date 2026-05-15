@@ -11,31 +11,31 @@
  */
 
 export {
-  buildMetaCapiApp,
   type BuildAppOptions,
   type BuiltMetaCapiApp,
+  buildMetaCapiApp,
 } from "./app.js";
 export {
   CONSUMER_SERVICE_NAME,
   DEFAULT_GRAPH_HOST,
   loadMetaCapiConfig,
+  type MetaCapiConfig,
+  type MetaCapiRuntimeConfig,
   metaCapiConfigSchema,
   metaCapiEnvKeys,
   metaCapiEnvSchema,
-  type MetaCapiConfig,
-  type MetaCapiRuntimeConfig,
 } from "./config.js";
 export {
+  type BuildDelivererOptions,
   buildGraphUrl,
   buildMetaCapiDeliverer,
   classifyRetryableStatus,
   isRetryableStatus,
   parseResolvedSecret,
-  type BuildDelivererOptions,
 } from "./deliverer.js";
 export {
-  createMetaCapiDescriptor,
   type CreateMetaCapiDescriptorOptions,
+  createMetaCapiDescriptor,
 } from "./descriptor.js";
 export {
   CONSUMER_IDENTITY,

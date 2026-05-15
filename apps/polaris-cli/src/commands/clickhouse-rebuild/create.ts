@@ -37,19 +37,19 @@ import {
   type ClickhouseRebuildPlan,
   type ClickhouseRebuildPlanned,
   findRebuildableProjection,
+  type PlanClickhouseRebuildOptions,
   planClickhouseRebuild,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
-  type PlanClickhouseRebuildOptions,
 } from "@polaris/shared-clickhouse/rebuild";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition, CommandResult } from "../../command.js";
 import {
   type AuditActorSource,
   connectDb,
+  type InsertClickhouseRebuildJobInput,
   insertAuditRecord,
   insertClickhouseRebuildJob,
-  type InsertClickhouseRebuildJobInput,
 } from "../../db/index.js";
 import { CliError, ExitCode, UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";

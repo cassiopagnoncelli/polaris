@@ -19,7 +19,7 @@
  * `mutates: false`.
  */
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { type DestinationRow, connectDb, listDestinationsByProjectEnv } from "../../db/index.js";
+import { connectDb, type DestinationRow, listDestinationsByProjectEnv } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderJson } from "../../output.js";
 

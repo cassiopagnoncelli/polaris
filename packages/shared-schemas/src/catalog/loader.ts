@@ -1,11 +1,11 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
   type CatalogEntry,
   type CatalogEntryFile,
-  type SchemaBinding,
   catalogEntryFileSchema,
+  type SchemaBinding,
 } from "./types.js";
 
 /**

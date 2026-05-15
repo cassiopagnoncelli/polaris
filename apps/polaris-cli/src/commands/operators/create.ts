@@ -31,16 +31,16 @@ import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   connectDb,
+  type InsertOperatorTokenInput,
   insertAuditRecord,
   insertOperatorToken,
-  type InsertOperatorTokenInput,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
-import { renderAccordingTo } from "../../output.js";
 import {
   generateOperatorTokenMaterial,
   type IssuedOperatorTokenMaterial,
 } from "../../operators/token-material.js";
+import { renderAccordingTo } from "../../output.js";
 
 /**
  * Snapshot persisted on the audit row's `after` column. Metadata only —

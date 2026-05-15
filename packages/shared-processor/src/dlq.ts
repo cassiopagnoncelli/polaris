@@ -22,11 +22,10 @@
  * @see docs/architecture/03-redpanda-topics.md "Retry and DLQ Topics"
  */
 
-import type { EachMessagePayload, RecordMetadata } from "kafkajs";
 import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-kafka";
-
-import type { ProcessorIdentity } from "./identity.js";
+import type { EachMessagePayload, RecordMetadata } from "kafkajs";
 import { classifyError, type ProcessorRetryClassification } from "./classify.js";
+import type { ProcessorIdentity } from "./identity.js";
 
 /**
  * Input accepted by `publishToDlq`. The caller passes the producer (so the

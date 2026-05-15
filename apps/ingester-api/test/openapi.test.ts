@@ -1,19 +1,18 @@
 import { describe, expect, it } from "vitest";
-
-import {
-  buildOpenApiDocument,
-  PUBLISHED_OPENAPI_INFO,
-  PUBLISHED_OPENAPI_SERVERS,
-  buildComponentSchemas,
-  buildPaths,
-  OPERATIONS_COMPONENT_SCHEMAS,
-} from "../src/openapi/index.js";
 import { buildIngesterApp } from "../src/app.js";
 import { InMemoryDedupeStore } from "../src/dedupe/index.js";
 import {
+  buildComponentSchemas,
+  buildOpenApiDocument,
+  buildPaths,
+  OPERATIONS_COMPONENT_SCHEMAS,
+  PUBLISHED_OPENAPI_INFO,
+  PUBLISHED_OPENAPI_SERVERS,
+} from "../src/openapi/index.js";
+import {
+  buildTestCatalog,
   InMemoryApiKeyRepository,
   RecordingProducer,
-  buildTestCatalog,
   testConfig,
 } from "./fixtures.js";
 

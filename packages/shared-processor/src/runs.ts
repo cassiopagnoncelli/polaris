@@ -30,9 +30,9 @@
  * @see docs/architecture/05-processors-and-replay.md
  */
 
-import { v7 as uuidv7 } from "uuid";
-import type { Kysely } from "kysely";
 import type { Database } from "@polaris/shared-db";
+import type { Kysely } from "kysely";
+import { v7 as uuidv7 } from "uuid";
 
 /**
  * Closed set of processor run lifecycle states.

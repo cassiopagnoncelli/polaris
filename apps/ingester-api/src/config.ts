@@ -1,21 +1,20 @@
-import { z } from "zod";
-
 import {
   composeConfigSchema,
   durationMsSchema,
+  type HttpConfig,
   httpEnvSchema,
   loadConfigWithDefaults,
+  type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  redisEnvSchema,
-  redpandaEnvSchema,
-  serviceEnvSchema,
-  type HttpConfig,
-  type PostgresConfig,
   type RedisConfig,
   type RedpandaConfig,
+  redisEnvSchema,
+  redpandaEnvSchema,
   type ServiceConfig,
+  serviceEnvSchema,
 } from "@polaris/shared-config";
+import { z } from "zod";
 
 /**
  * Tuning knobs for the in-process API key cache.

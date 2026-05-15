@@ -14,22 +14,20 @@
  *   - output events include processor metadata.
  */
 
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
-import { describe, expect, it, vi } from "vitest";
-
 import {
+  decodeEvent,
   type PolarisConsumer,
   type PolarisMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   TOPIC_FAMILY_ANALYTICS_EVENTS,
   TOPIC_FAMILY_ATTRIBUTION_EVENTS,
-  decodeEvent,
 } from "@polaris/shared-kafka";
 import { createLogger } from "@polaris/shared-logger";
-
-import { InMemoryTouchpointStore } from "../src/store.js";
+import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
+import { describe, expect, it, vi } from "vitest";
 import { createRuntime } from "../src/runtime.js";
+import { InMemoryTouchpointStore } from "../src/store.js";
 import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 
 const NOW_ISO = "2026-05-14T12:30:00.000Z";

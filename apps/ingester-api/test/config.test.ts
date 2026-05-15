@@ -1,12 +1,11 @@
-import { describe, expect, it } from "vitest";
-
 import { ConfigValidationError, loadConfig } from "@polaris/shared-config";
+import { describe, expect, it } from "vitest";
 
 import {
   INGESTER_SERVICE_NAME,
+  type IngesterConfig,
   ingesterConfigSchema,
   loadIngesterConfig,
-  type IngesterConfig,
 } from "../src/config.js";
 
 const basePostgresEnv: Record<string, string> = {

@@ -33,8 +33,8 @@ import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   type AuditEnvironment,
-  type DestinationRow,
   connectDb,
+  type DestinationRow,
   disableDestinationReplay,
   findDestinationById,
   insertAuditRecord,

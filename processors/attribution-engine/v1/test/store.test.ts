@@ -5,10 +5,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  InMemoryTouchpointStore,
   buildDeltaRecord,
   buildFirstObservationRecord,
   buildSameTupleRecord,
+  InMemoryTouchpointStore,
 } from "../src/store.js";
 import type { CampaignTuple, TouchpointChainRecord } from "../src/transform.js";
 

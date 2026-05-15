@@ -27,9 +27,9 @@
  *
  * @see docs/implementation/tasks/P7-005-clickhouse-rebuild-workflows.md
  */
-import { describe, expect, it } from "vitest";
 
 import type { PartsSummary } from "@polaris/shared-clickhouse/rebuild";
+import { describe, expect, it } from "vitest";
 
 import {
   buildClickhouseRebuildAbortRunner,
@@ -38,13 +38,13 @@ import {
   buildClickhouseRebuildPlanRunner,
   buildClickhouseRebuildShowRunner,
   CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
-  CliError,
   type ClickhouseRebuildAbortStore,
   type ClickhouseRebuildCreateAuditPayload,
   type ClickhouseRebuildCreateStore,
   type ClickhouseRebuildJobRow,
   type ClickhouseRebuildListStore,
   type ClickhouseRebuildShowStore,
+  CliError,
   type CommandContext,
   type InsertClickhouseRebuildJobInput,
   type ListClickhouseRebuildJobsFilter,

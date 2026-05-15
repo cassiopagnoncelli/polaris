@@ -1,17 +1,16 @@
-import { z } from "zod";
-
 import {
   composeConfigSchema,
+  type HttpConfig,
   httpEnvSchema,
   loadConfigWithDefaults,
   nonEmptyStringSchema,
   positiveIntSchema,
-  redpandaEnvSchema,
-  serviceEnvSchema,
-  type HttpConfig,
   type RedpandaConfig,
+  redpandaEnvSchema,
   type ServiceConfig,
+  serviceEnvSchema,
 } from "@polaris/shared-config";
+import { z } from "zod";
 
 /**
  * Default service name surfaced when `POLARIS_SERVICE_NAME` is omitted

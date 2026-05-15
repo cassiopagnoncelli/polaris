@@ -18,21 +18,19 @@
  *   - campaign change does not rotate the session.
  */
 
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
-import { describe, expect, it, vi } from "vitest";
-
 import {
+  buildRawEventsPartitionKey,
+  decodeEvent,
   type PolarisConsumer,
   type PolarisMessageContext,
   type PolarisProducer,
   TOPIC_FAMILY_RAW_EVENTS,
-  buildRawEventsPartitionKey,
-  decodeEvent,
 } from "@polaris/shared-kafka";
 import { createLogger } from "@polaris/shared-logger";
-
+import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
+import { describe, expect, it, vi } from "vitest";
+import { createRuntime, OUTPUT_TOPIC_FAMILY } from "../src/runtime.js";
 import { InMemorySessionStore } from "../src/store.js";
-import { OUTPUT_TOPIC_FAMILY, createRuntime } from "../src/runtime.js";
 import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 
 const RAN_AT_ISO = "2026-05-12T12:30:00.000Z";

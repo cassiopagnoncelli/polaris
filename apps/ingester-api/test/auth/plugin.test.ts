@@ -1,7 +1,6 @@
+import { createProblemErrorHandler } from "@polaris/shared-service-bootstrap";
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
-
-import { createProblemErrorHandler } from "@polaris/shared-service-bootstrap";
 
 import {
   API_KEY_HEADER,

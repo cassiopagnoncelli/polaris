@@ -60,51 +60,28 @@
  */
 
 export {
-  type CanonicalTopicFamily,
-  CANONICAL_TOPIC_FAMILIES,
-  TOPIC_DIAGNOSTICS_EVENTS,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_ATTRIBUTION_EVENTS,
-  TOPIC_FAMILY_ENRICHED_EVENTS,
-  TOPIC_FAMILY_IDENTITY_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-  dedicatedTopicName,
-  dlqTopicName,
-  isCanonicalTopicFamily,
-  retryTopicName,
-} from "./topics.js";
-
+  type CreateKafkaClientOptions,
+  createKafkaClient,
+  DEFAULT_RETRY_OPTIONS,
+} from "./client.js";
 export {
-  type IsolationLookup,
-  type ScopedTopicResolverLookup,
-  type SyncIsolationLookup,
-  consumerTopicsForFamily,
-  resolveTopicName,
-  resolveTopicNameScoped,
-  resolveTopicNameSync,
-  sharedOnlyIsolationLookup,
-  staticIsolationLookup,
-} from "./topic-family.js";
-
+  type CreatePolarisConsumerOptions,
+  createPolarisConsumer,
+  type PolarisConsumer,
+  type PolarisEachMessageHandler,
+  type PolarisMessageContext,
+} from "./consumer.js";
 export {
-  type ScopedIsolationLookup,
-  type TopicIsolationCacheOptions,
-  InMemoryScopedIsolationLookup,
-  TopicIsolationCache,
-} from "./topic-isolation-cache.js";
-
+  type RepublishInput,
+  readRetryAttempts,
+  republishToDlq,
+  republishToRetry,
+} from "./dlq.js";
 export {
-  type PartitionKeyIdentity,
-  type PartitionKeyIdentitySource,
-  type PartitionKeyInput,
-  buildRawEventsPartitionKey,
-  resolveRawEventsPartitionKey,
-} from "./partition-key.js";
-
-export {
+  buildEventHeaders,
+  buildRetryHeaders,
   type MessageHeaders,
-  type PolarisHeaderInput,
-  type RetryHeaderInput,
+  mergeHeaders,
   POLARIS_CONTENT_TYPE_JSON,
   POLARIS_HEADER_CONTENT_TYPE,
   POLARIS_HEADER_ENVIRONMENT,
@@ -115,9 +92,9 @@ export {
   POLARIS_HEADER_FAILED_AT,
   POLARIS_HEADER_INGESTED_AT,
   POLARIS_HEADER_OCCURRED_AT,
-  POLARIS_HEADER_PROJECT_ID,
   POLARIS_HEADER_PRODUCER,
   POLARIS_HEADER_PRODUCER_VERSION,
+  POLARIS_HEADER_PROJECT_ID,
   POLARIS_HEADER_RETRY_ATTEMPTS,
   POLARIS_HEADER_RETRY_REASON,
   POLARIS_HEADER_SCHEMA_VERSION,
@@ -126,53 +103,66 @@ export {
   POLARIS_HEADER_SOURCE_PARTITION,
   POLARIS_HEADER_SOURCE_TOPIC,
   POLARIS_HEADER_TOPIC_FAMILY,
-  buildEventHeaders,
-  buildRetryHeaders,
-  mergeHeaders,
+  type PolarisHeaderInput,
+  type RetryHeaderInput,
   readHeaderNumber,
   readHeaderString,
 } from "./headers.js";
-
 export {
-  EventDeserializationError,
-  decodeEvent,
-  encodeEvent,
-} from "./serialization.js";
-
-export {
+  composeHooks,
+  emitHook,
   type KafkaHookEvent,
   type KafkaHookHandler,
   type KafkaHookPayload,
   type KafkaHooks,
-  composeHooks,
-  emitHook,
 } from "./hooks.js";
-
 export {
-  type CreateKafkaClientOptions,
-  DEFAULT_RETRY_OPTIONS,
-  createKafkaClient,
-} from "./client.js";
-
+  buildRawEventsPartitionKey,
+  type PartitionKeyIdentity,
+  type PartitionKeyIdentitySource,
+  type PartitionKeyInput,
+  resolveRawEventsPartitionKey,
+} from "./partition-key.js";
 export {
   type CreatePolarisProducerOptions,
-  type PolarisProducer,
-  type PublishEventInput,
-  type PublishableEvent,
   createPolarisProducer,
+  type PolarisProducer,
+  type PublishableEvent,
+  type PublishEventInput,
 } from "./producer.js";
-
 export {
-  type CreatePolarisConsumerOptions,
-  type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
-  createPolarisConsumer,
-} from "./consumer.js";
-
+  decodeEvent,
+  EventDeserializationError,
+  encodeEvent,
+} from "./serialization.js";
 export {
-  type RepublishInput,
-  readRetryAttempts,
-  republishToDlq,
-  republishToRetry,
-} from "./dlq.js";
+  consumerTopicsForFamily,
+  type IsolationLookup,
+  resolveTopicName,
+  resolveTopicNameScoped,
+  resolveTopicNameSync,
+  type ScopedTopicResolverLookup,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  staticIsolationLookup,
+} from "./topic-family.js";
+export {
+  InMemoryScopedIsolationLookup,
+  type ScopedIsolationLookup,
+  TopicIsolationCache,
+  type TopicIsolationCacheOptions,
+} from "./topic-isolation-cache.js";
+export {
+  CANONICAL_TOPIC_FAMILIES,
+  type CanonicalTopicFamily,
+  dedicatedTopicName,
+  dlqTopicName,
+  isCanonicalTopicFamily,
+  retryTopicName,
+  TOPIC_DIAGNOSTICS_EVENTS,
+  TOPIC_FAMILY_ANALYTICS_EVENTS,
+  TOPIC_FAMILY_ATTRIBUTION_EVENTS,
+  TOPIC_FAMILY_ENRICHED_EVENTS,
+  TOPIC_FAMILY_IDENTITY_EVENTS,
+  TOPIC_FAMILY_RAW_EVENTS,
+} from "./topics.js";

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   type ActorSource,
-  type GateEnvironment,
-  type ResolvedActor,
   enforceProductionMutationGate,
+  type GateEnvironment,
   isGateEnvironment,
   PRODUCTION_GATE_DENIED_REASON,
   ProductionMutationRefusedError,
+  type ResolvedActor,
 } from "../src/index.js";
 
 const ACTORS: Record<ActorSource, ResolvedActor> = {

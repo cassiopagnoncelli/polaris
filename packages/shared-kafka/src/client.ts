@@ -12,8 +12,8 @@
  * use.
  */
 
-import { Kafka, type KafkaConfig, type RetryOptions, type SASLOptions, logLevel } from "kafkajs";
 import type { RedpandaConfig } from "@polaris/shared-config";
+import { Kafka, type KafkaConfig, logLevel, type RetryOptions, type SASLOptions } from "kafkajs";
 
 /**
  * Default KafkaJS retry options applied to producers and consumers that do

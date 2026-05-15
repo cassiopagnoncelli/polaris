@@ -7,10 +7,10 @@
  * command lists every match it found and returns the lot in JSON.
  */
 import type { Command } from "commander";
-import type { CommandContext, CommandDefinition } from "../../command.js";
-import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
 import type { SourceFile } from "../../catalog/index.js";
+import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";
 import type { SourceRow } from "../../catalog/sync.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchSourcesById } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

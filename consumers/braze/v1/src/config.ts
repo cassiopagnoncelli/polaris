@@ -25,23 +25,22 @@
  *                                           resolved-secret instance slug.
  */
 
-import { z } from "zod";
-
 import {
   booleanFromStringSchema,
   composeConfigSchema,
+  type HttpConfig,
   httpEnvSchema,
   loadConfigWithDefaults,
   nonEmptyStringSchema,
+  type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  redpandaEnvSchema,
-  serviceEnvSchema,
-  type HttpConfig,
-  type PostgresConfig,
   type RedpandaConfig,
+  redpandaEnvSchema,
   type ServiceConfig,
+  serviceEnvSchema,
 } from "@polaris/shared-config";
+import { z } from "zod";
 
 /**
  * Default service name surfaced when `POLARIS_SERVICE_NAME` is omitted.

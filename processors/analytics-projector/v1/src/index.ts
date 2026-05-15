@@ -11,33 +11,33 @@
  */
 
 export {
-  buildAnalyticsProjectorApp,
   type BuildAppOptions,
   type BuiltAnalyticsProjectorApp,
+  buildAnalyticsProjectorApp,
 } from "./app.js";
 export {
-  PROCESSOR_SERVICE_NAME,
+  type AnalyticsProjectorConfig,
+  type AnalyticsProjectorRuntimeConfig,
   analyticsProjectorConfigSchema,
   analyticsProjectorEnvKeys,
   analyticsProjectorEnvSchema,
   loadAnalyticsProjectorConfig,
-  type AnalyticsProjectorConfig,
-  type AnalyticsProjectorRuntimeConfig,
+  PROCESSOR_SERVICE_NAME,
 } from "./config.js";
 export {
-  createRuntime,
   type AnalyticsProjectorRuntime,
   type AnalyticsProjectorRuntimeDeps,
+  createRuntime,
 } from "./runtime.js";
 export {
+  type AnalyticsEventEnvelope,
   PROCESSOR_IDENTITY,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
-  transformToAnalyticsEvent,
-  type AnalyticsEventEnvelope,
   type ProcessorStamp,
   type RawEventEnvelope,
   type RawEventIdentity,
   type RawEventSource,
   type TransformOptions,
+  transformToAnalyticsEvent,
 } from "./transform.js";

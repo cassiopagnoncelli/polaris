@@ -17,21 +17,20 @@
  * KafkaJS and is covered by `@polaris/shared-kafka` tests.
  */
 
-import type { EachMessagePayload } from "kafkajs";
-import { describe, expect, it, vi } from "vitest";
-
 import {
+  buildRawEventsPartitionKey,
   type PolarisConsumer,
   type PolarisMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
+  sharedOnlyIsolationLookup,
   TOPIC_FAMILY_ANALYTICS_EVENTS,
   TOPIC_FAMILY_RAW_EVENTS,
-  sharedOnlyIsolationLookup,
 } from "@polaris/shared-kafka";
 import { createLogger } from "@polaris/shared-logger";
+import type { EachMessagePayload } from "kafkajs";
+import { describe, expect, it, vi } from "vitest";
 
 import { createRuntime } from "../src/runtime.js";
 import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";

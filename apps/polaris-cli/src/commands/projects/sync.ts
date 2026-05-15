@@ -15,14 +15,14 @@
  */
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
-import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   loadCatalog,
-  planProjectsSync,
   type ProjectDiffRow,
   type ProjectsSyncPlan,
+  planProjectsSync,
   resolveCatalogRoot,
 } from "../../catalog/index.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchAllProjects, insertProject, updateProject } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 

@@ -11,31 +11,31 @@
  */
 
 export {
-  buildTikTokApp,
   type BuildAppOptions,
   type BuiltTikTokApp,
+  buildTikTokApp,
 } from "./app.js";
 export {
   CONSUMER_SERVICE_NAME,
   DEFAULT_TIKTOK_API_HOST,
   loadTikTokConfig,
+  type TikTokConfig,
+  type TikTokRuntimeConfig,
   tiktokConfigSchema,
   tiktokEnvKeys,
   tiktokEnvSchema,
-  type TikTokConfig,
-  type TikTokRuntimeConfig,
 } from "./config.js";
 export {
+  type BuildDelivererOptions,
   buildEventsApiUrl,
   buildTikTokDeliverer,
   classifyRetryableStatus,
   isRetryableStatus,
   parseResolvedSecret,
-  type BuildDelivererOptions,
 } from "./deliverer.js";
 export {
-  createTikTokDescriptor,
   type CreateTikTokDescriptorOptions,
+  createTikTokDescriptor,
 } from "./descriptor.js";
 export {
   CONSUMER_IDENTITY,

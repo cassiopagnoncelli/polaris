@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildEventHeaders,
+  buildRetryHeaders,
+  mergeHeaders,
   POLARIS_CONTENT_TYPE_JSON,
   POLARIS_HEADER_CONTENT_TYPE,
   POLARIS_HEADER_EVENT_ID,
@@ -10,9 +13,6 @@ import {
   POLARIS_HEADER_SCHEMA_VERSION,
   POLARIS_HEADER_SOURCE_PARTITION,
   POLARIS_HEADER_TOPIC_FAMILY,
-  buildEventHeaders,
-  buildRetryHeaders,
-  mergeHeaders,
   readHeaderNumber,
   readHeaderString,
 } from "../src/headers.js";

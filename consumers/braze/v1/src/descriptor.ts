@@ -20,14 +20,14 @@
  *                         for its own dedupe)
  */
 
-import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 import type {
   IdentityHashingOptions,
   RawIdentityInput,
   RequiredConsent,
 } from "@polaris/shared-destination-normalize";
+import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 
-import { buildBrazeDeliverer, type BuildDelivererOptions } from "./deliverer.js";
+import { type BuildDelivererOptions, buildBrazeDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import { checkoutStartedMapper, paymentApprovedMapper, userIdentifiedMapper } from "./mapper.js";
 import type { BrazePayload } from "./types.js";

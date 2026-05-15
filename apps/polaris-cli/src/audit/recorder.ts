@@ -45,13 +45,13 @@ import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
 import {
+  AUDIT_ACTOR_SOURCES,
+  AUDIT_ENVIRONMENTS,
   type AuditActorSource,
   type AuditEnvironment,
   type AuditRecordRow,
-  AUDIT_ACTOR_SOURCES,
-  AUDIT_ENVIRONMENTS,
-  insertAuditRecord,
   findAuditRecordById,
+  insertAuditRecord,
 } from "../db/audit-records.js";
 
 /**

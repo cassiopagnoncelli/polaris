@@ -20,9 +20,8 @@
  */
 
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
-
-import type { WebhookPayload } from "./types.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
+import type { WebhookPayload } from "./types.js";
 
 /**
  * Build the canonical `WebhookPayload` for one normalized event.

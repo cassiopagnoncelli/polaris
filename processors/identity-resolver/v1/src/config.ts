@@ -7,22 +7,22 @@
  * `identity_links`, and emits canonical identity events on
  * `identity.events`.
  */
-import { z } from "zod";
 
 import {
   composeConfigSchema,
+  type HttpConfig,
   httpEnvSchema,
   loadConfigWithDefaults,
   nonEmptyStringSchema,
+  type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  redpandaEnvSchema,
-  serviceEnvSchema,
-  type HttpConfig,
-  type PostgresConfig,
   type RedpandaConfig,
+  redpandaEnvSchema,
   type ServiceConfig,
+  serviceEnvSchema,
 } from "@polaris/shared-config";
+import { z } from "zod";
 
 /** Default service name surfaced when `POLARIS_SERVICE_NAME` is omitted. */
 export const PROCESSOR_SERVICE_NAME = "identity-resolver" as const;

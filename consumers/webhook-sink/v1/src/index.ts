@@ -11,20 +11,21 @@
  */
 
 export {
-  buildWebhookSinkApp,
   type BuildAppOptions,
   type BuiltWebhookSinkApp,
+  buildWebhookSinkApp,
 } from "./app.js";
 export {
   CONSUMER_SERVICE_NAME,
   loadWebhookSinkConfig,
+  type WebhookSinkConfig,
+  type WebhookSinkRuntimeConfig,
   webhookSinkConfigSchema,
   webhookSinkEnvKeys,
   webhookSinkEnvSchema,
-  type WebhookSinkConfig,
-  type WebhookSinkRuntimeConfig,
 } from "./config.js";
 export {
+  type BuildDelivererOptions,
   buildWebhookDeliverer,
   classifyRetryableStatus,
   enforceTransportPolicy,
@@ -37,11 +38,10 @@ export {
   parseResolvedSecret,
   signBody,
   verifySignature,
-  type BuildDelivererOptions,
 } from "./deliverer.js";
 export {
-  createWebhookSinkDescriptor,
   type CreateWebhookSinkDescriptorOptions,
+  createWebhookSinkDescriptor,
 } from "./descriptor.js";
 export {
   CONSUMER_IDENTITY,

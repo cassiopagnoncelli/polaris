@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   EnvSecretProvider,
   SecretNotFoundError,
+  type SecretProviderAdapter,
   SecretProviderError,
   SecretProviderNotConfiguredError,
   SecretReferenceParseError,
   SecretResolver,
-  type SecretProviderAdapter,
 } from "../src/index.js";
 
 const SECRET_VALUE = "tk_resolver_secret_should_not_leak";

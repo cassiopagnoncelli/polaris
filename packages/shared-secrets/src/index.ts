@@ -72,10 +72,10 @@ export {
 export { formatSecretReference, parseSecretReference } from "./reference.js";
 export { SecretResolver, type SecretResolverOptions } from "./resolver.js";
 export {
+  isSecretProvider,
   SECRET_PROVIDERS,
   type SecretProvider,
   type SecretProviderAdapter,
   type SecretReference,
   type SecretReferenceInput,
-  isSecretProvider,
 } from "./types.js";

@@ -46,8 +46,8 @@
 
 import {
   applyRedactions,
-  evaluate,
   type EventInput,
+  evaluate,
   type ProjectPolicyOverride,
   type RedactionAction,
 } from "@polaris/shared-policy";
@@ -62,8 +62,8 @@ import { type EnvelopeContextInput, type FlatContext, flattenContext } from "./c
 import {
   type BestIdentity,
   type IdentityHashingOptions,
-  pickBestIdentity,
   type PreparedIdentity,
+  pickBestIdentity,
   prepareIdentity,
   type RawIdentityInput,
 } from "./identity.js";

@@ -9,9 +9,8 @@
  * @see consumers/webhook-sink/v1/src/config.ts
  */
 
-import { describe, expect, it } from "vitest";
-
 import { ConfigValidationError } from "@polaris/shared-config";
+import { describe, expect, it } from "vitest";
 
 import { CONSUMER_SERVICE_NAME, webhookSinkConfigSchema } from "../src/config.js";
 

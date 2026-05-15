@@ -37,7 +37,7 @@
  * @see docs/development/clickhouse-rebuilds.md
  */
 
-import { findRebuildableProjection, type ClickhouseProjectionDescriptor } from "./projections.js";
+import { type ClickhouseProjectionDescriptor, findRebuildableProjection } from "./projections.js";
 import type {
   ClickhouseRebuildDeclaration,
   ClickhouseRebuildPlan,

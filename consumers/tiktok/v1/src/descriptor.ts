@@ -19,13 +19,13 @@
  *   - identityHashing     hash both email + phone (TikTok requires it)
  */
 
-import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 import type {
   IdentityHashingOptions,
   RequiredConsent,
 } from "@polaris/shared-destination-normalize";
+import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 
-import { buildTikTokDeliverer, type BuildDelivererOptions } from "./deliverer.js";
+import { type BuildDelivererOptions, buildTikTokDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import { checkoutStartedMapper, paymentApprovedMapper, userIdentifiedMapper } from "./mapper.js";
 import type { TikTokEventPayload } from "./types.js";

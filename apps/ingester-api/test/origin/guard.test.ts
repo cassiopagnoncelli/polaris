@@ -9,18 +9,18 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import {
   AllowedOriginsCache,
-  ORIGIN_NOT_ALLOWED_CODE,
+  type AllowedOriginsRepository,
   createOriginGuardPreHandler,
   createPostgresAllowedOriginsRepository,
+  ORIGIN_NOT_ALLOWED_CODE,
   registerCorsPreflightRoute,
-  type AllowedOriginsRepository,
 } from "../../src/origin/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

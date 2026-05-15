@@ -12,9 +12,10 @@
  *
  * `mutates: false`.
  */
+
+import type { SourceRow } from "../../catalog/sync.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchSourcesByProject } from "../../db/index.js";
-import type { SourceRow } from "../../catalog/sync.js";
 import { UsageError } from "../../errors.js";
 import { renderJson } from "../../output.js";
 

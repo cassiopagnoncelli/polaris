@@ -35,10 +35,9 @@
  * `processor_name` / `processor_version`).
  */
 
-import { stampProcessorMetadata, type ProcessorStamp } from "@polaris/shared-processor";
-
-import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
+import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/shared-processor";
 import type { CampaignTuple, PrimaryIdentifierKind } from "./transform.js";
+import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
 import type { AnalyticsEventEnvelope, AttributionEventIdentity } from "./types.js";
 
 /** Names of the three governed attribution events v1 emits. */

@@ -1,6 +1,6 @@
 import {
-  mergePolicy,
   type ForbiddenFieldPolicy,
+  mergePolicy,
   type ProjectPolicyOverride,
 } from "@polaris/shared-policy";
 

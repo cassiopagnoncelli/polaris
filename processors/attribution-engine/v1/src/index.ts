@@ -11,58 +11,58 @@
  */
 
 export {
-  buildAttributionEngineApp,
   type BuildAppOptions,
   type BuiltAttributionEngineApp,
+  buildAttributionEngineApp,
 } from "./app.js";
 export {
-  PROCESSOR_SERVICE_NAME,
+  type AttributionEngineConfig,
+  type AttributionEngineRuntimeConfig,
   attributionEngineConfigSchema,
   attributionEngineEnvKeys,
   attributionEngineEnvSchema,
   loadAttributionEngineConfig,
-  type AttributionEngineConfig,
-  type AttributionEngineRuntimeConfig,
+  PROCESSOR_SERVICE_NAME,
 } from "./config.js";
 export {
-  createRuntime,
-  type AttributionEngineRuntime,
-  type AttributionEngineRuntimeDeps,
-  type AttributionEventEnvelope,
-  type AttributionEventName,
-} from "./runtime.js";
-export {
+  type AttributionEventProperties,
   buildFirstTouchAssignedEnvelope,
   buildLastTouchAssignedEnvelope,
   buildTouchpointCapturedEnvelope,
-  type AttributionEventProperties,
   type FirstTouchAssignedProperties,
   type LastTouchAssignedProperties,
   type TouchpointCapturedProperties,
 } from "./emit.js";
 export {
-  InMemoryTouchpointStore,
+  type AttributionEngineRuntime,
+  type AttributionEngineRuntimeDeps,
+  type AttributionEventEnvelope,
+  type AttributionEventName,
+  createRuntime,
+} from "./runtime.js";
+export {
   buildDeltaRecord,
   buildFirstObservationRecord,
   buildSameTupleRecord,
+  InMemoryTouchpointStore,
   type TouchpointStore,
 } from "./store.js";
 export {
-  PROCESSOR_IDENTITY,
-  PROCESSOR_NAME,
-  PROCESSOR_VERSION,
-  PRIMARY_IDENTIFIER_KINDS,
+  type AttributionDecision,
   buildTouchpointStoreKey,
+  type CampaignTuple,
   campaignTuplesEqual,
   decideAttribution,
   deriveTouchpointId,
   isCampaignEmpty,
   normaliseCampaign,
-  resolvePrimaryIdentifier,
-  type AttributionDecision,
-  type CampaignTuple,
+  PRIMARY_IDENTIFIER_KINDS,
+  PROCESSOR_IDENTITY,
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
   type PrimaryIdentifier,
   type PrimaryIdentifierKind,
+  resolvePrimaryIdentifier,
   type TouchpointChainRecord,
 } from "./transform.js";
 export type {

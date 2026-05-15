@@ -14,12 +14,12 @@
  * response) live in `packages/shared-schemas/` and are a separate contract.
  */
 
+export { isProblemError, ProblemError } from "./error.js";
+export { commonProblems, createProblem, PROBLEM_CONTENT_TYPE } from "./problem.js";
 export {
   COMMON_PROBLEM_CODES,
-  DEFAULT_PROBLEM_TYPE_BASE,
   type CommonProblemCode,
+  DEFAULT_PROBLEM_TYPE_BASE,
   type ProblemBody,
   type ProblemOptions,
 } from "./types.js";
-export { commonProblems, createProblem, PROBLEM_CONTENT_TYPE } from "./problem.js";
-export { isProblemError, ProblemError } from "./error.js";

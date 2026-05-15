@@ -18,7 +18,7 @@
  * No URL is provided => `ConfigError` (exit code 3), matching the rest of
  * the CLI's config-failure path.
  */
-import { type Database, closeDb, createDb } from "@polaris/shared-db";
+import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
 import { ConfigError } from "../errors.js";
 

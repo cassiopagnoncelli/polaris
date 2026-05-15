@@ -1,64 +1,63 @@
 // Canonical envelope and primitives — the SDK-safe surface.
-export * from "./envelope/index.js";
 
-// Per-event property schemas. SDKs do NOT bundle these; they live here
-// for ingester and processor consumption. Per `10-sdk-standards.md`, the
-// Web SDK explicitly avoids bundling the event catalog.
+// Catalog loader / validator surface (file-backed; intended for the
+// ingester process, not SDK distributions).
+export * from "./catalog/index.js";
+export * from "./envelope/index.js";
 export {
-  pageViewedV1PropertiesSchema,
-  type PageViewedV1Properties,
-} from "./events/page/viewed.v1.js";
+  type AttributionFirstTouchAssignedV1Properties,
+  attributionFirstTouchAssignedV1PropertiesSchema,
+} from "./events/attribution/first_touch_assigned.v1.js";
 export {
-  pageViewedV2PropertiesSchema,
-  type PageViewedV2Properties,
-} from "./events/page/viewed.v2.js";
+  type AttributionLastTouchAssignedV1Properties,
+  attributionLastTouchAssignedV1PropertiesSchema,
+} from "./events/attribution/last_touch_assigned.v1.js";
 export {
-  checkoutStartedV1PropertiesSchema,
+  type AttributionCampaignTuple,
+  type AttributionPrimaryIdentifierKind,
+  type AttributionTouchpointCapturedV1Properties,
+  attributionCampaignTupleSchema,
+  attributionPrimaryIdentifierKindSchema,
+  attributionTouchpointCapturedV1PropertiesSchema,
+} from "./events/attribution/touchpoint_captured.v1.js";
+export {
   type CheckoutStartedV1Properties,
+  checkoutStartedV1PropertiesSchema,
 } from "./events/checkout/started.v1.js";
 export {
-  identityIdentifierSchema,
-  identityLinkConfidenceSchema,
-  identityLinkedV1PropertiesSchema,
-  type IdentityLinkConfidence,
-  type IdentityLinkedV1Properties,
-} from "./events/identity/linked.v1.js";
-export {
-  identityMergedV1PropertiesSchema,
-  type IdentityMergedV1Properties,
-} from "./events/identity/merged.v1.js";
-export {
-  identityRotatedV1PropertiesSchema,
-  type IdentityRotatedV1Properties,
-} from "./events/identity/rotated.v1.js";
-export {
+  type EnrichedGeoipV1Properties,
   enrichedGeoipV1PropertiesSchema,
   geoipCountryCodeSchema,
   geoipRegionCodeSchema,
   geoipSourceIpHashSchema,
   geoipSourceSchema,
-  type EnrichedGeoipV1Properties,
 } from "./events/enriched/geoip.v1.js";
 export {
-  attributionCampaignTupleSchema,
-  attributionPrimaryIdentifierKindSchema,
-  attributionTouchpointCapturedV1PropertiesSchema,
-  type AttributionCampaignTuple,
-  type AttributionPrimaryIdentifierKind,
-  type AttributionTouchpointCapturedV1Properties,
-} from "./events/attribution/touchpoint_captured.v1.js";
+  type IdentityLinkConfidence,
+  type IdentityLinkedV1Properties,
+  identityIdentifierSchema,
+  identityLinkConfidenceSchema,
+  identityLinkedV1PropertiesSchema,
+} from "./events/identity/linked.v1.js";
 export {
-  attributionFirstTouchAssignedV1PropertiesSchema,
-  type AttributionFirstTouchAssignedV1Properties,
-} from "./events/attribution/first_touch_assigned.v1.js";
+  type IdentityMergedV1Properties,
+  identityMergedV1PropertiesSchema,
+} from "./events/identity/merged.v1.js";
 export {
-  attributionLastTouchAssignedV1PropertiesSchema,
-  type AttributionLastTouchAssignedV1Properties,
-} from "./events/attribution/last_touch_assigned.v1.js";
-
-// Catalog loader / validator surface (file-backed; intended for the
-// ingester process, not SDK distributions).
-export * from "./catalog/index.js";
+  type IdentityRotatedV1Properties,
+  identityRotatedV1PropertiesSchema,
+} from "./events/identity/rotated.v1.js";
+// Per-event property schemas. SDKs do NOT bundle these; they live here
+// for ingester and processor consumption. Per `10-sdk-standards.md`, the
+// Web SDK explicitly avoids bundling the event catalog.
+export {
+  type PageViewedV1Properties,
+  pageViewedV1PropertiesSchema,
+} from "./events/page/viewed.v1.js";
+export {
+  type PageViewedV2Properties,
+  pageViewedV2PropertiesSchema,
+} from "./events/page/viewed.v2.js";
 
 // Schema-related machine-readable reason codes for batch responses.
 export * from "./reason-codes.js";

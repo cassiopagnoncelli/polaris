@@ -42,6 +42,7 @@ import {
   normalizeOccurredAt,
   normalizeSchemaVersion,
 } from "./internal/validation.js";
+import { SDK_VERSION } from "./internal/version.js";
 import { MemoryQueueAdapter } from "./queue/memory.js";
 import { HttpsTransport, TransportError } from "./transport/https.js";
 import type {
@@ -61,7 +62,6 @@ import type {
   Transport,
   TransportResult,
 } from "./types.js";
-import { SDK_VERSION } from "./internal/version.js";
 
 /**
  * Default SDK version stamped into `source.sdk_version` if the caller omits it.

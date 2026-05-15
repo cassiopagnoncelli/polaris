@@ -9,9 +9,9 @@
  * Non-mutating: bypasses the production-gate. Authentication still
  * runs; an absent header surfaces as `{ source: 'cli', label: 'cli' }`.
  */
-import type { FastifyInstance } from "fastify";
 
 import { ProblemError } from "@polaris/shared-service-bootstrap";
+import type { FastifyInstance } from "fastify";
 
 export function registerWhoamiRoute(app: FastifyInstance): void {
   app.get("/v1/whoami", async (request, _reply) => {

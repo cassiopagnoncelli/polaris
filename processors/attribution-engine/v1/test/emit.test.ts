@@ -18,7 +18,7 @@ import {
   type LastTouchAssignedProperties,
   type TouchpointCapturedProperties,
 } from "../src/emit.js";
-import { PROCESSOR_NAME, PROCESSOR_VERSION, type CampaignTuple } from "../src/transform.js";
+import { type CampaignTuple, PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 import type { AnalyticsEventEnvelope } from "../src/types.js";
 
 const RAW: AnalyticsEventEnvelope = {

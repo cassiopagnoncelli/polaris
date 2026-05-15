@@ -13,9 +13,8 @@
  *     `ProblemError({ status: 429, code: 'rate_limited' })`.
  */
 
-import type { FastifyReply, FastifyRequest } from "fastify";
-
 import { ProblemError } from "@polaris/shared-service-bootstrap";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { IngestMetrics } from "../metrics/registry.js";
 

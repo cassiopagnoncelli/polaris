@@ -33,7 +33,7 @@
  * `processor` block + flat `processor_name` / `processor_version`).
  */
 
-import { stampProcessorMetadata, type ProcessorStamp } from "@polaris/shared-processor";
+import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/shared-processor";
 import type { EnrichedGeoipV1Properties } from "@polaris/shared-schemas";
 
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";

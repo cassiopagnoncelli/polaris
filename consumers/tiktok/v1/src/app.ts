@@ -23,6 +23,19 @@
  * Redpanda broker or PostgreSQL.
  */
 
+import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import {
+  createDestinationConsumer,
+  createKyselyDeliveryRecordRepository,
+  createKyselyDestinationInstanceReader,
+  createKyselyDlqRecordRepository,
+  type DeliveryRecordRepository,
+  type DestinationConsumer,
+  DestinationInstanceCache,
+  type DestinationInstanceReader,
+  DestinationMetrics,
+  type DlqRecordRepository,
+} from "@polaris/shared-destinations";
 import {
   createKafkaClient,
   createPolarisConsumer,
@@ -32,24 +45,11 @@ import {
 } from "@polaris/shared-kafka";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import {
-  createDestinationConsumer,
-  createKyselyDeliveryRecordRepository,
-  createKyselyDestinationInstanceReader,
-  createKyselyDlqRecordRepository,
-  DestinationInstanceCache,
-  DestinationMetrics,
-  type DeliveryRecordRepository,
-  type DestinationConsumer,
-  type DestinationInstanceReader,
-  type DlqRecordRepository,
-} from "@polaris/shared-destinations";
 import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
 import {
+  type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
-  type BootstrappedService,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";

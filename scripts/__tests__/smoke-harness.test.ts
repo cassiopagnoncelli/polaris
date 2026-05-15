@@ -11,11 +11,11 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  SmokeError,
   buildEnvelope,
   formatRow,
   pollClickHouseForEvent,
   postEvent,
+  SmokeError,
 } from "../smoke/harness.mjs";
 import { v7 } from "../smoke/uuidv7.mjs";
 

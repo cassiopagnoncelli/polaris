@@ -32,9 +32,9 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  type InsertDestinationInput,
   insertAuditRecord,
   insertDestination,
-  type InsertDestinationInput,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";

@@ -8,9 +8,8 @@
  * @see packages/shared-db/src/database.ts ApiKeyTable
  */
 
-import type { Kysely } from "kysely";
-
 import type { Database } from "@polaris/shared-db";
+import type { Kysely } from "kysely";
 
 /**
  * The subset of the `api_keys` row the ingester needs to authenticate a

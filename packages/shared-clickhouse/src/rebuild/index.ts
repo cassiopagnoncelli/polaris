@@ -22,14 +22,13 @@
  * @see docs/development/clickhouse-rebuilds.md
  */
 
+export { planClickhouseRebuild } from "./planner.js";
 export type { ClickhouseProjectionDescriptor } from "./projections.js";
 export {
   findRebuildableProjection,
-  REBUILDABLE_CLICKHOUSE_PROJECTIONS,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
+  REBUILDABLE_CLICKHOUSE_PROJECTIONS,
 } from "./projections.js";
-
-export { planClickhouseRebuild } from "./planner.js";
 export { renderClickhouseRebuildPlanHuman } from "./render.js";
 
 export type {

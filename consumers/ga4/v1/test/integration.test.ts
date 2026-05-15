@@ -12,8 +12,6 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
-import { describe, expect, it } from "vitest";
-
 import {
   createDestinationConsumer,
   InMemoryDeliveryRecordRepository,
@@ -24,6 +22,7 @@ import {
 } from "@polaris/shared-destinations";
 import { createLogger } from "@polaris/shared-logger";
 import { SecretResolver } from "@polaris/shared-secrets";
+import { describe, expect, it } from "vitest";
 
 import { createGa4Descriptor } from "../src/descriptor.js";
 import { fixtureDestinationInstance } from "./fixtures/normalized.js";

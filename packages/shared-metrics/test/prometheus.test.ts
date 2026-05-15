@@ -12,10 +12,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type MetricSample,
   metricTypeFor,
   PROMETHEUS_CONTENT_TYPE,
   toPrometheusText,
-  type MetricSample,
 } from "../src/index.js";
 
 describe("toPrometheusText", () => {

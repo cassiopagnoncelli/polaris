@@ -15,20 +15,19 @@
  * @see docs/implementation/tasks/P9-001b-destination-runtime-behavioral-tests.md
  */
 
-import type { IHeaders } from "kafkajs";
-import { describe, expect, it } from "vitest";
-
 import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
 import type { SecretResolver } from "@polaris/shared-secrets";
+import type { IHeaders } from "kafkajs";
+import { describe, expect, it } from "vitest";
 
 import {
   createDestinationConsumer,
   type Deliverer,
+  type DeliveryRecord,
   type DestinationDescriptor,
   type DestinationInstance,
   DestinationInstanceCache,
-  type DeliveryRecord,
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationDedupe,
   InMemoryDestinationInstanceReader,

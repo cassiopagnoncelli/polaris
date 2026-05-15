@@ -14,8 +14,8 @@
  */
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
-  type DestinationRow,
   connectDb,
+  type DestinationRow,
   listAllDestinations,
   listDestinationsByProjectEnv,
 } from "../../db/index.js";

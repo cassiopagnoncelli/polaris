@@ -26,10 +26,10 @@
  * `LayeredEventQueue.create(opts)` rather than `new LayeredEventQueue()`.
  */
 
+import type { EnqueueOutcome, EventQueue, QueueEntry, QueueLayer } from "../types.js";
 import { IndexedDbQueue, probeIndexedDb } from "./indexeddb-queue.js";
 import { LocalStorageQueue } from "./localstorage-queue.js";
 import { MemoryQueue } from "./memory-queue.js";
-import type { EnqueueOutcome, EventQueue, QueueEntry, QueueLayer } from "../types.js";
 
 export interface LayeredEventQueueOptions {
   readonly maxSize: number;

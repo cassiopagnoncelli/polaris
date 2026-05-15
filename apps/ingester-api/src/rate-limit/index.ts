@@ -8,25 +8,23 @@
  */
 
 export {
-  createMemoryRateLimiter,
-  type CreateMemoryRateLimiterOptions,
-} from "./memory.js";
-
-export {
-  createRedisRateLimiter,
-  DEFAULT_RATE_LIMIT_KEY_PREFIX,
-  DEFAULT_RATE_LIMIT_OP_TIMEOUT_MS,
-  DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
-  type CreateRedisRateLimiterOptions,
-  type RateLimitAllowanceResolver,
-  type RateLimitRedisClient,
-} from "./redis.js";
-
-export {
   createRateLimitPreHandler,
   RATE_LIMITED_CODE,
   type RateLimitGuardDeps,
 } from "./guard.js";
+export {
+  type CreateMemoryRateLimiterOptions,
+  createMemoryRateLimiter,
+} from "./memory.js";
+export {
+  type CreateRedisRateLimiterOptions,
+  createRedisRateLimiter,
+  DEFAULT_RATE_LIMIT_KEY_PREFIX,
+  DEFAULT_RATE_LIMIT_OP_TIMEOUT_MS,
+  DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+  type RateLimitAllowanceResolver,
+  type RateLimitRedisClient,
+} from "./redis.js";
 
 export type {
   RateLimitAcquireInput,

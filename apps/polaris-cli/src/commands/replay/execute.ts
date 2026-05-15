@@ -40,28 +40,29 @@
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
  */
-import type { Command } from "commander";
+
 import {
   type ExecuteReplayOutcome,
+  executeReplay,
+  planReplay,
+  ReplayExecutorError,
   type ReplayExecutorLogger,
   type ReplayExecutorProducer,
   type ReplayExecutorSource,
   type ReplayExecutorStore,
   type ReplayJobDeclaration,
   type ReplayPlan,
-  ReplayExecutorError,
   ReplayPlanError,
-  executeReplay,
-  planReplay,
 } from "@polaris/shared-replay";
+import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
-  type ReplayJobRow,
   completeReplayJob,
   connectDb,
   failReplayJob,
   findReplayJobById,
   markReplayJobRunning,
+  type ReplayJobRow,
   recordReplayChunkProgress,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";

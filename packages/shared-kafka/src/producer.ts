@@ -16,19 +16,19 @@
  * Polaris architectural rule.
  */
 
-import type { Kafka, Producer, ProducerConfig, ProducerRecord, RecordMetadata } from "kafkajs";
 import type { Logger } from "@polaris/shared-logger";
-import { type KafkaHooks, emitHook } from "./hooks.js";
+import type { Kafka, Producer, ProducerConfig, ProducerRecord, RecordMetadata } from "kafkajs";
 import {
-  type MessageHeaders,
-  type PolarisHeaderInput,
   buildEventHeaders,
+  type MessageHeaders,
   mergeHeaders,
+  type PolarisHeaderInput,
 } from "./headers.js";
-import { type PartitionKeyIdentity, buildRawEventsPartitionKey } from "./partition-key.js";
+import { emitHook, type KafkaHooks } from "./hooks.js";
+import { buildRawEventsPartitionKey, type PartitionKeyIdentity } from "./partition-key.js";
 import { encodeEvent } from "./serialization.js";
+import { resolveTopicNameSync, type SyncIsolationLookup } from "./topic-family.js";
 import type { CanonicalTopicFamily } from "./topics.js";
-import { type SyncIsolationLookup, resolveTopicNameSync } from "./topic-family.js";
 
 /**
  * Options accepted by `createPolarisProducer`. `kafka` is required; the rest

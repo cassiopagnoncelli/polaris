@@ -10,14 +10,14 @@
  */
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
-import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   loadCatalog,
   planSourcesSync,
+  resolveCatalogRoot,
   type SourceDiffRow,
   type SourcesSyncPlan,
-  resolveCatalogRoot,
 } from "../../catalog/index.js";
+import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchAllSources, insertSource, updateSource } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 

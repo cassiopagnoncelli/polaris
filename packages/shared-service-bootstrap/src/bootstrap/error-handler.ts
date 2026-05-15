@@ -1,7 +1,7 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 
 import { isProblemError, ProblemError } from "../problem/error.js";
-import { PROBLEM_CONTENT_TYPE, createProblem } from "../problem/problem.js";
+import { createProblem, PROBLEM_CONTENT_TYPE } from "../problem/problem.js";
 import {
   COMMON_PROBLEM_CODES,
   DEFAULT_PROBLEM_TYPE_BASE,

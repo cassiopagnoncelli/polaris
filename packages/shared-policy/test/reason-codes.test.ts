@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isPolicyReasonCode,
   POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
   POLICY_REASON_CODES,
   POLICY_REASON_LENGTH,
@@ -9,7 +10,6 @@ import {
   POLICY_REASON_PII_CARD,
   POLICY_REASON_PII_SECRET,
   POLICY_REASON_POLICY,
-  isPolicyReasonCode,
 } from "../src/index.js";
 
 describe("policy reason codes", () => {

@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { drainLoaderQueue, INLINE_LOADER_SNIPPET } from "../src/loader.js";
 import { PolarisWebSdk } from "../src/sdk.js";
-import type { LoaderQueue, Transport, TransportResult, QueuedEventPayload } from "../src/types.js";
+import type { LoaderQueue, QueuedEventPayload, Transport, TransportResult } from "../src/types.js";
 import { clearAllCookies } from "./helpers/dom.js";
 
 beforeEach(() => {

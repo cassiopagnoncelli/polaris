@@ -17,10 +17,9 @@
  * @see docs/implementation/tasks/P9-007-destination-dlq-triage.md
  */
 
-import { describe, expect, it } from "vitest";
-
 import type { CommandContext, OutputStreams, PackageMeta } from "@polaris/polaris-cli";
 import type { DeliveryRecord, DlqRecord } from "@polaris/shared-destinations";
+import { describe, expect, it } from "vitest";
 
 import { buildDeliveriesListRunner } from "../src/commands/deliveries/list.js";
 import { buildDeliveriesShowRunner } from "../src/commands/deliveries/show.js";

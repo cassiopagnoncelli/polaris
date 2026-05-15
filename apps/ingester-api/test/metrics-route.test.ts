@@ -23,9 +23,9 @@ import { buildIngesterApp } from "../src/app.js";
 import { InMemoryDedupeStore } from "../src/dedupe/index.js";
 import { IngestMetrics } from "../src/metrics/registry.js";
 import {
+  buildTestCatalog,
   InMemoryApiKeyRepository,
   RecordingProducer,
-  buildTestCatalog,
   testConfig,
 } from "./fixtures.js";
 

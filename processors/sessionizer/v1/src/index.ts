@@ -11,27 +11,19 @@
  */
 
 export {
-  buildSessionizerApp,
   type BuildAppOptions,
   type BuiltSessionizerApp,
+  buildSessionizerApp,
 } from "./app.js";
 export {
-  PROCESSOR_SERVICE_NAME,
   loadSessionizerConfig,
+  PROCESSOR_SERVICE_NAME,
+  type SessionizerConfig,
+  type SessionizerRuntimeConfig,
   sessionizerConfigSchema,
   sessionizerEnvKeys,
   sessionizerEnvSchema,
-  type SessionizerConfig,
-  type SessionizerRuntimeConfig,
 } from "./config.js";
-export {
-  OUTPUT_TOPIC_FAMILY,
-  createRuntime,
-  type SessionizerRuntime,
-  type SessionizerRuntimeDeps,
-  type SessionEventEnvelope,
-  type SessionEventName,
-} from "./runtime.js";
 export {
   buildSessionEndedEnvelope,
   buildSessionStartedEnvelope,
@@ -39,23 +31,31 @@ export {
   type SessionStartedProperties,
 } from "./emit.js";
 export {
-  InMemorySessionStore,
+  createRuntime,
+  OUTPUT_TOPIC_FAMILY,
+  type SessionEventEnvelope,
+  type SessionEventName,
+  type SessionizerRuntime,
+  type SessionizerRuntimeDeps,
+} from "./runtime.js";
+export {
   buildContinuedRecord,
   buildOpenedRecord,
+  InMemorySessionStore,
   type SessionStore,
 } from "./store.js";
 export {
+  buildSessionStoreKey,
   DEFAULT_INACTIVITY_SECONDS,
+  decideSession,
+  deriveSessionId,
+  PRIMARY_IDENTIFIER_KINDS,
   PROCESSOR_IDENTITY,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
-  PRIMARY_IDENTIFIER_KINDS,
-  buildSessionStoreKey,
-  decideSession,
-  deriveSessionId,
-  resolvePrimaryIdentifier,
   type PrimaryIdentifier,
   type PrimaryIdentifierKind,
+  resolvePrimaryIdentifier,
   type SessionDecision,
   type SessionRecord,
 } from "./transform.js";

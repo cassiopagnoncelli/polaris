@@ -14,19 +14,17 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-
-import { describe, expect, it } from "vitest";
-
+import { fileURLToPath } from "node:url";
 import { enrichedGeoipV1PropertiesSchema } from "@polaris/shared-schemas";
+import { describe, expect, it } from "vitest";
 
 import {
   decideEnrichment,
   decisionToProperties,
   fromFixture,
-  NoOpIPLookup,
   type GeoResult,
+  NoOpIPLookup,
 } from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);

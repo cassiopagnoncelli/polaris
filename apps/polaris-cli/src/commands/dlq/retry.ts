@@ -30,20 +30,20 @@
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
-import type { Command } from "commander";
-import { v7 as uuidv7 } from "uuid";
 
 import { loadConfigWithDefaults, redpandaEnvSchema } from "@polaris/shared-config";
 import {
+  createKyselyDlqRecordRepository,
   type DlqRecord,
   type DlqRecordRepository,
-  createKyselyDlqRecordRepository,
 } from "@polaris/shared-destinations";
 import {
-  type PolarisProducer,
   createKafkaClient,
   createPolarisProducer,
+  type PolarisProducer,
 } from "@polaris/shared-kafka";
+import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {

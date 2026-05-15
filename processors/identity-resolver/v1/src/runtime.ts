@@ -36,42 +36,41 @@
  * `@polaris/shared-processor`.
  */
 
-import { v7 as uuidv7 } from "uuid";
-import type { Logger } from "@polaris/shared-logger";
 import {
+  buildRawEventsPartitionKey,
+  consumerTopicsForFamily,
+  decodeEvent,
   type PolarisConsumer,
   type PolarisEachMessageHandler,
   type PolarisMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
-  decodeEvent,
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_IDENTITY_EVENTS,
   TOPIC_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
 import {
-  type ProcessorMetricLabels,
-  type ProcessorRetryClassification,
-  ProcessorMetrics,
   classifyError,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+  type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
-
-import type { IdentityLinkRepository } from "./repository.js";
-import {
-  EVIDENCE_TYPE_EXPLICIT_OVERLAP,
-  PROCESSOR_IDENTITY,
-  PROCESSOR_NAME,
-  PROCESSOR_VERSION,
-  formatIdentifier,
-  resolveIdentityCandidate,
-} from "./transform.js";
+import { v7 as uuidv7 } from "uuid";
 import {
   buildIdentityEventEnvelope,
   type IdentityEventEmission,
   type IdentityEventName,
 } from "./emit.js";
+import type { IdentityLinkRepository } from "./repository.js";
+import {
+  EVIDENCE_TYPE_EXPLICIT_OVERLAP,
+  formatIdentifier,
+  PROCESSOR_IDENTITY,
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
+  resolveIdentityCandidate,
+} from "./transform.js";
 import type { RawEventEnvelope } from "./types.js";
 
 /**
@@ -517,7 +516,7 @@ async function applyExplicitOverlap(input: {
 
 // `IdentityEventName` is exported from emit.ts but referenced through the
 // emission type here. We keep the local re-export to ease test imports.
-export type { IdentityEventName, IdentityEventEmission } from "./emit.js";
+export type { IdentityEventEmission, IdentityEventName } from "./emit.js";
 export { PROCESSOR_IDENTITY };
 
 /**

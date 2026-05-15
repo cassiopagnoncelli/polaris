@@ -18,15 +18,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  PRIMARY_IDENTIFIER_KINDS,
   buildTouchpointStoreKey,
+  type CampaignTuple,
   campaignTuplesEqual,
   decideAttribution,
   deriveTouchpointId,
   isCampaignEmpty,
   normaliseCampaign,
+  PRIMARY_IDENTIFIER_KINDS,
   resolvePrimaryIdentifier,
-  type CampaignTuple,
   type TouchpointChainRecord,
 } from "../src/transform.js";
 import type { AnalyticsEventEnvelope, AttributionEventCampaign } from "../src/types.js";

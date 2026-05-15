@@ -19,13 +19,13 @@
  *   - identityHashing     off (GA4 does not consume hashed identifiers)
  */
 
-import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 import type {
   IdentityHashingOptions,
   RequiredConsent,
 } from "@polaris/shared-destination-normalize";
+import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
 
-import { buildGa4Deliverer, type BuildDelivererOptions } from "./deliverer.js";
+import { type BuildDelivererOptions, buildGa4Deliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import { checkoutStartedMapper, paymentApprovedMapper, userIdentifiedMapper } from "./mapper.js";
 import type { Ga4EventPayload } from "./types.js";

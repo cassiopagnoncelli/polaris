@@ -4,9 +4,9 @@ import { buildIngesterApp } from "../src/app.js";
 import { API_KEY_HEADER, AUTH_PROBLEM_CODES } from "../src/auth/index.js";
 import { InMemoryDedupeStore } from "../src/dedupe/index.js";
 import {
+  buildTestCatalog,
   InMemoryApiKeyRepository,
   RecordingProducer,
-  buildTestCatalog,
   testConfig,
 } from "./fixtures.js";
 

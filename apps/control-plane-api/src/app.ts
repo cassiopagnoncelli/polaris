@@ -28,13 +28,14 @@
  * deterministically; production wires the Kysely-backed adapter from
  * `./operators/repository.ts`.
  */
+
+import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
+import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import { createLogger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
 import {
-  bootstrapService,
   type BootstrappedService,
+  bootstrapService,
   type OpenApiSetup,
   type ReadinessProbe,
   type ShutdownTask,
@@ -43,10 +44,6 @@ import type { Kysely } from "kysely";
 
 import { createBearerAuthPreHandler } from "./auth/bearer.js";
 import type { ControlPlaneConfig } from "./config.js";
-import { controlPlaneOpenApiSetup } from "./openapi/setup.js";
-import { createKyselyOperatorTokenRepository } from "./operators/repository.js";
-import { registerWhoamiRoute } from "./routes/whoami.js";
-
 // In-process counter registry. Reuses the Polaris convention from the
 // ingester (`IngestMetrics`); the control-plane v1 has no business
 // counters yet, so the registry is empty. The bootstrap still serves
@@ -55,6 +52,9 @@ import { registerWhoamiRoute } from "./routes/whoami.js";
 // We keep the structure here so a future P6-002+ task can land
 // counters under a typed registry without re-wiring `/metrics`.
 import { ControlPlaneMetrics } from "./metrics/registry.js";
+import { controlPlaneOpenApiSetup } from "./openapi/setup.js";
+import { createKyselyOperatorTokenRepository } from "./operators/repository.js";
+import { registerWhoamiRoute } from "./routes/whoami.js";
 
 export interface BuildControlPlaneAppOptions {
   readonly config: ControlPlaneConfig;

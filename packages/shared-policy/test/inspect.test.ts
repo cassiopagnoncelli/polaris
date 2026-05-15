@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatPolicyInspection,
+  inspectPolicy,
   POLICY_REASON_PII_ACCOUNT,
   POLICY_REASON_POLICY,
   type ProjectPolicyOverride,
-  formatPolicyInspection,
-  inspectPolicy,
 } from "../src/index.js";
 
 describe("inspectPolicy", () => {

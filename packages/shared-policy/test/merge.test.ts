@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  evaluate,
+  mergePolicy,
   PLATFORM_DEFAULT_POLICY,
   POLICY_REASON_PII_ACCOUNT,
   POLICY_REASON_PII_CARD,
   POLICY_REASON_POLICY,
   PolicyMergeError,
   type ProjectPolicyOverride,
-  evaluate,
-  mergePolicy,
 } from "../src/index.js";
 import { buildEvent } from "./fixtures.js";
 

@@ -16,9 +16,8 @@
  * @see consumers/meta-capi/v1/src/mapper.ts
  */
 
-import { describe, expect, it } from "vitest";
-
 import { sha256Hex } from "@polaris/shared-destination-normalize";
+import { describe, expect, it } from "vitest";
 
 import {
   buildUserData,

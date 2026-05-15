@@ -26,8 +26,8 @@
  * need to handle the new shape.
  */
 
-export { createDb, closeDb } from "./client.js";
-export type { Database, CreateDbOptions } from "./client.js";
+export type { CreateDbOptions, Database } from "./client.js";
+export { closeDb, createDb } from "./client.js";
 export type {
   DestinationMode,
   DestinationRetryPolicy,
@@ -38,13 +38,13 @@ export type {
   IdentityLinksTable,
   ProcessorActivationState,
   ProcessorActivationsTable,
-  ProcessorRunsTable,
   ProcessorRunStatus,
-  ProjectsTable,
+  ProcessorRunsTable,
   ProjectStatus,
+  ProjectsTable,
   SourceRuntime,
-  SourcesTable,
   SourceStatus,
+  SourcesTable,
   SourceType,
   TopicIsolationsTable,
 } from "./database.js";

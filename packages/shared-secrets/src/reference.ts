@@ -1,5 +1,5 @@
 import { SecretReferenceParseError } from "./errors.js";
-import { type SecretProvider, type SecretReference, isSecretProvider } from "./types.js";
+import { isSecretProvider, type SecretProvider, type SecretReference } from "./types.js";
 
 /**
  * Maximum accepted length for the `ref` portion of a secret reference. Set

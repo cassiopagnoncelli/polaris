@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EventDeserializationError, decodeEvent, encodeEvent } from "../src/serialization.js";
+import { decodeEvent, EventDeserializationError, encodeEvent } from "../src/serialization.js";
 
 describe("encodeEvent / decodeEvent", () => {
   it("round-trips a canonical event envelope", () => {

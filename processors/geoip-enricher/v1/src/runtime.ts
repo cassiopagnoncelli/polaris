@@ -39,37 +39,37 @@
  * `source_ip_hash`.
  */
 
-import { v7 as uuidv7 } from "uuid";
-import type { Logger } from "@polaris/shared-logger";
 import {
+  buildRawEventsPartitionKey,
+  consumerTopicsForFamily,
+  decodeEvent,
   type PolarisConsumer,
   type PolarisEachMessageHandler,
   type PolarisMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
-  decodeEvent,
   sharedOnlyIsolationLookup,
   TOPIC_FAMILY_ENRICHED_EVENTS,
   TOPIC_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-kafka";
+import type { Logger } from "@polaris/shared-logger";
 import {
-  type ProcessorMetricLabels,
-  type ProcessorRetryClassification,
-  ProcessorMetrics,
   classifyError,
+  type ProcessorMetricLabels,
+  ProcessorMetrics,
+  type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import { v7 as uuidv7 } from "uuid";
 
 import { buildGeoipEnvelope, type GeoipEnvelope } from "./emit.js";
 import type { IPLookup } from "./lookup.js";
 import { NoOpIPLookup } from "./lookup.js";
 import {
+  decideEnrichment,
+  decisionToProperties,
   PROCESSOR_IDENTITY,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
-  decideEnrichment,
-  decisionToProperties,
 } from "./transform.js";
 import type { RawEventEnvelope } from "./types.js";
 

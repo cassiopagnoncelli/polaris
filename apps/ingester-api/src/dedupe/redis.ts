@@ -1,7 +1,6 @@
-import type { RedisOptions } from "ioredis";
-
 import type { RedisConfig } from "@polaris/shared-config";
 import type { Logger } from "@polaris/shared-logger";
+import type { RedisOptions } from "ioredis";
 
 import type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "./types.js";
 

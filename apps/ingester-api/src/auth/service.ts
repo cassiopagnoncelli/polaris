@@ -15,9 +15,9 @@
  */
 
 import {
-  parseApiKeyHeader,
   type AuthenticatedRequestContext,
   type ParsedApiKey,
+  parseApiKeyHeader,
 } from "./api-key.js";
 import { AUTH_PROBLEM_CODES, type AuthProblemCode } from "./errors.js";
 import { verifyApiKeyHash } from "./hash.js";

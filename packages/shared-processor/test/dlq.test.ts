@@ -7,10 +7,10 @@
  * records `send` calls so we can assert the resulting DLQ topic name,
  * headers, and message payload.
  */
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
-import { describe, expect, it } from "vitest";
 
 import type { PolarisProducer } from "@polaris/shared-kafka";
+import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
+import { describe, expect, it } from "vitest";
 
 import { publishToDlq } from "../src/dlq.js";
 

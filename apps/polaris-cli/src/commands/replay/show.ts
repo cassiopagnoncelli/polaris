@@ -15,7 +15,7 @@
  */
 import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { type ReplayJobRow, connectDb, findReplayJobById } from "../../db/index.js";
+import { connectDb, findReplayJobById, type ReplayJobRow } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 

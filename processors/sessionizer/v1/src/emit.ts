@@ -36,10 +36,9 @@
  * `processor_name` / `processor_version`).
  */
 
-import { stampProcessorMetadata, type ProcessorStamp } from "@polaris/shared-processor";
-
-import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
+import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/shared-processor";
 import type { PrimaryIdentifierKind } from "./transform.js";
+import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
 import type { RawEventEnvelope, RawEventIdentity } from "./types.js";
 
 /** Names of the two governed session events v1 emits. */

@@ -25,47 +25,6 @@
  */
 
 export type {
-  PlanReplayOptions,
-  ReplayJobDeclaration,
-  ReplayPlan,
-  ReplayPlanChunk,
-  ReplayPlanEnvironment,
-  ReplayPlanMode,
-  ReplayPlanRejectionCode,
-  ReplayPlanRisk,
-  ReplayPlanTarget,
-  ReplayRiskCode,
-} from "./types.js";
-export {
-  REPLAY_PLAN_ENVIRONMENTS,
-  REPLAY_PLAN_MODES,
-  REPLAY_PLAN_REJECTION_CODES,
-  REPLAY_PLAN_TARGETS,
-  REPLAY_RISK_CODES,
-  ReplayPlanError,
-} from "./types.js";
-
-export {
-  DEFAULT_CHUNK_SIZE_DAYS,
-  DEFAULT_RETENTION_DAYS,
-  WIDE_WINDOW_DAYS_THRESHOLD,
-  buildConsumerGroup,
-  chunkWindow,
-  planReplay,
-} from "./planner.js";
-
-export { renderPlanHuman } from "./render.js";
-
-export {
-  REPLAY_EXECUTOR_REFUSAL_CODES,
-  REPLAY_HEADER_FLAG,
-  REPLAY_HEADER_JOB_ID,
-  ReplayExecutorError,
-  buildProduceRecord,
-  executeReplay,
-  matchesPlanScope,
-} from "./executor.js";
-export type {
   ExecuteReplayInput,
   ExecuteReplayOutcome,
   ExecuteReplayOutcomeStatus,
@@ -85,3 +44,43 @@ export type {
   ReplayProduceRecord,
   ReplaySourceEvent,
 } from "./executor.js";
+export {
+  buildProduceRecord,
+  executeReplay,
+  matchesPlanScope,
+  REPLAY_EXECUTOR_REFUSAL_CODES,
+  REPLAY_HEADER_FLAG,
+  REPLAY_HEADER_JOB_ID,
+  ReplayExecutorError,
+} from "./executor.js";
+
+export {
+  buildConsumerGroup,
+  chunkWindow,
+  DEFAULT_CHUNK_SIZE_DAYS,
+  DEFAULT_RETENTION_DAYS,
+  planReplay,
+  WIDE_WINDOW_DAYS_THRESHOLD,
+} from "./planner.js";
+
+export { renderPlanHuman } from "./render.js";
+export type {
+  PlanReplayOptions,
+  ReplayJobDeclaration,
+  ReplayPlan,
+  ReplayPlanChunk,
+  ReplayPlanEnvironment,
+  ReplayPlanMode,
+  ReplayPlanRejectionCode,
+  ReplayPlanRisk,
+  ReplayPlanTarget,
+  ReplayRiskCode,
+} from "./types.js";
+export {
+  REPLAY_PLAN_ENVIRONMENTS,
+  REPLAY_PLAN_MODES,
+  REPLAY_PLAN_REJECTION_CODES,
+  REPLAY_PLAN_TARGETS,
+  REPLAY_RISK_CODES,
+  ReplayPlanError,
+} from "./types.js";

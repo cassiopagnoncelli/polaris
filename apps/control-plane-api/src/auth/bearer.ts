@@ -33,15 +33,15 @@
  *   `request.actor` for downstream consumers (dispatcher gate, audit
  *   recorder, route handlers).
  */
-import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 import {
-  parseOperatorToken,
   type OperatorTokenRepository,
+  parseOperatorToken,
   type ResolvedActor,
 } from "@polaris/shared-control-plane";
 import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/shared-secrets";
 import { ProblemError } from "@polaris/shared-service-bootstrap";
+import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 /** Problem code returned when the bearer header is malformed. */
 export const INVALID_OPERATOR_TOKEN_CODE = "invalid_operator_token" as const;

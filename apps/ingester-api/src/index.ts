@@ -11,47 +11,53 @@
  * @see docs/architecture/09-engineering-standards.md "Fastify Service Structure"
  */
 
-export { buildIngesterApp, type BuildIngesterAppOptions } from "./app.js";
-export {
-  INGESTER_SERVICE_NAME,
-  authCacheEnvKeys,
-  authCacheEnvSchema,
-  ingestEnvKeys,
-  ingestEnvSchema,
-  ingesterConfigSchema,
-  loadIngesterConfig,
-  type AuthCacheConfig,
-  type IngestConfig,
-  type IngesterConfig,
-} from "./config.js";
+export { type BuildIngesterAppOptions, buildIngesterApp } from "./app.js";
 export {
   API_KEY_HEADER,
   ApiKeyCache,
-  AUTH_PROBLEM_CODES,
-  createAuthPreHandler,
-  createAuthService,
-  createPostgresApiKeyRepository,
-  parseApiKeyHeader,
-  verifyApiKeyHash,
   type ApiKeyCacheOptions,
   type ApiKeyRecord,
   type ApiKeyRepository,
-  type AuthenticateRequest,
+  AUTH_PROBLEM_CODES,
   type AuthenticatedRequestContext,
+  type AuthenticateRequest,
   type AuthProblemCode,
   type AuthRejection,
   type AuthRejectionReason,
   type AuthResult,
   type AuthServiceOptions,
   type AuthSuccess,
+  createAuthPreHandler,
+  createAuthService,
+  createPostgresApiKeyRepository,
   type ParsedApiKey,
+  parseApiKeyHeader,
+  verifyApiKeyHash,
 } from "./auth/index.js";
 export {
-  NOT_IMPLEMENTED_AFTER_AUTH_CODE,
-  NOT_IMPLEMENTED_CODE,
-  registerEventsRoutes,
-  type RegisterEventsRoutesOptions,
-} from "./routes/events.js";
+  loadRuntimeCatalog,
+  resolveDefaultCatalogRoot,
+} from "./catalog/runtime.js";
+export {
+  type AuthCacheConfig,
+  authCacheEnvKeys,
+  authCacheEnvSchema,
+  INGESTER_SERVICE_NAME,
+  type IngestConfig,
+  type IngesterConfig,
+  ingestEnvKeys,
+  ingestEnvSchema,
+  ingesterConfigSchema,
+  loadIngesterConfig,
+} from "./config.js";
+export {
+  createRedisDedupeStore,
+  type DedupeClaimInput,
+  type DedupeClaimOutcome,
+  type DedupeStore,
+  DisabledDedupeStore,
+  InMemoryDedupeStore,
+} from "./dedupe/index.js";
 export {
   createIngestHandler,
   type IngestHandler,
@@ -59,18 +65,10 @@ export {
   type InvalidRequestBody,
 } from "./ingest/handler.js";
 export {
-  batchRequestSchema,
   type BatchRequest,
+  batchRequestSchema,
   type IngestRequestContext,
 } from "./ingest/types.js";
-export {
-  DisabledDedupeStore,
-  InMemoryDedupeStore,
-  createRedisDedupeStore,
-  type DedupeClaimInput,
-  type DedupeClaimOutcome,
-  type DedupeStore,
-} from "./dedupe/index.js";
 export {
   IngestMetrics,
   METRIC_INGEST_BATCH_ACCEPTED_TOTAL,
@@ -82,23 +80,25 @@ export {
   type MetricSample,
 } from "./metrics/registry.js";
 export {
-  loadRuntimeCatalog,
-  resolveDefaultCatalogRoot,
-} from "./catalog/runtime.js";
-export {
-  buildOpenApiDocument,
+  type BuildOpenApiDocumentOptions,
   buildComponentSchemas,
+  buildOpenApiDocument,
   buildPaths,
   DEFAULT_OPENAPI_ROUTE,
   EXAMPLE_CANONICAL_ENVELOPE,
   OPERATIONS_COMPONENT_SCHEMAS,
+  type OpenApiDocument,
+  type OpenApiSetupOptions,
   openApiSetup,
   openApiSetupWith,
   PUBLISHED_OPENAPI_INFO,
   PUBLISHED_OPENAPI_SERVERS,
   registerOpenApiRoute,
-  type BuildOpenApiDocumentOptions,
-  type OpenApiDocument,
-  type OpenApiSetupOptions,
 } from "./openapi/index.js";
 export { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";
+export {
+  NOT_IMPLEMENTED_AFTER_AUTH_CODE,
+  NOT_IMPLEMENTED_CODE,
+  type RegisterEventsRoutesOptions,
+  registerEventsRoutes,
+} from "./routes/events.js";

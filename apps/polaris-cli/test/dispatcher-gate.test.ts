@@ -18,9 +18,14 @@
  *   - a valid `POLARIS_OPERATOR_TOKEN` flips the actor to `declared` and
  *     the gate allows the run.
  */
+
+import type {
+  OperatorTokenRepository,
+  OperatorTokenRow,
+  ResolvedActor,
+} from "@polaris/shared-control-plane";
 import { POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
 import {
   type CommandContext,
   type CommandDefinition,
@@ -29,11 +34,6 @@ import {
   type PackageMeta,
   run,
 } from "../src/index.js";
-import type {
-  OperatorTokenRepository,
-  OperatorTokenRow,
-  ResolvedActor,
-} from "@polaris/shared-control-plane";
 
 const META: PackageMeta = {
   version: "0.0.0-test",

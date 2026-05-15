@@ -1,11 +1,11 @@
 import {
-  type GateEnvironment,
-  type OperatorTokenRepository,
-  type ResolvedActor,
   enforceProductionMutationGate,
+  type GateEnvironment,
   isGateEnvironment,
   OPERATOR_TOKEN_ENV_VAR,
+  type OperatorTokenRepository,
   ProductionMutationRefusedError,
+  type ResolvedActor,
   resolveActor,
 } from "@polaris/shared-control-plane";
 import { Command, Option } from "commander";
@@ -15,14 +15,14 @@ import type {
   CommandHandler,
   CommandRegistrarDeps,
 } from "./command.js";
+import { BUILTIN_COMMANDS } from "./commands/index.js";
 import {
   CLI_LOG_LEVELS,
   type CliLogLevel,
   loadCliConfig,
-  type OutputFormat,
   OUTPUT_FORMATS,
+  type OutputFormat,
 } from "./config.js";
-import { BUILTIN_COMMANDS } from "./commands/index.js";
 import { connectDb } from "./db/connect.js";
 import { CliError, ExitCode, isCliError, UsageError } from "./errors.js";
 import { createCliLogger } from "./logger.js";

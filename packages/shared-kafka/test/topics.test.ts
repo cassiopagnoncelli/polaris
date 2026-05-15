@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   CANONICAL_TOPIC_FAMILIES,
-  TOPIC_DIAGNOSTICS_EVENTS,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
   dedicatedTopicName,
   dlqTopicName,
   isCanonicalTopicFamily,
   retryTopicName,
+  TOPIC_DIAGNOSTICS_EVENTS,
+  TOPIC_FAMILY_ANALYTICS_EVENTS,
+  TOPIC_FAMILY_RAW_EVENTS,
 } from "../src/topics.js";
 
 describe("canonical topic constants", () => {

@@ -3,8 +3,8 @@ import {
   booleanFromStringSchema,
   durationMsSchema,
   nonEmptyStringSchema,
-  positiveIntSchema,
   portSchema,
+  positiveIntSchema,
 } from "./common.js";
 
 /**

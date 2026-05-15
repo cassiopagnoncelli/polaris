@@ -15,17 +15,15 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
-import { describe, expect, it } from "vitest";
-
 import type { MapperContext } from "@polaris/shared-destinations";
-
-import { stampDelivery, webhookPassthroughMapper } from "../src/mapper.js";
+import { describe, expect, it } from "vitest";
 import {
   CONSUMER_VENDOR,
   CONSUMER_VERSION,
   DELIVERER_VERSION,
   MAPPER_VERSION,
 } from "../src/descriptor-identity.js";
+import { stampDelivery, webhookPassthroughMapper } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
 
 describe("webhookPassthroughMapper", () => {

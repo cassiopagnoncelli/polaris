@@ -14,30 +14,29 @@
  * and (for api-keys) the argon2id hash.
  */
 import { describe, expect, it } from "vitest";
-
+import type { SourceRow } from "../src/catalog/sync.js";
 import {
   type ApiKeyRow,
-  type AuditRecordRow,
   type AuditListStore,
+  type AuditRecordRow,
   type AuditShowStore,
-  type CommandContext,
-  type DestinationRow,
-  type ExportApiKeysStore,
-  type ExportAuditStore,
-  type ExportDestinationsStore,
-  type ExportSourcesStore,
-  ExitCode,
-  type OutputStreams,
-  type PackageMeta,
   buildAuditListRunner,
   buildAuditShowRunner,
   buildExportApiKeysRunner,
   buildExportAuditRunner,
   buildExportDestinationsRunner,
   buildExportSourcesRunner,
+  type CommandContext,
+  type DestinationRow,
+  ExitCode,
+  type ExportApiKeysStore,
+  type ExportAuditStore,
+  type ExportDestinationsStore,
+  type ExportSourcesStore,
+  type OutputStreams,
+  type PackageMeta,
   run,
 } from "../src/index.js";
-import type { SourceRow } from "../src/catalog/sync.js";
 
 const META: PackageMeta = {
   version: "0.0.0-test",

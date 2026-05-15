@@ -10,12 +10,12 @@
  * test.
  */
 
+import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 import type {
   DelivererContext,
   DestinationInstance,
   MapperContext,
 } from "@polaris/shared-destinations";
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 
 import type { TikTokEventPayload } from "../../src/types.js";
 

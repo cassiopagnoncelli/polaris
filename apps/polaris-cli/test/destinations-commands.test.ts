@@ -22,10 +22,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDestinationsCreateRunner,
-  buildDestinationsDisableRunner,
   buildDestinationsDisableReplayRunner,
-  buildDestinationsEnableRunner,
+  buildDestinationsDisableRunner,
   buildDestinationsEnableReplayRunner,
+  buildDestinationsEnableRunner,
   buildDestinationsListRunner,
   buildDestinationsShowRunner,
   buildDestinationsUpdateOpsRunner,

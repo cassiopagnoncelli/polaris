@@ -13,17 +13,16 @@
  * `./paths.ts` reference these by name.
  */
 
-import { z } from "zod";
-
 import {
   batchAcceptedResultSchema,
-  batchRejectedResultSchema,
   batchReasonCodeSchema,
+  batchRejectedResultSchema,
   batchResponseSchema,
   envelopeSchema,
   producerEnvelopeSchema,
   schemaReasonCodeSchema,
 } from "@polaris/shared-schemas";
+import { z } from "zod";
 
 import { batchRequestSchema } from "../ingest/types.js";
 

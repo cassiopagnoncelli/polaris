@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   bootstrapService,
-  PROBLEM_CONTENT_TYPE,
   POLARIS_REQUEST_ID_HEADER,
+  PROBLEM_CONTENT_TYPE,
   ProblemError,
   RESPONSE_REQUEST_ID_HEADER,
   type ServiceInfo,

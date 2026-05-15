@@ -20,8 +20,8 @@
 // internal infra team but possible), set POLARIS_SMOKE_API_KEY directly
 // and the runner skips the seed step entirely.
 
-import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { v7 as uuidv7Maybe } from "./uuidv7.mjs";
 
 /**

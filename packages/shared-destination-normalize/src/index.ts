@@ -38,41 +38,6 @@
  * tooling enumerate the helpers programmatically.
  */
 
-// ---- Public entry point ---------------------------------------------------
-export {
-  applySecondPassRedactions,
-  DROP_REASONS,
-  type DropOutcome,
-  type DropReason,
-  normalizeForDestination,
-  type NormalizableEnvelope,
-  type NormalizedEvent,
-  type NormalizedOutcome,
-  type NormalizeOptions,
-  type NormalizeOutcome,
-  type SecondPassRedactionOutcome,
-} from "./normalize.js";
-
-// ---- Identity helpers ----------------------------------------------------
-export {
-  type BestIdentity,
-  type BestIdentityKind,
-  type IdentityHashingOptions,
-  pickBestIdentity,
-  type PreparedIdentity,
-  prepareIdentity,
-  type RawIdentityInput,
-} from "./identity.js";
-
-// ---- Context flattening --------------------------------------------------
-export {
-  type EnvelopeCampaignContext,
-  type EnvelopeContextInput,
-  type EnvelopePageContext,
-  type FlatContext,
-  flattenContext,
-} from "./context.js";
-
 // ---- Consent -------------------------------------------------------------
 export {
   CONSENT_DIMENSIONS,
@@ -83,13 +48,14 @@ export {
   evaluateConsent,
   type RequiredConsent,
 } from "./consent.js";
-
-// ---- Hashing primitives --------------------------------------------------
-export { sha256Hex } from "./hashing.js";
-export { canonicalizeEmail, hashEmailLower } from "./email.js";
-export { hashPhoneE164, requireE164 } from "./phone.js";
-export { canonicalizeExternalId, hashExternalId } from "./external-id.js";
-
+// ---- Context flattening --------------------------------------------------
+export {
+  type EnvelopeCampaignContext,
+  type EnvelopeContextInput,
+  type EnvelopePageContext,
+  type FlatContext,
+  flattenContext,
+} from "./context.js";
 // ---- Currency conversion -------------------------------------------------
 export {
   CURRENCY_EXPONENTS,
@@ -98,6 +64,35 @@ export {
   majorToMinor,
   minorToMajor,
 } from "./currency.js";
+export { canonicalizeEmail, hashEmailLower } from "./email.js";
+export { canonicalizeExternalId, hashExternalId } from "./external-id.js";
+// ---- Hashing primitives --------------------------------------------------
+export { sha256Hex } from "./hashing.js";
+// ---- Identity helpers ----------------------------------------------------
+export {
+  type BestIdentity,
+  type BestIdentityKind,
+  type IdentityHashingOptions,
+  type PreparedIdentity,
+  pickBestIdentity,
+  prepareIdentity,
+  type RawIdentityInput,
+} from "./identity.js";
+// ---- Public entry point ---------------------------------------------------
+export {
+  applySecondPassRedactions,
+  DROP_REASONS,
+  type DropOutcome,
+  type DropReason,
+  type NormalizableEnvelope,
+  type NormalizedEvent,
+  type NormalizedOutcome,
+  type NormalizeOptions,
+  type NormalizeOutcome,
+  normalizeForDestination,
+  type SecondPassRedactionOutcome,
+} from "./normalize.js";
+export { hashPhoneE164, requireE164 } from "./phone.js";
 
 // ---- Timestamp conversion ------------------------------------------------
 export { isoToEpochMicros, isoToEpochMs, isoToEpochSeconds } from "./timestamp.js";

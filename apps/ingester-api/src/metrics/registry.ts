@@ -1,6 +1,6 @@
 import {
-  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
   type PatternRedactionMetricIncrement,
+  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
 } from "@polaris/shared-policy";
 
 /**

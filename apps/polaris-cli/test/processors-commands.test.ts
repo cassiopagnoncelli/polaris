@@ -26,7 +26,7 @@
  *   3. `processor_runs` not yet provisioned: `runs list` / `runs show`
  *      surface the structured "wired in P8-001" message without crashing.
  */
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

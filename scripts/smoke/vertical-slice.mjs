@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Polaris vertical-slice smoke runner — P5-001.
 //
 // Proves the wired path end-to-end against a running local stack:
@@ -63,19 +64,19 @@
 //   POLARIS_SMOKE_POLL_TIMEOUT_MS   default 60000
 //   POLARIS_SMOKE_POLL_INTERVAL_MS  default 1000
 
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
 
 import {
-  envOr,
-  log,
   buildEnvelope,
-  postEvent,
-  pollClickHouseForEvent,
-  seedApiKey,
+  envOr,
   formatRow,
+  log,
+  pollClickHouseForEvent,
+  postEvent,
   SmokeError,
+  seedApiKey,
 } from "./harness.mjs";
 
 const __filename = fileURLToPath(import.meta.url);

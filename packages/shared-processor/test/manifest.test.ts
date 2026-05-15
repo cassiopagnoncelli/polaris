@@ -10,9 +10,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  loadProcessorManifest,
   PROCESSOR_RELEASE_STATUSES,
   ProcessorManifestError,
-  loadProcessorManifest,
   processorManifestSchema,
   tryLoadProcessorManifest,
   validateProcessorFixtures,

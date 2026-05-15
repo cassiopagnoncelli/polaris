@@ -13,8 +13,8 @@
  * letting a duplicate-active state reach production.
  */
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { CANONICAL_TOPIC_FAMILIES } from "@polaris/shared-kafka";
 import { describe, expect, it } from "vitest";

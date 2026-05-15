@@ -1,8 +1,8 @@
 import type { ResolvedActor } from "@polaris/shared-control-plane";
+import type { Logger } from "@polaris/shared-logger";
 import type { Command } from "commander";
 import type { CliConfig } from "./config.js";
 import type { ExitCode } from "./errors.js";
-import type { Logger } from "@polaris/shared-logger";
 import type { OutputStreams } from "./output.js";
 import type { PackageMeta } from "./package-meta.js";
 

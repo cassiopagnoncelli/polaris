@@ -15,29 +15,29 @@
 
 export {
   API_KEY_HEADER,
-  parseApiKeyHeader,
   type AuthenticatedRequestContext,
   type ParsedApiKey,
+  parseApiKeyHeader,
 } from "./api-key.js";
 export { ApiKeyCache, type ApiKeyCacheOptions } from "./cache.js";
 export { AUTH_PROBLEM_CODES, type AuthProblemCode } from "./errors.js";
 export { verifyApiKeyHash } from "./hash.js";
 export {
+  type AuthenticateRequest,
   createAuthPreHandler,
   decorateAuthPreHandler,
-  type AuthenticateRequest,
   type RegisterAuthPreHandlerOptions,
 } from "./plugin.js";
 export {
-  createPostgresApiKeyRepository,
   type ApiKeyRecord,
   type ApiKeyRepository,
+  createPostgresApiKeyRepository,
 } from "./repository.js";
 export {
-  createAuthService,
   type AuthRejection,
   type AuthRejectionReason,
   type AuthResult,
   type AuthServiceOptions,
   type AuthSuccess,
+  createAuthService,
 } from "./service.js";

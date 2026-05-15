@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "fastify";
 import type { Logger } from "@polaris/shared-logger";
+import type { FastifyInstance } from "fastify";
 
 /**
  * POSIX signals that Polaris services treat as graceful-shutdown triggers.

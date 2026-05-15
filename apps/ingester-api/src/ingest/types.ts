@@ -1,11 +1,10 @@
-import { z } from "zod";
-
 import {
-  batchResponseSchema,
   type BatchAcceptedResult,
   type BatchRejectedResult,
   type BatchResponse,
+  batchResponseSchema,
 } from "@polaris/shared-schemas";
+import { z } from "zod";
 
 import type { AuthenticatedRequestContext } from "../auth/api-key.js";
 

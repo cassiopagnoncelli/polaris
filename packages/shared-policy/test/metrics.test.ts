@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
-  type RedactionAction,
   emitAllRedactionMetrics,
   emitRedactionMetric,
   evaluate,
   type PatternRedactionMetricIncrement,
+  POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
+  type RedactionAction,
 } from "../src/index.js";
 import { buildEvent, syntheticLuhn } from "./fixtures.js";
 

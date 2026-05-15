@@ -11,12 +11,12 @@
 
 export { CookieStore } from "./cookie-store.js";
 export { LayeredIdentityStore } from "./layered-store.js";
-export { IdentityManager, DEFAULT_SESSION_INACTIVITY_MS } from "./manager.js";
+export { DEFAULT_SESSION_INACTIVITY_MS, IdentityManager } from "./manager.js";
 export { MemoryStore } from "./memory-store.js";
+export { deserializeIdentity, serializeIdentity } from "./serialize.js";
 export {
   LocalStorageStore,
   SessionStorageStore,
   WebStorageStore,
   type WebStorageStoreInputs,
 } from "./web-storage-store.js";
-export { deserializeIdentity, serializeIdentity } from "./serialize.js";

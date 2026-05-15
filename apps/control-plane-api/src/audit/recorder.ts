@@ -13,11 +13,11 @@
  * and secret-resolved values NEVER appear in any column — the schema
  * forbids the columns and tests assert the surface.
  */
-import type { ColumnType, Kysely } from "kysely";
-import { v7 as uuidv7 } from "uuid";
 
 import type { ResolvedActor } from "@polaris/shared-control-plane";
 import type { Database } from "@polaris/shared-db";
+import type { ColumnType, Kysely } from "kysely";
+import { v7 as uuidv7 } from "uuid";
 
 /**
  * Typed mirror of the `audit_records` table. Duplicated from

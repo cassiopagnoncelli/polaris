@@ -1,7 +1,6 @@
 import type { Kafka, Producer, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
-
-import { createPolarisProducer } from "../src/producer.js";
+import { readRetryAttempts, republishToDlq, republishToRetry } from "../src/dlq.js";
 import {
   POLARIS_HEADER_ERROR_CLASS,
   POLARIS_HEADER_FAILED_AT,
@@ -10,7 +9,7 @@ import {
   POLARIS_HEADER_SOURCE_OFFSET,
   POLARIS_HEADER_SOURCE_TOPIC,
 } from "../src/headers.js";
-import { readRetryAttempts, republishToDlq, republishToRetry } from "../src/dlq.js";
+import { createPolarisProducer } from "../src/producer.js";
 
 function fakeProducer(): { producer: Producer; sent: ProducerRecord[] } {
   const sent: ProducerRecord[] = [];

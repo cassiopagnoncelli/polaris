@@ -9,18 +9,18 @@
  */
 
 export {
+  type BuildOpenApiDocumentOptions,
   buildOpenApiDocument,
+  type OpenApiDocument,
   PUBLISHED_OPENAPI_INFO,
   PUBLISHED_OPENAPI_SERVERS,
-  type BuildOpenApiDocumentOptions,
-  type OpenApiDocument,
 } from "./document.js";
+export { buildPaths, OPERATIONS_COMPONENT_SCHEMAS } from "./paths.js";
 export {
   DEFAULT_OPENAPI_ROUTE,
+  type OpenApiSetupOptions,
   openApiSetup,
   openApiSetupWith,
   registerOpenApiRoute,
-  type OpenApiSetupOptions,
 } from "./route.js";
 export { buildComponentSchemas, EXAMPLE_CANONICAL_ENVELOPE } from "./schemas.js";
-export { buildPaths, OPERATIONS_COMPONENT_SCHEMAS } from "./paths.js";

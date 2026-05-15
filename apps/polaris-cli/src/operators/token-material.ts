@@ -20,8 +20,9 @@
  * It is NEVER stored in PostgreSQL, NEVER written to a log line, NEVER
  * returned by any subsequent CLI command.
  */
-import { formatOperatorToken, OPERATOR_TOKEN_ID_PREFIX } from "@polaris/shared-control-plane";
+
 import { randomBytes } from "node:crypto";
+import { formatOperatorToken, OPERATOR_TOKEN_ID_PREFIX } from "@polaris/shared-control-plane";
 import { v7 as uuidv7 } from "uuid";
 
 /** Number of bytes pulled from CSPRNG for the secret tail. 32 = 256 bits. */

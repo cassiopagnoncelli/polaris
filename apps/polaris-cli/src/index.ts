@@ -24,6 +24,69 @@
  * @see docs/implementation/tasks/P6-002-projects-sources-cli.md
  */
 
+export {
+  type AuditRecorder,
+  type CreateRecorderOptions,
+  createAuditRecorder,
+  type RecordAuditInput,
+  readAuditRecord,
+} from "./audit/recorder.js";
+export {
+  type DiscoveredProcessorManifest,
+  ENVIRONMENTS,
+  type Environment,
+  environmentSchema,
+  idSchema,
+  type LoadCatalogOptions,
+  type LoadedCatalog,
+  type LoadOneProcessorManifestOptions,
+  type LoadProcessorManifestsOptions,
+  loadCatalog,
+  loadProcessorManifest,
+  loadProcessorManifests,
+  PROCESSOR_MODES,
+  PROJECT_STATUSES,
+  type ProcessorDefaults,
+  type ProcessorManifest,
+  type ProcessorManifestScan,
+  type ProcessorManifestWarning,
+  type ProcessorMode,
+  type ProcessorReplay,
+  type ProcessorTopicSpec,
+  type ProjectDiffRow,
+  type ProjectFile,
+  type ProjectRow,
+  type ProjectStatus,
+  type ProjectsSyncPlan,
+  planProjectsSync,
+  planSourcesSync,
+  processorDefaultsSchema,
+  processorManifestSchema,
+  processorModeSchema,
+  processorNameSchema,
+  processorReplaySchema,
+  processorTopicSpecSchema,
+  processorVersionSchema,
+  projectFileSchema,
+  projectStatusSchema,
+  type ResolveCatalogRootOptions,
+  resolveCatalogRoot,
+  SOURCE_RUNTIMES,
+  SOURCE_STATUSES,
+  SOURCE_TYPES,
+  type SourceDiffRow,
+  type SourceFile,
+  type SourceRow,
+  type SourceRuntime,
+  type SourceStatus,
+  type SourcesSyncPlan,
+  type SourceType,
+  type SyncAction,
+  sourceFileSchema,
+  sourceRuntimeSchema,
+  sourceStatusSchema,
+  sourceTypeSchema,
+} from "./catalog/index.js";
 export type {
   CommandContext,
   CommandDefinition,
@@ -31,39 +94,17 @@ export type {
   CommandRegistrarDeps,
   CommandResult,
 } from "./command.js";
+export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
 export {
-  type CliConfig,
-  type CliLogLevel,
-  CLI_LOG_LEVELS,
-  DEFAULT_CONFIG_PATH,
-  loadCliConfig,
-  type LoadConfigOptions,
-  type OutputFormat,
-  OUTPUT_FORMATS,
-  type ProfileEntry,
-  readConfigFile,
-} from "./config.js";
+  type AuditListHooks,
+  type AuditListStore,
+  buildAuditListRunner,
+} from "./commands/audit/list.js";
 export {
-  auditCommand,
-  BUILTIN_COMMANDS,
-  clickhouseRebuildCommand,
-  destinationsCommand,
-  exportCommand,
-  keysCommand,
-  operatorsCommand,
-  processorsCommand,
-  projectsCommand,
-  sourcesCommand,
-  topicsCommand,
-  versionCommand,
-} from "./commands/index.js";
-export {
-  clickhouseRebuildAbortCommand,
-  clickhouseRebuildCreateCommand,
-  clickhouseRebuildListCommand,
-  clickhouseRebuildPlanCommand,
-  clickhouseRebuildShowCommand,
-} from "./commands/clickhouse-rebuild/index.js";
+  type AuditShowHooks,
+  type AuditShowStore,
+  buildAuditShowRunner,
+} from "./commands/audit/show.js";
 export {
   buildClickhouseRebuildAbortRunner,
   type ClickhouseRebuildAbortHooks,
@@ -84,6 +125,13 @@ export {
   generateClickhouseRebuildJobId,
 } from "./commands/clickhouse-rebuild/id.js";
 export {
+  clickhouseRebuildAbortCommand,
+  clickhouseRebuildCreateCommand,
+  clickhouseRebuildListCommand,
+  clickhouseRebuildPlanCommand,
+  clickhouseRebuildShowCommand,
+} from "./commands/clickhouse-rebuild/index.js";
+export {
   buildClickhouseRebuildListRunner,
   type ClickhouseRebuildListHooks,
   type ClickhouseRebuildListStore,
@@ -97,105 +145,6 @@ export {
   type ClickhouseRebuildShowHooks,
   type ClickhouseRebuildShowStore,
 } from "./commands/clickhouse-rebuild/show.js";
-export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
-export {
-  buildAuditListRunner,
-  type AuditListHooks,
-  type AuditListStore,
-} from "./commands/audit/list.js";
-export {
-  buildAuditShowRunner,
-  type AuditShowHooks,
-  type AuditShowStore,
-} from "./commands/audit/show.js";
-export {
-  exportApiKeysCommand,
-  exportAuditCommand,
-  exportDestinationsCommand,
-  exportSourcesCommand,
-} from "./commands/export/index.js";
-export {
-  buildExportApiKeysRunner,
-  type ExportApiKeysHooks,
-  type ExportApiKeysStore,
-} from "./commands/export/api-keys.js";
-export {
-  buildExportAuditRunner,
-  type ExportAuditHooks,
-  type ExportAuditStore,
-} from "./commands/export/audit.js";
-export {
-  buildExportDestinationsRunner,
-  type ExportDestinationsHooks,
-  type ExportDestinationsStore,
-} from "./commands/export/destinations.js";
-export {
-  buildExportSourcesRunner,
-  type ExportSourcesHooks,
-  type ExportSourcesStore,
-} from "./commands/export/sources.js";
-export {
-  type AuditRecorder,
-  type CreateRecorderOptions,
-  createAuditRecorder,
-  readAuditRecord,
-  type RecordAuditInput,
-} from "./audit/recorder.js";
-export {
-  destinationsCreateCommand,
-  destinationsDisableCommand,
-  destinationsDisableReplayCommand,
-  destinationsEnableCommand,
-  destinationsEnableReplayCommand,
-  destinationsListCommand,
-  destinationsShowCommand,
-  destinationsUpdateOpsCommand,
-} from "./commands/destinations/index.js";
-export {
-  processorsDisableCommand,
-  processorsEnableCommand,
-  processorsListCommand,
-  processorsRunsCommand,
-  processorsRunsListCommand,
-  processorsRunsShowCommand,
-  processorsShowCommand,
-} from "./commands/processors/index.js";
-export {
-  buildProcessorsListRunner,
-  type ProcessorsListHooks,
-  type ProcessorsListStore,
-} from "./commands/processors/list.js";
-export {
-  buildProcessorsShowRunner,
-  type ProcessorsShowHooks,
-  type ProcessorsShowStore,
-} from "./commands/processors/show.js";
-export {
-  buildProcessorsEnableRunner,
-  type ProcessorsEnableHooks,
-  type ProcessorsEnableStore,
-} from "./commands/processors/enable.js";
-export {
-  buildProcessorsDisableRunner,
-  type ProcessorsDisableHooks,
-  type ProcessorsDisableStore,
-} from "./commands/processors/disable.js";
-export {
-  buildProcessorsRunsListRunner,
-  type ProcessorRunListRow,
-  type ProcessorsRunsListHooks,
-  type ProcessorsRunsListStore,
-} from "./commands/processors/runs-list.js";
-export {
-  buildProcessorsRunsShowRunner,
-  type ProcessorRunDetail,
-  type ProcessorsRunsShowHooks,
-  type ProcessorsRunsShowStore,
-} from "./commands/processors/runs-show.js";
-export {
-  FORBIDDEN_PROCESSOR_RULE_FLAG_TOKENS,
-  rejectProcessorRuleArguments,
-} from "./commands/processors/validation.js";
 export {
   buildDestinationsCreateRunner,
   type DestinationsCreateHooks,
@@ -225,6 +174,20 @@ export {
   type DestinationsEnableReplayStore,
 } from "./commands/destinations/enable-replay.js";
 export {
+  DESTINATION_ID_PREFIX,
+  generateDestinationId,
+} from "./commands/destinations/id.js";
+export {
+  destinationsCreateCommand,
+  destinationsDisableCommand,
+  destinationsDisableReplayCommand,
+  destinationsEnableCommand,
+  destinationsEnableReplayCommand,
+  destinationsListCommand,
+  destinationsShowCommand,
+  destinationsUpdateOpsCommand,
+} from "./commands/destinations/index.js";
+export {
   buildDestinationsListRunner,
   type DestinationsListHooks,
   type DestinationsListStore,
@@ -240,25 +203,61 @@ export {
   type DestinationsUpdateOpsStore,
 } from "./commands/destinations/update-ops.js";
 export {
-  DESTINATION_ID_PREFIX,
-  generateDestinationId,
-} from "./commands/destinations/id.js";
-export {
   FORBIDDEN_MAPPING_FLAG_TOKENS,
   rejectMappingArguments,
   validateSecretRef,
 } from "./commands/destinations/validation.js";
+export {
+  buildExportApiKeysRunner,
+  type ExportApiKeysHooks,
+  type ExportApiKeysStore,
+} from "./commands/export/api-keys.js";
+export {
+  buildExportAuditRunner,
+  type ExportAuditHooks,
+  type ExportAuditStore,
+} from "./commands/export/audit.js";
+export {
+  buildExportDestinationsRunner,
+  type ExportDestinationsHooks,
+  type ExportDestinationsStore,
+} from "./commands/export/destinations.js";
+export {
+  exportApiKeysCommand,
+  exportAuditCommand,
+  exportDestinationsCommand,
+  exportSourcesCommand,
+} from "./commands/export/index.js";
+export {
+  buildExportSourcesRunner,
+  type ExportSourcesHooks,
+  type ExportSourcesStore,
+} from "./commands/export/sources.js";
+export {
+  auditCommand,
+  BUILTIN_COMMANDS,
+  clickhouseRebuildCommand,
+  destinationsCommand,
+  exportCommand,
+  keysCommand,
+  operatorsCommand,
+  processorsCommand,
+  projectsCommand,
+  sourcesCommand,
+  topicsCommand,
+  versionCommand,
+} from "./commands/index.js";
+export {
+  buildKeysCreateRunner,
+  type KeysCreateHooks,
+  type KeysCreateStore,
+} from "./commands/keys/create.js";
 export {
   keysCreateCommand,
   keysListCommand,
   keysRevokeCommand,
   keysRotateCommand,
 } from "./commands/keys/index.js";
-export {
-  buildKeysCreateRunner,
-  type KeysCreateHooks,
-  type KeysCreateStore,
-} from "./commands/keys/create.js";
 export {
   buildKeysListRunner,
   type KeysListHooks,
@@ -281,17 +280,17 @@ export {
   type IssuedKeyMaterial,
 } from "./commands/keys/token.js";
 export {
-  operatorsCreateCommand,
-  operatorsListCommand,
-  operatorsRevokeCommand,
-} from "./commands/operators/index.js";
-export {
   buildOperatorsCreateRunner,
   type OperatorsCreateAuditPayload,
   type OperatorsCreateHooks,
   type OperatorsCreateStore,
   type OperatorTokenAuditSnapshot,
 } from "./commands/operators/create.js";
+export {
+  operatorsCreateCommand,
+  operatorsListCommand,
+  operatorsRevokeCommand,
+} from "./commands/operators/index.js";
 export {
   buildOperatorsListRunner,
   type OperatorsListHooks,
@@ -304,26 +303,55 @@ export {
   type OperatorsRevokeStore,
 } from "./commands/operators/revoke.js";
 export {
-  generateOperatorTokenMaterial,
-  type IssuedOperatorTokenMaterial,
-} from "./operators/token-material.js";
-export { createKyselyOperatorTokenRepository } from "./operators/repository.js";
+  buildProcessorsDisableRunner,
+  type ProcessorsDisableHooks,
+  type ProcessorsDisableStore,
+} from "./commands/processors/disable.js";
+export {
+  buildProcessorsEnableRunner,
+  type ProcessorsEnableHooks,
+  type ProcessorsEnableStore,
+} from "./commands/processors/enable.js";
+export {
+  processorsDisableCommand,
+  processorsEnableCommand,
+  processorsListCommand,
+  processorsRunsCommand,
+  processorsRunsListCommand,
+  processorsRunsShowCommand,
+  processorsShowCommand,
+} from "./commands/processors/index.js";
+export {
+  buildProcessorsListRunner,
+  type ProcessorsListHooks,
+  type ProcessorsListStore,
+} from "./commands/processors/list.js";
+export {
+  buildProcessorsRunsListRunner,
+  type ProcessorRunListRow,
+  type ProcessorsRunsListHooks,
+  type ProcessorsRunsListStore,
+} from "./commands/processors/runs-list.js";
+export {
+  buildProcessorsRunsShowRunner,
+  type ProcessorRunDetail,
+  type ProcessorsRunsShowHooks,
+  type ProcessorsRunsShowStore,
+} from "./commands/processors/runs-show.js";
+export {
+  buildProcessorsShowRunner,
+  type ProcessorsShowHooks,
+  type ProcessorsShowStore,
+} from "./commands/processors/show.js";
+export {
+  FORBIDDEN_PROCESSOR_RULE_FLAG_TOKENS,
+  rejectProcessorRuleArguments,
+} from "./commands/processors/validation.js";
 export {
   projectsListCommand,
   projectsShowCommand,
   projectsSyncCommand,
 } from "./commands/projects/index.js";
-export {
-  replayCancelCommand,
-  replayCommand,
-  replayCreateCommand,
-  replayExecuteCommand,
-  replayListCommand,
-  replayPauseCommand,
-  replayPlanCommand,
-  replayResumeCommand,
-  replayShowCommand,
-} from "./commands/replay/index.js";
 export {
   buildReplayCancelRunner,
   type ReplayCancelHooks,
@@ -343,6 +371,17 @@ export {
   type ReplayExecuteHooks,
   type ReplayExecuteStore,
 } from "./commands/replay/execute.js";
+export {
+  replayCancelCommand,
+  replayCommand,
+  replayCreateCommand,
+  replayExecuteCommand,
+  replayListCommand,
+  replayPauseCommand,
+  replayPlanCommand,
+  replayResumeCommand,
+  replayShowCommand,
+} from "./commands/replay/index.js";
 export {
   buildReplayListRunner,
   type ReplayListHooks,
@@ -382,20 +421,6 @@ export {
   sourcesSyncCommand,
 } from "./commands/sources/index.js";
 export {
-  topicsDeisolateCommand,
-  topicsIsolateCommand,
-  topicsListCommand,
-} from "./commands/topics/index.js";
-export {
-  buildTopicsIsolateRunner,
-  TOPIC_ISOLATION_ID_PREFIX,
-  type IsolateInsertOutcome,
-  type TopicIsolationAuditSnapshot,
-  type TopicsIsolateAuditPayload,
-  type TopicsIsolateHooks,
-  type TopicsIsolateStore,
-} from "./commands/topics/isolate.js";
-export {
   buildTopicsDeisolateRunner,
   type TopicIsolationDeisolateSnapshot,
   type TopicsDeisolateAuditPayload,
@@ -403,70 +428,39 @@ export {
   type TopicsDeisolateStore,
 } from "./commands/topics/deisolate.js";
 export {
+  topicsDeisolateCommand,
+  topicsIsolateCommand,
+  topicsListCommand,
+} from "./commands/topics/index.js";
+export {
+  buildTopicsIsolateRunner,
+  type IsolateInsertOutcome,
+  TOPIC_ISOLATION_ID_PREFIX,
+  type TopicIsolationAuditSnapshot,
+  type TopicsIsolateAuditPayload,
+  type TopicsIsolateHooks,
+  type TopicsIsolateStore,
+} from "./commands/topics/isolate.js";
+export {
   buildTopicsListRunner,
   type TopicsListFilter,
   type TopicsListHooks,
   type TopicsListStore,
 } from "./commands/topics/list.js";
 export {
-  type DiscoveredProcessorManifest,
-  ENVIRONMENTS,
-  environmentSchema,
-  idSchema,
-  loadCatalog,
-  type LoadCatalogOptions,
-  type LoadedCatalog,
-  type LoadOneProcessorManifestOptions,
-  type LoadProcessorManifestsOptions,
-  loadProcessorManifest,
-  loadProcessorManifests,
-  planProjectsSync,
-  planSourcesSync,
-  PROCESSOR_MODES,
-  type ProcessorDefaults,
-  processorDefaultsSchema,
-  type ProcessorManifest,
-  type ProcessorManifestScan,
-  type ProcessorManifestWarning,
-  processorManifestSchema,
-  type ProcessorMode,
-  processorModeSchema,
-  processorNameSchema,
-  type ProcessorReplay,
-  processorReplaySchema,
-  type ProcessorTopicSpec,
-  processorTopicSpecSchema,
-  processorVersionSchema,
-  PROJECT_STATUSES,
-  type ProjectDiffRow,
-  type ProjectFile,
-  projectFileSchema,
-  type ProjectRow,
-  type ProjectStatus,
-  projectStatusSchema,
-  type ProjectsSyncPlan,
-  resolveCatalogRoot,
-  type ResolveCatalogRootOptions,
-  SOURCE_RUNTIMES,
-  SOURCE_STATUSES,
-  SOURCE_TYPES,
-  type SourceDiffRow,
-  type SourceFile,
-  sourceFileSchema,
-  type SourceRow,
-  type SourceRuntime,
-  sourceRuntimeSchema,
-  type SourcesSyncPlan,
-  type SourceStatus,
-  sourceStatusSchema,
-  type SourceType,
-  sourceTypeSchema,
-  type SyncAction,
-  type Environment,
-} from "./catalog/index.js";
+  CLI_LOG_LEVELS,
+  type CliConfig,
+  type CliLogLevel,
+  DEFAULT_CONFIG_PATH,
+  type LoadConfigOptions,
+  loadCliConfig,
+  OUTPUT_FORMATS,
+  type OutputFormat,
+  type ProfileEntry,
+  readConfigFile,
+} from "./config.js";
 export {
   ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
-  abortClickhouseRebuildJob,
   type ApiKeyRow,
   AUDIT_ACTOR_SOURCES,
   AUDIT_ENVIRONMENTS,
@@ -474,37 +468,44 @@ export {
   type AuditEnvironment,
   type AuditRecordRow,
   type AuditRecordsTable,
+  abortClickhouseRebuildJob,
   CLICKHOUSE_REBUILD_JOB_STATUSES,
   type ClickhouseRebuildJobRow,
-  type ClickhouseRebuildJobsTable,
   type ClickhouseRebuildJobStatus,
-  connectDb,
+  type ClickhouseRebuildJobsTable,
   type ConnectDbOptions,
+  connectDb,
   type DbHandle,
+  type DestinationRow,
+  type DisableProcessorActivationInput,
   disableDestination,
   disableDestinationReplay,
   disableProcessorActivation,
-  type DisableProcessorActivationInput,
+  type EnableProcessorActivationInput,
   enableDestination,
   enableDestinationReplay,
   enableProcessorActivation,
-  type EnableProcessorActivationInput,
-  type DestinationRow,
   findActivationByKey,
   findApiKeyById,
   findAuditRecordById,
   findClickhouseRebuildJobById,
   findDestinationById,
-  insertApiKey,
-  insertAuditRecord,
-  insertClickhouseRebuildJob,
-  insertDestination,
+  findOperatorTokenAuthRowById,
+  findOperatorTokenById,
   type InsertApiKeyInput,
   type InsertAuditRecordInput,
   type InsertClickhouseRebuildJobInput,
   type InsertDestinationInput,
+  type InsertOperatorTokenInput,
+  insertApiKey,
+  insertAuditRecord,
+  insertClickhouseRebuildJob,
+  insertDestination,
+  insertOperatorToken,
   isAbortableClickhouseRebuildStatus,
   isTerminalClickhouseRebuildStatus,
+  type ListAuditRecordsFilter,
+  type ListClickhouseRebuildJobsFilter,
   listActivationsForProcessor,
   listAllActivations,
   listAllDestinations,
@@ -512,12 +513,6 @@ export {
   listAuditRecords,
   listClickhouseRebuildJobs,
   listDestinationsByProjectEnv,
-  type ListAuditRecordsFilter,
-  type ListClickhouseRebuildJobsFilter,
-  findOperatorTokenAuthRowById,
-  findOperatorTokenById,
-  insertOperatorToken,
-  type InsertOperatorTokenInput,
   listOperatorTokens,
   OPERATOR_TOKEN_STATUSES,
   type OperatorTokenAuthRow,
@@ -530,8 +525,8 @@ export {
   revokeOperatorToken,
   TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
   touchOperatorTokenLastUsedAt,
-  updateDestinationOps,
   type UpdateDestinationOpsInput,
+  updateDestinationOps,
 } from "./db/index.js";
 export {
   AuthError,
@@ -543,6 +538,11 @@ export {
   UsageError,
 } from "./errors.js";
 export { createCliLogger } from "./logger.js";
+export { createKyselyOperatorTokenRepository } from "./operators/repository.js";
+export {
+  generateOperatorTokenMaterial,
+  type IssuedOperatorTokenMaterial,
+} from "./operators/token-material.js";
 export {
   createOutputStreams,
   type OutputStreams,
@@ -551,4 +551,4 @@ export {
   renderJson,
 } from "./output.js";
 export { type PackageMeta, resolvePackageMeta } from "./package-meta.js";
-export { buildProgram, run, type RunOptions } from "./program.js";
+export { buildProgram, type RunOptions, run } from "./program.js";

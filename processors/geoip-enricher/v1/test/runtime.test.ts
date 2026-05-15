@@ -22,35 +22,33 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
-
-import type { EachMessagePayload } from "kafkajs";
-import { describe, expect, it, vi } from "vitest";
-
+import { fileURLToPath } from "node:url";
 import {
+  buildRawEventsPartitionKey,
   type PolarisConsumer,
   type PolarisMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   type SyncIsolationLookup,
-  buildRawEventsPartitionKey,
+  sharedOnlyIsolationLookup,
   TOPIC_FAMILY_ENRICHED_EVENTS,
   TOPIC_FAMILY_RAW_EVENTS,
-  sharedOnlyIsolationLookup,
 } from "@polaris/shared-kafka";
 import { createLogger } from "@polaris/shared-logger";
+import type { EachMessagePayload } from "kafkajs";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createRuntime,
+  type GeoResult,
   hashIp,
   InMemoryIPLookup,
   NoOpIPLookup,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
   SOURCE_NO_LOOKUP,
-  type GeoResult,
 } from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);

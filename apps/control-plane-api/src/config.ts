@@ -8,13 +8,13 @@
  */
 import {
   composeConfigSchema,
+  type HttpConfig,
   httpEnvSchema,
   loadConfigWithDefaults,
-  postgresEnvSchema,
-  serviceEnvSchema,
-  type HttpConfig,
   type PostgresConfig,
+  postgresEnvSchema,
   type ServiceConfig,
+  serviceEnvSchema,
 } from "@polaris/shared-config";
 
 export const CONTROL_PLANE_SERVICE_NAME = "control-plane-api" as const;

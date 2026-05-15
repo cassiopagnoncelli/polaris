@@ -16,9 +16,6 @@
  * @see docs/implementation/tasks/P8-002b-identity-resolver-behavioral-tests.md
  */
 
-import type { EachMessagePayload } from "kafkajs";
-import { describe, expect, it } from "vitest";
-
 import {
   type PolarisConsumer,
   type PolarisMessageContext,
@@ -27,6 +24,8 @@ import {
   TOPIC_FAMILY_IDENTITY_EVENTS,
 } from "@polaris/shared-kafka";
 import type { Logger } from "@polaris/shared-logger";
+import type { EachMessagePayload } from "kafkajs";
+import { describe, expect, it } from "vitest";
 
 import { InMemoryIdentityLinkRepository } from "../src/repository.js";
 import { createRuntime } from "../src/runtime.js";

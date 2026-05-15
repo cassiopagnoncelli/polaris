@@ -1,6 +1,3 @@
-import type { preHandlerAsyncHookHandler } from "fastify";
-import type { Kysely } from "kysely";
-
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createKafkaClient,
@@ -8,33 +5,34 @@ import {
   type PolarisProducer,
 } from "@polaris/shared-kafka";
 import { createLogger, type Logger } from "@polaris/shared-logger";
+import { toPrometheusText } from "@polaris/shared-metrics";
 import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 import type { EventCatalog } from "@polaris/shared-schemas";
 import {
-  bootstrapService,
   type BootstrappedService,
+  bootstrapService,
   type OpenApiSetup,
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
-
+import type { preHandlerAsyncHookHandler } from "fastify";
+import type { Kysely } from "kysely";
 import {
   ApiKeyCache,
+  type ApiKeyRepository,
   createAuthPreHandler,
   createAuthService,
   createPostgresApiKeyRepository,
-  type ApiKeyRepository,
 } from "./auth/index.js";
 import { loadRuntimeCatalog } from "./catalog/runtime.js";
 import type { IngesterConfig } from "./config.js";
 import {
-  DisabledDedupeStore,
   createRedisDedupeStore,
   type DedupeStore,
+  DisabledDedupeStore,
   type RedisClientLike,
 } from "./dedupe/index.js";
 import { buildRedisOptions } from "./dedupe/redis.js";
-import { toPrometheusText } from "@polaris/shared-metrics";
 
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { IngestMetrics } from "./metrics/registry.js";

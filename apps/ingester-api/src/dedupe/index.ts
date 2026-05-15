@@ -12,8 +12,8 @@ export { DisabledDedupeStore, InMemoryDedupeStore } from "./memory.js";
 export {
   buildDedupeKey,
   buildRedisOptions,
-  createRedisDedupeStore,
   type CreateRedisDedupeStoreOptions,
+  createRedisDedupeStore,
   type RedisClientLike,
 } from "./redis.js";
 export type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "./types.js";

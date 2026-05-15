@@ -37,11 +37,11 @@
  */
 
 import type {
+  IdentityHashingOptions,
   NormalizableEnvelope,
   NormalizedEvent,
-  RequiredConsent,
-  IdentityHashingOptions,
   RawIdentityInput,
+  RequiredConsent,
 } from "@polaris/shared-destination-normalize";
 import type { DeliveryRecordErrorClass } from "./db/delivery-records.js";
 import type { DestinationInstance } from "./db/destination-instance.js";

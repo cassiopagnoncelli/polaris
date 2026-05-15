@@ -29,8 +29,8 @@ import {
   type AuditEnvironment,
   type AuditRecordRow,
   connectDb,
-  listAuditRecords,
   type ListAuditRecordsFilter,
+  listAuditRecords,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderJson } from "../../output.js";

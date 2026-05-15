@@ -33,9 +33,9 @@
  * makes no use of the field.
  */
 
+import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 import { minorToMajor } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 
 import type {
   BrazeAttributeObject,

@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import { POLARIS_INGEST_REDACTED_PATTERN_TOTAL } from "@polaris/shared-policy";
+import { describe, expect, it } from "vitest";
 
 import {
   IngestMetrics,

@@ -15,12 +15,12 @@
  * reads from the raw slots; tests assert that contract.
  */
 
+import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 import type {
   DelivererContext,
   DestinationInstance,
   MapperContext,
 } from "@polaris/shared-destinations";
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
 
 import type { BrazePayload } from "../../src/types.js";
 
