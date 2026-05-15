@@ -28,9 +28,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 - [P10-005 Alerts and Incident Runbooks](./tasks/P10-005-alerts-runbooks.md)
 
-### P11 Deployment, Security, and Data Lifecycle
-
-- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md)
 
 (P11-005 Backup and Retention Runbooks moved to Done.)
 
@@ -149,6 +146,7 @@ No blocked cards.
 - [P11-002 CI Workflow](./tasks/P11-002-ci-workflow.md) — merged in `28d6105`
 - [P11-003 Production Config Templates](./tasks/P11-003-production-config-templates.md) — merged in `20fb6da` (cherry-picked from `worktree-agent-a720e5774bd34b47b`; no plaintext secrets; `infra/k8s/` and Vault wiring intentionally deferred to P11-004; signer unavailable so commit is unsigned)
 - [P11-004 Production Secret Provider Adapter (Vault)](./tasks/P11-004-production-secret-provider.md) — merged in `f712d87` (cherry-picked from `worktree-agent-ae3e3bd74d24d16de`; in-house `node:fetch` Vault HTTP client, K8s SA-JWT auth with 25% remaining-lease renewal, 5-min default TTL cache, `getStale` fallback for Vault outages flipping readiness to degraded rather than crash, discriminated-union schema in `shared-config`, AWS-Secrets-Manager extension as a reserved stub file, +43 tests including explicit "no secret in errors/logs" assertions; Vault Agent sidecar pattern and bounded transient-retry deferred)
+- [P11-007 Release Versioning and Build Metadata](./tasks/P11-007-release-versioning-build-metadata.md) — merged in `642e98f` (cherry-picked from `worktree-agent-a26eb73135ff2f5c2`; new `getBuildMetadata()` + `buildMetadataLogBindings()` helpers in `@polaris/shared-service-bootstrap`, `POLARIS_RELEASE_LABEL` plumbed through `shared-config` + `shared-logger` + `/health.release_label` + `polaris version`, fixed an existing `POLARIS_BUILD_VERSION` vs `POLARIS_SERVICE_VERSION` env-var-name mismatch, `docs/deployment/versioning.md` documents the hybrid model; `delivery_records.consumer_build_version` left as a deferred gap per the agent's rationale. Follow-up `a985084` extended the same `releaseLabel` wiring to `consumers/ga4/v1` and `consumers/braze/v1`, which landed in this session after the agent's worktree base) (cherry-picked from `worktree-agent-ae3e3bd74d24d16de`; in-house `node:fetch` Vault HTTP client, K8s SA-JWT auth with 25% remaining-lease renewal, 5-min default TTL cache, `getStale` fallback for Vault outages flipping readiness to degraded rather than crash, discriminated-union schema in `shared-config`, AWS-Secrets-Manager extension as a reserved stub file, +43 tests including explicit "no secret in errors/logs" assertions; Vault Agent sidecar pattern and bounded transient-retry deferred)
 - [P11-005 Backup and Retention Runbooks](./tasks/P11-005-backup-retention-runbooks.md) — merged in `618af87`
 - [P11-006 Security Hardening — origin allow-list scaffold](./tasks/P11-006-security-hardening.md) — merged in `b8b9741` (partial salvage; superseded by P11-006b)
 - [P11-006b Security Hardening — wire-up + HSTS + body-limit + OpenAPI 403](./tasks/P11-006b-security-hardening-completion.md) — merged in `a66631e` (partial; rate-limit deferred to P11-006c)
