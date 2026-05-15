@@ -132,6 +132,9 @@ export async function buildAnalyticsProjectorApp(
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
 
   // The processor-scoped child logger binds the canonical
@@ -238,6 +241,9 @@ export async function buildAnalyticsProjectorApp(
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger: processorLogger,
     fastify: {

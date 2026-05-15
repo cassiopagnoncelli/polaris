@@ -13,6 +13,13 @@ export interface PackageMeta {
   readonly gitSha: string | undefined;
   /** Build-time ISO 8601 UTC timestamp, if the build embedded one. */
   readonly buildTime: string | undefined;
+  /**
+   * Optional pipeline release label (e.g. `2026-q2-r1`), set at deploy time
+   * via `POLARIS_RELEASE_LABEL`. Distinct from `version`: the release label
+   * scopes a rollout that bundles many services. See P11-007 and
+   * `docs/deployment/versioning.md`.
+   */
+  readonly releaseLabel: string | undefined;
   /** Node.js runtime version reported by `process.version`. */
   readonly nodeVersion: string;
 }
@@ -37,6 +44,7 @@ export function resolvePackageMeta(env: NodeJS.ProcessEnv = process.env): Packag
     version: PACKAGE_VERSION,
     gitSha: nonEmpty(env["POLARIS_GIT_SHA"]),
     buildTime: nonEmpty(env["POLARIS_BUILD_TIME"]),
+    releaseLabel: nonEmpty(env["POLARIS_RELEASE_LABEL"]),
     nodeVersion: process.version,
   };
 }

@@ -58,6 +58,7 @@ const META: PackageMeta = {
   version: "0.0.0-test",
   gitSha: "deadbeef",
   buildTime: "2026-05-12T00:00:00.000Z",
+  releaseLabel: undefined,
   nodeVersion: "v22.0.0",
 };
 

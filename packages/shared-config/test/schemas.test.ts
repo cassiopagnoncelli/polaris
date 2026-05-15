@@ -90,6 +90,7 @@ describe("serviceEnvSchema", () => {
       logPretty: false,
       gitSha: undefined,
       buildTime: undefined,
+      releaseLabel: undefined,
     });
   });
 
@@ -107,6 +108,46 @@ describe("serviceEnvSchema", () => {
         POLARIS_ENV: "production",
       }),
     ).toThrow();
+  });
+
+  it("prefers POLARIS_SERVICE_VERSION when both env vars are set", () => {
+    const config = serviceEnvSchema.parse({
+      POLARIS_SERVICE_NAME: "ingester-api",
+      POLARIS_ENV: "production",
+      POLARIS_SERVICE_VERSION: "1.2.3",
+      POLARIS_BUILD_VERSION: "9.9.9",
+    });
+    expect(config.serviceVersion).toBe("1.2.3");
+  });
+
+  it("falls back to POLARIS_BUILD_VERSION when POLARIS_SERVICE_VERSION is unset", () => {
+    const config = serviceEnvSchema.parse({
+      POLARIS_SERVICE_NAME: "ingester-api",
+      POLARIS_ENV: "production",
+      POLARIS_BUILD_VERSION: "0.4.2-rc1",
+    });
+    expect(config.serviceVersion).toBe("0.4.2-rc1");
+  });
+
+  it("surfaces release label, git sha, and build time when set", () => {
+    const config = serviceEnvSchema.parse({
+      POLARIS_SERVICE_NAME: "ingester-api",
+      POLARIS_ENV: "production",
+      POLARIS_GIT_SHA: "abc1234",
+      POLARIS_BUILD_TIME: "2026-05-12T10:00:00.000Z",
+      POLARIS_RELEASE_LABEL: "2026-q2-r1",
+    });
+    expect(config.gitSha).toBe("abc1234");
+    expect(config.buildTime).toBe("2026-05-12T10:00:00.000Z");
+    expect(config.releaseLabel).toBe("2026-q2-r1");
+  });
+
+  it("leaves release label undefined when env var is absent", () => {
+    const config = serviceEnvSchema.parse({
+      POLARIS_SERVICE_NAME: "ingester-api",
+      POLARIS_ENV: "production",
+    });
+    expect(config.releaseLabel).toBeUndefined();
   });
 });
 

@@ -91,6 +91,9 @@ export async function buildControlPlaneApp(
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
 
   // ---- DB + operator-token repository ----------------------------------
@@ -133,6 +136,9 @@ export async function buildControlPlaneApp(
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger,
     fastify: {

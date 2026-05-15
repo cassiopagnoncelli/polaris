@@ -9,6 +9,12 @@
  */
 
 export {
+  buildMetadataLogBindings,
+  getBuildMetadata,
+  type BuildMetadata,
+  type GetBuildMetadataOptions,
+} from "./build-metadata.js";
+export {
   createProblemErrorHandler,
   createProblemNotFoundHandler,
   type ProblemErrorHandlerOptions,

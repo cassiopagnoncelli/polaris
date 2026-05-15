@@ -124,6 +124,12 @@ export async function bootstrapService(
       service: options.info.serviceName,
       version: options.info.serviceVersion,
       ...(options.info.environment !== undefined ? { env: options.info.environment } : {}),
+      // Stamp the release label on the platform bindings so every log line
+      // can be filtered by rollout in Loki/Grafana without each service
+      // wiring it manually. The shared-logger schema reserves this key.
+      ...(options.info.releaseLabel !== undefined
+        ? { releaseLabel: options.info.releaseLabel }
+        : {}),
     });
 
   const userFastify = options.fastify ?? {};

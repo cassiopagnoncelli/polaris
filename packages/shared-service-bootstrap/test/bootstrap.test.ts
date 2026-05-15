@@ -47,6 +47,35 @@ describe("bootstrapService", () => {
     }
   });
 
+  it("exposes /health.release_label when ServiceInfo carries one", async () => {
+    const { app } = await bootstrapService({
+      info: { ...testInfo, releaseLabel: "2026-q2-r1" },
+      installShutdown: false,
+    });
+    try {
+      const res = await app.inject({ method: "GET", url: "/health" });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as Record<string, unknown>;
+      expect(body.release_label).toBe("2026-q2-r1");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("omits /health.release_label cleanly when ServiceInfo has none", async () => {
+    const { app } = await buildTestService();
+    try {
+      const res = await app.inject({ method: "GET", url: "/health" });
+      const body = res.json() as Record<string, unknown>;
+      // `release_label` may be present as `undefined` (JSON.stringify drops
+      // it) or absent entirely; either way it must NOT carry a misleading
+      // value when the ServiceInfo did not set one.
+      expect(body.release_label).toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+
   it("exposes /ready returning 200 when no probes are configured", async () => {
     const { app } = await buildTestService();
     try {

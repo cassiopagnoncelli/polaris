@@ -219,6 +219,7 @@ export function buildProgram(options: BuildOptions): Command {
         "  POLARIS_LOG_LEVEL        fatal|error|warn|info|debug|trace (default: warn)",
         "  POLARIS_GIT_SHA          Optional build SHA shown by `polaris version`",
         "  POLARIS_BUILD_TIME       Optional build timestamp shown by `polaris version`",
+        "  POLARIS_RELEASE_LABEL    Optional pipeline release label shown by `polaris version`",
         "",
         "Exit codes:",
         "  0  success",

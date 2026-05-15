@@ -180,6 +180,9 @@ export async function buildIngesterApp(
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
 
   // ---- DB + API key repository -----------------------------------------
@@ -339,6 +342,9 @@ export async function buildIngesterApp(
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger,
     fastify: {

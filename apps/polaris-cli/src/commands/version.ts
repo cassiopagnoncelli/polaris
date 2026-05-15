@@ -28,6 +28,7 @@ function runVersion(_args: unknown, ctx: CommandContext): undefined {
   const footer = [`node ${meta.nodeVersion}`];
   if (meta.gitSha) footer.push(`sha ${meta.gitSha}`);
   if (meta.buildTime) footer.push(`built ${meta.buildTime}`);
+  if (meta.releaseLabel) footer.push(`release ${meta.releaseLabel}`);
   const human = `polaris ${meta.version}\n${footer.join(" · ")}`;
   ctx.output.writeOut(
     renderAccordingTo(ctx.config.output, {
@@ -38,6 +39,7 @@ function runVersion(_args: unknown, ctx: CommandContext): undefined {
         node: meta.nodeVersion,
         git_sha: meta.gitSha ?? null,
         build_time: meta.buildTime ?? null,
+        release_label: meta.releaseLabel ?? null,
       },
     }),
   );

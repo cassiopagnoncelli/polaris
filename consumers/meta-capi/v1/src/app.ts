@@ -99,6 +99,9 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
   const consumerLogger = logger.child({
     component: "meta-capi.runtime",
@@ -218,6 +221,9 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger: consumerLogger,
     fastify: {

@@ -126,6 +126,15 @@ These flow through to:
 Build args MUST NOT be used to pass secrets. They land in the image
 metadata and are visible to anyone who can `docker inspect` the image.
 
+### Release label (runtime-only)
+
+`POLARIS_RELEASE_LABEL` is the optional human-readable pipeline release
+tag (e.g. `2026-q2-r1`). It is **not** a build arg — it is set at
+container start so the same image can run under different release labels
+across rollouts. The shared service bootstrap surfaces it on
+`/health.release_label` and as a binding on every log line. See
+`docs/deployment/versioning.md` for the hybrid-versioning model.
+
 ## Building a single service
 
 ```bash

@@ -83,6 +83,9 @@ export async function buildIdentityResolverApp(
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
   const processorLogger = logger.child(processorLogContext({ identity: PROCESSOR_IDENTITY }));
 
@@ -192,6 +195,9 @@ export async function buildIdentityResolverApp(
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger: processorLogger,
     fastify: {

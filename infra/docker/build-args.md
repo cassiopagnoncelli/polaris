@@ -5,7 +5,7 @@ every per-service Dockerfile in the repository. The shape is intentionally
 small: three args, all optional, all metadata. Secrets and runtime config
 never enter via build args.
 
-## The three args
+## The three build args (immutable per image)
 
 | Arg                     | Default               | Surfaces in                                                                  |
 | ----------------------- | --------------------- | ---------------------------------------------------------------------------- |
@@ -17,6 +17,18 @@ Every value flows through three surfaces so an operator inspecting an image
 in production has the same metadata visible at the OCI layer
 (`docker inspect`), the OS-process layer (the running container's
 environment), and the HTTP layer (`GET /health`).
+
+## Pipeline release label (mutable per deploy)
+
+`POLARIS_RELEASE_LABEL` is the fourth metadata field but it is **not** a
+build arg. It is a runtime environment variable set at container start —
+the same image can run under different release labels across rollouts.
+
+| Env var                  | Default | Surfaces in                                              |
+| ------------------------ | ------- | -------------------------------------------------------- |
+| `POLARIS_RELEASE_LABEL`  | (unset) | runtime `ENV`, `/health.release_label`, log bindings     |
+
+See `docs/deployment/versioning.md` for the full hybrid-versioning model.
 
 ## Rules
 

@@ -39,6 +39,13 @@ export interface StandardLogFields {
   destination_id?: string;
   /** Per-request trace identifier (UUIDv7). */
   request_id?: string;
+  /**
+   * Pipeline release label stamped at build time (e.g. `2026-q2-r1`).
+   * Bound by `createLogger` on every line so a rollout can be filtered in
+   * Loki/Grafana without each service wiring it manually. See P11-007 and
+   * `docs/deployment/versioning.md`.
+   */
+  release_label?: string;
 }
 
 /**
@@ -59,7 +66,7 @@ export type LogLevel = "fatal" | "error" | "warn" | "info" | "debug" | "trace" |
 export interface ServiceBinding {
   /** Service name (kebab-case, e.g. `ingester-api`, `sessionizer-v1`). */
   service: string;
-  /** Build/version identifier — package version, git SHA, or release label. */
+  /** Package version stamped at build time (e.g. `1.2.3`, `0.0.0-dev`). */
   version?: string;
   /** Deployment environment label — `local`, `dev`, `staging`, `production`. */
   env?: string;
@@ -67,6 +74,13 @@ export interface ServiceBinding {
   hostname?: string;
   /** Free-form region or zone label, useful for multi-region rollouts. */
   region?: string;
+  /**
+   * Optional human-readable pipeline release label (e.g. `2026-q2-r1`).
+   * Distinct from `version` (which is the package version): the release
+   * label scopes a rollout that bundles many services. Surfaced as
+   * `release_label` in every log line. See `docs/deployment/versioning.md`.
+   */
+  releaseLabel?: string;
 }
 
 /**
@@ -75,7 +89,7 @@ export interface ServiceBinding {
 export interface LoggerOptions {
   /** Service binding fields attached to every log line. */
   service: string;
-  /** Build/version identifier (package version, git SHA, release label). */
+  /** Package version (e.g. `1.2.3`, `0.0.0-dev`). */
   version?: string;
   /** Deployment environment label. */
   env?: string;
@@ -83,6 +97,11 @@ export interface LoggerOptions {
   hostname?: string;
   /** Free-form region label. */
   region?: string;
+  /**
+   * Optional pipeline release label, stamped as `release_label` on every
+   * log line. See {@link ServiceBinding.releaseLabel}.
+   */
+  releaseLabel?: string;
   /** Initial log level. Default: `info`. */
   level?: LogLevel;
   /**

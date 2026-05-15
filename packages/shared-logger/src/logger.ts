@@ -53,6 +53,7 @@ export function createLogger(options: LoggerOptions): Logger {
     env,
     hostname,
     region,
+    releaseLabel,
     level = "info",
     additionalRedactionPaths,
     bindings,
@@ -66,6 +67,7 @@ export function createLogger(options: LoggerOptions): Logger {
   if (version !== undefined) base["version"] = version;
   if (env !== undefined) base["env"] = env;
   if (region !== undefined) base["region"] = region;
+  if (releaseLabel !== undefined) base["release_label"] = releaseLabel;
   base["hostname"] = hostname ?? osHostname();
   if (bindings !== undefined) {
     for (const [key, value] of Object.entries(bindings)) {

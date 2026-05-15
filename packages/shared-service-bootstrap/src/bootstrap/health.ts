@@ -38,6 +38,14 @@ export interface ServiceInfo {
   readonly gitSha?: string;
   /** Optional ISO 8601 build timestamp stamped at build time. */
   readonly buildTime?: string;
+  /**
+   * Optional human-readable pipeline release label (e.g. `2026-q2-r1`).
+   * Distinct from `serviceVersion`: a single release label may bundle many
+   * services with distinct package versions. Surfaced on `/health` as
+   * `release_label` so an operator bisecting a production rollout can map
+   * one tag to many running services. See `docs/deployment/versioning.md`.
+   */
+  readonly releaseLabel?: string;
   /** Optional deployment environment (`production`, `staging`, ...). */
   readonly environment?: string;
 }
@@ -132,6 +140,7 @@ export function registerHealthRoutes(app: FastifyInstance, options: HealthPlugin
       version: options.info.serviceVersion,
       git_sha: options.info.gitSha,
       build_time: options.info.buildTime,
+      release_label: options.info.releaseLabel,
       environment: options.info.environment,
       time: new Date().toISOString(),
     };

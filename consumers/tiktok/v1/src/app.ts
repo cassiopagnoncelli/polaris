@@ -99,6 +99,9 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     service: config.service.serviceName,
     version: config.service.serviceVersion,
     env: config.service.environment,
+    ...(config.service.releaseLabel !== undefined
+      ? { releaseLabel: config.service.releaseLabel }
+      : {}),
   });
   const consumerLogger = logger.child({
     component: "tiktok.runtime",
@@ -218,6 +221,9 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
       environment: config.service.environment,
       ...(config.service.gitSha !== undefined ? { gitSha: config.service.gitSha } : {}),
       ...(config.service.buildTime !== undefined ? { buildTime: config.service.buildTime } : {}),
+      ...(config.service.releaseLabel !== undefined
+        ? { releaseLabel: config.service.releaseLabel }
+        : {}),
     },
     logger: consumerLogger,
     fastify: {
