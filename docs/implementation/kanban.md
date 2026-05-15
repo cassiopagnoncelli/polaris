@@ -26,7 +26,6 @@ _(no remaining backlog — all P6 tasks Ready or Done)_
 
 ### P10 Observability and Operations
 
-- [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md)
 - [P10-004 Loki Logging Pipeline](./tasks/P10-004-loki-logging-pipeline.md)
 - [P10-005 Alerts and Incident Runbooks](./tasks/P10-005-alerts-runbooks.md)
 
@@ -144,6 +143,7 @@ No blocked cards.
 
 - [P10-001 Observability Compose](./tasks/P10-001-observability-compose.md) — merged in `d5ab28f`
 - [P10-002 Metrics Standardization](./tasks/P10-002-metrics-standardization.md) — merged in `f918b55`
+- [P10-003 Grafana Dashboards](./tasks/P10-003-grafana-dashboards.md) — merged in `537ecf0` (cherry-picked from `task/p10-003`; five dashboards covering ingestion, Redpanda, processors, destinations, ClickHouse + 228-line operator-facing index doc; superseded P10-001's `polaris-overview.json` placeholder; histograms, native CH exporter, and a dedicated publish-failure metric explicitly marked as gaps in the dashboards doc)
 - [P10-006 DLQ Triage Runbook](./tasks/P10-006-dlq-triage-runbook.md) — merged in `c114385` (cherry-picked from `worktree-agent-aab90b21dc7694720`; added `polaris dlq summary` aggregator + 6 CLI tests + 455-line runbook with verbatim SLA targets; processor DLQ CLI promotion + cross-vendor `--all` aggregate explicitly marked future in the runbook)
 
 ### P11 Deployment, Security, and Data Lifecycle
