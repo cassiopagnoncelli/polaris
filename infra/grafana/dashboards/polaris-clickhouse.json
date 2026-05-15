@@ -1,0 +1,253 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Polaris ClickHouse v1: Kafka-engine ingestion lag and analytics insert health, proxied via the analytics-projector processor metrics. Also surfaces operator-escape-hatch usage. Most native ClickHouse internals (MV failed_state, query p99, parts count) are NOT exposed in v1 — see About panel for gaps and the path to a native exporter.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The signals on this dashboard are derived from the **analytics-projector** processor, which is Polaris's ClickHouse inserter, plus the operator-escape-hatch counter from `packages/shared-clickhouse/src/raw.ts`.\n\n**Available metrics**:\n\n- `polaris_processor_lag_ms_last{processor_name=\"analytics-projector\"}` — proxy for Kafka-engine → analytics insert lag\n- `polaris_processor_events_consumed_total{processor_name=\"analytics-projector\"}` — proxy for the rate of rows landing in `analytics.events`\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` — proxy for materialized-view / insert failures (`reason` carries the failure class)\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` — events the inserter sent to DLQ after retry exhaustion\n- `polaris_clickhouse_operator_raw_query_total{caller}` — every operator escape-hatch raw query (audit signal)\n\n**Known gaps** (P10-003):\n\n- **No native ClickHouse Prometheus exporter** is wired in v1. To get `ClickHouseAsyncMetrics_ReplicasMaxQueueSize`, `failed_state` counts on materialized views, `Query` rate, query latency histograms, parts count, and disk usage, add a `clickhouse-exporter` (or the ClickHouse built-in `system.metrics` exporter) and a scrape stanza in `infra/prometheus/prometheus.yml`. Until that lands, this dashboard uses the proxies above and the panels for query-rate-by-table and query p99 are placeholders.\n- **Projection table freshness** is owned by `event-daily-counts` and similar ClickHouse projections. There is no v1 metric for projection freshness; placeholder panel calls it out.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30000 },
+              { "color": "red", "value": 120000 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["max"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "max by (partition) (polaris_processor_lag_ms_last{processor_name=\"analytics-projector\", environment=\"$environment\"})",
+          "legendFormat": "partition {{partition}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka-engine → analytics insert lag (ms, proxy via analytics-projector)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum(rate(polaris_processor_events_emitted_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "rows inserted into analytics.events",
+          "refId": "A"
+        }
+      ],
+      "title": "Analytics insert rate (5m, ops; proxy)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (reason) (rate(polaris_processor_events_failed_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Materialized-view / insert failures (5m, ops; proxy via analytics-projector)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (caller) (rate(polaris_clickhouse_operator_raw_query_total[5m]))",
+          "legendFormat": "{{caller}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operator escape-hatch raw query rate (audit, 5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 24 },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum(rate(polaris_processor_events_dlq_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[15m]))",
+          "legendFormat": "analytics-projector DLQ rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Inserter DLQ rate (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 30 },
+      "id": 7,
+      "options": {
+        "content": "## Query rate by table / query p99 latency — gap (placeholder)\n\nNot available in v1 — ClickHouse is not scraped by Prometheus. When the native exporter lands (see About panel), the panels become:\n\n- `sum by (database, table) (rate(ClickHouseProfileEvents_Query[5m]))` — query rate by table\n- `histogram_quantile(0.99, sum by (le) (rate(ClickHouseProfileEvents_QueryTimeMicroseconds[5m])))` — query p99 latency\n\n## Projection table freshness — gap (placeholder)\n\nProjections like `event-daily-counts` need a freshness metric (e.g. `max(updated_at) - now`). No emitter exists in v1.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "Query rate / p99 / projection freshness (gaps)",
+      "type": "text"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "clickhouse"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Prometheus", "value": "polaris-prometheus" },
+        "name": "DS_PROMETHEUS",
+        "label": "Datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "regex": "",
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — ClickHouse",
+  "uid": "polaris-clickhouse",
+  "version": 1,
+  "weekStart": ""
+}

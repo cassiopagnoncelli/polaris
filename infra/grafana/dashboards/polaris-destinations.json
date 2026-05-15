@@ -1,0 +1,312 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Polaris destination consumers v1: per-vendor delivery success/failure rates, failure breakdown by error_class, retry and DLQ counters, plus delivery duration and rate-limit wait gauges. Panels reference `polaris_destination_*` metrics defined in packages/shared-destinations/src/metrics.ts. The $vendor variable picks one of the five v1 consumers (webhook-sink, meta-capi, tiktok, ga4, braze).",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "content": "# Polaris Destinations\n\nMetrics from `packages/shared-destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `packages/shared-destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Known gaps** (P10-003):\n\n- `polaris_destination_delivery_duration_ms_last` is a **gauge** (last observation), not a histogram — panel shows `max` / `lastNotNull` as the best v1 signal. P10-002 owns the histogram migration.\n- DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `polaris_dlq_records` table via the DLQ triage runbook (P10-006).",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "About this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 2,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} — delivered",
+          "refId": "A"
+        }
+      ],
+      "title": "Delivery success rate per vendor (5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.95 },
+              { "color": "green", "value": 0.99 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])) / (sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])) + sum by (vendor) (rate(polaris_destination_events_failed_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])))",
+          "legendFormat": "{{vendor}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Delivery success ratio per vendor (15m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor, reason) (rate(polaris_destination_events_failed_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Failure breakdown by error_class (5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor) (rate(polaris_destination_events_retry_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} — retry",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor) (rate(polaris_destination_events_dlq_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} — DLQ",
+          "refId": "B"
+        }
+      ],
+      "title": "Retry and DLQ rates per vendor (5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 6,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "sum by (vendor, reason) (rate(polaris_destination_events_dropped_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Drops by reason (consent / identity / policy / mapper, 5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 7,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "max by (vendor) (polaris_destination_delivery_duration_ms_last{vendor=~\"$vendor\", environment=\"$environment\"})",
+          "legendFormat": "{{vendor}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Delivery duration (ms, last observed; gauge — see About panel)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "lastNotNull"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "max by (vendor) (polaris_destination_rate_limit_wait_ms_last{vendor=~\"$vendor\", environment=\"$environment\"})",
+          "legendFormat": "{{vendor}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate-limit lease wait (ms, last observed)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["polaris", "destinations"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Prometheus", "value": "polaris-prometheus" },
+        "name": "DS_PROMETHEUS",
+        "label": "Datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "regex": "",
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "current": { "text": "production", "value": "production" },
+        "options": [
+          { "text": "development", "value": "development" },
+          { "text": "staging", "value": "staging" },
+          { "text": "production", "value": "production", "selected": true }
+        ],
+        "label": "Environment",
+        "name": "environment",
+        "query": "development,staging,production",
+        "type": "custom"
+      },
+      {
+        "current": { "text": "All", "value": ".*" },
+        "options": [
+          { "text": "All", "value": ".*", "selected": true },
+          { "text": "webhook-sink", "value": "webhook-sink" },
+          { "text": "meta-capi", "value": "meta-capi" },
+          { "text": "tiktok", "value": "tiktok" },
+          { "text": "ga4", "value": "ga4" },
+          { "text": "braze", "value": "braze" }
+        ],
+        "label": "Vendor",
+        "name": "vendor",
+        "query": ".*,webhook-sink,meta-capi,tiktok,ga4,braze",
+        "type": "custom",
+        "includeAll": false
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Polaris — Destinations",
+  "uid": "polaris-destinations",
+  "version": 1,
+  "weekStart": ""
+}

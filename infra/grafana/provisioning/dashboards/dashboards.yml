@@ -6,11 +6,16 @@
 # into that directory and Grafana picks them up on the next sync
 # (10s by default).
 #
-# P10-001 ships a single placeholder dashboard so the provider has
-# something to load and doesn't log a 'no dashboards found' warning
-# on first start. P10-003 replaces that placeholder with the real
-# Polaris dashboards (Ingestion, Processors, Destinations, ClickHouse,
-# Redpanda).
+# P10-003 ships the v1 Polaris dashboards into infra/grafana/dashboards/:
+#
+#   polaris-ingestion.json    — accept/reject, reject reasons, dedupe
+#   polaris-redpanda.json     — native broker metrics + publish-fail proxy
+#   polaris-processors.json   — per-processor consumed/emitted/failed/DLQ
+#   polaris-destinations.json — per-vendor delivery success/failure
+#   polaris-clickhouse.json   — analytics-projector proxy + escape-hatch audit
+#
+# Plus the per-project topic-isolation dashboards from P11-008.
+# See docs/operations/dashboards.md for the panel inventory and gap list.
 
 apiVersion: 1
 

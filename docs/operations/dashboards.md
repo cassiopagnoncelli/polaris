@@ -1,0 +1,228 @@
+# Grafana Dashboards
+
+This document is the operator-facing index to the v1 Polaris Grafana dashboards
+shipped by **P10-003** (Grafana Dashboards). Each dashboard is a static JSON
+file under [`infra/grafana/dashboards/`](../../infra/grafana/dashboards), loaded
+into Grafana at startup by the dashboards provider in
+[`infra/grafana/provisioning/dashboards/dashboards.yml`](../../infra/grafana/provisioning/dashboards/dashboards.yml).
+The Prometheus datasource is auto-provisioned with UID `polaris-prometheus`
+(see [`infra/grafana/provisioning/datasources/datasources.yml`](../../infra/grafana/provisioning/datasources/datasources.yml));
+each dashboard exposes a `${DS_PROMETHEUS}` variable so the UID can be swapped
+at startup for staging / production stacks.
+
+The dashboards run on top of the optional observability compose
+([`docker-compose.observability.yml`](../../docker-compose.observability.yml)).
+Start it locally with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# Validate the merged compose without starting:
+docker compose -f docker-compose.yml -f docker-compose.observability.yml config
+```
+
+Grafana lands at <http://localhost:3000> (admin/admin, local-only).
+
+## Dashboard inventory
+
+| Dashboard | UID | Purpose | Source metrics package |
+|---|---|---|---|
+| [Polaris — Ingestion](#ingestion) | `polaris-ingestion` | Accept/reject rate, reject reason breakdown, dedupe, origin/rate-limit, redactions, deprecated schema usage | [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
+| [Polaris — Redpanda](#redpanda) | `polaris-redpanda` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
+| [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+| [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`packages/shared-destinations/src/metrics.ts`](../../packages/shared-destinations/src/metrics.ts) |
+| [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | Kafka-engine ingest lag proxy via analytics-projector, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+
+The per-project topic-isolation dashboards from **P11-008**
+(`polaris-per-project-throughput`, `polaris-per-project-schema`,
+`polaris-per-project-lag`, `polaris-per-partition-skew`) are shipped in the
+same directory and are owned by the [topic-isolation cutover
+runbook](./topic-isolation-cutover.md). They are not re-documented here.
+
+## Ingestion
+
+**File:** [`infra/grafana/dashboards/polaris-ingestion.json`](../../infra/grafana/dashboards/polaris-ingestion.json)
+**UID:** `polaris-ingestion`
+**Default range:** last 6 hours
+
+Panels and the metric each uses:
+
+| Panel | Metric expression |
+|---|---|
+| Accept vs reject rate (5m) | `sum(rate(polaris_ingest_batch_accepted_total[5m]))`; `sum(rate(polaris_ingest_batch_rejected_total[5m]))` |
+| Reject ratio (15m) | `polaris_ingest_batch_rejected_total / (accepted + rejected)` over 15m |
+| Reject reason breakdown (5m) | `sum by (reason) (rate(polaris_ingest_batch_rejected_total[5m]))` — reason ∈ `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope`, `forbidden_field_rejected`, `duplicate`, `publish_failed`, `invalid_request` (from `packages/shared-schemas/src/reason-codes.ts`) |
+| Short-window dedupe (5m) | `polaris_ingest_dedupe_hit_total`, `polaris_ingest_dedupe_skipped_total` |
+| Edge controls (5m) | `polaris_ingest_origin_rejected_total`, `polaris_ingest_rate_limit_rejected_total`, `polaris_ingest_rate_limit_skipped_total` |
+| Pattern-based redactions (5m) | `sum by (pattern, reason) (rate(polaris_ingest_redacted_pattern_total[5m]))` |
+| Deprecated `schema_version` usage (5m) | `sum by (event, schema_version) (rate(polaris_ingest_deprecated_schema_version_total[5m]))` |
+| Latency / body size (gap) | placeholder — no metric in v1 |
+
+**Known gaps:**
+
+- **No request-rate metric.** The v1 ingester does not emit an HTTP-level
+  request rate. Accept/reject sum is used as the proxy.
+- **No accept latency p50/p99/p999.** No histogram exists. P10-002
+  (`@polaris/shared-metrics`) owns the histogram migration; the dashboard's
+  "Latency / body size" panel is a placeholder until then.
+- **No body-size distribution.** Same story — no metric, placeholder panel.
+- **No publish-failure counter** distinct from `polaris_ingest_batch_rejected_total{reason="publish_failed"}`. The Redpanda dashboard re-uses that signal as its publish-failure proxy.
+
+## Redpanda
+
+**File:** [`infra/grafana/dashboards/polaris-redpanda.json`](../../infra/grafana/dashboards/polaris-redpanda.json)
+**UID:** `polaris-redpanda`
+**Default range:** last 6 hours
+
+Panels and the metric each uses:
+
+| Panel | Metric expression |
+|---|---|
+| Broker scrape health | `up{job="polaris-redpanda"}` |
+| Produce throughput per topic (5m, bytes/s) | `sum by (topic) (rate(redpanda_kafka_request_bytes_total{redpanda_request="produce"}[5m]))` |
+| Fetch throughput per topic (5m, bytes/s) | `sum by (topic) (rate(redpanda_kafka_request_bytes_total{redpanda_request="fetch"}[5m]))` |
+| Consumer group lag (records) | `sum by (group, topic) (redpanda_kafka_consumer_group_lag)` |
+| Publish failure rate (proxy) | `sum(rate(polaris_ingest_batch_rejected_total{reason="publish_failed"}[5m]))` |
+| Per-family processor lag (proxy, ms) | `max by (topic_family, processor_name) (polaris_processor_lag_ms_last)` |
+
+**Known gaps:**
+
+- **Native Redpanda metrics depend on `/public_metrics` exposing the
+  expected series.** The Polaris scrape config in
+  [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml)
+  targets `polaris-redpanda:9644/public_metrics`; the exact metric names
+  (`redpanda_kafka_request_bytes_total`, `redpanda_kafka_consumer_group_lag`)
+  are stable in current Redpanda releases but may shift between major
+  versions. If a panel shows no data, validate against the broker's
+  `/public_metrics` directly.
+- **No Polaris-side publish-failure counter.** The proxy is the ingester's
+  per-batch reject counter with `reason="publish_failed"`. A dedicated
+  `polaris_ingest_publish_failed_total` would let us split publish vs
+  serializer vs batch-flush failures; not in v1.
+- **No fleet-wide broker health roll-up.** `up{job=...}` is the v1 sentinel.
+
+## Processors
+
+**File:** [`infra/grafana/dashboards/polaris-processors.json`](../../infra/grafana/dashboards/polaris-processors.json)
+**UID:** `polaris-processors`
+**Default range:** last 6 hours
+
+The `$processor_name` template variable picks one of the five v1 processors:
+`analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`,
+`attribution-engine`. `All` shows the fleet aggregate.
+
+Panels and the metric each uses:
+
+| Panel | Metric expression |
+|---|---|
+| Events consumed (5m) | `sum by (processor_name) (rate(polaris_processor_events_consumed_total[5m]))` |
+| Events emitted (5m) | `sum by (processor_name) (rate(polaris_processor_events_emitted_total[5m]))` |
+| Failures by reason (5m) | `sum by (processor_name, reason) (rate(polaris_processor_events_failed_total[5m]))` |
+| Retry and DLQ rates (5m) | `polaris_processor_events_retry_total`, `polaris_processor_events_dlq_total` |
+| Per-processor lag (ms, last observed) | `max by (processor_name, partition) (polaris_processor_lag_ms_last)` |
+| Per-message handler duration (ms, last observed) | `max by (processor_name) (polaris_processor_handler_duration_ms_last)` |
+| DLQ growth rate by processor (15m) | `sum by (processor_name) (rate(polaris_processor_events_dlq_total[15m]))` |
+
+**Known gaps:**
+
+- **Lag and handler duration are gauges (`_ms_last`), not histograms.** Panels
+  report `max` and `lastNotNull` — they do not provide a real p50/p99/p999.
+  Until P10-002 swaps the registry implementation for a histogram-aware
+  backend, the percentile panels are a placeholder. See
+  [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts)
+  comments around `observeLagMs` / `observeHandlerDurationMs`.
+- **DLQ growth is a rate, not a backlog gauge.** For a true backlog count,
+  query `polaris_dlq_records` directly via the
+  [destination DLQ triage runbook](./destination-dlq-triage.md). A dedicated
+  per-processor DLQ-backlog metric would let this dashboard show "events
+  waiting in DLQ"; not in v1.
+
+## Destinations
+
+**File:** [`infra/grafana/dashboards/polaris-destinations.json`](../../infra/grafana/dashboards/polaris-destinations.json)
+**UID:** `polaris-destinations`
+**Default range:** last 6 hours
+
+The `$vendor` template variable picks one of the five v1 destination consumers:
+`webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. `All` shows the fleet aggregate.
+
+Panels and the metric each uses:
+
+| Panel | Metric expression |
+|---|---|
+| Delivery success rate per vendor (5m) | `sum by (vendor) (rate(polaris_destination_events_delivered_total[5m]))` |
+| Delivery success ratio per vendor (15m) | `delivered / (delivered + failed)` over 15m |
+| Failure breakdown by `error_class` (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_failed_total[5m]))` — `reason` ∈ `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy` (from `DELIVERY_RECORD_ERROR_CLASSES` in `packages/shared-destinations/src/db/delivery-records.ts`) |
+| Retry and DLQ rates per vendor (5m) | `polaris_destination_events_retry_total`, `polaris_destination_events_dlq_total` |
+| Drops by reason (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_dropped_total[5m]))` |
+| Delivery duration (ms, last observed) | `max by (vendor) (polaris_destination_delivery_duration_ms_last)` |
+| Rate-limit lease wait (ms, last observed) | `max by (vendor) (polaris_destination_rate_limit_wait_ms_last)` |
+
+**Known gaps:**
+
+- **Delivery duration and rate-limit-wait are gauges, not histograms.** Same
+  story as the Processors dashboard — `max` is the best v1 signal; P10-002
+  owns the histogram swap.
+- **DLQ growth is a rate, not a backlog count.** The
+  [destination DLQ triage runbook](./destination-dlq-triage.md) covers
+  per-destination backlog inspection from `polaris_dlq_records`.
+
+## ClickHouse
+
+**File:** [`infra/grafana/dashboards/polaris-clickhouse.json`](../../infra/grafana/dashboards/polaris-clickhouse.json)
+**UID:** `polaris-clickhouse`
+**Default range:** last 6 hours
+
+Panels and the metric each uses:
+
+| Panel | Metric expression |
+|---|---|
+| Kafka-engine → analytics insert lag (ms, proxy) | `max by (partition) (polaris_processor_lag_ms_last{processor_name="analytics-projector"})` |
+| Analytics insert rate (5m, ops; proxy) | `sum(rate(polaris_processor_events_emitted_total{processor_name="analytics-projector"}[5m]))` |
+| Materialized-view / insert failures (5m, proxy) | `sum by (reason) (rate(polaris_processor_events_failed_total{processor_name="analytics-projector"}[5m]))` |
+| Operator escape-hatch raw query rate (5m, audit) | `sum by (caller) (rate(polaris_clickhouse_operator_raw_query_total[5m]))` |
+| Inserter DLQ rate (15m) | `sum(rate(polaris_processor_events_dlq_total{processor_name="analytics-projector"}[15m]))` |
+| Query rate by table / query p99 / projection freshness | placeholder — see gap below |
+
+**Known gaps (largest in v1):**
+
+- **ClickHouse is not scraped natively in v1.** The `clickhouse` service
+  in [`docker-compose.yml`](../../docker-compose.yml) does not expose
+  `/metrics`; no `clickhouse_exporter` is wired in
+  [`docker-compose.observability.yml`](../../docker-compose.observability.yml);
+  no scrape stanza for ClickHouse exists in
+  [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml).
+  Until that lands, **every native ClickHouse signal** is proxied through
+  the **analytics-projector** processor (which is Polaris's writer into
+  `analytics.events`).
+- **No materialized-view `failed_state` count.** The proxy is
+  `polaris_processor_events_failed_total{processor_name="analytics-projector"}`,
+  which is the Polaris-side view of insert failures, not ClickHouse's
+  internal MV failure ledger.
+- **No query-rate-by-table panel.** Needs ClickHouse's built-in
+  `ClickHouseProfileEvents_Query` and a database/table label split, which
+  requires the native exporter.
+- **No query p99 latency.** Needs
+  `histogram_quantile(0.99, rate(ClickHouseProfileEvents_QueryTimeMicroseconds[5m]))`
+  via the native exporter.
+- **No projection table freshness signal.** Projections like
+  `event-daily-counts` need a `freshness_age_ms` gauge that no current
+  emitter produces.
+
+## Adding a new dashboard
+
+1. Author the JSON file under `infra/grafana/dashboards/`. The dashboards
+   provider (`infra/grafana/provisioning/dashboards/dashboards.yml`) picks
+   up new files within 10 seconds of the next sync.
+2. Reference the datasource as `${DS_PROMETHEUS}` (with a templating entry
+   declaring the variable) so the UID is swappable at startup.
+3. Reference real metric names — verify against the registries listed at
+   the top of this document. Do **not** invent metric names.
+4. Sanity-check the JSON parses: `jq . infra/grafana/dashboards/<file>.json`.
+5. Add an entry to the table at the top of this file.
+
+## See also
+
+- [Observability and Operations](../architecture/08-observability-and-operations.md) — canonical metric vocabulary and SLO posture.
+- [Delivery Roadmap](../implementation/delivery-roadmap.md) — what "v1 operations" means.
+- [Destination DLQ Triage](./destination-dlq-triage.md) — backlog inspection that complements the rate panels here.
+- [Topic Isolation Cutover](./topic-isolation-cutover.md) — owns the four per-project topic-isolation dashboards in the same directory.
