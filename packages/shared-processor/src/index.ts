@@ -41,7 +41,25 @@ export {
   type ProcessorRetryClassification,
   type ProcessorRetryReason,
 } from "./classify.js";
-export { type PublishToDlqInput, publishToDlq } from "./dlq.js";
+export {
+  type ProcessorDlqEnvelopeMetadata,
+  type PublishToDlqInput,
+  publishToDlq,
+} from "./dlq.js";
+export {
+  createKyselyProcessorDlqRecordRepository,
+  InMemoryProcessorDlqRecordRepository,
+  type InMemoryProcessorDlqRecordRepositoryOptions,
+  type KyselyProcessorDlqRecordRepositoryOptions,
+  LIST_PROCESSOR_DLQ_RECORDS_HARD_LIMIT,
+  type ListProcessorDlqRecordsFilter,
+  type MarkResolvedOutcome,
+  PROCESSOR_DLQ_RECORD_ID_PREFIX,
+  type ProcessorDlqRecord,
+  type ProcessorDlqRecordRepository,
+  type ProcessorDlqRecordsTable,
+  type RecordProcessorDlqInput,
+} from "./db/processor-dlq-records.js";
 export {
   type ProcessorIdentity,
   type ProcessorLogContextInput,

@@ -2,8 +2,8 @@
 
 This is the operator entry point for triaging Polaris DLQ events end-to-end.
 It covers both destination-side DLQs (per consumer instance, mirrored to
-PostgreSQL `dlq_records`) and processor-side DLQs (per processor, Kafka-only
-in v1).
+PostgreSQL `dlq_records`) and processor-side DLQs (per processor, dual-written
+to Kafka + PostgreSQL `processor_dlq_records` as of 3L2HKMND).
 
 Binding architecture references:
 
@@ -55,11 +55,19 @@ attempt counter, failed-at timestamp). The original Kafka bytes are
 preserved byte-identically so replay tooling can rely on `event_id`
 equality across topics.
 
-Processor DLQs are **Kafka-only in v1**. There is no
-`processor_dlq_records` PostgreSQL table; triage is done against the
-DLQ topic directly using Redpanda console / `rpk topic consume`.
-Promoting processor DLQs to a typed PostgreSQL table is a known gap
-(see [Known gaps](#known-gaps) at the end of this document).
+Processor DLQs **dual-write** as of 3L2HKMND: the Kafka publish to
+`<processor_name>.dlq` still happens (so existing topic consumers and
+runbooks stay unbroken) AND a row lands in the PostgreSQL
+[`processor_dlq_records`](../../packages/shared-processor/src/db/processor-dlq-records.ts)
+table. Each row carries the original Kafka bytes (`payload`), the
+original headers (`headers`), the failing processor identity
+(`processor_name`, `processor_version`), classifier output
+(`reason`, `error_class`, `error_message`), source-topic coordinates
+(`source_topic` / `source_partition` / `source_offset`), and the
+mutable resolution slots (`resolved_at`, `resolved_by`,
+`resolution_note`). Operators triage from PostgreSQL via the CLI
+commands documented in §3b; the Kafka topic remains the durable
+byte-identical buffer.
 
 ## 2. SLA targets
 
@@ -130,16 +138,23 @@ when forensic context is needed.
 
 ### Processor DLQs
 
-There is no per-processor CLI summary in v1. Operators inspect
-processor DLQs through Redpanda directly:
+As of 3L2HKMND, processor DLQs are queryable from PostgreSQL via
+`polaris processors dlq`:
+
+```bash
+polaris processors dlq list --processor geoip-enricher --limit 50
+polaris processors dlq list --processor analytics-projector --since 2026-05-14T00:00:00Z
+```
+
+The `--include-resolved` flag widens to the full history. The Kafka
+topic (`<processor_name>.dlq`) is still written byte-identically for
+backward compatibility with Redpanda-console workflows and existing
+streaming consumers:
 
 ```bash
 rpk topic describe geoip-enricher.dlq
 rpk topic consume geoip-enricher.dlq --num 50 --format '%h\t%v\n'
 ```
-
-A `polaris processors dlq summary` command is a known follow-up; see
-[Known gaps](#known-gaps).
 
 The processor DLQ metric `polaris_processor_events_dlq_total` (labeled
 by `processor_name`, `processor_version`, `project_id`, `environment`,
@@ -432,15 +447,16 @@ dispatcher rejects them and requires an operator token.
 
 ## Known gaps
 
-The destination-side surface is complete for v1. The following are
-follow-up work:
+The destination-side surface is complete for v1. The processor-side
+surface gained the typed `processor_dlq_records` table and the
+`polaris processors dlq {list,show,retry,mark-resolved}` commands in
+3L2HKMND. The following are follow-up work:
 
-- **Processor DLQ CLI.** Processor DLQs are Kafka-only in v1. A typed
-  PostgreSQL table (`processor_dlq_records`) plus
-  `polaris processors dlq {summary,list,show,retry,mark-resolved}`
-  is a natural extension and lands as a follow-up task. Until then,
-  operators triage processor DLQs via Redpanda console / `rpk` and
-  the `polaris_processor_events_dlq_total` Grafana panel.
+- **Cross-processor summary.** `polaris processors dlq` requires
+  `--processor`. A "everything, grouped by processor" view can be
+  achieved via a shell loop over the processor names; a first-class
+  `polaris processors dlq summary` is a sibling to the destination
+  surface's `summary` and not yet shipped.
 - **Cross-vendor / cross-destination aggregate.** `polaris dlq
   summary` requires `--destination` or `--vendor`. A "everything,
   grouped by vendor" view is achievable via a shell loop (see the

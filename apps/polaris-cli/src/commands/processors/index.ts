@@ -39,6 +39,7 @@
  */
 import type { CommandDefinition } from "../../command.js";
 import { processorsDisableCommand } from "./disable.js";
+import { processorsDlqCommand } from "./dlq/index.js";
 import { processorsEnableCommand } from "./enable.js";
 import { processorsListCommand } from "./list.js";
 import { processorsRunsCommand } from "./runs.js";
@@ -48,6 +49,7 @@ const CHILDREN: readonly CommandDefinition[] = [
   processorsListCommand,
   processorsShowCommand,
   processorsRunsCommand,
+  processorsDlqCommand,
   processorsEnableCommand,
   processorsDisableCommand,
 ];
