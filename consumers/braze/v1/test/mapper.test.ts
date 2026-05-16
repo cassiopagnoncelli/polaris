@@ -25,6 +25,7 @@ import {
   checkoutStartedMapper,
   paymentApprovedMapper,
   resolveExternalId,
+  resolveUserAlias,
   userIdentifiedMapper,
 } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
@@ -110,7 +111,7 @@ describe("checkoutStartedMapper", () => {
     expect(result.payload.events?.[0]?.properties).toBeUndefined();
   });
 
-  it("skips when no external_id can be resolved", () => {
+  it("emits a user_alias entry when only email is present (BJPQSPE5)", () => {
     const ctx = fixtureMapperContext({
       identity: {
         user_id: null,
@@ -122,9 +123,30 @@ describe("checkoutStartedMapper", () => {
       },
     });
     const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const event = result.payload.events?.[0];
+    expect(event?.external_id).toBeUndefined();
+    expect(event?.user_alias).toEqual({
+      alias_label: "email",
+      alias_name: "buyer@storefront.example",
+    });
+  });
+
+  it("skips when no identifier (external_id / email / phone) can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = checkoutStartedMapper(ctx);
     expect(result.kind).toBe("skip");
     if (result.kind !== "skip") return;
-    expect(result.reason).toContain("external_id");
+    expect(result.reason).toContain("identifier");
   });
 });
 
@@ -219,13 +241,36 @@ describe("paymentApprovedMapper", () => {
     expect(result.reason).toContain("product_id");
   });
 
-  it("skips when no external_id can be resolved", () => {
+  it("emits a user_alias entry when only phone is present (BJPQSPE5)", () => {
     const ctx = fixtureMapperContext({
       event: "payment.approved",
       identity: {
         user_id: null,
         anonymous_id: null,
-        email: "buyer@storefront.example",
+        email: null,
+        email_sha256: null,
+        phone: "+15555550199",
+        phone_sha256: null,
+      },
+      properties: { amount_minor: 4999, currency: "USD", cart_id: "cart_99" },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const purchase = result.payload.purchases?.[0];
+    expect(purchase?.external_id).toBeUndefined();
+    expect(purchase?.user_alias).toEqual({
+      alias_label: "phone",
+      alias_name: "+15555550199",
+    });
+  });
+
+  it("skips when no identifier can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
         email_sha256: null,
         phone: null,
         phone_sha256: null,
@@ -235,7 +280,7 @@ describe("paymentApprovedMapper", () => {
     const result = paymentApprovedMapper(ctx);
     expect(result.kind).toBe("skip");
     if (result.kind !== "skip") return;
-    expect(result.reason).toContain("external_id");
+    expect(result.reason).toContain("identifier");
   });
 });
 
@@ -277,7 +322,7 @@ describe("userIdentifiedMapper", () => {
     expect(attribute?.external_id).toBe("cust_456");
   });
 
-  it("skips when no external_id can be resolved", () => {
+  it("emits a user_alias entry when only email is present (BJPQSPE5)", () => {
     const ctx = fixtureMapperContext({
       event: "user.identified",
       identity: {
@@ -290,9 +335,34 @@ describe("userIdentifiedMapper", () => {
       },
     });
     const result = userIdentifiedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0];
+    expect(attribute?.external_id).toBeUndefined();
+    expect(attribute?.user_alias).toEqual({
+      alias_label: "email",
+      alias_name: "buyer@storefront.example",
+    });
+    // Email-only profile still has email/phone slots populated on the
+    // attribute body for downstream attribute updates.
+    expect(attribute?.email).toBe("buyer@storefront.example");
+  });
+
+  it("skips when no identifier can be resolved", () => {
+    const ctx = fixtureMapperContext({
+      event: "user.identified",
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = userIdentifiedMapper(ctx);
     expect(result.kind).toBe("skip");
     if (result.kind !== "skip") return;
-    expect(result.reason).toContain("external_id");
+    expect(result.reason).toContain("identifier");
   });
 });
 
@@ -342,6 +412,70 @@ describe("resolveExternalId", () => {
       },
     });
     expect(resolveExternalId(normalized)).toBeNull();
+  });
+});
+
+describe("resolveUserAlias (BJPQSPE5)", () => {
+  it("prefers email over phone", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "buyer@storefront.example",
+        email_sha256: null,
+        phone: "+15555550199",
+        phone_sha256: null,
+      },
+    });
+    expect(resolveUserAlias(normalized)).toEqual({
+      alias_label: "email",
+      alias_name: "buyer@storefront.example",
+    });
+  });
+
+  it("falls back to phone when email is null", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: "+15555550199",
+        phone_sha256: null,
+      },
+    });
+    expect(resolveUserAlias(normalized)).toEqual({
+      alias_label: "phone",
+      alias_name: "+15555550199",
+    });
+  });
+
+  it("returns null when neither email nor phone is present", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    expect(resolveUserAlias(normalized)).toBeNull();
+  });
+
+  it("trims + lowercases the email alias name", () => {
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: "  BUYER@STOREFRONT.example  ",
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    expect(resolveUserAlias(normalized)?.alias_name).toBe("buyer@storefront.example");
   });
 });
 

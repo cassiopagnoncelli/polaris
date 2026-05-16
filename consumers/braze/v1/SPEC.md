@@ -83,7 +83,9 @@ currency    minorToMajor (consumer applies this)
 
 Braze-specific rules (in `src/mapper.ts`):
 
-- **`external_id` resolution** — first non-null of `identity.user_id` (canonical `customer_id`) → `identity.anonymous_id`. Trimmed + lowercased before emission. Email and phone are NOT used as a fallback in v1; a future minor may add a `user_alias` mapping for email-only identities.
+- **Identifier resolution** — the mapper picks exactly one of `external_id` or `user_alias` per entry:
+  - `external_id` is the first non-null of `identity.user_id` (canonical `customer_id`) → `identity.anonymous_id`. Trimmed + lowercased before emission.
+  - `user_alias` (BJPQSPE5) is the email-only / phone-only fallback: `{ alias_label: "email", alias_name: ... }` when only `identity.email` is present, or `{ alias_label: "phone", alias_name: ... }` when only `identity.phone` is present. Email wins when both are present and `external_id` is absent. The alias name is raw (unhashed) — Braze does not accept hashed alias names. Events with neither slot still produce a `skip` outcome.
 - **`product_id` resolution (purchases)** — first non-null of `properties.cart_id` → `properties.order_id` → `properties.transaction_id`. Braze requires `product_id` on every purchase entry; missing slots produce a `skip` outcome.
 - **`name` (events)** — constant per canonical event mapping. v1 emits `checkout_started`; future canonical events get a stable underscore-snake-case Braze name agreed with the receiver.
 - **`_update_existing_only=false` (attributes)** — first-touch identification: Braze creates the user profile when one does not already exist. A future minor may surface a per-instance override (e.g. data-engineering-owned destinations may want strict update-only semantics).
@@ -158,7 +160,7 @@ identity.phone   passthrough — Braze's REST API consumes the raw value
 
 The mapper applies a thin canonicalization for `external_id` (trim + lowercase) to match Braze's documented case-insensitive comparison behavior. No other identity slots are mapped in v1.
 
-A future minor may add a `user_alias` mapping for email-only or phone-only identities (where `external_id` is not available), but the v1 contract is: events without a usable `external_id` produce a `skip` outcome at the mapper.
+Events without `external_id` AND without a `user_alias`-eligible identity (no email, no phone) still produce a `skip` outcome at the mapper. The v1.1 user-alias path (BJPQSPE5) materially shrinks that skip set: any envelope carrying either an email or a phone now produces a Braze entry.
 
 ## Test fixtures
 

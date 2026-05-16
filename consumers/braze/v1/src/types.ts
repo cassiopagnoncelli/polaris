@@ -43,8 +43,22 @@ export interface BrazePayload {
  * (`email`, `phone`, ...). The mapper populates `email` / `phone` from
  * the canonical envelope; future minors may surface more.
  */
+export interface BrazeUserAlias {
+  /** Closed set in v1: `"email"` or `"phone"`. */
+  readonly alias_label: string;
+  /** Raw alias value — Braze accepts unhashed alias names. */
+  readonly alias_name: string;
+}
+
 export interface BrazeAttributeObject {
-  readonly external_id: string;
+  /**
+   * Canonical `customer_id` (lowercased, trimmed). Required when no
+   * `user_alias` is supplied. The mapper emits exactly one of
+   * `external_id` or `user_alias` per entry; Braze rejects entries
+   * carrying both.
+   */
+  readonly external_id?: string;
+  readonly user_alias?: BrazeUserAlias;
   readonly email?: string;
   readonly phone?: string;
   readonly _update_existing_only?: boolean;
@@ -64,7 +78,13 @@ export interface BrazeAttributeObject {
  * `time` is ISO 8601 (Braze's REST contract), not Unix seconds.
  */
 export interface BrazeEventObject {
-  readonly external_id: string;
+  /**
+   * Canonical `customer_id` (lowercased, trimmed). Required when no
+   * `user_alias` is supplied. The mapper emits exactly one of
+   * `external_id` or `user_alias` per entry.
+   */
+  readonly external_id?: string;
+  readonly user_alias?: BrazeUserAlias;
   readonly name: string;
   readonly time: string;
   readonly properties?: BrazeEventProperties;
@@ -101,7 +121,13 @@ export interface BrazeEventProperties {
  * `time` is ISO 8601, matching `BrazeEventObject.time`.
  */
 export interface BrazePurchaseObject {
-  readonly external_id: string;
+  /**
+   * Canonical `customer_id` (lowercased, trimmed). Required when no
+   * `user_alias` is supplied. The mapper emits exactly one of
+   * `external_id` or `user_alias` per entry.
+   */
+  readonly external_id?: string;
+  readonly user_alias?: BrazeUserAlias;
   readonly product_id: string;
   readonly currency: string;
   readonly price: number;

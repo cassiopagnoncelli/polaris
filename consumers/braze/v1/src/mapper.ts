@@ -100,9 +100,9 @@ export const CANONICAL_TO_BRAZE_FAMILY = Object.freeze({
 export const checkoutStartedMapper: Mapper<BrazePayload> = (
   ctx: MapperContext,
 ): MapperResult<BrazePayload> => {
-  const externalId = resolveExternalId(ctx.normalized);
-  if (externalId === null) {
-    return { kind: "skip", reason: "no_external_id_for_braze_event" };
+  const identifier = resolveBrazeIdentifier(ctx.normalized);
+  if (identifier === null) {
+    return { kind: "skip", reason: "no_identifier_for_braze_event" };
   }
 
   const props = ctx.normalized.properties;
@@ -128,12 +128,14 @@ export const checkoutStartedMapper: Mapper<BrazePayload> = (
     properties.page_url = ctx.normalized.context.page_url;
   }
 
-  const event: BrazeEventObject = {
-    external_id: externalId,
-    name: BRAZE_EVENT_CHECKOUT_STARTED,
-    time: ctx.normalized.occurred_at,
-    ...(Object.keys(properties).length > 0 ? { properties: freezeProperties(properties) } : {}),
-  };
+  const event = applyBrazeIdentifier(
+    {
+      name: BRAZE_EVENT_CHECKOUT_STARTED,
+      time: ctx.normalized.occurred_at,
+      ...(Object.keys(properties).length > 0 ? { properties: freezeProperties(properties) } : {}),
+    },
+    identifier,
+  ) as BrazeEventObject;
   const payload: BrazePayload = { events: Object.freeze([Object.freeze(event)]) };
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
 };
@@ -163,9 +165,9 @@ export const checkoutStartedMapper: Mapper<BrazePayload> = (
 export const paymentApprovedMapper: Mapper<BrazePayload> = (
   ctx: MapperContext,
 ): MapperResult<BrazePayload> => {
-  const externalId = resolveExternalId(ctx.normalized);
-  if (externalId === null) {
-    return { kind: "skip", reason: "no_external_id_for_braze_purchase" };
+  const identifier = resolveBrazeIdentifier(ctx.normalized);
+  if (identifier === null) {
+    return { kind: "skip", reason: "no_identifier_for_braze_purchase" };
   }
 
   const props = ctx.normalized.properties;
@@ -187,13 +189,15 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
     return { kind: "skip", reason: "no_product_id_for_braze_purchase" };
   }
 
-  const purchase: BrazePurchaseObject = {
-    external_id: externalId,
-    product_id: productId,
-    currency,
-    price,
-    time: ctx.normalized.occurred_at,
-  };
+  const purchase = applyBrazeIdentifier(
+    {
+      product_id: productId,
+      currency,
+      price,
+      time: ctx.normalized.occurred_at,
+    },
+    identifier,
+  ) as BrazePurchaseObject;
   const payload: BrazePayload = { purchases: Object.freeze([Object.freeze(purchase)]) };
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
 };
@@ -215,22 +219,23 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
 export const userIdentifiedMapper: Mapper<BrazePayload> = (
   ctx: MapperContext,
 ): MapperResult<BrazePayload> => {
-  const externalId = resolveExternalId(ctx.normalized);
-  if (externalId === null) {
-    return { kind: "skip", reason: "no_external_id_for_braze_attribute" };
+  const identifier = resolveBrazeIdentifier(ctx.normalized);
+  if (identifier === null) {
+    return { kind: "skip", reason: "no_identifier_for_braze_attribute" };
   }
 
   const attribute: {
-    external_id: string;
+    external_id?: string;
+    user_alias?: { alias_label: string; alias_name: string };
     email?: string;
     phone?: string;
     _update_existing_only: boolean;
     country?: string;
     language?: string;
   } = {
-    external_id: externalId,
     _update_existing_only: false,
   };
+  applyBrazeIdentifier(attribute, identifier);
   if (ctx.normalized.identity.email !== null) {
     attribute.email = ctx.normalized.identity.email;
   }
@@ -278,6 +283,72 @@ export function resolveExternalId(normalized: NormalizedEvent): string | null {
     if (trimmed.length > 0) return trimmed;
   }
   return null;
+}
+
+/**
+ * Braze `user_alias` for email-only / phone-only identities (BJPQSPE5).
+ *
+ * Order:
+ *
+ *   1. `identity.email`  → `{ alias_label: "email", alias_name: ... }`
+ *   2. `identity.phone`  → `{ alias_label: "phone", alias_name: ... }`
+ *
+ * Email is preferred over phone because Braze recommends a stable
+ * alias label per profile, and email is more likely to be canonical
+ * for a given user across devices. The raw (unhashed) email/phone is
+ * shipped — Braze does not accept hashed alias names. The normalize
+ * layer still emits the hashed identifiers (`email_sha256` /
+ * `phone_sha256`) on the envelope; this consumer reads the raw
+ * `email` / `phone` slot, which is preserved through normalization
+ * for vendors that key on raw values.
+ */
+export function resolveUserAlias(
+  normalized: NormalizedEvent,
+): { alias_label: string; alias_name: string } | null {
+  const email = normalized.identity.email;
+  if (email !== null) {
+    const trimmed = email.trim().toLowerCase();
+    if (trimmed.length > 0) return { alias_label: "email", alias_name: trimmed };
+  }
+  const phone = normalized.identity.phone;
+  if (phone !== null) {
+    const trimmed = phone.trim();
+    if (trimmed.length > 0) return { alias_label: "phone", alias_name: trimmed };
+  }
+  return null;
+}
+
+/**
+ * Helper used by every per-event mapper: a deterministic identifier
+ * record carrying EITHER `external_id` OR `user_alias`. Braze rejects
+ * entries that carry both; the mapper picks one based on the canonical
+ * identity ladder.
+ */
+function resolveBrazeIdentifier(
+  normalized: NormalizedEvent,
+):
+  | { kind: "external_id"; value: string }
+  | { kind: "user_alias"; value: { alias_label: string; alias_name: string } }
+  | null {
+  const externalId = resolveExternalId(normalized);
+  if (externalId !== null) return { kind: "external_id", value: externalId };
+  const alias = resolveUserAlias(normalized);
+  if (alias !== null) return { kind: "user_alias", value: alias };
+  return null;
+}
+
+function applyBrazeIdentifier<T extends Record<string, unknown>>(
+  target: T,
+  identifier:
+    | { kind: "external_id"; value: string }
+    | { kind: "user_alias"; value: { alias_label: string; alias_name: string } },
+): T {
+  if (identifier.kind === "external_id") {
+    (target as Record<string, unknown>)["external_id"] = identifier.value;
+  } else {
+    (target as Record<string, unknown>)["user_alias"] = identifier.value;
+  }
+  return target;
 }
 
 // ---------------------------------------------------------------------------

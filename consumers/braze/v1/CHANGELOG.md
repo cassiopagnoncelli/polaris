@@ -1,5 +1,13 @@
 # `@polaris/consumer-braze-v1` changelog
 
+## v1.1.0 — `user_alias` mapping for email-only / phone-only identities (BJPQSPE5)
+
+- The mapper now emits a `user_alias` entry when `external_id` cannot be derived but `identity.email` or `identity.phone` is present. Email wins when both are populated.
+- `external_id` becomes optional on `BrazeEventObject`, `BrazePurchaseObject`, and `BrazeAttributeObject`; the new optional `user_alias` field is the email-only / phone-only fallback. Braze accepts exactly one of the two per entry; the mapper enforces that contract.
+- Skip-reason strings change from `no_external_id_for_braze_*` to `no_identifier_for_braze_*` to reflect that the mapper now checks both external_id and user_alias before skipping.
+- Tests updated: cases that previously asserted `skip` for email-only / phone-only events now assert `mapped` with a `user_alias` body.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.0.0 — initial release (P9-006)
 
 - Third real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003) and refined by `@polaris/consumer-tiktok-v1` (P9-005).
