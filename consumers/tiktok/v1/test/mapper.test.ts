@@ -315,6 +315,28 @@ describe("inferEventSource", () => {
   });
 });
 
+describe("inferEventSource — app channel (WH7LZ0WZ)", () => {
+  it("returns 'app' when any app_* slot is populated, even if page_url is also set", () => {
+    const normalized = fixtureNormalizedEvent();
+    const withApp = {
+      ...normalized,
+      context: {
+        ...normalized.context,
+        app_bundle_id: "com.example.shop",
+        app_version: "5.10.2",
+      },
+    };
+    expect(inferEventSource(withApp)).toBe("app");
+  });
+
+  it("falls back to 'web' / 'crm' when no app_* slots are present", () => {
+    const n = fixtureNormalizedEvent();
+    expect(inferEventSource(n)).toBe("web");
+    const noApp = { ...n, context: { ...n.context, page_url: null } };
+    expect(inferEventSource(noApp)).toBe("crm");
+  });
+});
+
 describe("CANONICAL_TO_TIKTOK_EVENT", () => {
   it("pins the v1.x event matrix", () => {
     expect(CANONICAL_TO_TIKTOK_EVENT["checkout.started"]).toBe(TIKTOK_EVENT_INITIATE_CHECKOUT);

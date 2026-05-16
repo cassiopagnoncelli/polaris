@@ -1,5 +1,11 @@
 # `@polaris/consumer-tiktok-v1` changelog
 
+## v1.2.0 — mobile-app `event_source` inference (WH7LZ0WZ)
+
+- `inferEventSource` now returns `app` when any `context.app_*` slot on the normalized envelope is populated. `app` wins over `web` so native-app webviews are attributed correctly.
+- Depends on the additive `EnvelopeAppContext` extension to `@polaris/shared-destination-normalize`'s `FlatContext` (landed alongside G7ZCYLL6).
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.1.0 — additive event-matrix expansion (XJ8BT875)
 
 - Added `signup.completed` → `CompleteRegistration` mapper. Both `user.identified` and `signup.completed` now map to TikTok's `CompleteRegistration`; canonical `event_id` keeps the two streams distinct on the receive side.

@@ -1,0 +1,31 @@
+{
+  "event_id": "evt_01HZZE4YJK0M2R8D8VYV4QH7XR",
+  "event": "payment.approved",
+  "schema_version": 1,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:00.500Z",
+  "source": { "id": "storefront-ios", "type": "mobile" },
+  "identity": {
+    "customer_id": "cust_12345",
+    "anonymous_id": "anon_abc"
+  },
+  "context": {
+    "ip": "203.0.113.42",
+    "user_agent": "Storefront/5.10 (iOS 17; iPhone15,2)",
+    "locale": "en-US",
+    "app": {
+      "bundle_id": "com.example.storefront",
+      "version": "5.10.2",
+      "build": "5102",
+      "idfv": "11111111-2222-3333-4444-555555555555"
+    }
+  },
+  "properties": {
+    "order_id": "ord_42",
+    "amount_minor": 4999,
+    "currency": "USD"
+  },
+  "consent": { "marketing": true, "analytics": true, "personalization": true }
+}

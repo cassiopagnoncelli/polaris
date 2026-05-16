@@ -43,7 +43,7 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `event_id` | `event_id` | none | Vendor dedupe key; matches browser-pixel `event_id` for cross-channel dedupe |
 | `occurred_at` | `event_time` | `isoToEpochSeconds` | TikTok requires Unix seconds, not ms; floor(ms/1000) |
 | `context.page.url` | `page.url` | none | When present; absent → omitted |
-| inferred | wrapper `event_source` | branch on `page.url` | populated `page.url` → `web`; otherwise `crm` |
+| inferred | wrapper `event_source` | branch on app/page context | `app` when any `context.app_*` slot is populated; `web` when `context.page.url` is populated; otherwise `crm` |
 | `identity.customer_id` | `user.external_id` | `sha256(lowercased(trim(value)))` | TikTok requires hash for external_id |
 | `identity.email_sha256` | `user.email` | (already hashed by normalize) | shared-destination-normalize handles email sha256 |
 | `identity.phone_sha256` | `user.phone` | (already hashed by normalize) | E.164 + sha256 |
@@ -116,7 +116,7 @@ currency    minorToMajor        (consumer applies this)
 
 TikTok-specific rules (in `src/mapper.ts`):
 
-- **`event_source` inference** — populated `context.page_url` → `web`; otherwise `crm` (TikTok's backend-event default). Mobile-source detection (`app`) is deferred until the `FlatContext` shape carries `app_*` slots (a future normalize-layer extension). TikTok stamps `event_source` on the wire wrapper, not the per-event payload; the deliverer reads the inferred value from the payload's `page.url` slot as a cheap proxy.
+- **`event_source` inference** — `app` when any `context.app_*` slot is populated (WH7LZ0WZ); `web` when `context.page_url` is populated; otherwise `crm` (TikTok's backend-event default). `app` wins over `web` so native-app webviews land correctly. TikTok stamps `event_source` on the wire wrapper, not the per-event payload; the deliverer reads the inferred value from the payload's source-context slots.
 - **`limited_data_use = 1`** — stamped when `consent.dimensions[?dimension=='marketing'].granted === false`. The normalize layer drops the event entirely if `marketing` is a required-and-denied dimension, so the `limited_data_use` branch only fires when a destination is more permissive than the mapper (`required_consent.marketing` is true at this consumer, so the LDU branch never actually fires through the runtime — kept as defense-in-depth).
 - **`properties.contents[]` builder** — TikTok's preferred per-product detail slot. The mapper emits one entry per canonical `properties.items[]` with `content_id` (sku), `quantity`, and `price` (unit_price minor → major). Entries with no usable fields are dropped from the array; an empty array is omitted entirely.
 
@@ -207,7 +207,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 - **TikTok requires `event_time` as Unix seconds** — canonical envelopes carry `occurred_at` as ISO 8601 + `occurred_at_epoch_ms` (milliseconds). The mapper floors `epoch_ms / 1000` to get seconds.
 - **TikTok's `value` is decimal** — canonical envelopes carry currency amounts in minor units (per `01-event-contract.md`). The mapper applies `minorToMajor(amount, currency)` with the ISO 4217 exponent. Zero-decimal currencies (JPY, KRW) pass through unchanged.
 - **TikTok `event_source` is request-level, not per-payload** — Meta CAPI's `action_source` rides on each event; TikTok's `event_source` rides on the wrapper. The deliverer reads the inferred source from the first payload's `page.url` slot to stamp the wrapper; v1 only ships one payload per request, so this is a clean mapping.
-- **Mobile sources are reported as `crm`** — until the `FlatContext` shape carries `app_*` fields, the consumer can't distinguish mobile from backend. A future minor version may detect mobile via `properties` heuristics; v1 keeps the inference narrow.
+- **Mobile-app sources are detected via `context.app_*`** (WH7LZ0WZ): when any of `app_bundle_id` / `app_version` / `app_namespace` / `app_build` / `app_idfa` / `app_idfv` / `app_gaid` is populated on the flat context, the deliverer stamps the wrapper's `event_source` as `app`. Backend-emitted events with no `app_*` and no `page_url` continue to land as `crm`.
 - **TikTok returns HTTP 200 even for some application-level errors** — the body carries `code != 0` to signal failure. v1 classifies on HTTP status alone; a future minor version may parse the body to reclassify these as `failed_permanent`.
 
 ## Vendor API changelog

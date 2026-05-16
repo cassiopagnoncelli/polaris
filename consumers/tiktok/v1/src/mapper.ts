@@ -30,7 +30,7 @@
  */
 
 import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
-import { minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
+import { hasAppContext, minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
 
 import type {
@@ -217,15 +217,18 @@ export const subscriptionRenewedMapper: Mapper<TikTokEventPayload> = (
 /**
  * Closed-set inference of TikTok's `event_source` from canonical context.
  *
+ *   - any `context.app_*` slot populated  → `app` (WH7LZ0WZ)
  *   - `context.page_url` populated        → `web`
  *   - otherwise                           → `crm` (TikTok's backend-event default)
  *
- * The `FlatContext` shape doesn't currently carry `app_*` slots; mobile
- * events flow through `crm` until a future normalize version surfaces
- * app-context fields. Misreporting `event_source` affects TikTok's
- * ad-attribution model, so v1 stays narrow.
+ * `app` takes precedence over `web` because a native-app webview may
+ * report both a `page_url` and an `app_*` slot; TikTok's attribution
+ * model expects `app` in that case.
  */
 export function inferEventSource(normalized: NormalizedEvent): TikTokEventSource {
+  if (hasAppContext(normalized.context)) {
+    return "app";
+  }
   if (normalized.context.page_url !== null) {
     return "web";
   }
