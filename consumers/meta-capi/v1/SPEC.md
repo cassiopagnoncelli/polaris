@@ -36,7 +36,7 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `event_id` | `event_id` | none | Vendor dedupe key; matches browser-pixel `eventID` for cross-channel dedupe |
 | `occurred_at` | `event_time` | `isoToEpochSeconds` | Meta requires Unix seconds, not ms; floor(ms/1000) |
 | `context.page.url` | `event_source_url` | none | When present; absent → omitted |
-| inferred | `action_source` | branch on `context.page_url` | populated page_url → `website`; otherwise `system_generated` |
+| inferred | `action_source` | branch on app/page context | `app` when any `context.app_*` slot is populated; `website` when `context.page_url` is populated; otherwise `system_generated` |
 | `identity.customer_id` | `user_data.external_id[0]` | `sha256(lowercased(trim(value)))` | Meta requires hash for external_id |
 | `identity.email_sha256` | `user_data.em[0]` | (already hashed by normalize) | shared-destination-normalize handles email sha256 |
 | `identity.phone_sha256` | `user_data.ph[0]` | (already hashed by normalize) | E.164 + sha256 |
@@ -110,7 +110,7 @@ currency    minorToMajor        (consumer applies this)
 
 Meta-specific rules (in `src/mapper.ts`):
 
-- **`action_source` inference** — populated `context.page_url` → `website`; otherwise `system_generated`. Mobile-source detection (`app`) is deferred until the `FlatContext` shape carries `app_*` slots (a future normalize-layer extension).
+- **`action_source` inference** — `app` when any `context.app_*` slot is populated (G7ZCYLL6 / WH7LZ0WZ); `website` when `context.page_url` is populated; otherwise `system_generated`. `app` wins over `website` because a native-app webview may report both and Meta's attribution model expects `app` in that case.
 - **`data_processing_options=["LDU"]`** — stamped when `consent.dimensions[?dimension=='marketing'].granted === false`. The normalize layer drops the event entirely if `marketing` is a required-and-denied dimension, so the LDU branch only fires when a destination is more permissive than the mapper (`required_consent.marketing` is true at this consumer, so the LDU branch never actually fires through the runtime — kept as defense-in-depth).
 
 ## Vendor dedupe
@@ -200,7 +200,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 - **Meta requires sha256-lowercased-trimmed email/phone** — canonical events MAY pass raw email and the shared normalize layer hashes them. The Meta consumer never sees raw email/phone; only the `*_sha256` slots are read.
 - **Meta requires `event_time` as Unix seconds** — canonical envelopes carry `occurred_at` as ISO 8601 + `occurred_at_epoch_ms` (milliseconds). The mapper floors `epoch_ms / 1000` to get seconds.
 - **Meta's `value` is decimal** — canonical envelopes carry currency amounts in minor units (per `01-event-contract.md`). The mapper applies `minorToMajor(amount, currency)` with the ISO 4217 exponent. Zero-decimal currencies (JPY, KRW) pass through unchanged.
-- **Mobile sources are reported as `system_generated`** — until the `FlatContext` shape carries `app_*` fields, the consumer can't distinguish mobile from backend. A future minor version may detect mobile via `properties` heuristics; v1 keeps the inference narrow.
+- **Mobile-app sources are detected via `context.app_*`** (G7ZCYLL6): when any of `app_bundle_id` / `app_version` / `app_namespace` / `app_build` / `app_idfa` / `app_idfv` / `app_gaid` is populated on the flat context, the mapper stamps `action_source: "app"`. Backend-emitted events with no `app_*` and no `page_url` continue to land as `system_generated`. SDKs running inside a native webview SHOULD set at least `app_bundle_id` so Meta's attribution model treats the event as mobile rather than web.
 
 ## Vendor API changelog
 

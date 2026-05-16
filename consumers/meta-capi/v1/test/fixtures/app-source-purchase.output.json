@@ -1,0 +1,19 @@
+{
+  "event_name": "Purchase",
+  "event_time": 1778587200,
+  "event_id": "evt_01HZZD3YJK0M2R8D8VYV4QH6XR",
+  "action_source": "app",
+  "user_data": {
+    "em": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+    "ph": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+    "external_id": ["6f12ff3d3a3f5e1b0c5dfde31a4e1c2c6b6f3a23a06d3e8e15f5e30b4f6e3e94"],
+    "anon_id": "bdb78aaa7d51d3c8b6c1a4e9d0c1f3e7e6cdeae5f5e5ac4e8a3b9a2f3a4f8a1b",
+    "client_ip_address": "203.0.113.42",
+    "client_user_agent": "Storefront/5.10 (iOS 17; iPhone15,2)"
+  },
+  "custom_data": {
+    "currency": "USD",
+    "value": 49.99,
+    "order_id": "ord_42"
+  }
+}

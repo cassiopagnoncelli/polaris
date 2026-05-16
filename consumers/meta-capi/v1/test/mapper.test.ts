@@ -349,6 +349,38 @@ describe("inferActionSource", () => {
   });
 });
 
+describe("inferActionSource — app channel (G7ZCYLL6)", () => {
+  it("returns 'app' when any app_* slot is populated, even if page_url is also set", () => {
+    const normalized = fixtureNormalizedEvent();
+    const withApp = {
+      ...normalized,
+      context: {
+        ...normalized.context,
+        app_bundle_id: "com.example.shop",
+        app_version: "5.10.2",
+      },
+    };
+    expect(inferActionSource(withApp)).toBe("app");
+  });
+
+  it("propagates 'app' through the checkout mapper's payload", () => {
+    const baseCtx = fixtureMapperContext();
+    const ctx = {
+      ...baseCtx,
+      normalized: {
+        ...baseCtx.normalized,
+        context: {
+          ...baseCtx.normalized.context,
+          app_bundle_id: "com.example.shop",
+        },
+      },
+    };
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.action_source).toBe("app");
+  });
+});
+
 describe("CANONICAL_TO_META_EVENT", () => {
   it("pins the v1.x event matrix", () => {
     expect(CANONICAL_TO_META_EVENT["checkout.started"]).toBe(META_EVENT_INITIATE_CHECKOUT);

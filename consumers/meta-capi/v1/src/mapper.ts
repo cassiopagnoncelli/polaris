@@ -28,7 +28,7 @@
  */
 
 import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
-import { minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
+import { hasAppContext, minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
 
 import type {
@@ -217,15 +217,22 @@ export const subscriptionRenewedMapper: Mapper<MetaCapiPayload> = (
 /**
  * Closed-set inference of Meta's `action_source` from canonical context.
  *
- *   - `context.page_url` populated        → `website`
- *   - otherwise                           → `system_generated` (Meta-safe default)
+ *   - any `app_*` slot populated         → `app` (G7ZCYLL6)
+ *   - `context.page_url` populated       → `website`
+ *   - otherwise                          → `system_generated` (Meta-safe default)
  *
- * The `FlatContext` shape doesn't currently carry `app_*` slots; mobile
- * events flow through `system_generated` until a future normalize
- * version surfaces app-context fields. Misreporting action_source
- * affects Meta's ad-attribution model, so v1 stays narrow.
+ * `app` takes precedence over `website` because a native-app SDK may
+ * report both a `page_url` (in-app webview) and an `app_*` slot; Meta's
+ * attribution model expects `app` in that case.
+ *
+ * Misreporting action_source affects Meta's ad-attribution model, so v1
+ * stays narrow — only flips to `app` when the canonical envelope
+ * explicitly carries an app context.
  */
 export function inferActionSource(normalized: NormalizedEvent): MetaActionSource {
+  if (hasAppContext(normalized.context)) {
+    return "app";
+  }
   if (normalized.context.page_url !== null) {
     return "website";
   }

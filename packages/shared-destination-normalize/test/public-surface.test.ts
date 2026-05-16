@@ -23,6 +23,7 @@ describe("public surface (`import * as pkg`)", () => {
       "prepareIdentity",
       // context.ts
       "flattenContext",
+      "hasAppContext",
       // consent.ts
       "CONSENT_DIMENSIONS",
       "evaluateConsent",

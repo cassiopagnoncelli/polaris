@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { flattenContext } from "../src/index.js";
+import { flattenContext, hasAppContext } from "../src/index.js";
 
 describe("flattenContext", () => {
   it("surfaces page.* and campaign.* into flat keys", () => {
@@ -72,9 +72,58 @@ describe("flattenContext", () => {
       "campaign_term",
       "campaign_content",
       "campaign_click_id",
+      "app_bundle_id",
+      "app_version",
+      "app_namespace",
+      "app_build",
+      "app_idfa",
+      "app_idfv",
+      "app_gaid",
     ] as const;
     for (const key of expectedKeys) {
       expect(flat[key]).toBeNull();
     }
+  });
+
+  it("surfaces app.* into app_* keys (G7ZCYLL6 / WH7LZ0WZ)", () => {
+    const flat = flattenContext({
+      ip: null,
+      user_agent: null,
+      locale: null,
+      app: {
+        bundle_id: "com.example.app",
+        version: "5.10.2",
+        namespace: "consumer",
+        build: "5102",
+        idfa: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+        idfv: "11111111-2222-3333-4444-555555555555",
+        gaid: "11111111-2222-3333-4444-666666666666",
+      },
+    });
+    expect(flat.app_bundle_id).toBe("com.example.app");
+    expect(flat.app_version).toBe("5.10.2");
+    expect(flat.app_namespace).toBe("consumer");
+    expect(flat.app_build).toBe("5102");
+    expect(flat.app_idfa).toBe("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+    expect(flat.app_idfv).toBe("11111111-2222-3333-4444-555555555555");
+    expect(flat.app_gaid).toBe("11111111-2222-3333-4444-666666666666");
+  });
+});
+
+describe("hasAppContext", () => {
+  it("returns false for a fully-null context", () => {
+    expect(hasAppContext(flattenContext(null))).toBe(false);
+  });
+
+  it("returns false when only web/page slots are populated", () => {
+    const flat = flattenContext({ page: { url: "https://example.com/" } });
+    expect(hasAppContext(flat)).toBe(false);
+  });
+
+  it("returns true when any app slot is populated", () => {
+    expect(hasAppContext(flattenContext({ app: { bundle_id: "com.example" } }))).toBe(true);
+    expect(hasAppContext(flattenContext({ app: { version: "1.0.0" } }))).toBe(true);
+    expect(hasAppContext(flattenContext({ app: { idfa: "abc" } }))).toBe(true);
+    expect(hasAppContext(flattenContext({ app: { gaid: "xyz" } }))).toBe(true);
   });
 });

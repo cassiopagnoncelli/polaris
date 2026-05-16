@@ -1,5 +1,11 @@
 # `@polaris/consumer-meta-capi-v1` changelog
 
+## v1.2.0 — mobile-app `action_source` inference (G7ZCYLL6)
+
+- `inferActionSource` now returns `app` when any `context.app_*` slot on the normalized envelope is populated (`app_bundle_id` / `app_version` / `app_namespace` / `app_build` / `app_idfa` / `app_idfv` / `app_gaid`). `app` wins over `website` so native-app webviews are attributed correctly.
+- Depends on the additive `EnvelopeAppContext` extension to `@polaris/shared-destination-normalize`'s `FlatContext`.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.1.0 — additive event-matrix expansion (3BBTUM7W)
 
 - Added `signup.completed` → `CompleteRegistration` mapper. Custom data populates `currency` + `predicted_ltv` (minor → major) when both are present on the canonical envelope; otherwise empty.

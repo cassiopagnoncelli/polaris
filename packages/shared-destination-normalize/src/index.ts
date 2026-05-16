@@ -50,11 +50,13 @@ export {
 } from "./consent.js";
 // ---- Context flattening --------------------------------------------------
 export {
+  type EnvelopeAppContext,
   type EnvelopeCampaignContext,
   type EnvelopeContextInput,
   type EnvelopePageContext,
   type FlatContext,
   flattenContext,
+  hasAppContext,
 } from "./context.js";
 // ---- Currency conversion -------------------------------------------------
 export {
