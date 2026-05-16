@@ -30,12 +30,14 @@
  * @see docs/development/clickhouse-rebuilds.md
  * @see packages/shared-clickhouse/src/rebuild/
  */
+import { createClickHouseClient } from "@polaris/shared-clickhouse";
 import {
   type ClickhouseRebuildDriver,
   type ClickhouseRebuildOutcome,
   type ClickhouseRebuildPlan,
   type ClickhouseRebuildPlanned,
   type ClickhouseRebuildStore,
+  createClickhouseRebuildDriver,
   executeClickhouseRebuild,
   findRebuildableProjection,
   type PlanClickhouseRebuildOptions,
@@ -43,6 +45,7 @@ import {
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
 } from "@polaris/shared-clickhouse/rebuild";
+import { clickhouseEnvSchema } from "@polaris/shared-config";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition, CommandResult } from "../../command.js";
 import {
@@ -55,7 +58,7 @@ import {
   markClickhouseRebuildJobFailed,
   markClickhouseRebuildJobRunning,
 } from "../../db/index.js";
-import { CliError, ExitCode, UsageError } from "../../errors.js";
+import { CliError, ConfigError, ExitCode, UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
 import { generateClickhouseRebuildJobId } from "./id.js";
 
@@ -125,9 +128,11 @@ export interface ClickhouseRebuildCreateHooks {
   /**
    * Driver the rebuild executor calls. Injected for tests;
    * production opens an operator-profile ClickHouse client. Only
-   * consulted on the non-dry-run path.
+   * consulted on the non-dry-run path. Receives the job id so the
+   * production driver can stamp it onto the raw.query audit reason
+   * for every clearSlice / INSERT.
    */
-  readonly openDriver?: () => Promise<ClickhouseRebuildDriverHandle>;
+  readonly openDriver?: (input: { readonly jobId: string }) => Promise<ClickhouseRebuildDriverHandle>;
 }
 
 export interface ClickhouseRebuildExecutorStoreHandle {
@@ -300,7 +305,7 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
       // transitions itself; we just supply the store + driver
       // seams and surface the outcome.
       const executorStoreHandle = openExecutorStore();
-      const driverHandle = await openDriver();
+      const driverHandle = await openDriver({ jobId });
       let outcome: ClickhouseRebuildOutcome;
       try {
         outcome = await executeClickhouseRebuild({
@@ -457,35 +462,50 @@ function defaultExecutorStore(): ClickhouseRebuildExecutorStoreHandle {
 }
 
 /**
- * Production default driver. Refuses to run today because wiring it
- * against the operator-profile ClickHouse client requires an
- * audited reason on every raw SQL query and full materialization of
- * the feeder MV's SELECT text. The CLI's test path always injects a
- * driver via `hooks.openDriver`; production wires this once a
- * persistent operator-trust contract for `clearSlice` lands.
+ * Production default driver: an operator-profile ClickHouse client
+ * wrapped by `createClickhouseRebuildDriver`. Reads
+ * `POLARIS_CLICKHOUSE_*` from `process.env`, refuses with a
+ * `ConfigError` (exit code 3) if operator credentials are not
+ * configured — same shape `connectDb` uses for the Postgres URL.
  *
- * Throwing here surfaces as a `failed` outcome on the row because
- * the executor catches driver errors and routes them through
- * `markFailed`, so an operator running the command without an
- * injected driver gets a clean structured failure rather than a
- * silent no-op.
+ * Tests inject their own driver via `hooks.openDriver`, so this
+ * function is only consulted in production.
  */
-async function defaultDriver(): Promise<ClickhouseRebuildDriverHandle> {
-  const driver: ClickhouseRebuildDriver = {
-    async clearSlice() {
-      throw new Error(
-        "clickhouse_rebuild_driver_not_wired: the production ClickHouse driver is not wired in this build; inject one via hooks.openDriver or wait for the operator-trust contract for clearSlice/INSERT.",
-      );
+async function defaultDriver(input: {
+  readonly jobId: string;
+}): Promise<ClickhouseRebuildDriverHandle> {
+  let parsed: ReturnType<typeof clickhouseEnvSchema.parse>;
+  try {
+    parsed = clickhouseEnvSchema.parse(process.env);
+  } catch (cause) {
+    throw new ConfigError(
+      `POLARIS_CLICKHOUSE_* env is required for non-dry-run rebuilds: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+  if (parsed.operator === undefined) {
+    throw new ConfigError(
+      "POLARIS_CLICKHOUSE_OPERATOR_USER and POLARIS_CLICKHOUSE_OPERATOR_PASSWORD are required to run a non-dry-run rebuild. The rebuild driver uses the operator profile so its raw SQL leaves an audit trail.",
+    );
+  }
+  const client = createClickHouseClient({
+    role: "operator",
+    url: parsed.url,
+    database: parsed.database,
+    credential: {
+      username: parsed.operator.user,
+      password: parsed.operator.password,
     },
-    async rebuildPartition() {
-      throw new Error(
-        "clickhouse_rebuild_driver_not_wired: the production ClickHouse driver is not wired in this build; inject one via hooks.openDriver or wait for the operator-trust contract for clearSlice/INSERT.",
-      );
-    },
-  };
+    requestTimeoutMs: parsed.requestTimeoutMs,
+    maxOpenConnections: parsed.maxOpenConnections,
+    application: "polaris-cli",
+  });
+  const driver = createClickhouseRebuildDriver({
+    raw: client.raw,
+    jobId: input.jobId,
+  });
   return {
     driver,
-    close: async () => undefined,
+    close: () => client.close(),
   };
 }
 

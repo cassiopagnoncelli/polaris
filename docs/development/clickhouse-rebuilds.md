@@ -27,16 +27,10 @@ bad processor revision — the supported fix path is a **rebuild job**:
    row in `clickhouse_rebuild_jobs` carrying the planner's
    estimates, writes the matching `audit_records` row in the same
    transaction, and exits 0.
-3. (Deferred) Operator promotes the dry-run to a live rebuild by
-   re-running without `--dry-run`. The executor reads the row,
-   advances `status` through `planning → running → completed`, and
-   stamps `error_class`/`error_message` if it fails.
-
-**Step 3 is deferred to a follow-up task.** Today, `create` without
-`--dry-run` persists a `pending` row + audit row but then exits
-non-zero with reason code `clickhouse_rebuild_executor_not_implemented`
-so scripts can't believe a rebuild actually ran. The row stays — the
-operator's audit trail of "yes, I intended this" survives.
+3. Operator promotes the dry-run to a live rebuild by re-running
+   without `--dry-run`. The executor reads the row, advances `status`
+   through `pending → running → completed | failed`, and stamps
+   `error_class`/`error_message` if it fails.
 
 ### What hand-rolled fix paths break
 
@@ -62,6 +56,13 @@ polaris.analytics_raw …` directly through `clickhouse-client`. This
    CLUSTER '{cluster}'`. The rebuild workflow always targets the
    logical projection through the same DDL macros the schema uses,
    so cross-replica state stays consistent.
+
+Operators DO use those same primitives — `TRUNCATE TABLE`, `DROP
+PARTITION`, `INSERT INTO … SELECT FROM polaris.analytics_raw` — but
+through the executor's driver, which routes every call through the
+operator escape hatch (`raw.query`) so each one carries a `caller` +
+`reason` audit pair logged at `info` and counted in the
+`polaris_clickhouse_operator_raw_query_total` metric.
 
 ## The closed set of rebuildable projections
 
@@ -111,16 +112,61 @@ for them in the CLI's error output:
 The CLI surfaces these as `clickhouse_rebuild_rejected:<code>` in
 the exit-code message so `grep` is reliable in CI.
 
-## The deferred execute path
+## The execute path
 
-`status='pending'` is reserved in the schema for rows that have been
-created but not yet executed. The executor that walks `pending →
-planning → running → completed` is deferred to a follow-up task.
-Today the CLI rejects non-dry-run `create` with reason code
-`clickhouse_rebuild_executor_not_implemented` (exit code 5,
-`NotImplemented`).
+`polaris clickhouse-rebuild create <projection> --reason "..."`
+(without `--dry-run`) persists a `pending` row + audit row and then
+hands the row to the executor (`executeClickhouseRebuild` in
+`packages/shared-clickhouse/src/rebuild/executor.ts`) which walks
+the state machine to a terminal status:
 
-The non-zero exit is **intentional**. A common script pattern is:
+```
+pending → running → completed
+                 ↘ failed
+       (aborted by a sibling operator before markRunning succeeds)
+```
+
+The executor is pure orchestration over two injected adapters:
+
+- A **store** (Kysely-backed in production) that performs the
+  `pending → running` / `running → completed` / `running → failed`
+  transitions as guarded single-row UPDATEs (`WHERE status =
+  '<previous>'`). The migration's
+  `clickhouse_rebuild_jobs_error_pair` and
+  `clickhouse_rebuild_jobs_error_status_consistent` CHECK
+  constraints enforce the both-set/both-null and "non-null
+  error_class iff status='failed'" invariants on the row.
+
+- A **driver** (`createClickhouseRebuildDriver` in
+  `packages/shared-clickhouse/src/rebuild/driver.ts`) that wraps the
+  operator escape hatch and issues, in order:
+
+  1. `clearSlice` — `TRUNCATE TABLE` on a full-table rebuild, or
+     `ALTER TABLE … DROP PARTITION {partition:String}` once per
+     partition on a ranged rebuild. Both are synchronous in
+     ClickHouse, so no mutation polling is needed.
+
+  2. `rebuildPartition` — `INSERT INTO <projection> <select>` where
+     `<select>` is the SELECT body checked in under the projection's
+     `rebuildSelectFile` slot, with `{partition:String}` bound as a
+     query parameter. The driver does not interpolate the partition
+     label into the SQL.
+
+Every raw SQL call carries `caller="polaris-cli/clickhouse-rebuild"`
+and `reason` stamped with the job id, so the
+`polaris_clickhouse_operator_raw_query_total` metric and the
+operator audit log have a one-to-many breakdown from job id to
+clearSlice + INSERT calls.
+
+The exit-code contract:
+
+| Outcome                    | Exit code              |
+| -------------------------- | ---------------------- |
+| `completed`                | 0 (`Ok`)               |
+| `failed`                   | 1 (`GenericFailure`)   |
+| `aborted` (peer-aborted)   | 1 (`GenericFailure`)   |
+
+A common script pattern works as expected:
 
 ```bash
 polaris clickhouse-rebuild create --projection event_daily_counts \
@@ -128,26 +174,45 @@ polaris clickhouse-rebuild create --projection event_daily_counts \
 echo "rebuild complete"
 ```
 
-Today that exits before the `echo`. When the executor lands, the
-same command will succeed and produce `status='completed'`.
+### Required env
 
-When the executor follow-up lands, it MUST:
+The non-dry-run path uses the operator profile, so the CLI must see:
 
-- Read the row from `clickhouse_rebuild_jobs` by id.
-- Advance `status` through `planning → running → completed | failed`
-  in single-row UPDATEs that pin the previous status in the WHERE
-  clause (mirroring the replay-job state machine in P7-003).
-- On failure, stamp `error_class` + `error_message` and flip status
-  to `failed`. The migration's `clickhouse_rebuild_jobs_error_pair`
-  and `clickhouse_rebuild_jobs_error_status_consistent` CHECK
-  constraints enforce the both-set/both-null and "non-null error_class
-  iff status='failed'" invariants.
-- Run the rebuild as `INSERT INTO polaris.<projection> SELECT
-  argMax(…, _version) FROM polaris.analytics_raw GROUP BY
-  (project_id, environment, event, event_id) WHERE <range>` —
-  partition-by-partition so resume-after-abort is precise.
-- Never use the `FINAL` keyword. The argMax pattern is the project's
-  one sanctioned dedupe approach.
+```
+POLARIS_CLICKHOUSE_URL
+POLARIS_CLICKHOUSE_DATABASE
+POLARIS_CLICKHOUSE_OPERATOR_USER
+POLARIS_CLICKHOUSE_OPERATOR_PASSWORD
+```
+
+Missing operator credentials fail with `ConfigError` (exit code 3)
+before the executor runs — no row gets stamped, no SQL gets issued.
+The `--dry-run` path is unaffected; it only reads via the planner
+adapter.
+
+### Adding a new projection
+
+When extending `REBUILDABLE_CLICKHOUSE_PROJECTIONS`, the four-step
+process now includes a fifth file: the rebuild SELECT.
+
+1. DDL under `sql/clickhouse/projections/40_<name>.sql`.
+2. Feeder MV under `sql/clickhouse/materialized-views/41_mv_…_to_<name>.sql`.
+3. Rebuild SELECT under `sql/clickhouse/projections/40_<name>_rebuild.sql`
+   — the SELECT body the MV uses, plus
+   `WHERE _partition_id = {partition:String}` and one terminating
+   semicolon.
+4. SELECT grant in `sql/clickhouse/roles/01_grants.sql`.
+5. Append a `ClickhouseProjectionDescriptor` to
+   `REBUILDABLE_CLICKHOUSE_PROJECTIONS` with all four paths.
+
+The `rebuildable projection registry matches the on-disk SQL` test
+in `apps/polaris-cli/test/clickhouse-rebuild-commands.test.ts`
+asserts every descriptor's `rebuildSelectFile` exists on disk and
+mentions `{partition:String}`. Adding a projection without the
+rebuild SELECT fails the test suite.
+
+The rebuild SELECT must never use the `FINAL` keyword. The argMax
+pattern is the project's one sanctioned dedupe approach.
 
 ## Rolling back a faulty rebuild plan
 
@@ -161,13 +226,13 @@ A dry-run row is a plan, not a mutation. Rolling back is mechanical:
   decided against it" decision. The audit trail keeps the row;
   there's no `DELETE FROM clickhouse_rebuild_jobs`.
 
-- **The plan was right but the executor (when it lands) failed
-  partway.** The deferred executor will set `status='failed'` with
-  `error_class` + `error_message` describing the failure. Re-run
-  `create --dry-run` to get a fresh plan against the current state
-  of `analytics_raw`, review, then re-run without `--dry-run` to
-  retry. Failed rows are immutable from the CLI — they are the
-  audit trail of "this attempt failed", not a state to mutate.
+- **The plan was right but the executor failed partway.** The
+  executor sets `status='failed'` with `error_class` +
+  `error_message` describing the failure. Re-run `create --dry-run`
+  to get a fresh plan against the current state of `analytics_raw`,
+  review, then re-run without `--dry-run` to retry. Failed rows are
+  immutable from the CLI — they are the audit trail of "this attempt
+  failed", not a state to mutate.
 
 - **The plan was right but ClickHouse was unreachable when the
   planner tried to estimate.** The CLI surfaces
@@ -206,10 +271,12 @@ polaris clickhouse-rebuild create \
 
 ### `polaris clickhouse-rebuild create` (no `--dry-run`)
 
-Persists a row with `status='pending'`, writes the audit row,
-then exits non-zero with reason code
-`clickhouse_rebuild_executor_not_implemented`. The audit trail
-survives; the rebuild does NOT run.
+Persists a row with `status='pending'`, writes the audit row, then
+hands the row to the executor. The executor advances the row through
+`running → completed | failed` and stamps the outcome. Exits 0 on
+`completed`, 1 on `failed` / `aborted`. Requires operator
+ClickHouse env (see [The execute path](#the-execute-path) →
+"Required env").
 
 ### `polaris clickhouse-rebuild list`
 
@@ -219,7 +286,7 @@ Read-only. Newest first. Filter by `--status`, `--projection`,
 ### `polaris clickhouse-rebuild show <id>`
 
 Read-only. Full row including planner estimates and any
-`error_class` / `error_message` set by the (deferred) executor.
+`error_class` / `error_message` the executor stamped on failure.
 
 ### `polaris clickhouse-rebuild abort <id> --reason "..."`
 

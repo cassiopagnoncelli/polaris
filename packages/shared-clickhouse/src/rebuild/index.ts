@@ -23,6 +23,11 @@
  */
 
 export {
+  type CreateClickhouseRebuildDriverInput,
+  createClickhouseRebuildDriver,
+  REBUILD_DRIVER_CALLER,
+} from "./driver.js";
+export {
   CLICKHOUSE_REBUILD_EXECUTOR_REFUSAL_CODES,
   type ClearSliceInput,
   type ClickhouseRebuildDriver,

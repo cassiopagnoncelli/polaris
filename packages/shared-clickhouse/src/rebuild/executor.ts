@@ -159,8 +159,14 @@ export interface ClearSliceInput {
 
 export interface RebuildPartitionInput {
   readonly qualifiedTable: string;
-  /** Feeder MV SQL file path the planner pinned. */
+  /** Feeder MV SQL file path the planner pinned. Carried for audit/logging. */
   readonly feederMvFile: string;
+  /**
+   * Path to the canonical INSERT-side SELECT for this projection. The
+   * driver reads the file once at construction and looks up the
+   * SELECT body by this path — this is just the lookup key.
+   */
+  readonly rebuildSelectFile: string;
   readonly partition: string;
   readonly sourceRangeFrom: string | null;
   readonly sourceRangeTo: string | null;
@@ -290,6 +296,7 @@ export async function executeClickhouseRebuild(
       const { rows_inserted } = await input.driver.rebuildPartition({
         qualifiedTable: descriptor.qualifiedTable,
         feederMvFile: descriptor.feederMvFile,
+        rebuildSelectFile: descriptor.rebuildSelectFile,
         partition,
         sourceRangeFrom: input.plan.sourceRangeFrom,
         sourceRangeTo: input.plan.sourceRangeTo,

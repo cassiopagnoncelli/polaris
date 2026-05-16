@@ -52,6 +52,16 @@
  *                       SELECT against `analytics_raw` to repopulate
  *                       the projection.
  *
+ *   `rebuildSelectFile` the canonical INSERT-side SELECT, checked in
+ *                       next to the projection DDL. The rebuild
+ *                       driver reads this file at construction time
+ *                       and wraps it in `INSERT INTO <table> <select>`
+ *                       for each partition. Separate from
+ *                       `feederMvFile` because the live MV statement
+ *                       is a `CREATE MATERIALIZED VIEW … AS SELECT`
+ *                       wrapper and the rebuild path needs only the
+ *                       SELECT body.
+ *
  *   `description`       one-line plain-English summary, shown in
  *                       `polaris clickhouse-rebuild plan` output.
  */
@@ -60,6 +70,7 @@ export interface ClickhouseProjectionDescriptor {
   readonly qualifiedTable: string;
   readonly sqlFile: string;
   readonly feederMvFile: string;
+  readonly rebuildSelectFile: string;
   readonly description: string;
 }
 
@@ -85,6 +96,7 @@ export const REBUILDABLE_CLICKHOUSE_PROJECTIONS: readonly ClickhouseProjectionDe
     qualifiedTable: "polaris.event_daily_counts",
     sqlFile: "sql/clickhouse/projections/40_event_daily_counts.sql",
     feederMvFile: "sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
+    rebuildSelectFile: "sql/clickhouse/projections/40_event_daily_counts_rebuild.sql",
     description:
       "Per-day event counts keyed by (project_id, environment, event). SummingMergeTree.",
   },

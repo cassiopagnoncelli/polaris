@@ -235,6 +235,7 @@ function cloneDescriptor(d: ClickhouseProjectionDescriptor): ClickhouseProjectio
     qualifiedTable: d.qualifiedTable,
     sqlFile: d.sqlFile,
     feederMvFile: d.feederMvFile,
+    rebuildSelectFile: d.rebuildSelectFile,
     description: d.description,
   };
 }

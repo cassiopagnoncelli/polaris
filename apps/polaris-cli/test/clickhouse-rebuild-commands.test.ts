@@ -147,6 +147,23 @@ describe("rebuildable projection registry matches the on-disk SQL", () => {
     }
   });
 
+  it("every registered projection has a real rebuildSelectFile that mentions {partition:String}", async () => {
+    const { readFile } = await import("node:fs/promises");
+    for (const descriptor of REBUILDABLE_CLICKHOUSE_PROJECTIONS) {
+      const absPath = resolve(REPO_ROOT, descriptor.rebuildSelectFile);
+      expect(
+        existsSync(absPath),
+        `missing rebuild SELECT for projection ${descriptor.name}: ${descriptor.rebuildSelectFile}`,
+      ).toBe(true);
+      const body = await readFile(absPath, "utf8");
+      // The rebuild driver binds the partition via the ClickHouse
+      // query-params mechanism, so the SELECT must reference it as
+      // a parameter placeholder, not interpolate the partition label
+      // into the SQL.
+      expect(body).toContain("{partition:String}");
+    }
+  });
+
   it("every registered projection has qualifiedTable shape polaris.<table>", () => {
     for (const descriptor of REBUILDABLE_CLICKHOUSE_PROJECTIONS) {
       expect(descriptor.qualifiedTable).toMatch(/^polaris\.[a-z][a-z0-9_]*$/);
