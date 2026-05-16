@@ -278,6 +278,117 @@ export async function listClickhouseRebuildJobs(
 }
 
 /**
+ * Transition a rebuild job to `'running'` and stamp `started_at` +
+ * `updated_at` (GWNZH1N5). The WHERE clause restricts the update to
+ * rows whose status is currently `'pending'`; passing any other
+ * status returns the existing row's current status without
+ * mutating it.
+ *
+ * Returns the row's status after the attempted update (matching the
+ * `ClickhouseRebuildStore.markRunning` contract in
+ * `@polaris/shared-clickhouse/rebuild`), or `null` when the row no
+ * longer exists.
+ */
+export async function markClickhouseRebuildJobRunning(
+  db: Kysely<Database>,
+  jobId: string,
+  now: Date,
+): Promise<{ readonly status: ClickhouseRebuildJobStatus } | null> {
+  const updated = await db
+    .updateTable("clickhouse_rebuild_jobs")
+    .set({
+      status: "running",
+      started_at: now,
+      updated_at: now,
+    })
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .where("status", "=", "pending")
+    .returning("status")
+    .executeTakeFirst();
+  if (updated !== undefined) {
+    return { status: updated.status };
+  }
+  const existing = await db
+    .selectFrom("clickhouse_rebuild_jobs")
+    .select("status")
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .executeTakeFirst();
+  return existing === undefined ? null : { status: existing.status };
+}
+
+/**
+ * Transition a rebuild job to `'completed'` and stamp `completed_at`
+ * + `updated_at` + `rows_estimated` (re-using the column to record
+ * the actual rows inserted; the schema lets the column carry the
+ * post-run actual). The WHERE clause restricts to `'running'` rows
+ * so a peer-aborted row never moves to `completed`.
+ */
+export async function markClickhouseRebuildJobCompleted(
+  db: Kysely<Database>,
+  jobId: string,
+  now: Date,
+  rowsInserted: number,
+): Promise<{ readonly status: ClickhouseRebuildJobStatus } | null> {
+  const updated = await db
+    .updateTable("clickhouse_rebuild_jobs")
+    .set({
+      status: "completed",
+      completed_at: now,
+      updated_at: now,
+      rows_estimated: rowsInserted,
+    })
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .where("status", "=", "running")
+    .returning("status")
+    .executeTakeFirst();
+  if (updated !== undefined) {
+    return { status: updated.status };
+  }
+  const existing = await db
+    .selectFrom("clickhouse_rebuild_jobs")
+    .select("status")
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .executeTakeFirst();
+  return existing === undefined ? null : { status: existing.status };
+}
+
+/**
+ * Transition a rebuild job to `'failed'` with `error_class` +
+ * `error_message` per the migration's CHECK constraints. WHERE
+ * clause restricts to `'running'` rows.
+ */
+export async function markClickhouseRebuildJobFailed(
+  db: Kysely<Database>,
+  jobId: string,
+  now: Date,
+  errorClass: string,
+  errorMessage: string,
+): Promise<{ readonly status: ClickhouseRebuildJobStatus } | null> {
+  const updated = await db
+    .updateTable("clickhouse_rebuild_jobs")
+    .set({
+      status: "failed",
+      completed_at: now,
+      updated_at: now,
+      error_class: errorClass,
+      error_message: errorMessage,
+    })
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .where("status", "=", "running")
+    .returning("status")
+    .executeTakeFirst();
+  if (updated !== undefined) {
+    return { status: updated.status };
+  }
+  const existing = await db
+    .selectFrom("clickhouse_rebuild_jobs")
+    .select("status")
+    .where("clickhouse_rebuild_job_id", "=", jobId)
+    .executeTakeFirst();
+  return existing === undefined ? null : { status: existing.status };
+}
+
+/**
  * Transition a rebuild job to `'aborted'` and stamp
  * `completed_at` + `updated_at`. The WHERE clause restricts the
  * update to rows whose status is currently abortable; passing a

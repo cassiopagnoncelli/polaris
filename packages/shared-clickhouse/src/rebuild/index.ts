@@ -22,6 +22,21 @@
  * @see docs/development/clickhouse-rebuilds.md
  */
 
+export {
+  CLICKHOUSE_REBUILD_EXECUTOR_REFUSAL_CODES,
+  type ClearSliceInput,
+  type ClickhouseRebuildDriver,
+  ClickhouseRebuildExecutorError,
+  type ClickhouseRebuildExecutorRefusalCode,
+  type ClickhouseRebuildOutcome,
+  type ClickhouseRebuildOutcomeStatus,
+  type ClickhouseRebuildStore,
+  type ClickhouseRebuildStoreStatus,
+  type ExecuteClickhouseRebuildInput,
+  executeClickhouseRebuild,
+  REBUILD_EXECUTOR_VERSION,
+  type RebuildPartitionInput,
+} from "./executor.js";
 export { planClickhouseRebuild } from "./planner.js";
 export type { ClickhouseProjectionDescriptor } from "./projections.js";
 export {

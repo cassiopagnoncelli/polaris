@@ -114,10 +114,11 @@ export {
 } from "./commands/clickhouse-rebuild/abort.js";
 export {
   buildClickhouseRebuildCreateRunner,
-  CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
   type ClickhouseRebuildCreateAuditPayload,
   type ClickhouseRebuildCreateHooks,
   type ClickhouseRebuildCreateStore,
+  type ClickhouseRebuildDriverHandle,
+  type ClickhouseRebuildExecutorStoreHandle,
   type ClickhouseRebuildJobAuditSnapshot,
 } from "./commands/clickhouse-rebuild/create.js";
 export {

@@ -37,6 +37,9 @@ export {
   isTerminalClickhouseRebuildStatus,
   type ListClickhouseRebuildJobsFilter,
   listClickhouseRebuildJobs,
+  markClickhouseRebuildJobCompleted,
+  markClickhouseRebuildJobFailed,
+  markClickhouseRebuildJobRunning,
   TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
 } from "./clickhouse-rebuild-jobs.js";
 export { type ConnectDbOptions, connectDb, type DbHandle } from "./connect.js";

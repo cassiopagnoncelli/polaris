@@ -12,16 +12,13 @@
  *                            estimates, prints the plan, exits 0. No
  *                            ClickHouse writes happen anywhere.
  *
- *   (no --dry-run)           persists a `pending` row, then exits
- *                            NON-ZERO with the reason code
- *                            `clickhouse_rebuild_executor_not_implemented`.
- *                            The row stays so an operator can see
- *                            "yes, this was the intent" but the
- *                            executor that would advance pending -->
- *                            running --> completed is deferred to a
- *                            follow-up task. The non-zero exit
- *                            prevents scripts from believing a
- *                            rebuild actually ran.
+ *   (no --dry-run)           persists a `pending` row, then invokes
+ *                            the rebuild executor (GWNZH1N5) which
+ *                            transitions pending --> running -->
+ *                            completed / failed and stamps the row
+ *                            with the outcome. Exits 0 on
+ *                            `completed`, non-zero on `failed` /
+ *                            `aborted`.
  *
  * Both paths write an `audit_records` row in the SAME transaction as
  * the rebuild-job row.
@@ -34,8 +31,12 @@
  * @see packages/shared-clickhouse/src/rebuild/
  */
 import {
+  type ClickhouseRebuildDriver,
+  type ClickhouseRebuildOutcome,
   type ClickhouseRebuildPlan,
   type ClickhouseRebuildPlanned,
+  type ClickhouseRebuildStore,
+  executeClickhouseRebuild,
   findRebuildableProjection,
   type PlanClickhouseRebuildOptions,
   planClickhouseRebuild,
@@ -50,21 +51,13 @@ import {
   type InsertClickhouseRebuildJobInput,
   insertAuditRecord,
   insertClickhouseRebuildJob,
+  markClickhouseRebuildJobCompleted,
+  markClickhouseRebuildJobFailed,
+  markClickhouseRebuildJobRunning,
 } from "../../db/index.js";
 import { CliError, ExitCode, UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
 import { generateClickhouseRebuildJobId } from "./id.js";
-
-/**
- * Reason code surfaced on the non-dry-run path. Stamped onto:
- *
- *   - the `CliError.message` so scripts can grep for the token,
- *   - the human/JSON output the runner emits before throwing,
- *   - the audit row's `reason` slot is unaffected; the operator's
- *     `--reason` is preserved on the audit trail verbatim.
- */
-export const CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED =
-  "clickhouse_rebuild_executor_not_implemented";
 
 interface ClickhouseRebuildCreateArgs {
   readonly projection?: string;
@@ -123,6 +116,28 @@ export interface ClickhouseRebuildCreateHooks {
    * Omit to test the `clickhouse_unreachable` path explicitly.
    */
   readonly readPartitions?: PlanClickhouseRebuildOptions["readPartitions"];
+  /**
+   * Lifecycle store the rebuild executor calls (GWNZH1N5). Injected
+   * for tests; production opens a fresh Kysely-backed store. Only
+   * consulted on the non-dry-run path.
+   */
+  readonly openExecutorStore?: () => ClickhouseRebuildExecutorStoreHandle;
+  /**
+   * Driver the rebuild executor calls. Injected for tests;
+   * production opens an operator-profile ClickHouse client. Only
+   * consulted on the non-dry-run path.
+   */
+  readonly openDriver?: () => Promise<ClickhouseRebuildDriverHandle>;
+}
+
+export interface ClickhouseRebuildExecutorStoreHandle {
+  readonly store: ClickhouseRebuildStore;
+  close(): Promise<void>;
+}
+
+export interface ClickhouseRebuildDriverHandle {
+  readonly driver: ClickhouseRebuildDriver;
+  close(): Promise<void>;
 }
 
 export const clickhouseRebuildCreateCommand: CommandDefinition = {
@@ -136,9 +151,10 @@ export const clickhouseRebuildCreateCommand: CommandDefinition = {
           "Issue a ClickHouse rebuild job for one analytical projection.",
           "",
           "With --dry-run, runs the planner and persists a `dry_run` row carrying the",
-          "planner's row / partition estimates. Without --dry-run, persists a `pending` row",
-          "but exits NON-ZERO with reason code `clickhouse_rebuild_executor_not_implemented` —",
-          "the executor that advances pending->running->completed is deferred to a follow-up.",
+          "planner's row / partition estimates. Without --dry-run, persists a `pending`",
+          "row and then invokes the rebuild executor, which drives pending -> running ->",
+          "completed (or failed) and stamps the row with the outcome. Exits non-zero on",
+          "failed / aborted.",
           "",
           `Allowed --projection values: ${REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES.join(", ")}`,
         ].join("\n"),
@@ -154,7 +170,7 @@ export const clickhouseRebuildCreateCommand: CommandDefinition = {
       .option("--to <iso>", "Inclusive source-range end (ISO 8601 UTC).")
       .option(
         "--dry-run",
-        "Plan only; persist a `dry_run` row. Without --dry-run, executor is deferred and the CLI exits non-zero.",
+        "Plan only; persist a `dry_run` row. Without --dry-run, the executor runs and the row transitions through to completed / failed.",
       )
       .requiredOption(
         "--reason <reason>",
@@ -167,6 +183,8 @@ export const clickhouseRebuildCreateCommand: CommandDefinition = {
 export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateClickhouseRebuildJobId;
   const openStore = hooks.openStore ?? defaultStore;
+  const openExecutorStore = hooks.openExecutorStore ?? defaultExecutorStore;
+  const openDriver = hooks.openDriver ?? defaultDriver;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
@@ -263,7 +281,7 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
       },
       validated.dryRun
         ? "clickhouse rebuild dry-run row persisted (audit row persisted)"
-        : "clickhouse rebuild pending row persisted (executor deferred; audit row persisted)",
+        : "clickhouse rebuild pending row persisted (audit row persisted; executor next)",
     );
 
     // ---- output -----------------------------------------------------
@@ -277,21 +295,113 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
     });
 
     if (!validated.dryRun) {
-      throw new CliError(
-        `${CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED}: created clickhouse_rebuild_job=${jobId} in status='pending' but the rebuild executor is not yet implemented. The audit row + dry-run plan stay on file; re-run with --dry-run to inspect, or wait for the executor follow-up.`,
+      // Drive the rebuild through the executor (GWNZH1N5). The
+      // executor handles the pending→running→completed|failed
+      // transitions itself; we just supply the store + driver
+      // seams and surface the outcome.
+      const executorStoreHandle = openExecutorStore();
+      const driverHandle = await openDriver();
+      let outcome: ClickhouseRebuildOutcome;
+      try {
+        outcome = await executeClickhouseRebuild({
+          plan,
+          clickhouse_rebuild_job_id: jobId,
+          store: executorStoreHandle.store,
+          driver: driverHandle.driver,
+          now: nowFn,
+        });
+      } finally {
+        try {
+          await driverHandle.close();
+        } catch {
+          // best-effort
+        }
+        try {
+          await executorStoreHandle.close();
+        } catch {
+          // best-effort
+        }
+      }
+
+      ctx.logger.info(
         {
-          exitCode: ExitCode.NotImplemented,
-          details: {
-            clickhouse_rebuild_job_id: jobId,
-            reason_code: CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
-            status: "pending",
-          },
+          audit_action: "clickhouse-rebuild.execute",
+          clickhouse_rebuild_job_id: jobId,
+          target_projection: plan.projection,
+          target_table_qualified: plan.targetTableQualified,
+          outcome_status: outcome.status,
+          rows_inserted_total: outcome.rows_inserted_total,
+          partition_count: outcome.partitions.length,
+          started_at: outcome.started_at,
+          finished_at: outcome.finished_at,
+          ...(outcome.error !== null
+            ? {
+                err: {
+                  name: outcome.error.error_class,
+                  message: outcome.error.error_message,
+                },
+              }
+            : {}),
         },
+        outcome.status === "completed"
+          ? "clickhouse rebuild completed"
+          : outcome.status === "failed"
+            ? "clickhouse rebuild failed"
+            : "clickhouse rebuild aborted",
       );
+
+      ctx.output.writeOut(
+        renderAccordingTo(ctx.config.output, {
+          human: renderOutcomeHuman(jobId, outcome),
+          json: outcome,
+        }),
+      );
+
+      if (outcome.status === "failed") {
+        throw new CliError(
+          `clickhouse_rebuild_failed: ${jobId} terminated with ${outcome.error?.error_class ?? "Error"}: ${outcome.error?.error_message ?? "(no message)"}`,
+          {
+            exitCode: ExitCode.GenericFailure,
+            details: {
+              clickhouse_rebuild_job_id: jobId,
+              status: "failed",
+              error_class: outcome.error?.error_class ?? null,
+            },
+          },
+        );
+      }
+      if (outcome.status === "aborted") {
+        throw new CliError(
+          `clickhouse_rebuild_aborted: ${jobId} was aborted before the executor could start`,
+          {
+            exitCode: ExitCode.GenericFailure,
+            details: { clickhouse_rebuild_job_id: jobId, status: "aborted" },
+          },
+        );
+      }
     }
 
     return undefined;
   };
+}
+
+function renderOutcomeHuman(
+  jobId: string,
+  outcome: ClickhouseRebuildOutcome,
+): string {
+  const lines = [
+    `clickhouse_rebuild_job_id ${jobId}`,
+    `status                    ${outcome.status}`,
+    `started_at                ${outcome.started_at}`,
+    `finished_at               ${outcome.finished_at}`,
+    `rows_inserted_total       ${outcome.rows_inserted_total}`,
+    `partitions_processed      ${outcome.partitions.length}`,
+  ];
+  if (outcome.error !== null) {
+    lines.push(`error_class               ${outcome.error.error_class}`);
+    lines.push(`error_message             ${outcome.error.error_message}`);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 const runCreate = buildClickhouseRebuildCreateRunner();
@@ -319,6 +429,66 @@ function defaultStore(): ClickhouseRebuildCreateStore {
         });
       }),
     close: () => handle.close(),
+  };
+}
+
+function defaultExecutorStore(): ClickhouseRebuildExecutorStoreHandle {
+  const handle = connectDb({ env: process.env });
+  const store: ClickhouseRebuildStore = {
+    markRunning: async (input) =>
+      markClickhouseRebuildJobRunning(handle.db, input.clickhouse_rebuild_job_id, input.now),
+    markCompleted: async (input) =>
+      markClickhouseRebuildJobCompleted(
+        handle.db,
+        input.clickhouse_rebuild_job_id,
+        input.now,
+        input.rows_inserted,
+      ),
+    markFailed: async (input) =>
+      markClickhouseRebuildJobFailed(
+        handle.db,
+        input.clickhouse_rebuild_job_id,
+        input.now,
+        input.error_class,
+        input.error_message,
+      ),
+  };
+  return {
+    store,
+    close: () => handle.close(),
+  };
+}
+
+/**
+ * Production default driver. Refuses to run today because wiring it
+ * against the operator-profile ClickHouse client requires an
+ * audited reason on every raw SQL query and full materialization of
+ * the feeder MV's SELECT text. The CLI's test path always injects a
+ * driver via `hooks.openDriver`; production wires this once a
+ * persistent operator-trust contract for `clearSlice` lands.
+ *
+ * Throwing here surfaces as a `failed` outcome on the row because
+ * the executor catches driver errors and routes them through
+ * `markFailed`, so an operator running the command without an
+ * injected driver gets a clean structured failure rather than a
+ * silent no-op.
+ */
+async function defaultDriver(): Promise<ClickhouseRebuildDriverHandle> {
+  const driver: ClickhouseRebuildDriver = {
+    async clearSlice() {
+      throw new Error(
+        "clickhouse_rebuild_driver_not_wired: the production ClickHouse driver is not wired in this build; inject one via hooks.openDriver or wait for the operator-trust contract for clearSlice/INSERT.",
+      );
+    },
+    async rebuildPartition() {
+      throw new Error(
+        "clickhouse_rebuild_driver_not_wired: the production ClickHouse driver is not wired in this build; inject one via hooks.openDriver or wait for the operator-trust contract for clearSlice/INSERT.",
+      );
+    },
+  };
+  return {
+    driver,
+    close: async () => undefined,
   };
 }
 
@@ -430,9 +600,6 @@ function emit(ctx: CommandContext, input: EmitInput): void {
         reason: input.reason,
         requester_actor_label: input.createdBy,
         plan: planned,
-        executor: input.dryRun
-          ? "skipped (dry-run)"
-          : `deferred (${CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED})`,
       }),
     );
     return;
@@ -440,7 +607,7 @@ function emit(ctx: CommandContext, input: EmitInput): void {
   const human: string[] = [
     input.dryRun
       ? `polaris clickhouse-rebuild created (dry-run)`
-      : `polaris clickhouse-rebuild created (pending; executor deferred)`,
+      : `polaris clickhouse-rebuild created (pending; executor next)`,
     `  clickhouse_rebuild_job_id  ${input.jobId}`,
     `  status                     ${input.status}`,
     `  requester_actor_label      ${input.createdBy}`,
@@ -448,12 +615,6 @@ function emit(ctx: CommandContext, input: EmitInput): void {
   ];
   if (planned !== null) {
     human.push("", renderClickhouseRebuildPlanHuman(planned));
-  }
-  if (!input.dryRun) {
-    human.push(
-      "",
-      `executor: ${CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED} (exit code ${ExitCode.NotImplemented})`,
-    );
   }
   ctx.output.writeOut(
     renderAccordingTo("human", {

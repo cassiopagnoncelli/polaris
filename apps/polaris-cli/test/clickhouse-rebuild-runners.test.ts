@@ -15,9 +15,10 @@
  *               --from/--to pairing rule
  *
  *   create      --dry-run        → persists `dry_run` row + audit, exits 0
- *               (no --dry-run)   → persists `pending` row + audit, throws
- *                                  CliError carrying
- *                                  clickhouse_rebuild_executor_not_implemented
+ *               (no --dry-run)   → persists `pending` row + audit, then drives
+ *                                  the rebuild executor through pending →
+ *                                  running → completed / failed and stamps the
+ *                                  row.
  *               unknown projection → UsageError BEFORE any DB call
  *               planner rejection  → UsageError before any DB call
  *
@@ -28,7 +29,13 @@
  * @see docs/implementation/tasks/P7-005-clickhouse-rebuild-workflows.md
  */
 
-import type { PartsSummary } from "@polaris/shared-clickhouse/rebuild";
+import type {
+  ClickhouseRebuildDriver,
+  ClickhouseRebuildOutcomeStatus,
+  ClickhouseRebuildStore,
+  ClickhouseRebuildStoreStatus,
+  PartsSummary,
+} from "@polaris/shared-clickhouse/rebuild";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -37,10 +44,11 @@ import {
   buildClickhouseRebuildListRunner,
   buildClickhouseRebuildPlanRunner,
   buildClickhouseRebuildShowRunner,
-  CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
   type ClickhouseRebuildAbortStore,
   type ClickhouseRebuildCreateAuditPayload,
   type ClickhouseRebuildCreateStore,
+  type ClickhouseRebuildDriverHandle,
+  type ClickhouseRebuildExecutorStoreHandle,
   type ClickhouseRebuildJobRow,
   type ClickhouseRebuildListStore,
   type ClickhouseRebuildShowStore,
@@ -254,6 +262,127 @@ class InMemoryStore {
       },
     };
   }
+
+  /**
+   * Lifecycle store the create-runner hands the executor on the
+   * non-dry-run path. Returns a fresh handle on every `openExecutorStore`
+   * call so `closeCalls` reflects real lifecycle.
+   */
+  asExecutorStore(): ClickhouseRebuildExecutorStoreHandle {
+    const store: ClickhouseRebuildStore = {
+      markRunning: async (input) => {
+        const row = this.rows.get(input.clickhouse_rebuild_job_id);
+        if (row === undefined) return null;
+        // Mirror the SQL guard: status must be `pending` to transition.
+        // Anything else surfaces as-is so the executor can branch on it.
+        if (row.status !== "pending") {
+          return { status: row.status as ClickhouseRebuildStoreStatus["status"] };
+        }
+        const updated: ClickhouseRebuildJobRow = {
+          ...row,
+          status: "running",
+          started_at: input.now.toISOString(),
+          updated_at: input.now.toISOString(),
+        };
+        this.rows.set(updated.clickhouse_rebuild_job_id, updated);
+        return { status: "running" };
+      },
+      markCompleted: async (input) => {
+        const row = this.rows.get(input.clickhouse_rebuild_job_id);
+        if (row === undefined) return null;
+        if (row.status !== "running") {
+          return { status: row.status as ClickhouseRebuildStoreStatus["status"] };
+        }
+        const updated: ClickhouseRebuildJobRow = {
+          ...row,
+          status: "completed",
+          completed_at: input.now.toISOString(),
+          updated_at: input.now.toISOString(),
+        };
+        this.rows.set(updated.clickhouse_rebuild_job_id, updated);
+        return { status: "completed" };
+      },
+      markFailed: async (input) => {
+        const row = this.rows.get(input.clickhouse_rebuild_job_id);
+        if (row === undefined) return null;
+        if (row.status !== "running") {
+          return { status: row.status as ClickhouseRebuildStoreStatus["status"] };
+        }
+        // Enforce the same schema CHECKs we ship in the migration:
+        //   - error_class / error_message both NOT NULL when status = failed
+        //   - error_class length in [1, 64]
+        //   - error_message length in [1, 4096]
+        if (
+          input.error_class.length === 0 ||
+          input.error_class.length > 64 ||
+          input.error_message.length === 0 ||
+          input.error_message.length > 4096
+        ) {
+          throw new Error(
+            `clickhouse_rebuild_jobs error_pair_length CHECK violated: class=${input.error_class.length} message=${input.error_message.length}`,
+          );
+        }
+        const updated: ClickhouseRebuildJobRow = {
+          ...row,
+          status: "failed",
+          error_class: input.error_class,
+          error_message: input.error_message,
+          completed_at: input.now.toISOString(),
+          updated_at: input.now.toISOString(),
+        };
+        this.rows.set(updated.clickhouse_rebuild_job_id, updated);
+        return { status: "failed" };
+      },
+    };
+    return {
+      store,
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+}
+
+interface DriverCall {
+  readonly method: "clearSlice" | "rebuildPartition";
+  readonly partition: string | null;
+}
+
+interface SyntheticDriverOptions {
+  readonly throwOnClearSlice?: Error;
+  readonly throwOnPartition?: { readonly partition: string; readonly err: Error };
+  readonly rowsPerPartition?: number;
+}
+
+function syntheticDriver(opts: SyntheticDriverOptions = {}): {
+  readonly driver: ClickhouseRebuildDriver;
+  readonly calls: DriverCall[];
+} {
+  const calls: DriverCall[] = [];
+  const driver: ClickhouseRebuildDriver = {
+    async clearSlice() {
+      calls.push({ method: "clearSlice", partition: null });
+      if (opts.throwOnClearSlice !== undefined) throw opts.throwOnClearSlice;
+    },
+    async rebuildPartition(input) {
+      calls.push({ method: "rebuildPartition", partition: input.partition });
+      if (
+        opts.throwOnPartition !== undefined &&
+        opts.throwOnPartition.partition === input.partition
+      ) {
+        throw opts.throwOnPartition.err;
+      }
+      return { rows_inserted: opts.rowsPerPartition ?? 100 };
+    },
+  };
+  return { driver, calls };
+}
+
+function driverHandle(driver: ClickhouseRebuildDriver): ClickhouseRebuildDriverHandle {
+  return {
+    driver,
+    close: async () => undefined,
+  };
 }
 
 const HAPPY_PARTS: PartsSummary = {
@@ -396,49 +525,66 @@ describe("clickhouse-rebuild create runner", () => {
     expect(store.closeCalls).toBe(1);
   });
 
-  it("(no --dry-run): persists a pending row, then throws clickhouse_rebuild_executor_not_implemented", async () => {
+  it("(no --dry-run, happy path): persists pending → executor drives running → completed", async () => {
     const store = new InMemoryStore();
     const cap = captureOutput();
     const ctx = makeContext(cap.streams);
+    const { driver, calls } = syntheticDriver({ rowsPerPartition: 50 });
     const runner = buildClickhouseRebuildCreateRunner({
       issueId: () => "polaris_chr_pending1",
       openStore: () => store.asCreateStore(),
+      openExecutorStore: () => store.asExecutorStore(),
+      openDriver: async () => driverHandle(driver),
       now: () => NOW,
       generateAuditId: () => "polaris_aud_pending1",
       readPartitions: stubAdapter(HAPPY_PARTS),
     });
-    await expect(
-      runner(
-        {
-          projection: "event_daily_counts",
-          dryRun: false,
-          reason: "intend to rebuild but executor pending",
-        },
-        ctx,
-      ),
-    ).rejects.toMatchObject({
-      message: expect.stringContaining(CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED),
-    });
-    // The row IS still persisted — operator's audit trail survives even though
-    // no rebuild actually ran.
+    await runner(
+      {
+        projection: "event_daily_counts",
+        dryRun: false,
+        reason: "real rebuild",
+      },
+      ctx,
+    );
     expect(store.inserts).toHaveLength(1);
     expect(store.inserts[0]?.status).toBe("pending");
-    // Output was emitted BEFORE the throw so an operator sees the
-    // executor-deferred note in their stdout, not just the exit-code message.
-    const out = cap.stdout.join("");
-    expect(out).toContain("executor deferred");
-    expect(out).toContain(CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED);
+    // Driver was invoked once for clearSlice + once per planned partition.
+    expect(calls.map((c) => c.method)).toEqual([
+      "clearSlice",
+      "rebuildPartition",
+      "rebuildPartition",
+    ]);
+    expect(calls.filter((c) => c.method === "rebuildPartition").map((c) => c.partition)).toEqual([
+      "202604",
+      "202605",
+    ]);
+    // Row was stamped completed by the executor's markCompleted call.
+    const row = store.rows.get("polaris_chr_pending1");
+    expect(row?.status).toBe("completed");
+    expect(row?.error_class).toBeNull();
+    expect(row?.error_message).toBeNull();
   });
 
-  it("(no --dry-run): the thrown error uses ExitCode.NotImplemented (5)", async () => {
+  it("(no --dry-run, mid-rebuild failure): driver throws on partition → row stamped failed with error pair", async () => {
     const store = new InMemoryStore();
     const cap = captureOutput();
     const ctx = makeContext(cap.streams);
+    const { driver, calls } = syntheticDriver({
+      throwOnPartition: {
+        partition: "202605",
+        err: Object.assign(new Error("INSERT failed because of disk pressure"), {
+          name: "ClickHouseDriverError",
+        }),
+      },
+    });
     const runner = buildClickhouseRebuildCreateRunner({
-      issueId: () => "polaris_chr_pending2",
+      issueId: () => "polaris_chr_failed1",
       openStore: () => store.asCreateStore(),
+      openExecutorStore: () => store.asExecutorStore(),
+      openDriver: async () => driverHandle(driver),
       now: () => NOW,
-      generateAuditId: () => "polaris_aud_pending2",
+      generateAuditId: () => "polaris_aud_failed1",
       readPartitions: stubAdapter(HAPPY_PARTS),
     });
     let thrown: unknown = null;
@@ -447,7 +593,7 @@ describe("clickhouse-rebuild create runner", () => {
         {
           projection: "event_daily_counts",
           dryRun: false,
-          reason: "exit-code check",
+          reason: "rebuild fails mid-flight",
         },
         ctx,
       );
@@ -456,11 +602,100 @@ describe("clickhouse-rebuild create runner", () => {
     }
     expect(thrown).toBeInstanceOf(CliError);
     if (thrown instanceof CliError) {
-      expect(thrown.exitCode).toBe(5); // NotImplemented
-      expect((thrown.details as Record<string, unknown>)["reason_code"]).toBe(
-        CLICKHOUSE_REBUILD_EXECUTOR_NOT_IMPLEMENTED,
+      expect(thrown.exitCode).toBe(1);
+      expect(thrown.message).toContain("clickhouse_rebuild_failed");
+      expect((thrown.details as Record<string, unknown>)["status"]).toBe("failed");
+      expect((thrown.details as Record<string, unknown>)["error_class"]).toBe(
+        "ClickHouseDriverError",
       );
     }
+    // The first partition ran, then the second threw and short-circuited.
+    expect(calls.map((c) => c.partition)).toEqual([null, "202604", "202605"]);
+    // Row carries both error_class AND error_message (schema's error_pair_present CHECK).
+    const row = store.rows.get("polaris_chr_failed1");
+    expect(row?.status).toBe("failed");
+    expect(row?.error_class).toBe("ClickHouseDriverError");
+    expect(row?.error_message).toBe("INSERT failed because of disk pressure");
+  });
+
+  it("(no --dry-run, peer-aborted): markRunning returns aborted → executor short-circuits, throws CliError", async () => {
+    const store = new InMemoryStore();
+    // Pre-stamp the row as aborted BEFORE the create call by injecting a
+    // store whose `markRunning` reports `aborted`. Simulates the case
+    // where a sibling operator runs `polaris clickhouse-rebuild abort`
+    // between the row insertion and the executor's first transition.
+    const executorStore: ClickhouseRebuildStore = {
+      markRunning: async () => ({ status: "aborted" }),
+      markCompleted: async () => null,
+      markFailed: async () => null,
+    };
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams);
+    const { driver, calls } = syntheticDriver();
+    const runner = buildClickhouseRebuildCreateRunner({
+      issueId: () => "polaris_chr_aborted1",
+      openStore: () => store.asCreateStore(),
+      openExecutorStore: () => ({ store: executorStore, close: async () => undefined }),
+      openDriver: async () => driverHandle(driver),
+      now: () => NOW,
+      generateAuditId: () => "polaris_aud_aborted1",
+      readPartitions: stubAdapter(HAPPY_PARTS),
+    });
+    let thrown: unknown = null;
+    try {
+      await runner(
+        {
+          projection: "event_daily_counts",
+          dryRun: false,
+          reason: "peer-aborted",
+        },
+        ctx,
+      );
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(CliError);
+    if (thrown instanceof CliError) {
+      expect(thrown.exitCode).toBe(1);
+      expect(thrown.message).toContain("clickhouse_rebuild_aborted");
+      expect((thrown.details as Record<string, unknown>)["status"]).toBe("aborted");
+    }
+    // Driver was never consulted because the row was aborted before
+    // we could enter the clearSlice phase.
+    expect(calls).toHaveLength(0);
+  });
+
+  it("(no --dry-run): outcome JSON shape includes status + partitions + rows_inserted_total", async () => {
+    const store = new InMemoryStore();
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams, "json");
+    const { driver } = syntheticDriver({ rowsPerPartition: 25 });
+    const runner = buildClickhouseRebuildCreateRunner({
+      issueId: () => "polaris_chr_json1",
+      openStore: () => store.asCreateStore(),
+      openExecutorStore: () => store.asExecutorStore(),
+      openDriver: async () => driverHandle(driver),
+      now: () => NOW,
+      generateAuditId: () => "polaris_aud_json1",
+      readPartitions: stubAdapter(HAPPY_PARTS),
+    });
+    await runner(
+      {
+        projection: "event_daily_counts",
+        dryRun: false,
+        reason: "verify json shape",
+      },
+      ctx,
+    );
+    // The runner writes both the create-row payload and the outcome
+    // payload to stdout; the outcome is the second write.
+    expect(cap.stdout.length).toBeGreaterThanOrEqual(2);
+    const outcome = JSON.parse(cap.stdout[cap.stdout.length - 1] as string);
+    expect(outcome.status).toBe("completed" satisfies ClickhouseRebuildOutcomeStatus);
+    expect(outcome.partitions).toHaveLength(2);
+    expect(outcome.rows_inserted_total).toBe(50);
+    expect(outcome.error).toBeNull();
+    expect(outcome.executor_version).toBe("v1");
   });
 
   it("rejects unknown projection BEFORE any DB call", async () => {
