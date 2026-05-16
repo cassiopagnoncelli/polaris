@@ -173,6 +173,14 @@ export interface DestinationConsumerOptions<Payload> {
    * with the explicit `allowReplay` opt-in.
    */
   readonly subscribeFromBeginning?: boolean;
+  /**
+   * Operational build version stamped on every `delivery_records` row
+   * (M0DROHV3). Distinct from the descriptor's `consumerVersion`, which
+   * is the semantic v1/v2/... contract. The build version is the runtime
+   * instance — typically `releaseLabel || gitSha || serviceVersion` from
+   * `getBuildMetadata()`. When omitted, the column is written as NULL.
+   */
+  readonly consumerBuildVersion?: string;
 }
 
 /** Runtime handle. The host's `app.ts` calls `start()` / `stop()`. */
@@ -255,6 +263,9 @@ export function createDestinationConsumer<Payload>(
       dedupe,
       metrics,
       allowReplay,
+      ...(options.consumerBuildVersion !== undefined
+        ? { consumerBuildVersion: options.consumerBuildVersion }
+        : {}),
     });
   };
 
@@ -379,6 +390,9 @@ export function createDestinationConsumer<Payload>(
       dedupe,
       metrics,
       allowReplay,
+      ...(options.consumerBuildVersion !== undefined
+        ? { consumerBuildVersion: options.consumerBuildVersion }
+        : {}),
     });
   };
 
@@ -438,6 +452,8 @@ interface ProcessOneInput<Payload> {
   readonly dedupe: DestinationDedupe;
   readonly metrics: DestinationMetrics;
   readonly allowReplay: boolean;
+  /** Forwarded onto every `delivery_records` row written this turn (M0DROHV3). */
+  readonly consumerBuildVersion?: string;
 }
 
 async function processOne<Payload>(
@@ -461,8 +477,15 @@ async function processOne<Payload>(
     dedupe,
     metrics,
     allowReplay,
+    consumerBuildVersion,
   } = input;
   const identity = descriptor.identity;
+  // Spread into every `recordOutcome` call so the column is stamped on
+  // every row. `recordOutcome` only forwards it to `recordDelivery`
+  // when defined, so omitting `consumerBuildVersion` keeps the column
+  // NULL for callers that did not configure the build version.
+  const outcomeBuildVersion =
+    consumerBuildVersion !== undefined ? { consumerBuildVersion } : {};
   const baseLabels = {
     vendor: identity.vendor,
     consumer_version: identity.consumerVersion,
@@ -580,6 +603,7 @@ async function processOne<Payload>(
     // delivery row so smoke tests / smoke harness can assert end-to-end
     // shape, but it short-circuits before mapping / delivering.
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -661,6 +685,7 @@ async function processOne<Payload>(
   const mapper: Mapper<Payload> | undefined = descriptor.mappers[normalized.event];
   if (mapper === undefined) {
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -687,6 +712,7 @@ async function processOne<Payload>(
     mapResult = mapper(mapperContext);
   } catch (err) {
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -711,6 +737,7 @@ async function processOne<Payload>(
   if (mapResult.kind === "skip") {
     metrics.incrementSkipped({ ...instanceLabels, reason: mapResult.reason });
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -744,6 +771,7 @@ async function processOne<Payload>(
     secret = await secrets.resolve(instance.secret_ref);
   } catch (err) {
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -796,6 +824,7 @@ async function processOne<Payload>(
     // or a genuinely unexpected exception.
     lease.release();
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -831,6 +860,7 @@ async function processOne<Payload>(
   if (deliveryResult.kind === "accepted") {
     await dedupe.mark(instance.destination_id, delivery_key, deliveryFinishedAt.getTime());
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -853,6 +883,7 @@ async function processOne<Payload>(
 
   if (deliveryResult.kind === "failed_retryable") {
     return recordOutcome({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -886,6 +917,7 @@ async function processOne<Payload>(
 
   // failed_permanent
   return recordOutcome({
+    ...outcomeBuildVersion,
     records,
     metrics,
     logger,
@@ -938,6 +970,8 @@ interface RecordOutcomeInput {
     readonly environment: string;
   };
   readonly logErr?: unknown;
+  /** Operational build version (M0DROHV3) stamped on the row. Forwarded by the runtime from `DestinationConsumerOptions.consumerBuildVersion`. */
+  readonly consumerBuildVersion?: string;
   /** When set, the runtime publishes the original payload to the DLQ. */
   readonly payloadForDlq?: EachMessagePayload;
   /** PolarisProducer required when `payloadForDlq` is set. */
@@ -964,6 +998,9 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
     project_id: input.envelope.project_id,
     environment: input.envelope.environment,
     consumer_version: input.identity.consumerVersion,
+    ...(input.consumerBuildVersion !== undefined
+      ? { consumer_build_version: input.consumerBuildVersion }
+      : {}),
     normalize_version: input.identity.normalizeVersion,
     mapper_version: input.identity.mapperVersion,
     deliverer_version: input.identity.delivererVersion,

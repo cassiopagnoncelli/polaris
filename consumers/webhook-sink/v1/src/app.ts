@@ -208,6 +208,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
 
   const runtime = createDestinationConsumer({
     descriptor,
+    consumerBuildVersion: config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
     producer,
     instances,

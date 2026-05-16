@@ -115,6 +115,27 @@ describe("findByDestinationId (in-memory)", () => {
     expect(rows.map((r) => r.delivery_id)).toEqual(["in"]);
   });
 
+  it("stamps consumer_build_version when supplied (M0DROHV3)", async () => {
+    const repo = new InMemoryDeliveryRecordRepository();
+    const persisted = await repo.recordDelivery({
+      ...baseInput(),
+      delivery_id: "with-build",
+      consumer_build_version: "2026-q2-r1",
+    });
+    expect(persisted.consumer_build_version).toBe("2026-q2-r1");
+    const fetched = await repo.findRecord("with-build");
+    expect(fetched?.consumer_build_version).toBe("2026-q2-r1");
+  });
+
+  it("leaves consumer_build_version null when omitted (back-compat)", async () => {
+    const repo = new InMemoryDeliveryRecordRepository();
+    const persisted = await repo.recordDelivery({
+      ...baseInput(),
+      delivery_id: "no-build",
+    });
+    expect(persisted.consumer_build_version).toBeNull();
+  });
+
   it("clamps to LIST_DELIVERY_RECORDS_HARD_LIMIT", async () => {
     const repo = new InMemoryDeliveryRecordRepository();
     for (let i = 0; i < 3; i += 1) {

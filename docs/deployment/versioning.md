@@ -111,7 +111,7 @@ node v22.16.0 · sha abc1234 · built 2026-05-12T10:00:00Z · release 2026-q2-r1
 
 Runtime records that participate in replay lineage pin the **semantic
 version only** — not the operational build version. The replay control
-plane targets `consumer_version=v1`, not `consumer_build_version=1.4.0`.
+plane targets `consumer_version=v1`, not `consumer_build_version=2026-q2-r1`.
 This is intentional: replays must remain reproducible across operational
 rebuilds.
 
@@ -120,25 +120,33 @@ rebuilds.
 | `processor_runs`       | `processor_version`          | semantic            |
 | `replay_jobs`          | `target_processor_version`   | semantic            |
 | `delivery_records`     | `consumer_version`           | semantic            |
+| `delivery_records`     | `consumer_build_version`     | **operational** (M0DROHV3) |
 | `delivery_records`     | `normalize_version`          | semantic (sub-axis) |
 | `delivery_records`     | `mapper_version`             | semantic (sub-axis) |
 | `delivery_records`     | `deliverer_version`          | semantic (sub-axis) |
 | `dlq_records`          | `consumer_version`           | semantic            |
 | `audit_records`        | (none — captures actor)      | —                   |
 
-Operational build metadata (package version, git SHA, build time, release
-label) is **not** stamped on these rows. When an operator needs to
-reconstruct exactly which build produced a row, the join points are:
+`delivery_records.consumer_build_version` (added by M0DROHV3) is the
+one operational-axis column on the runtime-record surface. It carries
+whatever `getBuildMetadata()` resolves at consumer startup
+(`releaseLabel || gitSha || serviceVersion`); existing rows written
+before the migration stay NULL.
+
+For the remaining runtime tables, operational build metadata (package
+version, git SHA, build time, release label) is still **not** stamped
+on the rows. When an operator needs to reconstruct exactly which build
+produced a non-delivery row, the join points are:
 
 - the row's `created_at` timestamp,
 - the rollout timeline (release labels + their start/end windows tracked
   separately by the deploy system),
 - the image registry's per-tag history.
 
-Adding `consumer_build_version` / `processor_build_version` columns to
-the runtime tables is **deferred** — it duplicates information the rollout
-timeline already carries, would invalidate every existing index, and
-would force a write-coordination change on every record-writing path. See
+Adding `processor_build_version` to `processor_runs` is **deferred** —
+it duplicates information the rollout timeline already carries, would
+invalidate every existing index, and would force a write-coordination
+change on every record-writing path. See
 `agents/pm/kanban/done/P11-007-release-versioning-and-build-metadata.md`
 "Known gaps".
 

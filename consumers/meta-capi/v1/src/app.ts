@@ -157,6 +157,7 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
 
   const runtime = createDestinationConsumer({
     descriptor,
+    consumerBuildVersion: config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
     producer,
     instances,

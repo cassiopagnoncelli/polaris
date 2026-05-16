@@ -138,6 +138,19 @@ export interface DeliveryRecordsTable {
   project_id: string;
   environment: string;
   consumer_version: string;
+  /**
+   * Operational build version stamped at consumer startup (M0DROHV3).
+   * Distinct from `consumer_version`, which is the semantic v1/v2/... of
+   * the consumer's deliverer contract. `consumer_build_version` is the
+   * runtime instance — typically `releaseLabel || gitSha || serviceVersion`
+   * from `getBuildMetadata()`. Nullable to keep rows written before the
+   * migration honest.
+   */
+  consumer_build_version: ColumnType<
+    string | null,
+    string | null | undefined,
+    string | null
+  >;
   normalize_version: string;
   mapper_version: string;
   deliverer_version: string;
@@ -178,6 +191,8 @@ export interface DeliveryRecord {
   readonly project_id: string;
   readonly environment: string;
   readonly consumer_version: string;
+  /** Operational build version (M0DROHV3); see DeliveryRecordsTable. */
+  readonly consumer_build_version: string | null;
   readonly normalize_version: string;
   readonly mapper_version: string;
   readonly deliverer_version: string;
@@ -208,6 +223,12 @@ export interface RecordDeliveryInput {
   readonly project_id: string;
   readonly environment: string;
   readonly consumer_version: string;
+  /**
+   * Optional operational build version stamped at consumer startup
+   * (M0DROHV3). When omitted, the column persists as NULL so existing
+   * callers that don't know about the new slot still write valid rows.
+   */
+  readonly consumer_build_version?: string | null;
   readonly normalize_version: string;
   readonly mapper_version: string;
   readonly deliverer_version: string;
@@ -302,6 +323,7 @@ export class InMemoryDeliveryRecordRepository implements DeliveryRecordRepositor
       project_id: input.project_id,
       environment: input.environment,
       consumer_version: input.consumer_version,
+      consumer_build_version: input.consumer_build_version ?? null,
       normalize_version: input.normalize_version,
       mapper_version: input.mapper_version,
       deliverer_version: input.deliverer_version,
@@ -397,6 +419,7 @@ export function createKyselyDeliveryRecordRepository(
         project_id: input.project_id,
         environment: input.environment,
         consumer_version: input.consumer_version,
+        consumer_build_version: input.consumer_build_version ?? null,
         normalize_version: input.normalize_version,
         mapper_version: input.mapper_version,
         deliverer_version: input.deliverer_version,
@@ -493,6 +516,7 @@ interface DeliveryRecordRow {
   project_id: string;
   environment: string;
   consumer_version: string;
+  consumer_build_version: string | null;
   normalize_version: string;
   mapper_version: string;
   deliverer_version: string;
@@ -515,6 +539,7 @@ function toRecord(row: DeliveryRecordRow): DeliveryRecord {
     project_id: row.project_id,
     environment: row.environment,
     consumer_version: row.consumer_version,
+    consumer_build_version: row.consumer_build_version,
     normalize_version: row.normalize_version,
     mapper_version: row.mapper_version,
     deliverer_version: row.deliverer_version,

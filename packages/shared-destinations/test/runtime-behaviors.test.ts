@@ -244,7 +244,7 @@ function buildConsumerStub() {
   } as unknown as Parameters<typeof createDestinationConsumer>[0]["consumer"];
 }
 
-function buildConsumer(env: TestEnv) {
+function buildConsumer(env: TestEnv, overrides: { consumerBuildVersion?: string } = {}) {
   return createDestinationConsumer({
     descriptor: env.descriptor,
     consumer: buildConsumerStub(),
@@ -254,6 +254,9 @@ function buildConsumer(env: TestEnv) {
     secrets: env.secrets,
     logger: noopLogger,
     dedupe: env.dedupe,
+    ...(overrides.consumerBuildVersion !== undefined
+      ? { consumerBuildVersion: overrides.consumerBuildVersion }
+      : {}),
   });
 }
 
@@ -302,6 +305,28 @@ function makeFakeKafkaPayload(): {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("destination runtime — M0DROHV3 build version", () => {
+  it("stamps consumer_build_version on delivery_records when supplied via options", async () => {
+    const env = makeEnv();
+    const consumer = buildConsumer(env, { consumerBuildVersion: "2026-q2-r1" });
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(lastRecord(env)?.consumer_build_version).toBe("2026-q2-r1");
+  });
+
+  it("leaves consumer_build_version null when the option is omitted (back-compat)", async () => {
+    const env = makeEnv();
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(lastRecord(env)?.consumer_build_version).toBeNull();
+  });
+});
 
 describe("destination runtime — happy path", () => {
   it("normalize -> map -> deliver writes status=delivered", async () => {
