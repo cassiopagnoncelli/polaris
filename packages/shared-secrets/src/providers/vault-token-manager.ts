@@ -50,6 +50,42 @@ export interface VaultHttpResponse {
 }
 
 /**
+ * Common token-source contract used by the Vault provider. Two
+ * implementations satisfy it:
+ *
+ *   - {@link VaultTokenManager} for the direct K8s-auth flow (the v1
+ *     production wiring). The pod exchanges its service-account JWT
+ *     for a Vault client token, holds it in memory, and renews it
+ *     inline.
+ *
+ *   - {@link VaultAgentTokenSource} (DCJXEFE5) for the sidecar pattern.
+ *     A co-located Vault Agent container handles auth + lease renewal
+ *     and writes the current client token to a shared file; the
+ *     source reads that file. Polaris never sees the K8s SA token nor
+ *     calls `auth/.../login` directly. Simpler K8s RBAC policy (the
+ *     agent owns the auth-role binding); more moving parts (an extra
+ *     container per pod).
+ */
+export interface VaultTokenSource {
+  /** Return a currently-valid Vault client token. */
+  token(): Promise<string>;
+  /**
+   * Discard the current token state. Called by the provider when a
+   * downstream KV read returns 403 (token revoked / lease exceeded /
+   * agent rotated the file mid-flight). The next `token()` call must
+   * read freshly.
+   */
+  invalidate(): void;
+  /**
+   * Read-only view of the active token's lease window. Returns
+   * `undefined` when no token is held (or when the source has no
+   * lease metadata, as with the Agent variant). Never includes the
+   * token bytes.
+   */
+  lease(): { expiresAt: number; renewable: boolean } | undefined;
+}
+
+/**
  * Default HTTP client uses the global `fetch`. Node 22 ships it natively;
  * the workspace's runtime baseline is Node 22+.
  */
@@ -169,7 +205,7 @@ interface VaultRenewResponse {
  * authentication is shared via a promise so we never thunder-herd Vault's
  * login endpoint with the same K8s JWT.
  */
-export class VaultTokenManager {
+export class VaultTokenManager implements VaultTokenSource {
   private readonly address: string;
   private readonly kubernetesMount: string;
   private readonly role: string;

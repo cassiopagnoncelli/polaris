@@ -381,6 +381,144 @@ describe("VaultSecretProvider", () => {
   });
 });
 
+describe("VaultSecretProvider — agent sidecar (DCJXEFE5)", () => {
+  it("reads the token from the agent sink file and never calls /v1/auth/.../login", async () => {
+    let calls = 0;
+    let lastHeaders: Record<string, string> = {};
+    const http: VaultHttp = async (url, init) => {
+      calls += 1;
+      lastHeaders = init.headers;
+      if (url.includes("/v1/auth/")) {
+        throw new Error(`agent mode must not call ${url}`);
+      }
+      return makeResponse(200, { data: { data: { value: SECRET_VALUE } } });
+    };
+
+    const provider = createVaultProvider({
+      address: ADDRESS,
+      auth: "agent",
+      agentTokenReader: async () => "hvs.agent-managed-token",
+      http,
+      sleep: async () => {},
+    });
+
+    expect(await provider.getSecret("polaris/production/storefront/meta-capi")).toBe(SECRET_VALUE);
+    expect(calls).toBe(1);
+    expect(lastHeaders["x-vault-token"]).toBe("hvs.agent-managed-token");
+    // The Agent owns the lease window; the source surfaces no lease metadata.
+    expect(provider.lease()).toBeUndefined();
+  });
+
+  it("permits agent mode without `role` (the Agent owns the auth-role binding)", () => {
+    expect(() =>
+      createVaultProvider({
+        address: ADDRESS,
+        auth: "agent",
+        agentTokenReader: async () => "hvs.token",
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("VaultSecretProvider — bounded transient retry (DCJXEFE5)", () => {
+  it("retries on transport failure and succeeds on the 2nd attempt", async () => {
+    let attempts = 0;
+    const http: VaultHttp = async (url) => {
+      if (url.endsWith("/login")) return loginResponse();
+      attempts += 1;
+      if (attempts === 1) throw new Error("ECONNRESET");
+      return makeResponse(200, { data: { data: { value: SECRET_VALUE } } });
+    };
+    const sleeps: number[] = [];
+    const provider = createVaultProvider({
+      address: ADDRESS,
+      role: "polaris-production",
+      serviceAccountTokenReader: new FakeReader(),
+      http,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+
+    expect(await provider.getSecret("polaris/production/p/x")).toBe(SECRET_VALUE);
+    expect(attempts).toBe(2);
+    expect(sleeps).toEqual([100]);
+  });
+
+  it("retries on 5xx and 429 but eventually succeeds inside maxAttempts", async () => {
+    let attempts = 0;
+    const sequence = [503, 429, 200] as const;
+    const http: VaultHttp = async (url) => {
+      if (url.endsWith("/login")) return loginResponse();
+      const status = sequence[attempts] ?? 200;
+      attempts += 1;
+      if (status === 200) {
+        return makeResponse(200, { data: { data: { value: SECRET_VALUE } } });
+      }
+      return makeResponse(status, {});
+    };
+    const provider = createVaultProvider({
+      address: ADDRESS,
+      role: "polaris-production",
+      serviceAccountTokenReader: new FakeReader(),
+      http,
+      sleep: async () => {},
+    });
+
+    expect(await provider.getSecret("polaris/production/p/x")).toBe(SECRET_VALUE);
+    expect(attempts).toBe(3);
+  });
+
+  it("after exhaustion, falls back to stale cache and flips probe to degraded", async () => {
+    let firstReadDone = false;
+    let attemptsAfterFirstSuccess = 0;
+    const http: VaultHttp = async (url) => {
+      if (url.endsWith("/login")) return loginResponse();
+      if (!firstReadDone) {
+        firstReadDone = true;
+        return makeResponse(200, { data: { data: { value: SECRET_VALUE } } });
+      }
+      attemptsAfterFirstSuccess += 1;
+      return makeResponse(503, {});
+    };
+    const provider = createVaultProvider({
+      address: ADDRESS,
+      role: "polaris-production",
+      serviceAccountTokenReader: new FakeReader(),
+      http,
+      cacheTtlMs: 0, // every fresh-path lookup misses; stale-path always hits
+      sleep: async () => {},
+    });
+
+    expect(await provider.getSecret("polaris/production/p/x")).toBe(SECRET_VALUE);
+    expect(await provider.getSecret("polaris/production/p/x")).toBe(SECRET_VALUE);
+    expect(attemptsAfterFirstSuccess).toBe(3);
+    expect(provider.probe().status).toBe("degraded");
+  });
+
+  it("does not retry when maxAttempts=1", async () => {
+    let attempts = 0;
+    const http: VaultHttp = async (url) => {
+      if (url.endsWith("/login")) return loginResponse();
+      attempts += 1;
+      return makeResponse(503, {});
+    };
+    const provider = createVaultProvider({
+      address: ADDRESS,
+      role: "polaris-production",
+      serviceAccountTokenReader: new FakeReader(),
+      http,
+      maxAttempts: 1,
+      sleep: async () => {},
+    });
+
+    await expect(provider.getSecret("polaris/production/p/x")).rejects.toBeInstanceOf(
+      SecretProviderError,
+    );
+    expect(attempts).toBe(1);
+  });
+});
+
 /**
  * Helper that drives the provider through every documented error path and
  * collects the thrown errors so the no-leak assertion can run over the full

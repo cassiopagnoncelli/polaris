@@ -45,12 +45,15 @@
 
 import { SecretNotFoundError, SecretProviderError } from "../errors.js";
 import type { SecretProviderAdapter } from "../types.js";
+import { VaultAgentTokenSource } from "./vault-agent-token-source.js";
 import { type VaultCacheClock, VaultSecretCache } from "./vault-cache.js";
 import {
   FileServiceAccountTokenReader,
   type ServiceAccountTokenReader,
   type VaultHttp,
+  type VaultHttpResponse,
   VaultTokenManager,
+  type VaultTokenSource,
 } from "./vault-token-manager.js";
 
 /**
@@ -80,6 +83,33 @@ export const DEFAULT_VAULT_K8S_AUTH_MOUNT = "kubernetes";
 export const DEFAULT_VAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
+ * Default Vault Agent sidecar token-file path (DCJXEFE5). Polaris
+ * production deployments mount the agent's `auto_auth.sink` here on a
+ * shared `emptyDir` volume. Override via `agentTokenPath` in options.
+ */
+export const DEFAULT_VAULT_AGENT_TOKEN_PATH = "/vault/secrets/token";
+
+/**
+ * Default maximum HTTP attempt count for the bounded transient-retry
+ * loop (DCJXEFE5). Includes the original attempt — `3` means the
+ * initial call plus up to two retries.
+ */
+export const DEFAULT_VAULT_MAX_ATTEMPTS = 3;
+
+/**
+ * Default initial backoff (milliseconds) between retry attempts. The
+ * delay doubles between attempts up to `DEFAULT_VAULT_MAX_BACKOFF_MS`.
+ */
+export const DEFAULT_VAULT_INITIAL_BACKOFF_MS = 100;
+
+/**
+ * Default cap on the per-attempt backoff. Even with three attempts at
+ * exponential growth the worst-case wait stays bounded so a slow Vault
+ * cannot block the calling delivery beyond ~700ms.
+ */
+export const DEFAULT_VAULT_MAX_BACKOFF_MS = 500;
+
+/**
  * Public constructor options for the Vault provider.
  *
  * Fields:
@@ -102,7 +132,12 @@ export const DEFAULT_VAULT_CACHE_TTL_MS = 5 * 60 * 1000;
  */
 export interface VaultProviderOptions {
   readonly address: string;
-  readonly role: string;
+  /**
+   * Vault Kubernetes auth role bound to the pod's service account.
+   * Required for the default `auth: "kubernetes"` mode; ignored when
+   * `auth: "agent"` is selected (the Agent owns the role binding).
+   */
+  readonly role?: string;
   readonly kubernetesAuthMount?: string;
   readonly kvMount?: string;
   readonly tokenPath?: string;
@@ -110,6 +145,72 @@ export interface VaultProviderOptions {
   readonly serviceAccountTokenReader?: ServiceAccountTokenReader;
   readonly http?: VaultHttp;
   readonly now?: () => number;
+  /**
+   * Authentication mode (DCJXEFE5):
+   *
+   *   - `"kubernetes"` (default) — the provider performs Vault's
+   *     Kubernetes auth flow itself, exchanging the pod's
+   *     service-account JWT for a Vault client token and renewing
+   *     inline. Requires `role` to be set.
+   *
+   *   - `"agent"` — a Vault Agent sidecar container handles auth +
+   *     renewal and writes the current client token to a shared file;
+   *     the provider just reads it. Requires `agentTokenPath` to be
+   *     set (or use the default).
+   */
+  readonly auth?: "kubernetes" | "agent";
+  /**
+   * Path to the Vault Agent's token sink. Only consulted when
+   * `auth: "agent"`. Defaults to {@link DEFAULT_VAULT_AGENT_TOKEN_PATH}.
+   */
+  readonly agentTokenPath?: string;
+  /**
+   * Override the Agent token-file reader. Defaults to
+   * `node:fs/promises#readFile`. Only consulted when
+   * `auth: "agent"`; tests inject in-memory readers.
+   */
+  readonly agentTokenReader?: (path: string) => Promise<string>;
+  /**
+   * Override the re-read interval for the agent token cache.
+   * Defaults to the source's own default (30 s). Only consulted when
+   * `auth: "agent"`; tests pass `0` to force re-read on every call.
+   */
+  readonly agentTokenRereadIntervalMs?: number;
+  /**
+   * Pre-built token source. When supplied, the provider uses it
+   * directly and ignores `auth` / `role` / `agent*` / `tokenPath` /
+   * `serviceAccountTokenReader` / `kubernetesAuthMount`. Useful for
+   * tests and for callers that want to share a single token source
+   * across providers.
+   */
+  readonly tokenSource?: VaultTokenSource;
+  /**
+   * Maximum number of HTTP attempts for the bounded transient-retry
+   * loop (DCJXEFE5). Includes the original attempt; `1` disables
+   * retry. Defaults to {@link DEFAULT_VAULT_MAX_ATTEMPTS}.
+   *
+   * Retried statuses: connection errors caught by the HTTP client,
+   * `429`, and `5xx`. Terminal statuses (`200`-`2xx`, `403`, `404`)
+   * never retry.
+   */
+  readonly maxAttempts?: number;
+  /**
+   * Initial backoff (milliseconds) between retry attempts. The wait
+   * doubles between attempts up to `maxBackoffMs`. Defaults to
+   * {@link DEFAULT_VAULT_INITIAL_BACKOFF_MS}.
+   */
+  readonly initialBackoffMs?: number;
+  /**
+   * Cap on the per-attempt backoff. Defaults to
+   * {@link DEFAULT_VAULT_MAX_BACKOFF_MS}.
+   */
+  readonly maxBackoffMs?: number;
+  /**
+   * Sleep override for the retry loop. Defaults to a real
+   * `setTimeout`; tests pass an instant resolver to keep the suite
+   * fast.
+   */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -161,9 +262,13 @@ export class VaultSecretProvider implements SecretProviderAdapter {
   private readonly address: string;
   private readonly kvMount: string;
   private readonly http: VaultHttp;
-  private readonly tokens: VaultTokenManager;
+  private readonly tokens: VaultTokenSource;
   private readonly cache: VaultSecretCache;
   private readonly now: () => number;
+  private readonly maxAttempts: number;
+  private readonly initialBackoffMs: number;
+  private readonly maxBackoffMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   private lastSuccessAt: number | undefined = undefined;
   private lastFailureAt: number | undefined = undefined;
@@ -175,8 +280,13 @@ export class VaultSecretProvider implements SecretProviderAdapter {
     if (options.address.endsWith("/")) {
       throw new TypeError("VaultSecretProvider: address must not end with '/'");
     }
-    if (typeof options.role !== "string" || options.role.length === 0) {
-      throw new TypeError("VaultSecretProvider: role is required");
+    const authMode = options.auth ?? "kubernetes";
+    if (
+      options.tokenSource === undefined &&
+      authMode === "kubernetes" &&
+      (typeof options.role !== "string" || options.role.length === 0)
+    ) {
+      throw new TypeError("VaultSecretProvider: role is required when auth='kubernetes'");
     }
     this.address = options.address;
     this.kvMount = options.kvMount ?? DEFAULT_VAULT_KV_MOUNT;
@@ -186,17 +296,42 @@ export class VaultSecretProvider implements SecretProviderAdapter {
     const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_VAULT_CACHE_TTL_MS;
     const cacheClock: VaultCacheClock = { now };
     this.cache = new VaultSecretCache({ ttlMs: cacheTtlMs, clock: cacheClock });
-    const tokenReader: ServiceAccountTokenReader =
-      options.serviceAccountTokenReader ??
-      new FileServiceAccountTokenReader(options.tokenPath ?? DEFAULT_K8S_SA_TOKEN_PATH);
-    this.tokens = new VaultTokenManager({
-      address: this.address,
-      kubernetesMount: options.kubernetesAuthMount ?? DEFAULT_VAULT_K8S_AUTH_MOUNT,
-      role: options.role,
-      serviceAccountTokenReader: tokenReader,
-      ...(options.http !== undefined ? { http: options.http } : {}),
-      now,
-    });
+
+    if (options.tokenSource !== undefined) {
+      this.tokens = options.tokenSource;
+    } else if (authMode === "agent") {
+      this.tokens = new VaultAgentTokenSource({
+        tokenPath: options.agentTokenPath ?? DEFAULT_VAULT_AGENT_TOKEN_PATH,
+        ...(options.agentTokenReader !== undefined
+          ? { readToken: options.agentTokenReader }
+          : {}),
+        ...(options.agentTokenRereadIntervalMs !== undefined
+          ? { rereadIntervalMs: options.agentTokenRereadIntervalMs }
+          : {}),
+        now,
+      });
+    } else {
+      const tokenReader: ServiceAccountTokenReader =
+        options.serviceAccountTokenReader ??
+        new FileServiceAccountTokenReader(options.tokenPath ?? DEFAULT_K8S_SA_TOKEN_PATH);
+      this.tokens = new VaultTokenManager({
+        address: this.address,
+        kubernetesMount: options.kubernetesAuthMount ?? DEFAULT_VAULT_K8S_AUTH_MOUNT,
+        // `role` is guaranteed by the constructor check above when auth=kubernetes.
+        role: options.role as string,
+        serviceAccountTokenReader: tokenReader,
+        ...(options.http !== undefined ? { http: options.http } : {}),
+        now,
+      });
+    }
+
+    this.maxAttempts = options.maxAttempts ?? DEFAULT_VAULT_MAX_ATTEMPTS;
+    if (this.maxAttempts < 1 || !Number.isInteger(this.maxAttempts)) {
+      throw new TypeError("VaultSecretProvider: maxAttempts must be a positive integer");
+    }
+    this.initialBackoffMs = options.initialBackoffMs ?? DEFAULT_VAULT_INITIAL_BACKOFF_MS;
+    this.maxBackoffMs = options.maxBackoffMs ?? DEFAULT_VAULT_MAX_BACKOFF_MS;
+    this.sleep = options.sleep ?? defaultSleep;
   }
 
   /**
@@ -313,32 +448,26 @@ export class VaultSecretProvider implements SecretProviderAdapter {
    * Read the secret from Vault. Pulled into a separate method so the cache
    * fallback in `getSecret` reads as a single try/catch around the network
    * portion.
+   *
+   * Transient failures (caught exceptions, `429`, `5xx`) drive the
+   * bounded retry loop (DCJXEFE5); terminal statuses (`200`-`2xx`,
+   * `404`, `403`) short-circuit immediately. After `maxAttempts`
+   * transient failures the loop throws, which lets `getSecret` fall
+   * through to its `getStale` fallback.
    */
   private async fetchFromVault(ref: string): Promise<string> {
-    const token = await this.acquireToken(ref);
     const url = `${this.address}/v1/${this.kvMount}/data/${encodeKvPath(ref)}`;
-    let response: Awaited<ReturnType<VaultHttp>>;
-    try {
-      response = await this.http(url, {
-        method: "GET",
-        headers: { "x-vault-token": token },
-      });
-    } catch (cause) {
-      throw new SecretProviderError("vault", ref, "vault transport failure", { cause });
-    }
+    const response = await this.kvGetWithRetry(url, ref);
     if (response.status === 404) {
       throw new SecretNotFoundError("vault", ref);
     }
     if (response.status === 403) {
       // Drop the cached token and retry once. Vault occasionally invalidates
-      // tokens out-of-band (admin revoke, lease expired between operations).
+      // tokens out-of-band (admin revoke, lease expired between operations,
+      // Agent rotated the sink file between our reads).
       this.tokens.invalidate();
       try {
-        const retryToken = await this.acquireToken(ref);
-        const retry = await this.http(url, {
-          method: "GET",
-          headers: { "x-vault-token": retryToken },
-        });
+        const retry = await this.kvGetWithRetry(url, ref);
         if (retry.status === 404) {
           throw new SecretNotFoundError("vault", ref);
         }
@@ -360,6 +489,72 @@ export class VaultSecretProvider implements SecretProviderAdapter {
       throw new SecretProviderError("vault", ref, `vault read returned status ${response.status}`);
     }
     return extractKvValue(response, ref);
+  }
+
+  /**
+   * Issue a single `GET <kvUrl>` with the bounded transient-retry
+   * envelope. Returns the final response (which may be terminal-2xx /
+   * 403 / 404, all of which the caller handles). Throws
+   * `SecretProviderError` only after all attempts have failed for
+   * transient reasons.
+   */
+  private async kvGetWithRetry(
+    url: string,
+    ref: string,
+  ): Promise<VaultHttpResponse> {
+    let lastTransientError: unknown;
+    let lastTransientStatus: number | undefined;
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      const token = await this.acquireToken(ref);
+      let response: VaultHttpResponse;
+      try {
+        response = await this.http(url, {
+          method: "GET",
+          headers: { "x-vault-token": token },
+        });
+      } catch (cause) {
+        lastTransientError = cause;
+        if (attempt < this.maxAttempts) {
+          await this.sleep(this.backoffFor(attempt));
+          continue;
+        }
+        throw new SecretProviderError("vault", ref, "vault transport failure", { cause });
+      }
+      if (isTransientStatus(response.status)) {
+        lastTransientStatus = response.status;
+        if (attempt < this.maxAttempts) {
+          await this.sleep(this.backoffFor(attempt));
+          continue;
+        }
+        throw new SecretProviderError(
+          "vault",
+          ref,
+          `vault read returned status ${response.status} after ${this.maxAttempts} attempts`,
+        );
+      }
+      return response;
+    }
+    // The loop above always returns or throws; this branch is defensive
+    // so the type checker does not complain about a missing return.
+    if (lastTransientStatus !== undefined) {
+      throw new SecretProviderError(
+        "vault",
+        ref,
+        `vault read returned status ${lastTransientStatus} after ${this.maxAttempts} attempts`,
+      );
+    }
+    throw new SecretProviderError("vault", ref, "vault transport failure", {
+      cause: lastTransientError,
+    });
+  }
+
+  /**
+   * Backoff for the i-th attempt (1-indexed). Doubles between attempts
+   * starting from `initialBackoffMs`, capped at `maxBackoffMs`.
+   */
+  private backoffFor(attempt: number): number {
+    const grown = this.initialBackoffMs * 2 ** (attempt - 1);
+    return Math.min(grown, this.maxBackoffMs);
   }
 
   /**
@@ -427,6 +622,31 @@ async function extractKvValue(
     throw new SecretNotFoundError("vault", ref);
   }
   return value;
+}
+
+/**
+ * Closed set of HTTP statuses the retry loop treats as transient.
+ *
+ * The retry policy is conservative: it retries connection-level errors
+ * (caught as exceptions outside this function), `429` Too Many
+ * Requests, and `5xx` server errors. Every other status — `2xx`
+ * (terminal success), `403` (auth handled separately at the provider
+ * layer), `404` (`SecretNotFoundError`) — short-circuits immediately.
+ */
+function isTransientStatus(status: number): boolean {
+  if (status === 429) return true;
+  if (status >= 500 && status < 600) return true;
+  return false;
+}
+
+/**
+ * Default sleep used by the retry loop. Tests pass an instant sleep
+ * so the suite does not spend wall-clock time waiting.
+ */
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /**

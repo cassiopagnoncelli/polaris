@@ -155,10 +155,60 @@ longer. The default in-process cache TTL (5 min) is independent of the
 Vault token TTL; the two windows interact only via the degraded-health
 path below.
 
-The adapter does **not** support the Vault Agent sidecar pattern in
-this version. Services talk to Vault directly via HTTPS using the
-service-account JWT mounted into the pod. A future task may add Vault
-Agent if operational experience shows a need.
+### Vault Agent sidecar variant (DCJXEFE5)
+
+The adapter also supports the Vault Agent sidecar pattern. A
+co-located `vault agent` container runs alongside the Polaris
+service, exchanges the pod's SA JWT for a Vault client token, renews
+the lease on its own schedule, and writes the current token to a file
+on a shared `emptyDir` volume. The Polaris service reads the token
+from that file. It never sees the SA JWT and never calls
+`auth/.../login` itself.
+
+Activate via the `auth: "agent"` option on `createVaultProvider`
+(forwarded through the standard service config under
+`POLARIS_VAULT_AUTH=agent`). Default token-sink path is
+`/vault/secrets/token`; override with `agentTokenPath` /
+`POLARIS_VAULT_AGENT_TOKEN_PATH`. The default in-memory re-read
+interval is 30 seconds — long enough to avoid filesystem thrash,
+short enough that an Agent-driven rotation is picked up well inside
+one cache cycle of a typical 1-minute lease window.
+
+Trade-offs:
+
+| Axis | Direct K8s auth (default) | Agent sidecar |
+|---|---|---|
+| **K8s RBAC surface** | Each Polaris service-account is bound to a Vault auth-role | Only the Agent's service-account is bound; Polaris pods carry no auth-role binding |
+| **Container count** | 1 (Polaris only) | 2 (Polaris + Agent) per pod |
+| **Lease management** | Polaris adapter renews inline | Agent renews on its own schedule |
+| **Failure modes** | Token store collapsed to the in-process VaultTokenManager | Agent process can crash independently; pod-level readiness probe should include the Agent's `/v1/sys/health` mirror or the sink-file mtime |
+| **Sample wiring** | See the Kubernetes manifest snippet above | A `vault agent` container with `auto_auth.method.kubernetes` + `sink.file` pointing at the shared volume |
+
+Operators picking direct K8s auth keep moving parts to a minimum;
+operators picking the Agent variant get a simpler authz policy at the
+cost of a sidecar per pod.
+
+## Bounded transient-retry inside the adapter (DCJXEFE5)
+
+Both auth variants share the same bounded-retry envelope around
+the KV read. Connection failures, `429`, and `5xx` responses retry up
+to `maxAttempts` (default `3`) with exponential backoff that doubles
+from `initialBackoffMs` (default `100 ms`) capped at `maxBackoffMs`
+(default `500 ms`). Terminal statuses (`2xx`, `403`, `404`) never
+retry — `404` propagates as `SecretNotFoundError`; `403` flips into
+the inline re-auth path documented above.
+
+After exhaustion, the adapter falls through to the same stale-cache
+fallback that the no-retry path has used since P11-004: if a previous
+read of the same ref exists in cache, the adapter returns it and the
+readiness probe flips to `degraded`. This preserves end-to-end
+delivery across short Vault blips while operators see the condition
+on the probe.
+
+The defaults (3 attempts, 100→200ms backoff) keep the worst-case
+wait at roughly 300 ms before falling back — bounded enough that the
+calling delivery does not look hung. Override via `maxAttempts` /
+`initialBackoffMs` / `maxBackoffMs` on `createVaultProvider`.
 
 ## In-process cache + degraded health
 
@@ -296,9 +346,6 @@ with no implementation; it documents the extension contract inline.
 
 ## Known limits
 
-- **Vault Agent sidecar pattern is not supported.** Services talk to
-  Vault directly using the pod's SA JWT. A future task may add Agent
-  support if operational experience shows a clear win.
 - **No CLI flush command.** Operators rotate by changing the value in
   Vault and rolling the service replicas; the in-process cache is
   per-replica, so a rolling restart drops every cached entry.
@@ -307,7 +354,3 @@ with no implementation; it documents the extension contract inline.
   multiple KV mounts simultaneously without re-instantiating the
   provider, which is intentional: cross-mount reads conflate
   audit trails and complicate the role binding.
-- **No automatic backoff on Vault outage.** The adapter throws
-  immediately on transport failure; the caller's retry policy
-  decides what happens next. Cached entries continue serving until
-  they expire.
