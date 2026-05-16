@@ -28,7 +28,13 @@ import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinati
 
 import { type BuildDelivererOptions, buildMetaCapiDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
-import { checkoutStartedMapper, paymentApprovedMapper, userIdentifiedMapper } from "./mapper.js";
+import {
+  checkoutStartedMapper,
+  paymentApprovedMapper,
+  signupCompletedMapper,
+  subscriptionRenewedMapper,
+  userIdentifiedMapper,
+} from "./mapper.js";
 import type { MetaCapiPayload } from "./types.js";
 
 /**
@@ -53,6 +59,8 @@ const MAPPERS: MapperMap<MetaCapiPayload> = Object.freeze({
   "checkout.started": checkoutStartedMapper,
   "payment.approved": paymentApprovedMapper,
   "user.identified": userIdentifiedMapper,
+  "signup.completed": signupCompletedMapper,
+  "subscription.renewed": subscriptionRenewedMapper,
 });
 
 /** Options accepted by `createMetaCapiDescriptor`. */

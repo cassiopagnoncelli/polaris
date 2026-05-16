@@ -55,6 +55,8 @@ type CustomDataBuilder = {
 export const META_EVENT_PURCHASE = "Purchase" as const;
 export const META_EVENT_INITIATE_CHECKOUT = "InitiateCheckout" as const;
 export const META_EVENT_LEAD = "Lead" as const;
+export const META_EVENT_COMPLETE_REGISTRATION = "CompleteRegistration" as const;
+export const META_EVENT_SUBSCRIBE = "Subscribe" as const;
 
 /**
  * Closed-set mapping from canonical event name → Meta event name. The
@@ -64,6 +66,8 @@ export const CANONICAL_TO_META_EVENT = Object.freeze({
   "checkout.started": META_EVENT_INITIATE_CHECKOUT,
   "payment.approved": META_EVENT_PURCHASE,
   "user.identified": META_EVENT_LEAD,
+  "signup.completed": META_EVENT_COMPLETE_REGISTRATION,
+  "subscription.renewed": META_EVENT_SUBSCRIBE,
 }) as Readonly<Record<string, string>>;
 
 // ---------------------------------------------------------------------------
@@ -142,6 +146,68 @@ export const userIdentifiedMapper: Mapper<MetaCapiPayload> = (
   ctx: MapperContext,
 ): MapperResult<MetaCapiPayload> => {
   return buildResult(ctx.normalized, META_EVENT_LEAD, {});
+};
+
+/**
+ * `signup.completed` → `CompleteRegistration`.
+ *
+ * Pulls `predicted_ltv_minor` + `currency` off `properties` when present;
+ * Meta uses `predicted_ltv` on `CompleteRegistration` events to inform
+ * the lookalike-modelling pipeline. Most signup events do not carry a
+ * value (registrations without a paid component); v1 leaves the custom
+ * data empty in that case rather than fabricating a placeholder.
+ */
+export const signupCompletedMapper: Mapper<MetaCapiPayload> = (
+  ctx: MapperContext,
+): MapperResult<MetaCapiPayload> => {
+  const props = ctx.normalized.properties;
+  const currency = readString(props, "currency");
+  const predictedLtvMinor = readInteger(props, "predicted_ltv_minor");
+
+  const customData: CustomDataBuilder = {};
+  if (currency !== null && predictedLtvMinor !== null) {
+    customData.currency = currency;
+    const ltv = safeMinorToMajor(predictedLtvMinor, currency);
+    if (ltv !== undefined) customData.predicted_ltv = ltv;
+  }
+
+  return buildResult(ctx.normalized, META_EVENT_COMPLETE_REGISTRATION, customData);
+};
+
+/**
+ * `subscription.renewed` → `Subscribe`.
+ *
+ * The renewal carries the recurring amount as `amount_minor` (or
+ * `amount` for legacy producers) plus `currency`. `predicted_ltv` —
+ * when supplied — is forwarded to Meta's recurring-revenue model. The
+ * order_id slot carries the subscription id so Meta receives a stable
+ * vendor-side identifier per renewal cycle (Meta's wire `event_id`
+ * still uses the canonical envelope id for cross-channel dedupe).
+ */
+export const subscriptionRenewedMapper: Mapper<MetaCapiPayload> = (
+  ctx: MapperContext,
+): MapperResult<MetaCapiPayload> => {
+  const props = ctx.normalized.properties;
+  const currency = readString(props, "currency");
+  const amountMinor = readInteger(props, "amount_minor") ?? readInteger(props, "amount");
+  const predictedLtvMinor = readInteger(props, "predicted_ltv_minor");
+  const subscriptionId = readString(props, "subscription_id");
+
+  const customData: CustomDataBuilder = {};
+  if (currency !== null && amountMinor !== null) {
+    customData.currency = currency;
+    const value = safeMinorToMajor(amountMinor, currency);
+    if (value !== undefined) customData.value = value;
+  } else if (currency !== null) {
+    customData.currency = currency;
+  }
+  if (currency !== null && predictedLtvMinor !== null) {
+    const ltv = safeMinorToMajor(predictedLtvMinor, currency);
+    if (ltv !== undefined) customData.predicted_ltv = ltv;
+  }
+  if (subscriptionId !== null) customData.order_id = subscriptionId;
+
+  return buildResult(ctx.normalized, META_EVENT_SUBSCRIBE, customData);
 };
 
 // ---------------------------------------------------------------------------

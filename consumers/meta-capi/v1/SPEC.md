@@ -13,16 +13,16 @@
 ## Supported canonical events
 
 ```text
-checkout.started   →  InitiateCheckout
-payment.approved   →  Purchase
-user.identified    →  Lead
+checkout.started       →  InitiateCheckout
+payment.approved       →  Purchase
+user.identified        →  Lead
+signup.completed       →  CompleteRegistration
+subscription.renewed   →  Subscribe
 ```
 
 Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
 
 ```text
-signup.completed       not in v1 (future minor)
-subscription.renewed   not in v1 (future minor)
 support.ticket.opened  Meta has no canonical equivalent; never delivered
 polaris.diagnostics.*  internal-only platform telemetry; never delivered
 ```
@@ -70,6 +70,30 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `context.*` | `user_data.client_*` + `event_source_url` | same as checkout | see above |
 
 No `custom_data` is populated — `Lead` is a lightweight intent signal.
+
+### `signup.completed` → `CompleteRegistration`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `identity.*` | `user_data.*` | same as checkout | see above |
+| `context.*` | `user_data.client_*` + `event_source_url` | same as checkout | see above |
+| `properties.currency` | `custom_data.currency` | none | ISO 4217 |
+| `properties.predicted_ltv_minor` | `custom_data.predicted_ltv` | `minorToMajor` | Optional. Only populated when both `currency` and `predicted_ltv_minor` are present |
+
+### `subscription.renewed` → `Subscribe`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `identity.*` | `user_data.*` | same as checkout | see above |
+| `context.*` | `user_data.client_*` + `event_source_url` | same as checkout | see above |
+| `properties.amount_minor` (or `amount`) | `custom_data.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
+| `properties.currency` | `custom_data.currency` | none | ISO 4217 |
+| `properties.predicted_ltv_minor` | `custom_data.predicted_ltv` | `minorToMajor` | Optional |
+| `properties.subscription_id` | `custom_data.order_id` | none | Stable per-cycle id on the renewal |
 
 ## Normalization rules
 

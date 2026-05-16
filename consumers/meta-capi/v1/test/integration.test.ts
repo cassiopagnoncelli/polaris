@@ -261,6 +261,88 @@ describe("meta-capi v1 integration (handleEvent driven)", () => {
     expect(records.snapshot()).toHaveLength(0);
   });
 
+  it("delivers a signup.completed event as CompleteRegistration", async () => {
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"events_received":1,"fbtrace_id":"trace_signup"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance();
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+    const secrets = makeSecretResolver({ META_CAPI_SECRET: SECRET });
+
+    const descriptor = createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      secrets,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_meta_signup",
+        event: "signup.completed",
+        properties: { currency: "USD", predicted_ltv_minor: 9999 },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.data[0].event_name).toBe("CompleteRegistration");
+    expect(body.data[0].custom_data).toEqual({ currency: "USD", predicted_ltv: 99.99 });
+  });
+
+  it("delivers a subscription.renewed event as Subscribe with value + ltv + subscription order_id", async () => {
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"events_received":1,"fbtrace_id":"trace_sub"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance();
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+    const secrets = makeSecretResolver({ META_CAPI_SECRET: SECRET });
+
+    const descriptor = createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      secrets,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_meta_sub",
+        event: "subscription.renewed",
+        properties: {
+          subscription_id: "sub_42",
+          amount_minor: 1999,
+          currency: "USD",
+          predicted_ltv_minor: 99999,
+        },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.data[0].event_name).toBe("Subscribe");
+    expect(body.data[0].custom_data).toEqual({
+      currency: "USD",
+      value: 19.99,
+      predicted_ltv: 999.99,
+      order_id: "sub_42",
+    });
+  });
+
   it("maps a 401 to failed_permanent + auth and writes a dlq_records row", async () => {
     const { fetch } = makeFetch(() => new Response("nope", { status: 401 }));
     const instance = fixtureDestinationInstance();

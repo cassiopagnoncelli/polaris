@@ -1,0 +1,31 @@
+{
+  "event_id": "evt_01HZZB1YJK0M2R8D8VYV4QH4ZP",
+  "event": "signup.completed",
+  "schema_version": 1,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:00.500Z",
+  "source": { "id": "storefront-web", "type": "frontend" },
+  "identity": {
+    "customer_id": "cust_12345",
+    "anonymous_id": "anon_abc"
+  },
+  "context": {
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US",
+    "page": {
+      "url": "https://storefront.example/signup/complete",
+      "path": "/signup/complete",
+      "title": "Welcome",
+      "referrer": "https://storefront.example/signup"
+    }
+  },
+  "properties": {
+    "registration_method": "email",
+    "currency": "USD",
+    "predicted_ltv_minor": 9999
+  },
+  "consent": { "marketing": true, "analytics": true, "personalization": true }
+}

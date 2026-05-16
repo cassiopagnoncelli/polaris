@@ -107,6 +107,14 @@ export interface MetaCapiCustomData {
   readonly content_ids?: readonly string[];
   readonly content_type?: string;
   readonly num_items?: number;
+  /**
+   * Predicted lifetime value (decimal, in `currency` major units). Meta
+   * canonically accepts this on subscription / lead-scoring events;
+   * the Subscribe and CompleteRegistration mappers populate it when
+   * the canonical envelope carries `predicted_ltv` or
+   * `predicted_ltv_minor`.
+   */
+  readonly predicted_ltv?: number;
 }
 
 /**

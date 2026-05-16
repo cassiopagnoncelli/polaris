@@ -24,10 +24,14 @@ import {
   CANONICAL_TO_META_EVENT,
   checkoutStartedMapper,
   inferActionSource,
+  META_EVENT_COMPLETE_REGISTRATION,
   META_EVENT_INITIATE_CHECKOUT,
   META_EVENT_LEAD,
   META_EVENT_PURCHASE,
+  META_EVENT_SUBSCRIBE,
   paymentApprovedMapper,
+  signupCompletedMapper,
+  subscriptionRenewedMapper,
   userIdentifiedMapper,
 } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
@@ -167,6 +171,106 @@ describe("paymentApprovedMapper", () => {
   });
 });
 
+describe("signupCompletedMapper", () => {
+  it("returns CompleteRegistration with dedupe_key = event_id", () => {
+    const ctx = fixtureMapperContext({ event: "signup.completed", properties: {} });
+    const result = signupCompletedMapper(ctx);
+    expect(result.kind).toBe("mapped");
+    if (result.kind !== "mapped") return;
+    expect(result.payload.event_name).toBe(META_EVENT_COMPLETE_REGISTRATION);
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+    expect(result.payload.event_id).toBe(ctx.normalized.event_id);
+  });
+
+  it("omits custom_data when no predicted_ltv / currency is supplied", () => {
+    const ctx = fixtureMapperContext({ event: "signup.completed", properties: {} });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data).toBeUndefined();
+  });
+
+  it("populates currency + predicted_ltv (minor → major) when both are present", () => {
+    const ctx = fixtureMapperContext({
+      event: "signup.completed",
+      properties: { currency: "USD", predicted_ltv_minor: 9999 },
+    });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data).toEqual({
+      currency: "USD",
+      predicted_ltv: 99.99,
+    });
+  });
+
+  it("ignores predicted_ltv_minor when currency is absent", () => {
+    const ctx = fixtureMapperContext({
+      event: "signup.completed",
+      properties: { predicted_ltv_minor: 9999 },
+    });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    // Per the spec: both currency + predicted_ltv must be present for the
+    // ltv slot to populate.
+    expect(result.payload.custom_data).toBeUndefined();
+  });
+});
+
+describe("subscriptionRenewedMapper", () => {
+  it("returns Subscribe with currency + value + order_id from subscription_id", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: {
+        currency: "USD",
+        amount_minor: 1999,
+        subscription_id: "sub_abc",
+      },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.event_name).toBe(META_EVENT_SUBSCRIBE);
+    expect(result.payload.custom_data).toEqual({
+      currency: "USD",
+      value: 19.99,
+      order_id: "sub_abc",
+    });
+  });
+
+  it("accepts `amount` as an alias for `amount_minor` (legacy producers)", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { amount: 1999, currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.value).toBe(19.99);
+  });
+
+  it("forwards predicted_ltv when supplied alongside currency", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: {
+        currency: "USD",
+        amount_minor: 1999,
+        predicted_ltv_minor: 99999,
+      },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.predicted_ltv).toBe(999.99);
+  });
+
+  it("emits currency-only custom_data when amount is missing", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data).toEqual({ currency: "USD" });
+    expect(result.payload.custom_data?.value).toBeUndefined();
+  });
+});
+
 describe("userIdentifiedMapper", () => {
   it("returns Lead with no custom_data", () => {
     const ctx = fixtureMapperContext({ event: "user.identified", properties: {} });
@@ -246,10 +350,12 @@ describe("inferActionSource", () => {
 });
 
 describe("CANONICAL_TO_META_EVENT", () => {
-  it("pins the v1 event matrix", () => {
+  it("pins the v1.x event matrix", () => {
     expect(CANONICAL_TO_META_EVENT["checkout.started"]).toBe(META_EVENT_INITIATE_CHECKOUT);
     expect(CANONICAL_TO_META_EVENT["payment.approved"]).toBe(META_EVENT_PURCHASE);
     expect(CANONICAL_TO_META_EVENT["user.identified"]).toBe(META_EVENT_LEAD);
+    expect(CANONICAL_TO_META_EVENT["signup.completed"]).toBe(META_EVENT_COMPLETE_REGISTRATION);
+    expect(CANONICAL_TO_META_EVENT["subscription.renewed"]).toBe(META_EVENT_SUBSCRIBE);
   });
 });
 

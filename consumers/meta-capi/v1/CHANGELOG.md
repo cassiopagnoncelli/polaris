@@ -1,5 +1,12 @@
 # `@polaris/consumer-meta-capi-v1` changelog
 
+## v1.1.0 — additive event-matrix expansion (3BBTUM7W)
+
+- Added `signup.completed` → `CompleteRegistration` mapper. Custom data populates `currency` + `predicted_ltv` (minor → major) when both are present on the canonical envelope; otherwise empty.
+- Added `subscription.renewed` → `Subscribe` mapper. Custom data populates `currency`, `value` (from `amount_minor` / legacy `amount`), `predicted_ltv`, and `order_id` (from `subscription_id`).
+- Extended `MetaCapiCustomData.predicted_ltv?: number` slot — additive on the wire shape; existing mappers ignore it.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.0.0 — initial release (P9-003)
 
 - First real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001).
