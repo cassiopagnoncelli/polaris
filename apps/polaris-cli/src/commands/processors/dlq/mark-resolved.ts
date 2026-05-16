@@ -65,9 +65,7 @@ export const processorsDlqMarkResolvedCommand: CommandDefinition = {
   },
 };
 
-export function buildProcessorsDlqMarkResolvedRunner(
-  hooks: ProcessorDlqMarkResolvedHooks = {},
-) {
+export function buildProcessorsDlqMarkResolvedRunner(hooks: ProcessorDlqMarkResolvedHooks = {}) {
   const openStore = hooks.openStore ?? defaultStore;
   return async function runner(args: MarkResolvedArgs, ctx: CommandContext): Promise<undefined> {
     const id = args.dlqId.trim();

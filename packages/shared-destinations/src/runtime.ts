@@ -484,8 +484,7 @@ async function processOne<Payload>(
   // every row. `recordOutcome` only forwards it to `recordDelivery`
   // when defined, so omitting `consumerBuildVersion` keeps the column
   // NULL for callers that did not configure the build version.
-  const outcomeBuildVersion =
-    consumerBuildVersion !== undefined ? { consumerBuildVersion } : {};
+  const outcomeBuildVersion = consumerBuildVersion !== undefined ? { consumerBuildVersion } : {};
   const baseLabels = {
     vendor: identity.vendor,
     consumer_version: identity.consumerVersion,

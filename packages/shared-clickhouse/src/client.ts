@@ -22,7 +22,7 @@ import {
 import { ClickHouseConfigError, ClickHouseConnectionError } from "./errors.js";
 import { createHealthChecker, type HealthChecker } from "./health.js";
 import { createIngestLogReader, type IngestLogReader } from "./ingest-log.js";
-import { createClickHouseHealthProbes, type ClickHouseHealthProbes } from "./probes/index.js";
+import { type ClickHouseHealthProbes, createClickHouseHealthProbes } from "./probes/index.js";
 import { createProjectionReaders, type ProjectionReaders } from "./projections/index.js";
 import { createOperatorRaw, type OperatorRaw } from "./raw.js";
 import { createReplayReader, type ReplayReader } from "./replay.js";

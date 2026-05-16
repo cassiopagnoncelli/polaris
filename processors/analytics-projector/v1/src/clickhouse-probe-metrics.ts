@@ -107,10 +107,7 @@ export class ClickHouseProbeMetrics {
   }
 }
 
-function sampleKey(
-  name: string,
-  labels: Readonly<Record<string, string | number>>,
-): string {
+function sampleKey(name: string, labels: Readonly<Record<string, string | number>>): string {
   const keys = Object.keys(labels).sort();
   const parts = keys.map((k) => `${k}=${labels[k]}`);
   return `${name}|${parts.join(",")}`;

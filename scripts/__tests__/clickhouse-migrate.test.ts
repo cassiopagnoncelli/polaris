@@ -353,7 +353,8 @@ describe("expandClientMacros", () => {
 
   it("expands every occurrence in the input", () => {
     delete process.env.POLARIS_CLICKHOUSE_REPLICATED;
-    const sql = "CREATE TABLE a (x UInt32) ENGINE = {replicated}MergeTree;\n" +
+    const sql =
+      "CREATE TABLE a (x UInt32) ENGINE = {replicated}MergeTree;\n" +
       "CREATE TABLE b (x UInt32) ENGINE = {replicated}MergeTree;";
     expect(expandClientMacros(sql)).toBe(
       "CREATE TABLE a (x UInt32) ENGINE = MergeTree;\n" +

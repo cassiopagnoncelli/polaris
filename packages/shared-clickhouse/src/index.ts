@@ -37,10 +37,6 @@ export {
 export type { HealthChecker } from "./health.js";
 export type { IngestLogReader } from "./ingest-log.js";
 export type {
-  EventDailyCountsReader,
-  ProjectionReaders,
-} from "./projections/index.js";
-export type {
   ClickHouseHealthProbes,
   KafkaIngestionLagInput,
   KafkaIngestionLagRow,
@@ -55,6 +51,10 @@ export {
   buildPartsSummarySql,
   createClickHouseHealthProbes,
 } from "./probes/index.js";
+export type {
+  EventDailyCountsReader,
+  ProjectionReaders,
+} from "./projections/index.js";
 export type { OperatorRaw } from "./raw.js";
 export { ESCAPE_HATCH_METRIC } from "./raw.js";
 // ---------------------------------------------------------------------------

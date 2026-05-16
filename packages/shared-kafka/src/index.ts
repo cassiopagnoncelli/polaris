@@ -117,8 +117,8 @@ export {
   type KafkaHooks,
 } from "./hooks.js";
 export {
-  createKafkaJsConsumerDriver,
   type CreateKafkaJsConsumerDriverOptions,
+  createKafkaJsConsumerDriver,
   OFFSET_RANGE_TERMINATION_REASONS,
   type OffsetRangeBatch,
   type OffsetRangeBatchMessage,

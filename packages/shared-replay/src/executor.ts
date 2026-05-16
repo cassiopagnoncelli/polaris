@@ -398,8 +398,14 @@ export type ReplayJobStatusValue = (typeof REPLAY_JOB_STATUS_VALUES)[number];
  * emits these gauges per-row.
  */
 export interface ReplayExecutorMetricsSink {
-  observeProgress(input: { readonly replay_job_id: string; readonly progress_offset: number }): void;
-  observeStatus(input: { readonly replay_job_id: string; readonly status: ReplayJobStatusValue }): void;
+  observeProgress(input: {
+    readonly replay_job_id: string;
+    readonly progress_offset: number;
+  }): void;
+  observeStatus(input: {
+    readonly replay_job_id: string;
+    readonly status: ReplayJobStatusValue;
+  }): void;
 }
 
 const NOOP_METRICS_SINK: ReplayExecutorMetricsSink = {

@@ -111,7 +111,14 @@ export interface ClickhouseRebuildStore {
  * executor treats that as an `aborted` outcome.
  */
 export interface ClickhouseRebuildStoreStatus {
-  readonly status: "pending" | "planning" | "dry_run" | "running" | "completed" | "failed" | "aborted";
+  readonly status:
+    | "pending"
+    | "planning"
+    | "dry_run"
+    | "running"
+    | "completed"
+    | "failed"
+    | "aborted";
 }
 
 /**
@@ -269,7 +276,8 @@ export async function executeClickhouseRebuild(
 
   // ---- drive the rebuild ---------------------------------------------
   const partitionLabels = input.plan.partitions.map((p) => p.partition);
-  const partitionOutcomes: Array<{ readonly partition: string; readonly rows_inserted: number }> = [];
+  const partitionOutcomes: Array<{ readonly partition: string; readonly rows_inserted: number }> =
+    [];
 
   try {
     await input.driver.clearSlice({
@@ -329,9 +337,7 @@ export async function executeClickhouseRebuild(
   };
 }
 
-function sumRowsInserted(
-  parts: ReadonlyArray<{ readonly rows_inserted: number }>,
-): number {
+function sumRowsInserted(parts: ReadonlyArray<{ readonly rows_inserted: number }>): number {
   let total = 0;
   for (const p of parts) total += p.rows_inserted;
   return total;

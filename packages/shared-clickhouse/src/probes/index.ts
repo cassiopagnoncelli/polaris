@@ -96,17 +96,13 @@ export interface ClickHouseHealthProbes {
    * Per-view state row for every materialized view in `database`. Used by
    * the analytics-projector to emit `polaris_clickhouse_mv_state{view,state}`.
    */
-  materializedViewStates(
-    input?: MaterializedViewStatesInput,
-  ): Promise<MaterializedViewStateRow[]>;
+  materializedViewStates(input?: MaterializedViewStatesInput): Promise<MaterializedViewStateRow[]>;
   /**
    * Per-(`database`,`table`) maximum Kafka-Engine consumer lag in seconds.
    * Returns one row per Kafka-Engine table seen by the consumer; tables with
    * no active consumer (e.g. on cold start) are omitted.
    */
-  kafkaIngestionLag(
-    input?: KafkaIngestionLagInput,
-  ): Promise<KafkaIngestionLagRow[]>;
+  kafkaIngestionLag(input?: KafkaIngestionLagInput): Promise<KafkaIngestionLagRow[]>;
 }
 
 export interface PartsSummaryInput {

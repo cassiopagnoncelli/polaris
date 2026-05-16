@@ -41,6 +41,7 @@
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
  */
 
+import { randomUUID } from "node:crypto";
 import { loadConfigWithDefaults, redpandaEnvSchema } from "@polaris/shared-config";
 import {
   createKafkaClient,
@@ -63,7 +64,6 @@ import {
   ReplayPlanError,
 } from "@polaris/shared-replay";
 import type { Command } from "commander";
-import { randomUUID } from "node:crypto";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   completeReplayJob,

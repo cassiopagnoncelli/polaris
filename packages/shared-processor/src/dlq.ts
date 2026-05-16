@@ -184,7 +184,11 @@ function stringifyHeaders(headers: MessageHeaders): Record<string, string> {
   for (const [key, value] of Object.entries(headers)) {
     if (typeof value === "string") {
       out[key] = value;
-    } else if (value !== undefined && value !== null && typeof (value as Buffer).toString === "function") {
+    } else if (
+      value !== undefined &&
+      value !== null &&
+      typeof (value as Buffer).toString === "function"
+    ) {
       out[key] = (value as Buffer).toString("utf8");
     } else {
       out[key] = "";

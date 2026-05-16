@@ -338,7 +338,12 @@ describe("operator profile: ClickHouse health probes", () => {
 
   it("materializedViewStates issues a system.view_refreshes query and decodes rows", async () => {
     setQueryRows([
-      { database: "polaris", view: "mv_raw_to_event_daily_counts", state: "Running", last_exception: "" },
+      {
+        database: "polaris",
+        view: "mv_raw_to_event_daily_counts",
+        state: "Running",
+        last_exception: "",
+      },
       { database: "polaris", view: "mv_broken", state: "failed", last_exception: "Cannot insert" },
     ]);
 
@@ -397,8 +402,12 @@ describe("operator profile: ClickHouse health probes", () => {
       role: "operator",
       credential: { username: "polaris_operator", password: "p" },
     });
-    await expect(client.probes.partsSummary({ limit: 0 })).rejects.toThrow(/limit must be an integer/);
-    await expect(client.probes.partsSummary({ limit: 10_001 })).rejects.toThrow(/limit must be an integer/);
+    await expect(client.probes.partsSummary({ limit: 0 })).rejects.toThrow(
+      /limit must be an integer/,
+    );
+    await expect(client.probes.partsSummary({ limit: 10_001 })).rejects.toThrow(
+      /limit must be an integer/,
+    );
   });
 });
 

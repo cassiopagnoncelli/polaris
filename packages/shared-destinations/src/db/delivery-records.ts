@@ -146,11 +146,7 @@ export interface DeliveryRecordsTable {
    * from `getBuildMetadata()`. Nullable to keep rows written before the
    * migration honest.
    */
-  consumer_build_version: ColumnType<
-    string | null,
-    string | null | undefined,
-    string | null
-  >;
+  consumer_build_version: ColumnType<string | null, string | null | undefined, string | null>;
   normalize_version: string;
   mapper_version: string;
   deliverer_version: string;

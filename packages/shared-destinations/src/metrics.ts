@@ -166,7 +166,10 @@ export class DestinationMetrics {
     string,
     {
       readonly buckets: readonly number[];
-      readonly series: Map<string, { readonly labels: Record<string, string | number>; state: HistogramSeries }>;
+      readonly series: Map<
+        string,
+        { readonly labels: Record<string, string | number>; state: HistogramSeries }
+      >;
     }
   >();
 

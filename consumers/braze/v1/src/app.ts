@@ -157,7 +157,8 @@ export async function buildBrazeApp(options: BuildAppOptions): Promise<BuiltBraz
 
   const runtime = createDestinationConsumer({
     descriptor,
-    consumerBuildVersion: config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
+    consumerBuildVersion:
+      config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
     producer,
     instances,

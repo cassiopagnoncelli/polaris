@@ -302,9 +302,7 @@ export class VaultSecretProvider implements SecretProviderAdapter {
     } else if (authMode === "agent") {
       this.tokens = new VaultAgentTokenSource({
         tokenPath: options.agentTokenPath ?? DEFAULT_VAULT_AGENT_TOKEN_PATH,
-        ...(options.agentTokenReader !== undefined
-          ? { readToken: options.agentTokenReader }
-          : {}),
+        ...(options.agentTokenReader !== undefined ? { readToken: options.agentTokenReader } : {}),
         ...(options.agentTokenRereadIntervalMs !== undefined
           ? { rereadIntervalMs: options.agentTokenRereadIntervalMs }
           : {}),
@@ -498,10 +496,7 @@ export class VaultSecretProvider implements SecretProviderAdapter {
    * `SecretProviderError` only after all attempts have failed for
    * transient reasons.
    */
-  private async kvGetWithRetry(
-    url: string,
-    ref: string,
-  ): Promise<VaultHttpResponse> {
+  private async kvGetWithRetry(url: string, ref: string): Promise<VaultHttpResponse> {
     let lastTransientError: unknown;
     let lastTransientStatus: number | undefined;
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {

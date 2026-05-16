@@ -100,9 +100,7 @@ export function buildKafkaReplaySource(
       const fromMs = Date.parse(chunk.from);
       const toMs = Date.parse(chunk.to);
       if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
-        throw new Error(
-          `replay chunk timestamp parse failed: from=${chunk.from} to=${chunk.to}`,
-        );
+        throw new Error(`replay chunk timestamp parse failed: from=${chunk.from} to=${chunk.to}`);
       }
 
       const partitionRanges = await options.fetchOffsetsForWindow({

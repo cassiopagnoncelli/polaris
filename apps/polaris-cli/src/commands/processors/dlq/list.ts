@@ -81,8 +81,10 @@ export function buildProcessorsDlqListRunner(hooks: ProcessorDlqListHooks = {}) 
     }
     const filter: ListProcessorDlqRecordsFilter = {};
     if (args.reason !== undefined) (filter as { reason?: string }).reason = args.reason;
-    if (args.since !== undefined) (filter as { since?: Date }).since = parseIsoOrThrow(args.since, "--since");
-    if (args.until !== undefined) (filter as { until?: Date }).until = parseIsoOrThrow(args.until, "--until");
+    if (args.since !== undefined)
+      (filter as { since?: Date }).since = parseIsoOrThrow(args.since, "--since");
+    if (args.until !== undefined)
+      (filter as { until?: Date }).until = parseIsoOrThrow(args.until, "--until");
     if (args.includeResolved !== undefined) {
       (filter as { includeResolved?: boolean }).includeResolved = args.includeResolved;
     }
@@ -154,7 +156,8 @@ function emit(ctx: CommandContext, rows: readonly ProcessorDlqRecord[]): void {
 
 function humanTable(rows: readonly ProcessorDlqRecord[]): string {
   if (rows.length === 0) return "No DLQ rows.\n";
-  const header = "PUBLISHED_AT          DLQ_ID                EVENT             ATTEMPTS REASON              RESOLVED";
+  const header =
+    "PUBLISHED_AT          DLQ_ID                EVENT             ATTEMPTS REASON              RESOLVED";
   const lines = [header];
   for (const r of rows) {
     lines.push(

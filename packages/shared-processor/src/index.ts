@@ -42,11 +42,6 @@ export {
   type ProcessorRetryReason,
 } from "./classify.js";
 export {
-  type ProcessorDlqEnvelopeMetadata,
-  type PublishToDlqInput,
-  publishToDlq,
-} from "./dlq.js";
-export {
   createKyselyProcessorDlqRecordRepository,
   InMemoryProcessorDlqRecordRepository,
   type InMemoryProcessorDlqRecordRepositoryOptions,
@@ -60,6 +55,11 @@ export {
   type ProcessorDlqRecordsTable,
   type RecordProcessorDlqInput,
 } from "./db/processor-dlq-records.js";
+export {
+  type ProcessorDlqEnvelopeMetadata,
+  type PublishToDlqInput,
+  publishToDlq,
+} from "./dlq.js";
 export {
   type ProcessorIdentity,
   type ProcessorLogContextInput,

@@ -385,10 +385,7 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
   };
 }
 
-function renderOutcomeHuman(
-  jobId: string,
-  outcome: ClickhouseRebuildOutcome,
-): string {
+function renderOutcomeHuman(jobId: string, outcome: ClickhouseRebuildOutcome): string {
   const lines = [
     `clickhouse_rebuild_job_id ${jobId}`,
     `status                    ${outcome.status}`,

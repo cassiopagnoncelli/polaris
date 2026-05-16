@@ -1,11 +1,5 @@
 export { EnvSecretProvider, type EnvSecretProviderOptions } from "./env.js";
 export {
-  DEFAULT_AGENT_REREAD_INTERVAL_MS,
-  VaultAgentTokenSource,
-  type VaultAgentTokenSourceOptions,
-} from "./vault-agent-token-source.js";
-export type { VaultTokenSource } from "./vault-token-manager.js";
-export {
   createVaultProvider,
   DEFAULT_K8S_SA_TOKEN_PATH,
   DEFAULT_VAULT_AGENT_TOKEN_PATH,
@@ -19,4 +13,10 @@ export {
   type VaultProviderOptions,
   VaultSecretProvider,
 } from "./vault.js";
+export {
+  DEFAULT_AGENT_REREAD_INTERVAL_MS,
+  VaultAgentTokenSource,
+  type VaultAgentTokenSourceOptions,
+} from "./vault-agent-token-source.js";
+export type { VaultTokenSource } from "./vault-token-manager.js";
 // AWS Secrets Manager slot is reserved. See ./aws-secrets-manager.ts.

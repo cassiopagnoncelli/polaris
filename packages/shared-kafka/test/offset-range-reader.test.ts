@@ -351,9 +351,7 @@ describe("readOffsetRange — partition reassignment mid-read", () => {
   it("aborts cleanly when the driver delivers a batch from a different topic", async () => {
     // The same defensive check fires if a misconfigured driver delivers
     // a batch from another topic (subscribe leak).
-    const goodBatch = makeBatch("raw.events", 0, 10, [
-      makeMessage({ offset: 0, eventId: "good" }),
-    ]);
+    const goodBatch = makeBatch("raw.events", 0, 10, [makeMessage({ offset: 0, eventId: "good" })]);
     const otherTopic = makeBatch("analytics.events", 0, 10, [
       makeMessage({ offset: 0, eventId: "leak" }),
     ]);

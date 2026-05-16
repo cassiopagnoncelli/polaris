@@ -157,7 +157,8 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
 
   const runtime = createDestinationConsumer({
     descriptor,
-    consumerBuildVersion: config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
+    consumerBuildVersion:
+      config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
     producer,
     instances,

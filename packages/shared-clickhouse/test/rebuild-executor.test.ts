@@ -70,9 +70,9 @@ class RecordingStore {
 
   constructor(
     private readonly behavior: {
-      markRunning?: () => Promise<
-        { readonly status: "pending" | "running" | "aborted" | "completed" } | null
-      >;
+      markRunning?: () => Promise<{
+        readonly status: "pending" | "running" | "aborted" | "completed";
+      } | null>;
     } = {},
   ) {}
 

@@ -49,9 +49,9 @@ export type {
 export {
   buildProduceRecord,
   executeReplay,
-  matchesPlanScope,
   METRIC_REPLAY_JOB_PROGRESS_OFFSET,
   METRIC_REPLAY_JOB_STATUS,
+  matchesPlanScope,
   REPLAY_EXECUTOR_REFUSAL_CODES,
   REPLAY_HEADER_FLAG,
   REPLAY_HEADER_JOB_ID,

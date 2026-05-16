@@ -72,13 +72,12 @@ export const processorsDlqRetryCommand: CommandDefinition = {
         "Republish a processor DLQ row's payload back to its source topic and mark the row resolved.",
       )
       .option("--note <text>", "Operator-supplied resolution note (<=1024 chars).")
-      .option("--dry-run", "Plan only: look up the row, validate the retry, but do NOT publish or mark resolved.")
+      .option(
+        "--dry-run",
+        "Plan only: look up the row, validate the retry, but do NOT publish or mark resolved.",
+      )
       .action(
-        async (
-          dlqId: string,
-          opts: { note?: string; dryRun?: boolean },
-          command: Command,
-        ) => {
+        async (dlqId: string, opts: { note?: string; dryRun?: boolean }, command: Command) => {
           const wrapped = deps.runCommand<RetryArgs>(
             { id: "processors.dlq.retry", mutates: true },
             runProcessorsDlqRetry,

@@ -6,12 +6,11 @@
  * same contract so it shares the same behavioural surface.
  */
 import { describe, expect, it } from "vitest";
-
-import { publishToDlq } from "../src/dlq.js";
 import {
   InMemoryProcessorDlqRecordRepository,
   type ProcessorDlqRecord,
 } from "../src/db/processor-dlq-records.js";
+import { publishToDlq } from "../src/dlq.js";
 
 const PROCESSOR_NAME = "analytics-projector";
 const PROCESSOR_VERSION = "v1";
@@ -198,7 +197,9 @@ describe("publishToDlq — dual-write (3L2HKMND)", () => {
   });
 });
 
-function seed(overrides: Partial<Parameters<InMemoryProcessorDlqRecordRepository["recordDlq"]>[0]> = {}) {
+function seed(
+  overrides: Partial<Parameters<InMemoryProcessorDlqRecordRepository["recordDlq"]>[0]> = {},
+) {
   return {
     processor_name: PROCESSOR_NAME,
     processor_version: PROCESSOR_VERSION,

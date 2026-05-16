@@ -352,8 +352,7 @@ export async function buildAnalyticsProjectorApp(
     // the processor samples so a future `_TYPE`/`_HELP` header from
     // ProcessorMetrics never lands between the probe series.
     metrics: {
-      producer: () =>
-        toPrometheusText([...metrics.getSamples(), ...probeMetrics.getSamples()]),
+      producer: () => toPrometheusText([...metrics.getSamples(), ...probeMetrics.getSamples()]),
     },
   });
 

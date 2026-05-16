@@ -46,7 +46,11 @@ export {
   type ProductionGateDeniedReason,
   ProductionMutationRefusedError,
 } from "./gate.js";
-
+export {
+  METRIC_OPERATOR_GATE_DENIED_TOTAL,
+  type OperatorGateDenialLabels,
+  type OperatorGateMetricsSink,
+} from "./metrics.js";
 export {
   CLI_FALLBACK_LABEL,
   OPERATOR_TOKEN_ENV_VAR,
@@ -62,9 +66,3 @@ export {
   type ParsedOperatorToken,
   parseOperatorToken,
 } from "./token-format.js";
-
-export {
-  METRIC_OPERATOR_GATE_DENIED_TOTAL,
-  type OperatorGateDenialLabels,
-  type OperatorGateMetricsSink,
-} from "./metrics.js";

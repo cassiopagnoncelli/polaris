@@ -62,9 +62,12 @@ describe("ClickHouseProbeMetrics", () => {
     expect(metrics.getSamples()).toHaveLength(2);
 
     metrics.clear(METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS);
-    expect(metrics.getSamples().map((s) => s.name).sort()).toEqual([
-      METRIC_CLICKHOUSE_MV_STATE,
-    ]);
+    expect(
+      metrics
+        .getSamples()
+        .map((s) => s.name)
+        .sort(),
+    ).toEqual([METRIC_CLICKHOUSE_MV_STATE]);
   });
 
   it("upserts the same label tuple in place", () => {
