@@ -127,12 +127,19 @@ services:
       - polaris
 
   clickhouse:
-    # Single-node ClickHouse for local/dev — plain MergeTree / ReplacingMergeTree,
-    # no Keeper. Macros in infra/clickhouse/config.d/macros.xml expand the
-    # {replicated}, {cluster}, {shard}, {replica} placeholders to local-safe
-    # values so the same SQL DDL that runs in production (Replicated* engines
-    # + Keeper) works here unchanged.
-    image: clickhouse/clickhouse-server:24.8
+    # Single-node ClickHouse for local/dev — plain MergeTree / ReplacingMergeTree.
+    # Macros in infra/clickhouse/config.d/macros.xml expand the {replicated},
+    # {cluster}, {shard}, {replica} placeholders to local-safe values so the
+    # same SQL DDL that runs in production (Replicated* engines + Keeper)
+    # works here unchanged.
+    #
+    # Pinned to 26.2 so docker and bare-metal local installs run the same
+    # major. ClickHouse 25+ requires `<zookeeper>` + `<distributed_ddl>` for
+    # any `ON CLUSTER` DDL (the polaris SQL uses it everywhere), so this
+    # service mounts infra/clickhouse/config.d/keeper-local.xml — a tiny
+    # single-node embedded Keeper that satisfies the requirement without
+    # introducing a separate Keeper container.
+    image: clickhouse/clickhouse-server:26.2
     container_name: polaris-clickhouse
     restart: unless-stopped
     ulimits:
@@ -163,6 +170,7 @@ services:
       # break local engine selection.
       - ./infra/clickhouse/config.d/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
       - ./infra/clickhouse/config.d/macros.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./infra/clickhouse/config.d/keeper-local.xml:/etc/clickhouse-server/config.d/keeper-local.xml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
       interval: 5s

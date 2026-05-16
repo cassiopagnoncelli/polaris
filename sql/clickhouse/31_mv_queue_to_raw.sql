@@ -46,5 +46,10 @@ SELECT
 
     processor_name,
     processor_version,
-    _version
+    -- _version defaulting moved here from the queue table: CH 25+ rejects
+    -- DEFAULT on Kafka Engine columns. Producers should populate _version,
+    -- but if they omit it (zero value) we fall back to the ingest timestamp
+    -- so ReplacingMergeTree's collapse logic in analytics_raw still sees
+    -- a monotonic value.
+    if(_version = 0, toUnixTimestamp64Milli(ingested_at), _version) AS _version
 FROM polaris.analytics_events_queue;

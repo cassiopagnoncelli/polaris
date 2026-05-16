@@ -77,23 +77,28 @@ GRANT ON CLUSTER '{cluster}'
     ON polaris.*
     TO polaris_operator;
 
+-- CH 25+ requires an explicit `ON <scope>` for SYSTEM privileges —
+-- `ON *.*` means global, matching the prior implicit behaviour on CH 24.
 GRANT ON CLUSTER '{cluster}'
     SYSTEM RELOAD CONFIG, SYSTEM FLUSH LOGS
+    ON *.*
     TO polaris_operator;
 
 -- Operator workflows occasionally need to inspect system tables
 -- (system.parts, system.replicas, system.kafka_consumers,
 -- system.merges) to diagnose ingestion or replay state. These are
 -- read-only and do not expose customer data.
-GRANT ON CLUSTER '{cluster}'
-    SELECT ON system.parts,
-    SELECT ON system.replicas,
-    SELECT ON system.kafka_consumers,
-    SELECT ON system.merges,
-    SELECT ON system.mutations,
-    SELECT ON system.tables,
-    SELECT ON system.columns
-    TO polaris_operator;
+--
+-- One GRANT per table: CH 25+ rejects multiple `<priv> ON db.table`
+-- entries in a single GRANT (the earlier comma-separated form was
+-- silently accepted on CH 24 but is not standard).
+GRANT ON CLUSTER '{cluster}' SELECT ON system.parts             TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.replicas          TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.kafka_consumers   TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.merges            TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.mutations         TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.tables            TO polaris_operator;
+GRANT ON CLUSTER '{cluster}' SELECT ON system.columns           TO polaris_operator;
 
 -- Even for operators, the Kafka Engine table is never granted for
 -- direct SELECT. The MV pipeline is the only authorized reader.

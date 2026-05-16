@@ -39,16 +39,25 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_events_queue ON CLUSTER '{cluster}'
     source            String,                  -- JSON object
     identity          String,                  -- JSON object
     context           String,                  -- JSON object
-    consent           String DEFAULT '',       -- JSON object (informational in v1)
-    privacy           String DEFAULT '',       -- JSON object (informational in v1)
+    -- consent/privacy are informational in v1. ClickHouse 25+ forbids
+    -- DEFAULT/MATERIALIZED/EPHEMERAL on Kafka Engine columns, so omitted
+    -- JSON fields fall back to the type's zero value (empty String) —
+    -- which matches the prior `DEFAULT ''` semantics exactly.
+    consent           String,                  -- JSON object (informational in v1)
+    privacy           String,                  -- JSON object (informational in v1)
     properties        String,                  -- JSON object
 
-    -- Processor metadata stamped by the analytics processor that
-    -- writes to `analytics.events`. _version is the monotonic
-    -- per-event-key revision used by ReplacingMergeTree and argMax.
-    processor_name    LowCardinality(String) DEFAULT '',
-    processor_version LowCardinality(String) DEFAULT '',
-    _version          UInt64 DEFAULT toUnixTimestamp64Milli(ingested_at)
+    -- Processor metadata stamped by the analytics processor that writes
+    -- to `analytics.events`. _version is the monotonic per-event-key
+    -- revision used by ReplacingMergeTree and argMax. Defaulting for
+    -- omitted JSON fields used to live here (`DEFAULT
+    -- toUnixTimestamp64Milli(ingested_at)`); CH 25+ disallows DEFAULT
+    -- on Kafka Engine, so the same fallback now lives in the two MVs
+    -- that read this table (21_mv_queue_to_ingest_log.sql,
+    -- 31_mv_queue_to_raw.sql) — see the `_version` projection there.
+    processor_name    LowCardinality(String),
+    processor_version LowCardinality(String),
+    _version          UInt64
 )
 ENGINE = Kafka
 SETTINGS

@@ -81,6 +81,44 @@ const SCANNED_EXTENSIONS = new Set([".sql"]);
 // ClickHouse supports both single-quoted strings and backtick-quoted
 // identifiers; backticks cannot legally contain a semicolon-as-terminator,
 // so the tokenizer treats them the same as strings for safety.
+/**
+ * Client-side macro expansion.
+ *
+ * ClickHouse 25+ no longer expands `{macro}` placeholders inside the
+ * `ENGINE = ...` clause (unquoted identifier position). The polaris
+ * schema uses `ENGINE = {replicated}MergeTree` as the local/prod swap:
+ *
+ *   local/dev:  {replicated} = ''           → MergeTree
+ *   production: {replicated} = 'Replicated' → ReplicatedMergeTree
+ *
+ * To keep the canonical SQL working on CH 25+, the runner substitutes
+ * client-side macros BEFORE handing each statement to ClickHouse.
+ * Other macros (e.g. `{cluster}` inside `ON CLUSTER '{cluster}'`)
+ * stay in string-literal position and are still expanded server-side.
+ *
+ * Macros come from environment variables, defaulting to the local/dev
+ * values so a developer running `pnpm clickhouse:migrate` with no env
+ * set gets the local engine family. Production CI sets these to the
+ * replicated equivalents.
+ *
+ *   POLARIS_CLICKHOUSE_REPLICATED   default '' (becomes '' / 'Replicated')
+ *
+ * Add new entries here when introducing a new identifier-position
+ * macro. Keep the regex `{name}` literal — these are not server-side
+ * substitutions and do not interact with ClickHouse's parameter syntax.
+ */
+const CLIENT_MACRO_NAMES = ["replicated"];
+
+export function expandClientMacros(sql) {
+  let out = sql;
+  for (const name of CLIENT_MACRO_NAMES) {
+    const envKey = `POLARIS_CLICKHOUSE_${name.toUpperCase()}`;
+    const value = process.env[envKey] ?? "";
+    out = out.replace(new RegExp(`\\{${name}\\}`, "g"), value);
+  }
+  return out;
+}
+
 export function splitSqlStatements(sql) {
   const out = [];
   const len = sql.length;
@@ -228,7 +266,8 @@ export function discoverMigrations(root) {
       // belt-and-braces in case of symlinks pointing at directories.
       const st = statSync(sourcePath);
       if (!st.isFile()) continue;
-      const sql = readFileSync(sourcePath, "utf8");
+      const raw = readFileSync(sourcePath, "utf8");
+      const sql = expandClientMacros(raw);
       out.push({ relativePath, sourcePath, sql });
     }
   }

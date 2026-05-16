@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<!--
+  Polaris ClickHouse: embedded Keeper for local/dev.
+
+  ClickHouse 25+ requires a configured `<zookeeper>` client AND an explicit
+  `<distributed_ddl>` stanza for `ON CLUSTER` DDL to work, even on a
+  single-replica cluster. ClickHouse 24.x bypassed this for trivial
+  single-replica setups, but 25+ rejects the queries with
+  `NO_ELEMENTS_IN_CONFIG`.
+
+  This file ships the minimum needed for the local docker stack to run the
+  same `ON CLUSTER '{cluster}'` DDL the rest of the SQL uses. It bundles:
+
+    1. A single-node embedded Keeper (one Raft server, quorum of 1).
+    2. The `<zookeeper>` client wired to that Keeper on localhost.
+    3. `<distributed_ddl>` with the canonical DDL queue path.
+
+  Mount it into the ClickHouse container at
+  /etc/clickhouse-server/config.d/keeper-local.xml.
+
+  Production uses infra/clickhouse/config.d/keeper.xml instead, which has a
+  different storage layout and (eventually) an external Keeper quorum.
+  Bare-metal local installs use the version this script generates at
+  bootstrap time (scripts/clickhouse-bootstrap-local.mjs phase 0) — same
+  shape, but with paths under the bare-metal data dir.
+
+  127.0.0.1 (not localhost) on the zookeeper client: Keeper binds IPv4 only
+  by default, and a `localhost` DNS lookup routes to ::1 first → connection
+  refused.
+-->
+<clickhouse>
+  <keeper_server>
+    <tcp_port>9181</tcp_port>
+    <server_id>1</server_id>
+    <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+    <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+    <coordination_settings>
+      <operation_timeout_ms>10000</operation_timeout_ms>
+      <session_timeout_ms>30000</session_timeout_ms>
+      <raft_logs_level>warning</raft_logs_level>
+    </coordination_settings>
+    <raft_configuration>
+      <server>
+        <id>1</id>
+        <hostname>127.0.0.1</hostname>
+        <port>9234</port>
+      </server>
+    </raft_configuration>
+  </keeper_server>
+  <zookeeper>
+    <node>
+      <host>127.0.0.1</host>
+      <port>9181</port>
+    </node>
+  </zookeeper>
+  <distributed_ddl>
+    <path>/clickhouse/task_queue/ddl</path>
+  </distributed_ddl>
+</clickhouse>
