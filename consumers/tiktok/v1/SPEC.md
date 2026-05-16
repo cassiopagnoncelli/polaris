@@ -13,16 +13,23 @@
 ## Supported canonical events
 
 ```text
-checkout.started   →  InitiateCheckout
-payment.approved   →  Purchase
-user.identified    →  CompleteRegistration
+checkout.started       →  InitiateCheckout
+payment.approved       →  Purchase
+user.identified        →  CompleteRegistration
+signup.completed       →  CompleteRegistration
+subscription.renewed   →  Subscribe
 ```
 
-Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
+Both `user.identified` and `signup.completed` map to TikTok's
+`CompleteRegistration` because TikTok does not expose a `Lead` event;
+the canonical `event_id` keeps the two streams distinct on the
+receive side. Events outside this set produce `mapped_failed`
+delivery records with `error_class='mapping'`. The runbook
+(`docs/operations/destination-dlq-triage.md`) covers the operator
+path; future minor versions will extend the matrix. Notable
+not-yet-supported events:
 
 ```text
-signup.completed       not in v1 (future minor)
-subscription.renewed   not in v1 (future minor; TikTok has no native renewal event — would map to a custom event)
 support.ticket.opened  TikTok has no canonical equivalent; never delivered
 polaris.diagnostics.*  internal-only platform telemetry; never delivered
 ```
@@ -71,6 +78,28 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `context.*` | `user.*` + `page.url` | same as checkout | see above |
 
 No `properties` block is populated — `CompleteRegistration` is a lightweight signup signal.
+
+### `signup.completed` → `CompleteRegistration`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `identity.*` | `user.*` | same as checkout | see above |
+| `context.*` | `user.*` + `page.url` | same as checkout | see above |
+| `properties.currency` | `properties.currency` | none | Optional; forwarded when supplied so TikTok can bucket by paid-acquisition channel |
+
+### `subscription.renewed` → `Subscribe`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `identity.*` | `user.*` | same as checkout | see above |
+| `context.*` | `user.*` + `page.url` | same as checkout | see above |
+| `properties.amount_minor` (or `amount`) | `properties.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
+| `properties.currency` | `properties.currency` | none | ISO 4217 |
+| `properties.subscription_id` | `properties.order_id` | none | Stable per-cycle id on the renewal |
 
 ## Normalization rules
 

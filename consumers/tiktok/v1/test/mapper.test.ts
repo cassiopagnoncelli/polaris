@@ -25,9 +25,12 @@ import {
   checkoutStartedMapper,
   inferEventSource,
   paymentApprovedMapper,
+  signupCompletedMapper,
+  subscriptionRenewedMapper,
   TIKTOK_EVENT_COMPLETE_REGISTRATION,
   TIKTOK_EVENT_INITIATE_CHECKOUT,
   TIKTOK_EVENT_PURCHASE,
+  TIKTOK_EVENT_SUBSCRIBE,
   userIdentifiedMapper,
 } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
@@ -185,6 +188,76 @@ describe("userIdentifiedMapper", () => {
   });
 });
 
+describe("signupCompletedMapper", () => {
+  it("returns CompleteRegistration with dedupe_key = event_id", () => {
+    const ctx = fixtureMapperContext({ event: "signup.completed", properties: {} });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.event).toBe(TIKTOK_EVENT_COMPLETE_REGISTRATION);
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+    expect(result.payload.event_id).toBe(ctx.normalized.event_id);
+  });
+
+  it("forwards currency when supplied", () => {
+    const ctx = fixtureMapperContext({
+      event: "signup.completed",
+      properties: { currency: "USD" },
+    });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.properties).toEqual({ currency: "USD" });
+  });
+
+  it("omits properties when no currency is supplied", () => {
+    const ctx = fixtureMapperContext({ event: "signup.completed", properties: {} });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.properties).toBeUndefined();
+  });
+});
+
+describe("subscriptionRenewedMapper", () => {
+  it("returns Subscribe with currency + value + order_id from subscription_id", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: {
+        currency: "USD",
+        amount_minor: 1999,
+        subscription_id: "sub_42",
+      },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.event).toBe(TIKTOK_EVENT_SUBSCRIBE);
+    expect(result.payload.properties).toEqual({
+      currency: "USD",
+      value: 19.99,
+      order_id: "sub_42",
+    });
+  });
+
+  it("accepts `amount` as an alias for `amount_minor` (legacy producers)", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { amount: 1999, currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.properties?.value).toBe(19.99);
+  });
+
+  it("emits currency-only properties when amount is missing", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.properties).toEqual({ currency: "USD" });
+    expect(result.payload.properties?.value).toBeUndefined();
+  });
+});
+
 describe("buildUserData", () => {
   it("emits email from email_sha256 when present", () => {
     const normalized = fixtureNormalizedEvent();
@@ -243,10 +316,12 @@ describe("inferEventSource", () => {
 });
 
 describe("CANONICAL_TO_TIKTOK_EVENT", () => {
-  it("pins the v1 event matrix", () => {
+  it("pins the v1.x event matrix", () => {
     expect(CANONICAL_TO_TIKTOK_EVENT["checkout.started"]).toBe(TIKTOK_EVENT_INITIATE_CHECKOUT);
     expect(CANONICAL_TO_TIKTOK_EVENT["payment.approved"]).toBe(TIKTOK_EVENT_PURCHASE);
     expect(CANONICAL_TO_TIKTOK_EVENT["user.identified"]).toBe(TIKTOK_EVENT_COMPLETE_REGISTRATION);
+    expect(CANONICAL_TO_TIKTOK_EVENT["signup.completed"]).toBe(TIKTOK_EVENT_COMPLETE_REGISTRATION);
+    expect(CANONICAL_TO_TIKTOK_EVENT["subscription.renewed"]).toBe(TIKTOK_EVENT_SUBSCRIBE);
   });
 });
 

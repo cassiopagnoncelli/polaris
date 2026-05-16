@@ -1,0 +1,18 @@
+{
+  "event": "Subscribe",
+  "event_time": 1778587200,
+  "event_id": "evt_01HZZC2YJK0M2R8D8VYV4QH5XR",
+  "user": {
+    "email": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "phone": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "external_id": "6f12ff3d3a3f5e1b0c5dfde31a4e1c2c6b6f3a23a06d3e8e15f5e30b4f6e3e94",
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US"
+  },
+  "properties": {
+    "currency": "USD",
+    "value": 19.99,
+    "order_id": "sub_42"
+  }
+}

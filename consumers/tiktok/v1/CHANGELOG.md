@@ -1,5 +1,12 @@
 # `@polaris/consumer-tiktok-v1` changelog
 
+## v1.1.0 — additive event-matrix expansion (XJ8BT875)
+
+- Added `signup.completed` → `CompleteRegistration` mapper. Both `user.identified` and `signup.completed` now map to TikTok's `CompleteRegistration`; canonical `event_id` keeps the two streams distinct on the receive side.
+- Added `subscription.renewed` → `Subscribe` mapper. Properties populate `currency`, `value` (from `amount_minor` / legacy `amount`), and `order_id` (from `subscription_id`).
+- New `TIKTOK_EVENT_SUBSCRIBE` constant exported from `src/mapper.ts`.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.0.0 — initial release (P9-005)
 
 - Second real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003).

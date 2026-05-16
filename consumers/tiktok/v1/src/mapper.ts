@@ -58,15 +58,23 @@ type PropertiesBuilder = {
 export const TIKTOK_EVENT_PURCHASE = "Purchase" as const;
 export const TIKTOK_EVENT_INITIATE_CHECKOUT = "InitiateCheckout" as const;
 export const TIKTOK_EVENT_COMPLETE_REGISTRATION = "CompleteRegistration" as const;
+export const TIKTOK_EVENT_SUBSCRIBE = "Subscribe" as const;
 
 /**
  * Closed-set mapping from canonical event name → TikTok event name. The
  * descriptor uses this map as the keys for the per-event `MapperMap`.
+ *
+ * Both `user.identified` and `signup.completed` map to TikTok's
+ * `CompleteRegistration`. TikTok does not expose a `Lead` event, so the
+ * v1 consumer treats both canonical events as the same vendor signal;
+ * canonical `event_id` keeps them distinct on the receive side.
  */
 export const CANONICAL_TO_TIKTOK_EVENT = Object.freeze({
   "checkout.started": TIKTOK_EVENT_INITIATE_CHECKOUT,
   "payment.approved": TIKTOK_EVENT_PURCHASE,
   "user.identified": TIKTOK_EVENT_COMPLETE_REGISTRATION,
+  "signup.completed": TIKTOK_EVENT_COMPLETE_REGISTRATION,
+  "subscription.renewed": TIKTOK_EVENT_SUBSCRIBE,
 }) as Readonly<Record<string, string>>;
 
 // ---------------------------------------------------------------------------
@@ -148,6 +156,58 @@ export const userIdentifiedMapper: Mapper<TikTokEventPayload> = (
   ctx: MapperContext,
 ): MapperResult<TikTokEventPayload> => {
   return buildResult(ctx.normalized, TIKTOK_EVENT_COMPLETE_REGISTRATION, {});
+};
+
+/**
+ * `signup.completed` → `CompleteRegistration`.
+ *
+ * Same vendor event as `user.identified`. The canonical envelope's
+ * `signup.completed` semantics are more specific (an account was just
+ * created), but TikTok exposes a single `CompleteRegistration` event
+ * for the funnel stage. When the envelope carries `currency`, the
+ * mapper forwards it so TikTok can group by paid-acquisition channel.
+ */
+export const signupCompletedMapper: Mapper<TikTokEventPayload> = (
+  ctx: MapperContext,
+): MapperResult<TikTokEventPayload> => {
+  const props = ctx.normalized.properties;
+  const currency = readString(props, "currency");
+
+  const properties: PropertiesBuilder = {};
+  if (currency !== null) properties.currency = currency;
+
+  return buildResult(ctx.normalized, TIKTOK_EVENT_COMPLETE_REGISTRATION, properties);
+};
+
+/**
+ * `subscription.renewed` → `Subscribe`.
+ *
+ * Pulls `amount_minor` (or legacy `amount`) + `currency` off
+ * `properties`; converts to major units for TikTok's
+ * `properties.value` field. `subscription_id` lands in
+ * `properties.order_id` so TikTok receives a stable per-cycle vendor
+ * id while the wire `event_id` still keys on the canonical envelope
+ * id for cross-channel dedupe.
+ */
+export const subscriptionRenewedMapper: Mapper<TikTokEventPayload> = (
+  ctx: MapperContext,
+): MapperResult<TikTokEventPayload> => {
+  const props = ctx.normalized.properties;
+  const currency = readString(props, "currency");
+  const amountMinor = readInteger(props, "amount_minor") ?? readInteger(props, "amount");
+  const subscriptionId = readString(props, "subscription_id");
+
+  const properties: PropertiesBuilder = {};
+  if (currency !== null && amountMinor !== null) {
+    properties.currency = currency;
+    const value = safeMinorToMajor(amountMinor, currency);
+    if (value !== undefined) properties.value = value;
+  } else if (currency !== null) {
+    properties.currency = currency;
+  }
+  if (subscriptionId !== null) properties.order_id = subscriptionId;
+
+  return buildResult(ctx.normalized, TIKTOK_EVENT_SUBSCRIBE, properties);
 };
 
 // ---------------------------------------------------------------------------
