@@ -94,10 +94,9 @@ export const processorsDlqRetryCommand: CommandDefinition = {
 };
 
 export function buildProcessorsDlqRetryRunner(hooks: ProcessorDlqRetryHooks = {}) {
-  const openProducer = hooks.openProducer ?? defaultProducer;
-
   return async function runner(args: RetryArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const openProducer = hooks.openProducer ?? (() => defaultProducer(ctx.env));
     const id = args.dlqId.trim();
     if (id.length === 0) throw new UsageError("dlq_id is required");
 
@@ -168,10 +167,11 @@ function defaultStore(env: NodeJS.ProcessEnv): ProcessorDlqRetryStore {
   };
 }
 
-async function defaultProducer(): Promise<ProcessorDlqRetryProducer> {
+async function defaultProducer(env: NodeJS.ProcessEnv): Promise<ProcessorDlqRetryProducer> {
   const config = loadConfigWithDefaults({
     serviceName: "polaris-cli",
     schema: redpandaEnvSchema,
+    processEnv: env,
   });
   const kafka = createKafkaClient({ redpanda: config });
   const producer: PolarisProducer = createPolarisProducer({

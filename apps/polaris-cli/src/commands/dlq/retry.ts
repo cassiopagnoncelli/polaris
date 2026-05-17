@@ -135,13 +135,13 @@ export const dlqRetryCommand: CommandDefinition = {
 };
 
 export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
-  const openProducer = hooks.openProducer ?? defaultProducer;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: DlqRetryArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const openProducer = hooks.openProducer ?? (() => defaultProducer(ctx.env));
     const id = args.dlqId.trim();
     if (id.length === 0) throw new UsageError("dlq_id is required");
     const note = args.note?.trim();
@@ -281,13 +281,14 @@ function defaultStore(env: NodeJS.ProcessEnv): DlqRetryStore {
   };
 }
 
-async function defaultProducer(): Promise<RetryProducer> {
+async function defaultProducer(env: NodeJS.ProcessEnv): Promise<RetryProducer> {
   // Build a redpanda config block from env using the shared schema; no
   // other Polaris services in the CLI need the broker, so we keep this
   // local rather than hoist into shared connect-helpers.
   const config = loadConfigWithDefaults({
     serviceName: "polaris-cli",
     schema: redpandaEnvSchema,
+    processEnv: env,
   });
   const kafka = createKafkaClient({ redpanda: config });
   const producer: PolarisProducer = createPolarisProducer({
