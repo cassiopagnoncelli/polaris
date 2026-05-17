@@ -84,9 +84,8 @@ export const deliveriesListCommand: CommandDefinition = {
 };
 
 export function buildDeliveriesListRunner(hooks: DeliveriesListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: DeliveriesListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.destinationId.trim();
     if (id.length === 0) {
       throw new UsageError("destination_id is required");
@@ -156,8 +155,8 @@ function parseDate(flag: string, raw: string): Date {
   return new Date(ms);
 }
 
-function defaultStore(): DeliveriesListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DeliveriesListStore {
+  const handle = connectDb({ env });
   const repo = createKyselyDeliveryRecordRepository({ db: handle.db });
   return {
     list: (id, filter) => repo.findByDestinationId(id, filter),

@@ -88,11 +88,11 @@ export const operatorsRevokeCommand: CommandDefinition = {
 };
 
 export function buildOperatorsRevokeRunner(hooks: OperatorsRevokeHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(args: OperatorsRevokeArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.operatorTokenId.trim();
     if (id.length === 0) {
       throw new UsageError("operator_token_id is required");
@@ -180,8 +180,8 @@ export function buildOperatorsRevokeRunner(hooks: OperatorsRevokeHooks = {}) {
 
 const runOperatorsRevoke = buildOperatorsRevokeRunner();
 
-function defaultStore(): OperatorsRevokeStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): OperatorsRevokeStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findOperatorTokenById(handle.db, id),
     revokeWithAudit: async (id, revokedAt, audit) =>

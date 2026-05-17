@@ -96,9 +96,8 @@ export const dlqSummaryCommand: CommandDefinition = {
 };
 
 export function buildDlqSummaryRunner(hooks: DlqSummaryHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: DlqSummaryArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const scope = pickScope(args);
     const filter = parseFilter(args);
     const store = openStore();
@@ -154,8 +153,8 @@ function trim(value: string | undefined): string | undefined {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function defaultStore(): DlqSummaryStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DlqSummaryStore {
+  const handle = connectDb({ env });
   const repo = createKyselyDlqRecordRepository({ db: handle.db });
   return {
     list: (scope, filter) =>

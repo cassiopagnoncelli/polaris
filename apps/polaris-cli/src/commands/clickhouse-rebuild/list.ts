@@ -55,12 +55,11 @@ export const clickhouseRebuildListCommand: CommandDefinition = {
 };
 
 export function buildClickhouseRebuildListRunner(hooks: ClickhouseRebuildListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(
     args: ClickhouseRebuildListArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const filter = validate(args);
     const store = openStore();
     try {
@@ -75,8 +74,8 @@ export function buildClickhouseRebuildListRunner(hooks: ClickhouseRebuildListHoo
 
 const runList = buildClickhouseRebuildListRunner();
 
-function defaultStore(): ClickhouseRebuildListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildListStore {
+  const handle = connectDb({ env });
   return {
     list: (filter) => listClickhouseRebuildJobs(handle.db, filter),
     close: () => handle.close(),

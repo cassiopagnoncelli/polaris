@@ -132,7 +132,10 @@ export interface ClickhouseRebuildCreateHooks {
    * production driver can stamp it onto the raw.query audit reason
    * for every clearSlice / INSERT.
    */
-  readonly openDriver?: (input: { readonly jobId: string }) => Promise<ClickhouseRebuildDriverHandle>;
+  readonly openDriver?: (input: {
+    readonly jobId: string;
+    readonly env: NodeJS.ProcessEnv;
+  }) => Promise<ClickhouseRebuildDriverHandle>;
 }
 
 export interface ClickhouseRebuildExecutorStoreHandle {
@@ -187,9 +190,6 @@ export const clickhouseRebuildCreateCommand: CommandDefinition = {
 
 export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateClickhouseRebuildJobId;
-  const openStore = hooks.openStore ?? defaultStore;
-  const openExecutorStore = hooks.openExecutorStore ?? defaultExecutorStore;
-  const openDriver = hooks.openDriver ?? defaultDriver;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
@@ -199,6 +199,9 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
     args: ClickhouseRebuildCreateArgs,
     ctx: CommandContext,
   ): Promise<CommandResult | undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const openExecutorStore = hooks.openExecutorStore ?? (() => defaultExecutorStore(ctx.env));
+    const openDriver = hooks.openDriver ?? defaultDriver;
     const now = nowFn();
     const validated = validate(args);
     const jobId = issueId();
@@ -305,7 +308,7 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
       // transitions itself; we just supply the store + driver
       // seams and surface the outcome.
       const executorStoreHandle = openExecutorStore();
-      const driverHandle = await openDriver({ jobId });
+      const driverHandle = await openDriver({ jobId, env: ctx.env });
       let outcome: ClickhouseRebuildOutcome;
       try {
         outcome = await executeClickhouseRebuild({
@@ -408,8 +411,8 @@ function renderOutcomeHuman(jobId: string, outcome: ClickhouseRebuildOutcome): s
 
 const runCreate = buildClickhouseRebuildCreateRunner();
 
-function defaultStore(): ClickhouseRebuildCreateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildCreateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit) =>
       handle.db.transaction().execute(async (trx) => {
@@ -434,8 +437,8 @@ function defaultStore(): ClickhouseRebuildCreateStore {
   };
 }
 
-function defaultExecutorStore(): ClickhouseRebuildExecutorStoreHandle {
-  const handle = connectDb({ env: process.env });
+function defaultExecutorStore(env: NodeJS.ProcessEnv): ClickhouseRebuildExecutorStoreHandle {
+  const handle = connectDb({ env });
   const store: ClickhouseRebuildStore = {
     markRunning: async (input) =>
       markClickhouseRebuildJobRunning(handle.db, input.clickhouse_rebuild_job_id, input.now),
@@ -464,19 +467,21 @@ function defaultExecutorStore(): ClickhouseRebuildExecutorStoreHandle {
 /**
  * Production default driver: an operator-profile ClickHouse client
  * wrapped by `createClickhouseRebuildDriver`. Reads
- * `POLARIS_CLICKHOUSE_*` from `process.env`, refuses with a
- * `ConfigError` (exit code 3) if operator credentials are not
- * configured — same shape `connectDb` uses for the Postgres URL.
+ * `POLARIS_CLICKHOUSE_*` from the CLI invocation's env (threaded via
+ * `ctx.env`), refuses with a `ConfigError` (exit code 3) if operator
+ * credentials are not configured — same shape `connectDb` uses for
+ * the Postgres URL.
  *
  * Tests inject their own driver via `hooks.openDriver`, so this
  * function is only consulted in production.
  */
 async function defaultDriver(input: {
   readonly jobId: string;
+  readonly env: NodeJS.ProcessEnv;
 }): Promise<ClickhouseRebuildDriverHandle> {
   let parsed: ReturnType<typeof clickhouseEnvSchema.parse>;
   try {
-    parsed = clickhouseEnvSchema.parse(process.env);
+    parsed = clickhouseEnvSchema.parse(input.env);
   } catch (cause) {
     throw new ConfigError(
       `POLARIS_CLICKHOUSE_* env is required for non-dry-run rebuilds: ${cause instanceof Error ? cause.message : String(cause)}`,

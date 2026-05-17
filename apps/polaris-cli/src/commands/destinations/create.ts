@@ -148,7 +148,6 @@ export const destinationsCreateCommand: CommandDefinition = {
 
 export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateDestinationId;
-  const openStore = hooks.openStore ?? defaultStore;
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const nowFn = hooks.now ?? (() => new Date());
   const actorLabelOverride = hooks.actorLabel;
@@ -157,6 +156,7 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
     args: DestinationsCreateArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     // Refuse mapping-shaped flags BEFORE any validation or DB work. This is
     // the acceptance-criteria gate: even though the option surface above
     // doesn't declare such flags, commander accepts trailing positional
@@ -245,8 +245,8 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
 
 const runDestinationsCreate = buildDestinationsCreateRunner();
 
-function defaultStore(): DestinationsCreateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsCreateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit) =>
       handle.db.transaction().execute(async (trx) => {

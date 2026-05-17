@@ -54,12 +54,11 @@ export const destinationsListCommand: CommandDefinition = {
 };
 
 export function buildDestinationsListRunner(hooks: DestinationsListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(
     args: DestinationsListArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectMappingArguments(args as unknown as Record<string, unknown>);
     const projectId = trim(args.project);
     const environment = trim(args.env);
@@ -85,8 +84,8 @@ export function buildDestinationsListRunner(hooks: DestinationsListHooks = {}) {
 
 const runDestinationsList = buildDestinationsListRunner();
 
-function defaultStore(): DestinationsListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsListStore {
+  const handle = connectDb({ env });
   return {
     list: async (filter) => {
       if (filter.projectId !== undefined && filter.environment !== undefined) {

@@ -102,11 +102,11 @@ export const operatorsCreateCommand: CommandDefinition = {
 export function buildOperatorsCreateRunner(hooks: OperatorsCreateHooks = {}) {
   const issueMaterial = hooks.issue ?? generateOperatorTokenMaterial;
   const hashFn = hooks.hash ?? hashSecret;
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
   return async function runner(args: OperatorsCreateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const operatorLabel = validate(args);
 
     const store = openStore();
@@ -163,8 +163,8 @@ export function buildOperatorsCreateRunner(hooks: OperatorsCreateHooks = {}) {
   };
 }
 
-function defaultStore(): OperatorsCreateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): OperatorsCreateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit) =>
       handle.db.transaction().execute(async (trx) => {

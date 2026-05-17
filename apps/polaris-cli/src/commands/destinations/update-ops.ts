@@ -151,7 +151,6 @@ export const destinationsUpdateOpsCommand: CommandDefinition = {
 };
 
 export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
@@ -160,6 +159,7 @@ export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHoo
     args: DestinationsUpdateOpsArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     // Defense-in-depth: the dispatcher path already calls
     // `rejectMappingArguments` against the raw commander opts. The runner
     // path (driven by tests and any future programmatic caller) runs the
@@ -257,8 +257,8 @@ export function buildDestinationsUpdateOpsRunner(hooks: DestinationsUpdateOpsHoo
 
 const runDestinationsUpdateOps = buildDestinationsUpdateOpsRunner();
 
-function defaultStore(): DestinationsUpdateOpsStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsUpdateOpsStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
     updateWithAudit: async (id, patch, now, audit) =>

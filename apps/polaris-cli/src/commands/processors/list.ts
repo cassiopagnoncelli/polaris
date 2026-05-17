@@ -62,13 +62,13 @@ export const processorsListCommand: CommandDefinition = {
 };
 
 export function buildProcessorsListRunner(hooks: ProcessorsListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const loadManifests = hooks.loadManifests ?? ((root) => loadProcessorManifests({ root }));
   const resolveRoot =
     hooks.resolveRoot ??
     ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
 
   return async function runner(args: ProcessorsListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     // Defense-in-depth: reject any flag that resembles a transform-rule
     // surface even though commander only declares --catalog-root above.
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
@@ -93,8 +93,8 @@ export function buildProcessorsListRunner(hooks: ProcessorsListHooks = {}) {
 
 const runProcessorsList = buildProcessorsListRunner();
 
-function defaultStore(): ProcessorsListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorsListStore {
+  const handle = connectDb({ env });
   return {
     listActivations: () => listAllActivations(handle.db),
     close: () => handle.close(),

@@ -50,7 +50,7 @@ async function runSourcesList(args: SourcesListArgs, ctx: CommandContext): Promi
     return undefined;
   }
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const rows =
       args.project !== undefined

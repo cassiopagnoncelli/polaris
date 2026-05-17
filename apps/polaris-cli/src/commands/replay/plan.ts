@@ -88,10 +88,10 @@ export const replayPlanCommand: CommandDefinition = {
 };
 
 export function buildReplayPlanRunner(hooks: ReplayPlanHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
 
   return async function runner(args: ReplayPlanArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     // Defence in depth: even though `plan` is read-only and does not
     // accept any --partition / --transform / --chunk flags via
     // commander, run the same rejection sweep the rest of the replay
@@ -136,8 +136,8 @@ export function buildReplayPlanRunner(hooks: ReplayPlanHooks = {}) {
 
 const runReplayPlan = buildReplayPlanRunner();
 
-function defaultStore(): ReplayPlanStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayPlanStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
     close: () => handle.close(),

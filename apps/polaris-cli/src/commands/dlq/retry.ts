@@ -135,13 +135,13 @@ export const dlqRetryCommand: CommandDefinition = {
 };
 
 export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const openProducer = hooks.openProducer ?? defaultProducer;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: DlqRetryArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.dlqId.trim();
     if (id.length === 0) throw new UsageError("dlq_id is required");
     const note = args.note?.trim();
@@ -247,8 +247,8 @@ export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
 
 const runDlqRetry = buildDlqRetryRunner();
 
-function defaultStore(): DlqRetryStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DlqRetryStore {
+  const handle = connectDb({ env });
   const repo: DlqRecordRepository = createKyselyDlqRecordRepository({ db: handle.db });
   return {
     findById: (id) => repo.findRecord(id),

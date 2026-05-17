@@ -71,7 +71,7 @@ async function runSourcesShow(
     return;
   }
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const rows = await fetchSourcesById(handle.db, sourceId);
     const filtered =

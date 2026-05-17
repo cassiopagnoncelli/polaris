@@ -117,7 +117,6 @@ export const destinationsEnableCommand: CommandDefinition = {
 };
 
 export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
@@ -126,6 +125,7 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
     args: DestinationsEnableArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectMappingArguments(args as unknown as Record<string, unknown>);
     const id = args.destinationId.trim();
     if (id.length === 0) {
@@ -200,8 +200,8 @@ export function buildDestinationsEnableRunner(hooks: DestinationsEnableHooks = {
 
 const runDestinationsEnable = buildDestinationsEnableRunner();
 
-function defaultStore(): DestinationsEnableStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsEnableStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
     enableWithAudit: async (id, now, audit) =>

@@ -58,12 +58,11 @@ export const exportDestinationsCommand: CommandDefinition = {
 };
 
 export function buildExportDestinationsRunner(hooks: ExportDestinationsHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(
     args: ExportDestinationsArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
     const store = openStore();
     try {
@@ -78,8 +77,8 @@ export function buildExportDestinationsRunner(hooks: ExportDestinationsHooks = {
 
 const runExportDestinations = buildExportDestinationsRunner();
 
-function defaultStore(): ExportDestinationsStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ExportDestinationsStore {
+  const handle = connectDb({ env });
   return {
     list: (projectId, environment) =>
       listDestinationsByProjectEnv(handle.db, projectId, environment),

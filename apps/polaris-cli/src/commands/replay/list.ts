@@ -62,9 +62,8 @@ export const replayListCommand: CommandDefinition = {
 };
 
 export function buildReplayListRunner(hooks: ReplayListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: ReplayListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectReplayPlanArguments(args as unknown as Record<string, unknown>);
     const filter = validate(args);
 
@@ -81,8 +80,8 @@ export function buildReplayListRunner(hooks: ReplayListHooks = {}) {
 
 const runReplayList = buildReplayListRunner();
 
-function defaultStore(): ReplayListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayListStore {
+  const handle = connectDb({ env });
   return {
     list: (filter) => listReplayJobs(handle.db, filter),
     close: () => handle.close(),

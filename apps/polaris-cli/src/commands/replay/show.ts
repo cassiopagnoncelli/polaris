@@ -50,9 +50,8 @@ export const replayShowCommand: CommandDefinition = {
 };
 
 export function buildReplayShowRunner(hooks: ReplayShowHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: ReplayShowArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.replayJobId.trim();
     if (id.length === 0) {
       throw new UsageError("replay_job_id is required");
@@ -74,8 +73,8 @@ export function buildReplayShowRunner(hooks: ReplayShowHooks = {}) {
 
 const runReplayShow = buildReplayShowRunner();
 
-function defaultStore(): ReplayShowStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayShowStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
     close: () => handle.close(),

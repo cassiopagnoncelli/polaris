@@ -150,7 +150,6 @@ export const replayExecuteCommand: CommandDefinition = {
 };
 
 export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   // The kafka I/O default is lazy: tests that inject both `hooks.source`
   // and `hooks.producer` never trigger a real Redpanda connection.
@@ -158,6 +157,7 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
     hooks.source === undefined || hooks.producer === undefined ? buildDefaultKafkaIo : null;
 
   return async function runner(args: ReplayExecuteArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     // Defense in depth: same flag-rejection gate the rest of the replay
     // group uses. The execute surface accepts ONLY `--target-topic`; any
     // attempt to smuggle a planner-shaped flag is refused here before
@@ -273,8 +273,8 @@ const runReplayExecute = buildReplayExecuteRunner();
 // Default wiring
 // ---------------------------------------------------------------------------
 
-function defaultStore(): ReplayExecuteStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayExecuteStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
     markRunning: async (input) => {

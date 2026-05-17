@@ -46,7 +46,7 @@ async function runSourcesSync(args: SourcesSyncArgs, ctx: CommandContext): Promi
   const root = resolveCatalogRoot({ explicit: args.catalogRoot });
   const catalog = loadCatalog({ root });
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const current = await fetchAllSources(handle.db);
     const plan = planSourcesSync(catalog.sources, current);

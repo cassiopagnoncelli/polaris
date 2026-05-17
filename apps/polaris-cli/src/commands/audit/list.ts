@@ -83,9 +83,8 @@ export const auditListCommand: CommandDefinition = {
 };
 
 export function buildAuditListRunner(hooks: AuditListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: AuditListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const filter = validate(args);
     const store = openStore();
     try {
@@ -100,8 +99,8 @@ export function buildAuditListRunner(hooks: AuditListHooks = {}) {
 
 const runAuditList = buildAuditListRunner();
 
-function defaultStore(): AuditListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): AuditListStore {
+  const handle = connectDb({ env });
   return {
     list: (filter) => listAuditRecords(handle.db, filter),
     close: () => handle.close(),

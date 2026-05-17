@@ -58,9 +58,8 @@ export const topicsListCommand: CommandDefinition = {
 };
 
 export function buildTopicsListRunner(hooks: TopicsListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: TopicsListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const filter: TopicsListFilter = {};
     if (args.project !== undefined) {
       const trimmed = args.project.trim();
@@ -91,8 +90,8 @@ export function buildTopicsListRunner(hooks: TopicsListHooks = {}) {
 
 const runTopicsList = buildTopicsListRunner();
 
-function defaultStore(): TopicsListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): TopicsListStore {
+  const handle = connectDb({ env });
   return {
     list: (filter) =>
       listActiveIsolations(handle.db, {

@@ -66,8 +66,8 @@ export const processorsDlqMarkResolvedCommand: CommandDefinition = {
 };
 
 export function buildProcessorsDlqMarkResolvedRunner(hooks: ProcessorDlqMarkResolvedHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   return async function runner(args: MarkResolvedArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.dlqId.trim();
     if (id.length === 0) throw new UsageError("dlq_id is required");
     const note = args.note?.trim();
@@ -101,8 +101,8 @@ export function buildProcessorsDlqMarkResolvedRunner(hooks: ProcessorDlqMarkReso
 
 const runProcessorsDlqMarkResolved = buildProcessorsDlqMarkResolvedRunner();
 
-function defaultStore(): ProcessorDlqMarkResolvedStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorDlqMarkResolvedStore {
+  const handle = connectDb({ env });
   const repo = createKyselyProcessorDlqRecordRepository({ db: handle.db });
   return {
     markResolved: (id, by, note) => repo.markResolved(id, by, note),

@@ -155,12 +155,12 @@ export const replayCreateCommand: CommandDefinition = {
 
 export function buildReplayCreateRunner(hooks: ReplayCreateHooks = {}) {
   const issueId = hooks.issueId ?? generateReplayJobId;
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: ReplayCreateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectReplayPlanArguments(args as unknown as Record<string, unknown>);
     const now = nowFn();
     const validated = validate(args, now);
@@ -250,8 +250,8 @@ export function buildReplayCreateRunner(hooks: ReplayCreateHooks = {}) {
 
 const runReplayCreate = buildReplayCreateRunner();
 
-function defaultStore(): ReplayCreateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayCreateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit) =>
       handle.db.transaction().execute(async (trx) => {

@@ -87,7 +87,6 @@ export const clickhouseRebuildAbortCommand: CommandDefinition = {
 };
 
 export function buildClickhouseRebuildAbortRunner(hooks: ClickhouseRebuildAbortHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabel = hooks.actorLabel;
@@ -96,6 +95,7 @@ export function buildClickhouseRebuildAbortRunner(hooks: ClickhouseRebuildAbortH
     args: ClickhouseRebuildAbortArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.id.trim();
     if (id.length === 0) {
       throw new UsageError("clickhouse_rebuild_job_id is required");
@@ -134,8 +134,8 @@ export function buildClickhouseRebuildAbortRunner(hooks: ClickhouseRebuildAbortH
 
 const runAbort = buildClickhouseRebuildAbortRunner();
 
-function defaultStore(): ClickhouseRebuildAbortStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildAbortStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findClickhouseRebuildJobById(handle.db, id),
     abortWithAudit: async (input) =>

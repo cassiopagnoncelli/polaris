@@ -45,9 +45,8 @@ export const auditShowCommand: CommandDefinition = {
 };
 
 export function buildAuditShowRunner(hooks: AuditShowHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: AuditShowArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.auditId.trim();
     if (id.length === 0) {
       throw new UsageError("audit_id is required");
@@ -69,8 +68,8 @@ export function buildAuditShowRunner(hooks: AuditShowHooks = {}) {
 
 const runAuditShow = buildAuditShowRunner();
 
-function defaultStore(): AuditShowStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): AuditShowStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findAuditRecordById(handle.db, id),
     close: () => handle.close(),

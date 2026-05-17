@@ -110,12 +110,12 @@ export const keysCreateCommand: CommandDefinition = {
 export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
   const issueMaterial = hooks.issue ?? generateKeyMaterial;
   const hashFn = hooks.hash ?? hashSecret;
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: KeysCreateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
 
     const store = openStore();
@@ -184,8 +184,8 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
   };
 }
 
-function defaultStore(): KeysCreateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): KeysCreateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit) =>
       handle.db.transaction().execute(async (trx) => {

@@ -83,12 +83,12 @@ export const replayPauseCommand: CommandDefinition = {
 };
 
 export function buildReplayPauseRunner(hooks: ReplayPauseHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabel = hooks.actorLabel;
 
   return async function runner(args: ReplayPauseArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.replayJobId.trim();
     if (id.length === 0) {
       throw new UsageError("replay_job_id is required");
@@ -125,8 +125,8 @@ export function buildReplayPauseRunner(hooks: ReplayPauseHooks = {}) {
 
 const runReplayPause = buildReplayPauseRunner();
 
-function defaultStore(): ReplayPauseStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayPauseStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
     pauseWithAudit: async (input) =>

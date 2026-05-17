@@ -145,12 +145,12 @@ export const topicsDeisolateCommand: CommandDefinition = {
 };
 
 export function buildTopicsDeisolateRunner(hooks: TopicsDeisolateHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const nowFn = hooks.now ?? (() => new Date());
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: TopicsDeisolateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
     const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
     const reason =
@@ -256,8 +256,8 @@ export function buildTopicsDeisolateRunner(hooks: TopicsDeisolateHooks = {}) {
 
 const runTopicsDeisolate = buildTopicsDeisolateRunner();
 
-function defaultStore(): TopicsDeisolateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): TopicsDeisolateStore {
+  const handle = connectDb({ env });
   return {
     findActive: (family, projectId, environment) =>
       findActiveIsolation(handle.db, family, projectId, environment),

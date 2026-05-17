@@ -54,9 +54,8 @@ export const keysListCommand: CommandDefinition = {
 };
 
 export function buildKeysListRunner(hooks: KeysListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: KeysListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const project = trim(args.project);
     const env = trim(args.env);
     if (project === undefined) {
@@ -79,8 +78,8 @@ export function buildKeysListRunner(hooks: KeysListHooks = {}) {
 
 const runKeysList = buildKeysListRunner();
 
-function defaultStore(): KeysListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): KeysListStore {
+  const handle = connectDb({ env });
   return {
     list: (projectId, environment) => listApiKeysByProjectEnv(handle.db, projectId, environment),
     close: () => handle.close(),

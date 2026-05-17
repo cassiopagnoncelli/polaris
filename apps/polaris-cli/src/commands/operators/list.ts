@@ -59,9 +59,8 @@ export const operatorsListCommand: CommandDefinition = {
 };
 
 export function buildOperatorsListRunner(hooks: OperatorsListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: OperatorsListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const statusFilter = validate(args);
 
     const store = openStore();
@@ -77,8 +76,8 @@ export function buildOperatorsListRunner(hooks: OperatorsListHooks = {}) {
 
 const runOperatorsList = buildOperatorsListRunner();
 
-function defaultStore(): OperatorsListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): OperatorsListStore {
+  const handle = connectDb({ env });
   return {
     list: (statusFilter) =>
       listOperatorTokens(handle.db, statusFilter !== undefined ? { statusFilter } : {}),

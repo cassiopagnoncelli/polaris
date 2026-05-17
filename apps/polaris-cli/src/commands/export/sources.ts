@@ -52,9 +52,8 @@ export const exportSourcesCommand: CommandDefinition = {
 };
 
 export function buildExportSourcesRunner(hooks: ExportSourcesHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: ExportSourcesArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
     const store = openStore();
     try {
@@ -77,8 +76,8 @@ export function buildExportSourcesRunner(hooks: ExportSourcesHooks = {}) {
 
 const runExportSources = buildExportSourcesRunner();
 
-function defaultStore(): ExportSourcesStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ExportSourcesStore {
+  const handle = connectDb({ env });
   return {
     list: (projectId) => fetchSourcesByProject(handle.db, projectId),
     close: () => handle.close(),

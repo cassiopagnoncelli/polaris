@@ -27,6 +27,19 @@ export interface CommandContext {
   readonly output: OutputStreams;
   readonly meta: PackageMeta;
   readonly actor: ResolvedActor;
+  /**
+   * The process environment as seen by this CLI invocation. Threaded
+   * from `run({ env })` so handlers can construct DB connections and
+   * read config-relevant vars without reaching into `process.env`. In
+   * production this is `process.env`; in tests it's the synthetic env
+   * the test passed to `run()`.
+   *
+   * Handlers that open a DB connection MUST use `ctx.env` (passing it
+   * to `connectDb({ env: ctx.env })`); reading `process.env` directly
+   * leaks the developer's real environment into tests that mean to
+   * exercise the "no var set" path.
+   */
+  readonly env: NodeJS.ProcessEnv;
 }
 
 /**

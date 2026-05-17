@@ -51,7 +51,7 @@ async function runProjectsSync(args: ProjectsSyncArgs, ctx: CommandContext): Pro
   const root = resolveCatalogRoot({ explicit: args.catalogRoot });
   const catalog = loadCatalog({ root });
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const current = await fetchAllProjects(handle.db);
     const plan = planProjectsSync(catalog.projects, current);

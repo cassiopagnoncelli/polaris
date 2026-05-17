@@ -126,7 +126,6 @@ export const keysRotateCommand: CommandDefinition = {
 export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
   const issueMaterial = hooks.issue ?? generateKeyMaterial;
   const hashFn = hooks.hash ?? hashSecret;
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   // Tests can inject a deterministic id sequence; production uses uuidv7.
   // We need two distinct ids per rotation, so we generate per-call.
@@ -134,6 +133,7 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: KeysRotateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.apiKeyId.trim();
     if (id.length === 0) {
       throw new UsageError("api_key_id is required");
@@ -240,8 +240,8 @@ export function buildKeysRotateRunner(hooks: KeysRotateHooks = {}) {
 
 const runKeysRotate = buildKeysRotateRunner();
 
-function defaultStore(): KeysRotateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): KeysRotateStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findApiKeyById(handle.db, id),
     rotate: (input) =>

@@ -59,7 +59,7 @@ async function runProjectsShow(
     return;
   }
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const rows = await fetchAllProjects(handle.db);
     const row = rows.find((r) => r.project_id === projectId);

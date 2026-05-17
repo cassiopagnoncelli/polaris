@@ -46,7 +46,7 @@ async function runProjectsList(args: ProjectsListArgs, ctx: CommandContext): Pro
     return undefined;
   }
 
-  const handle = connectDb({ env: process.env });
+  const handle = connectDb({ env: ctx.env });
   try {
     const rows = await fetchAllProjects(handle.db);
     emit(ctx, "database", rows.map(rowToView));

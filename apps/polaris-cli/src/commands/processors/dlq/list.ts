@@ -73,8 +73,8 @@ export const processorsDlqListCommand: CommandDefinition = {
 };
 
 export function buildProcessorsDlqListRunner(hooks: ProcessorDlqListHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   return async function runner(args: ListArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const processor = (args.processor ?? "").trim();
     if (processor.length === 0) {
       throw new UsageError("--processor is required");
@@ -109,8 +109,8 @@ export function buildProcessorsDlqListRunner(hooks: ProcessorDlqListHooks = {}) 
 
 const runProcessorsDlqList = buildProcessorsDlqListRunner();
 
-function defaultStore(): ProcessorDlqListStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorDlqListStore {
+  const handle = connectDb({ env });
   const repo = createKyselyProcessorDlqRecordRepository({ db: handle.db });
   return {
     listByProcessor: (name, filter) => repo.findByProcessor(name, filter),

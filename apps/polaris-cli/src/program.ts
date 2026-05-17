@@ -381,6 +381,7 @@ async function buildContextForCommand(options: {
     output: options.output,
     meta: options.meta,
     actor: options.actor,
+    env: options.env,
   };
 }
 

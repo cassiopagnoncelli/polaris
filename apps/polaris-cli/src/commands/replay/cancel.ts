@@ -88,12 +88,12 @@ export const replayCancelCommand: CommandDefinition = {
 };
 
 export function buildReplayCancelRunner(hooks: ReplayCancelHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabel = hooks.actorLabel;
 
   return async function runner(args: ReplayCancelArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.replayJobId.trim();
     if (id.length === 0) {
       throw new UsageError("replay_job_id is required");
@@ -134,8 +134,8 @@ export function buildReplayCancelRunner(hooks: ReplayCancelHooks = {}) {
 
 const runReplayCancel = buildReplayCancelRunner();
 
-function defaultStore(): ReplayCancelStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ReplayCancelStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
     cancelWithAudit: async (input) =>

@@ -56,9 +56,8 @@ export const exportApiKeysCommand: CommandDefinition = {
 };
 
 export function buildExportApiKeysRunner(hooks: ExportApiKeysHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: ExportApiKeysArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
     const store = openStore();
     try {
@@ -73,8 +72,8 @@ export function buildExportApiKeysRunner(hooks: ExportApiKeysHooks = {}) {
 
 const runExportApiKeys = buildExportApiKeysRunner();
 
-function defaultStore(): ExportApiKeysStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ExportApiKeysStore {
+  const handle = connectDb({ env });
   return {
     list: (projectId, environment) => listApiKeysByProjectEnv(handle.db, projectId, environment),
     close: () => handle.close(),

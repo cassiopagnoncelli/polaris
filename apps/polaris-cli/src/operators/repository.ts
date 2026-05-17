@@ -36,7 +36,7 @@ import {
  * Wrap a Kysely client in the resolver's repository contract.
  *
  * The returned object is stateless — the same `db` may be shared across
- * commands. Callers that opened a `connectDb({ env: process.env })`
+ * commands. Callers that opened a `connectDb({ env: ctx.env })`
  * handle pass the `db` field here and close the handle when the command
  * finishes (the resolver does not close the db itself).
  */

@@ -50,12 +50,11 @@ export const clickhouseRebuildShowCommand: CommandDefinition = {
 };
 
 export function buildClickhouseRebuildShowRunner(hooks: ClickhouseRebuildShowHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(
     args: ClickhouseRebuildShowArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.id.trim();
     if (id.length === 0) {
       throw new UsageError("clickhouse_rebuild_job_id is required");
@@ -76,8 +75,8 @@ export function buildClickhouseRebuildShowRunner(hooks: ClickhouseRebuildShowHoo
 
 const runShow = buildClickhouseRebuildShowRunner();
 
-function defaultStore(): ClickhouseRebuildShowStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildShowStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findClickhouseRebuildJobById(handle.db, id),
     close: () => handle.close(),

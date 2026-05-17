@@ -122,7 +122,6 @@ export const destinationsDisableReplayCommand: CommandDefinition = {
 };
 
 export function buildDestinationsDisableReplayRunner(hooks: DestinationsDisableReplayHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
@@ -131,6 +130,7 @@ export function buildDestinationsDisableReplayRunner(hooks: DestinationsDisableR
     args: DestinationsDisableReplayArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectMappingArguments(args as unknown as Record<string, unknown>);
     const id = args.destinationId.trim();
     if (id.length === 0) {
@@ -224,8 +224,8 @@ export function buildDestinationsDisableReplayRunner(hooks: DestinationsDisableR
 
 const runDestinationsDisableReplay = buildDestinationsDisableReplayRunner();
 
-function defaultStore(): DestinationsDisableReplayStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsDisableReplayStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
     disableReplayWithAudit: async (id, reason, now, audit) =>

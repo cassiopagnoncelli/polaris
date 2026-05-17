@@ -52,9 +52,8 @@ export const dlqShowCommand: CommandDefinition = {
 };
 
 export function buildDlqShowRunner(hooks: DlqShowHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: DlqShowArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.dlqId.trim();
     if (id.length === 0) {
       throw new UsageError("dlq_id is required");
@@ -75,8 +74,8 @@ export function buildDlqShowRunner(hooks: DlqShowHooks = {}) {
 
 const runDlqShow = buildDlqShowRunner();
 
-function defaultStore(): DlqShowStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DlqShowStore {
+  const handle = connectDb({ env });
   const repo = createKyselyDlqRecordRepository({ db: handle.db });
   return {
     findById: (id) => repo.findRecord(id),

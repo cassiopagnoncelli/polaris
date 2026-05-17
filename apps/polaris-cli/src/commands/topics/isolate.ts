@@ -153,13 +153,13 @@ export const topicsIsolateCommand: CommandDefinition = {
 };
 
 export function buildTopicsIsolateRunner(hooks: TopicsIsolateHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const issueId = hooks.issueId ?? (() => `${TOPIC_ISOLATION_ID_PREFIX}${uuidv7()}`);
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const nowFn = hooks.now ?? (() => new Date());
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: TopicsIsolateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
     const now = nowFn();
     const id = issueId();
@@ -241,8 +241,8 @@ export function buildTopicsIsolateRunner(hooks: TopicsIsolateHooks = {}) {
 
 const runTopicsIsolate = buildTopicsIsolateRunner();
 
-function defaultStore(): TopicsIsolateStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): TopicsIsolateStore {
+  const handle = connectDb({ env });
   return {
     insertWithAudit: async (input, audit): Promise<IsolateInsertOutcome> => {
       try {

@@ -47,12 +47,11 @@ export const destinationsShowCommand: CommandDefinition = {
 };
 
 export function buildDestinationsShowRunner(hooks: DestinationsShowHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(
     args: DestinationsShowArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectMappingArguments(args as unknown as Record<string, unknown>);
     const id = args.destinationId.trim();
     if (id.length === 0) {
@@ -75,8 +74,8 @@ export function buildDestinationsShowRunner(hooks: DestinationsShowHooks = {}) {
 
 const runDestinationsShow = buildDestinationsShowRunner();
 
-function defaultStore(): DestinationsShowStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsShowStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
     close: () => handle.close(),

@@ -118,7 +118,6 @@ export const processorsDisableCommand: CommandDefinition = {
 };
 
 export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const verifyManifest =
     hooks.verifyManifest ??
@@ -133,6 +132,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
     args: ProcessorsDisableArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
 
     const key = validate(args);
@@ -237,8 +237,8 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
 
 const runProcessorsDisable = buildProcessorsDisableRunner();
 
-function defaultStore(): ProcessorsDisableStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorsDisableStore {
+  const handle = connectDb({ env });
   return {
     findByKey: (key) => findActivationByKey(handle.db, key),
     disableWithAudit: async (input, audit) =>

@@ -90,9 +90,8 @@ export const exportAuditCommand: CommandDefinition = {
 };
 
 export function buildExportAuditRunner(hooks: ExportAuditHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
-
   return async function runner(args: ExportAuditArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const { filter, format } = validate(args);
     const store = openStore();
     try {
@@ -107,8 +106,8 @@ export function buildExportAuditRunner(hooks: ExportAuditHooks = {}) {
 
 const runExportAudit = buildExportAuditRunner();
 
-function defaultStore(): ExportAuditStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ExportAuditStore {
+  const handle = connectDb({ env });
   return {
     list: (filter) => listAuditRecords(handle.db, filter),
     close: () => handle.close(),

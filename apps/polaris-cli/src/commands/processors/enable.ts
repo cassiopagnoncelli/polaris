@@ -137,7 +137,6 @@ export const processorsEnableCommand: CommandDefinition = {
 };
 
 export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const verifyManifest =
     hooks.verifyManifest ??
@@ -152,6 +151,7 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
     args: ProcessorsEnableArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
 
     const key = validate(args);
@@ -256,8 +256,8 @@ export function buildProcessorsEnableRunner(hooks: ProcessorsEnableHooks = {}) {
 
 const runProcessorsEnable = buildProcessorsEnableRunner();
 
-function defaultStore(): ProcessorsEnableStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorsEnableStore {
+  const handle = connectDb({ env });
   return {
     findByKey: (key) => findActivationByKey(handle.db, key),
     enableWithAudit: async (input, audit) =>

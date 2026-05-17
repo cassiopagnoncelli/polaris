@@ -91,12 +91,12 @@ export const keysRevokeCommand: CommandDefinition = {
 };
 
 export function buildKeysRevokeRunner(hooks: KeysRevokeHooks = {}) {
-  const openStore = hooks.openStore ?? defaultStore;
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(args: KeysRevokeArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const id = args.apiKeyId.trim();
     if (id.length === 0) {
       throw new UsageError("api_key_id is required");
@@ -189,8 +189,8 @@ export function buildKeysRevokeRunner(hooks: KeysRevokeHooks = {}) {
 
 const runKeysRevoke = buildKeysRevokeRunner();
 
-function defaultStore(): KeysRevokeStore {
-  const handle = connectDb({ env: process.env });
+function defaultStore(env: NodeJS.ProcessEnv): KeysRevokeStore {
+  const handle = connectDb({ env });
   return {
     findById: (id) => findApiKeyById(handle.db, id),
     revokeWithAudit: async (id, revokedAt, audit) =>
