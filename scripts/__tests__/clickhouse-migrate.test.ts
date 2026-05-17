@@ -156,6 +156,25 @@ describe("discoverMigrations", () => {
     const order = discoverMigrations(root).map((m: { relativePath: string }) => m.relativePath);
     expect(order).toEqual(["00_database.sql"]);
   });
+
+  it("skips *_rebuild.sql template files that aren't migrations", () => {
+    // The clickhouse-rebuild driver ships projection SELECT templates
+    // (e.g. projections/40_event_daily_counts_rebuild.sql) alongside the
+    // canonical projection table DDL. Templates have unbound ClickHouse
+    // parameters like `{partition:String}` and must not be executed by
+    // the migration runner.
+    seed(
+      "projections/40_event_daily_counts.sql",
+      "CREATE TABLE polaris.x (a UInt32) ENGINE = MergeTree ORDER BY a;",
+    );
+    seed(
+      "projections/40_event_daily_counts_rebuild.sql",
+      "SELECT a FROM polaris.x WHERE _partition_id = {partition:String};",
+    );
+
+    const order = discoverMigrations(root).map((m: { relativePath: string }) => m.relativePath);
+    expect(order).toEqual([join("projections", "40_event_daily_counts.sql")]);
+  });
 });
 
 describe("applyMigrations", () => {
@@ -330,12 +349,18 @@ describe("end-to-end against the real sql/clickhouse/ tree", () => {
 
 describe("expandClientMacros", () => {
   const originalReplicated = process.env["POLARIS_CLICKHOUSE_REPLICATED"];
+  const originalKafkaBrokers = process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
 
   afterEach(() => {
     if (originalReplicated === undefined) {
       delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     } else {
       process.env["POLARIS_CLICKHOUSE_REPLICATED"] = originalReplicated;
+    }
+    if (originalKafkaBrokers === undefined) {
+      delete process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
+    } else {
+      process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = originalKafkaBrokers;
     }
   });
 
@@ -366,6 +391,32 @@ describe("expandClientMacros", () => {
     delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     expect(expandClientMacros("CREATE TABLE x (y UInt32) ON CLUSTER '{cluster}'")).toBe(
       "CREATE TABLE x (y UInt32) ON CLUSTER '{cluster}'",
+    );
+  });
+
+  it("expands {kafka_brokers} to the docker-compose hostname by default", () => {
+    delete process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
+    expect(expandClientMacros("kafka_broker_list = '{kafka_brokers}'")).toBe(
+      "kafka_broker_list = 'redpanda:9092'",
+    );
+  });
+
+  it("expands {kafka_brokers} to the bare-metal override when set", () => {
+    process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = "localhost:19092";
+    expect(expandClientMacros("kafka_broker_list = '{kafka_brokers}'")).toBe(
+      "kafka_broker_list = 'localhost:19092'",
+    );
+  });
+
+  it("expands both {replicated} and {kafka_brokers} in the same input", () => {
+    process.env["POLARIS_CLICKHOUSE_REPLICATED"] = "Replicated";
+    process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = "kafka.prod.svc:9092";
+    const sql =
+      "CREATE TABLE q (x UInt32) ENGINE = Kafka SETTINGS kafka_broker_list = '{kafka_brokers}';\n" +
+      "CREATE TABLE r (x UInt32) ENGINE = {replicated}MergeTree ORDER BY x;";
+    expect(expandClientMacros(sql)).toBe(
+      "CREATE TABLE q (x UInt32) ENGINE = Kafka SETTINGS kafka_broker_list = 'kafka.prod.svc:9092';\n" +
+        "CREATE TABLE r (x UInt32) ENGINE = ReplicatedMergeTree ORDER BY x;",
     );
   });
 });

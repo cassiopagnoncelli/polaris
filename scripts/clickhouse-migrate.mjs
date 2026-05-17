@@ -70,6 +70,19 @@ const APPLY_DIRECTORIES = [".", "projections", "materialized-views", "roles"];
 
 const SCANNED_EXTENSIONS = new Set([".sql"]);
 
+/**
+ * Filename suffixes for `.sql` files that live under sql/clickhouse/ but
+ * are NOT migrations — they're SELECT templates loaded by application
+ * code (e.g. `polaris clickhouse-rebuild create` reads
+ * `projections/<name>_rebuild.sql` and wraps it in an INSERT). Templates
+ * contain unbound ClickHouse parameter placeholders like
+ * `{partition:String}` and will fail with UNKNOWN_QUERY_PARAMETER if the
+ * runner tries to execute them directly.
+ *
+ * Add new template-naming conventions here as they appear in the tree.
+ */
+const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
+
 // Strip SQL line comments (-- ...) and block comments (slash-star ...
 // star-slash), then split the remaining text on top-level semicolons.
 //
@@ -84,37 +97,52 @@ const SCANNED_EXTENSIONS = new Set([".sql"]);
 /**
  * Client-side macro expansion.
  *
- * ClickHouse 25+ no longer expands `{macro}` placeholders inside the
- * `ENGINE = ...` clause (unquoted identifier position). The polaris
- * schema uses `ENGINE = {replicated}MergeTree` as the local/prod swap:
+ * Two cases push macros onto the runner instead of the ClickHouse server:
  *
- *   local/dev:  {replicated} = ''           → MergeTree
- *   production: {replicated} = 'Replicated' → ReplicatedMergeTree
+ *   1. ClickHouse 25+ no longer expands `{macro}` placeholders inside the
+ *      `ENGINE = ...` clause (unquoted identifier position). The polaris
+ *      schema uses `ENGINE = {replicated}MergeTree` as the local/prod swap:
  *
- * To keep the canonical SQL working on CH 25+, the runner substitutes
- * client-side macros BEFORE handing each statement to ClickHouse.
- * Other macros (e.g. `{cluster}` inside `ON CLUSTER '{cluster}'`)
- * stay in string-literal position and are still expanded server-side.
+ *        local/dev:  {replicated} = ''           → MergeTree
+ *        production: {replicated} = 'Replicated' → ReplicatedMergeTree
  *
- * Macros come from environment variables, defaulting to the local/dev
- * values so a developer running `pnpm clickhouse:migrate` with no env
- * set gets the local engine family. Production CI sets these to the
- * replicated equivalents.
+ *   2. Even where macro expansion does fire (e.g. inside string literals),
+ *      values that depend on the *operator's* viewpoint — not the
+ *      ClickHouse server's — can't be modelled server-side. The Kafka
+ *      Engine broker list is the canonical example: docker compose's
+ *      ClickHouse reaches Redpanda at `redpanda:9092` (compose network);
+ *      a bare-metal ClickHouse reaches the host-mapped Redpanda at
+ *      `localhost:19092`. The server can't infer the right value, so the
+ *      runner substitutes it from the environment instead.
  *
- *   POLARIS_CLICKHOUSE_REPLICATED   default '' (becomes '' / 'Replicated')
+ * Other macros (e.g. `{cluster}` inside `ON CLUSTER '{cluster}'`) stay
+ * in string-literal position and remain server-side.
  *
- * Add new entries here when introducing a new identifier-position
- * macro. Keep the regex `{name}` literal — these are not server-side
- * substitutions and do not interact with ClickHouse's parameter syntax.
+ * Macros come from environment variables, defaulting to the canonical
+ * docker-compose values so a developer who runs `make docker-up && make
+ * setup` with no extra env gets a working stack. Bare-metal users
+ * override via `.env.local` (the Makefile loads it before `make setup`).
+ *
+ *   POLARIS_CLICKHOUSE_REPLICATED       default '' (local; prod = 'Replicated')
+ *   POLARIS_CLICKHOUSE_KAFKA_BROKERS    default 'redpanda:9092' (docker
+ *                                       compose hostname); bare-metal
+ *                                       sets it to 'localhost:19092'.
+ *
+ * Add new entries to CLIENT_MACROS when introducing a new client-side
+ * substitution. Keep the regex `{name}` literal — these are not
+ * server-side macros and do not interact with ClickHouse's parameter
+ * syntax (`{name:Type}`).
  */
-const CLIENT_MACRO_NAMES = ["replicated"];
+const CLIENT_MACROS = [
+  { name: "replicated", env: "POLARIS_CLICKHOUSE_REPLICATED", default: "" },
+  { name: "kafka_brokers", env: "POLARIS_CLICKHOUSE_KAFKA_BROKERS", default: "redpanda:9092" },
+];
 
 export function expandClientMacros(sql) {
   let out = sql;
-  for (const name of CLIENT_MACRO_NAMES) {
-    const envKey = `POLARIS_CLICKHOUSE_${name.toUpperCase()}`;
-    const value = process.env[envKey] ?? "";
-    out = out.replace(new RegExp(`\\{${name}\\}`, "g"), value);
+  for (const macro of CLIENT_MACROS) {
+    const value = process.env[macro.env] ?? macro.default;
+    out = out.replace(new RegExp(`\\{${macro.name}\\}`, "g"), value);
   }
   return out;
 }
@@ -256,7 +284,10 @@ export function discoverMigrations(root) {
       .filter((name) => {
         const dot = name.lastIndexOf(".");
         if (dot === -1) return false;
-        return SCANNED_EXTENSIONS.has(name.slice(dot));
+        if (!SCANNED_EXTENSIONS.has(name.slice(dot))) return false;
+        // Skip non-migration template SQL (e.g. *_rebuild.sql) — see
+        // NON_MIGRATION_SUFFIXES comment.
+        return !NON_MIGRATION_SUFFIXES.some((suffix) => name.endsWith(suffix));
       })
       .sort(); // lexicographic
     for (const name of files) {

@@ -61,7 +61,15 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_events_queue ON CLUSTER '{cluster}'
 )
 ENGINE = Kafka
 SETTINGS
-    kafka_broker_list           = 'redpanda:9092',
+    -- `{kafka_brokers}` is substituted client-side by the migration
+    -- runner (see scripts/clickhouse-migrate.mjs, expandClientMacros).
+    -- Default is the docker-compose hostname `redpanda:9092`; bare-metal
+    -- setups override via POLARIS_CLICKHOUSE_KAFKA_BROKERS (typically
+    -- `localhost:19092`, matching the host-side port mapping in
+    -- docker-compose.yml). Server-side macro substitution does NOT fire
+    -- inside Kafka Engine SETTINGS values, hence the runner-side
+    -- substitution.
+    kafka_broker_list           = '{kafka_brokers}',
     kafka_topic_list            = 'analytics.events',
     kafka_group_name            = 'polaris-clickhouse-analytics',
     kafka_format                = 'JSONEachRow',
