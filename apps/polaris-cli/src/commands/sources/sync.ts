@@ -43,7 +43,7 @@ export const sourcesSyncCommand: CommandDefinition = {
 };
 
 async function runSourcesSync(args: SourcesSyncArgs, ctx: CommandContext): Promise<undefined> {
-  const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+  const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
   const catalog = loadCatalog({ root });
 
   const handle = connectDb({ env: ctx.env });

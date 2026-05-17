@@ -40,7 +40,7 @@ export const projectsListCommand: CommandDefinition = {
 
 async function runProjectsList(args: ProjectsListArgs, ctx: CommandContext): Promise<undefined> {
   if (args.fromCatalog === true) {
-    const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+    const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
     const catalog = loadCatalog({ root });
     emit(ctx, "catalog", catalog.projects.map(catalogToView));
     return undefined;

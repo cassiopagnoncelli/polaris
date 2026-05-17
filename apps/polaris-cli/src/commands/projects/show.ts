@@ -49,7 +49,7 @@ async function runProjectsShow(
   ctx: CommandContext,
 ): Promise<void> {
   if (args.fromCatalog === true) {
-    const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+    const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
     const catalog = loadCatalog({ root });
     const match = catalog.projects.find((p) => p.project_id === projectId);
     if (match === undefined) {

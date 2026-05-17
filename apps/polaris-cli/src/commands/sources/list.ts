@@ -40,7 +40,7 @@ export const sourcesListCommand: CommandDefinition = {
 
 async function runSourcesList(args: SourcesListArgs, ctx: CommandContext): Promise<undefined> {
   if (args.fromCatalog === true) {
-    const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+    const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
     const catalog = loadCatalog({ root });
     const filtered =
       args.project !== undefined

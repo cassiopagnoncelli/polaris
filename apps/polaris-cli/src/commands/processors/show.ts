@@ -82,12 +82,13 @@ export const processorsShowCommand: CommandDefinition = {
 export function buildProcessorsShowRunner(hooks: ProcessorsShowHooks = {}) {
   const loadManifest =
     hooks.loadManifest ?? ((root, name, version) => loadProcessorManifest({ root, name, version }));
-  const resolveRoot =
-    hooks.resolveRoot ??
-    ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
 
   return async function runner(args: ProcessorsShowArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const resolveRoot =
+      hooks.resolveRoot ??
+      ((explicit?: string) =>
+        resolveCatalogRoot({ env: ctx.env, ...(explicit !== undefined ? { explicit } : {}) }));
     // Defense-in-depth: reject any rule-shaped flag even though commander
     // only declares --version / --catalog-root.
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);

@@ -48,7 +48,7 @@ export const projectsSyncCommand: CommandDefinition = {
 };
 
 async function runProjectsSync(args: ProjectsSyncArgs, ctx: CommandContext): Promise<undefined> {
-  const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+  const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
   const catalog = loadCatalog({ root });
 
   const handle = connectDb({ env: ctx.env });

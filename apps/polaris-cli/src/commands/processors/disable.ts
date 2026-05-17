@@ -122,9 +122,6 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
   const verifyManifest =
     hooks.verifyManifest ??
     ((root, name, version) => loadProcessorManifest({ root, name, version }).ok);
-  const resolveRoot =
-    hooks.resolveRoot ??
-    ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
   const actorLabelOverride = hooks.actorLabel;
   const generateAuditId = hooks.generateAuditId ?? uuidv7;
 
@@ -133,6 +130,10 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
     ctx: CommandContext,
   ): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const resolveRoot =
+      hooks.resolveRoot ??
+      ((explicit?: string) =>
+        resolveCatalogRoot({ env: ctx.env, ...(explicit !== undefined ? { explicit } : {}) }));
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
 
     const key = validate(args);

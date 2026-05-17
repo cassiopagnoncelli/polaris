@@ -53,7 +53,7 @@ async function runSourcesShow(
   ctx: CommandContext,
 ): Promise<void> {
   if (args.fromCatalog === true) {
-    const root = resolveCatalogRoot({ explicit: args.catalogRoot });
+    const root = resolveCatalogRoot({ env: ctx.env, explicit: args.catalogRoot });
     const catalog = loadCatalog({ root });
     const matches = catalog.sources.filter((s) => {
       if (s.source_id !== sourceId) return false;

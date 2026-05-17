@@ -63,12 +63,13 @@ export const processorsListCommand: CommandDefinition = {
 
 export function buildProcessorsListRunner(hooks: ProcessorsListHooks = {}) {
   const loadManifests = hooks.loadManifests ?? ((root) => loadProcessorManifests({ root }));
-  const resolveRoot =
-    hooks.resolveRoot ??
-    ((explicit?: string) => resolveCatalogRoot(explicit !== undefined ? { explicit } : {}));
 
   return async function runner(args: ProcessorsListArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const resolveRoot =
+      hooks.resolveRoot ??
+      ((explicit?: string) =>
+        resolveCatalogRoot({ env: ctx.env, ...(explicit !== undefined ? { explicit } : {}) }));
     // Defense-in-depth: reject any flag that resembles a transform-rule
     // surface even though commander only declares --catalog-root above.
     rejectProcessorRuleArguments(args as unknown as Record<string, unknown>);
