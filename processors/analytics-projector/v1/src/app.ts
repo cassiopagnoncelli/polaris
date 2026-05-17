@@ -266,9 +266,13 @@ export async function buildAnalyticsProjectorApp(
     }
   });
   if (probePoller !== null) {
+    // Bind to a const so the narrowed type survives into the async
+    // closure (TS widens `let probePoller: ... | null` back to nullable
+    // inside the callback).
+    const poller = probePoller;
     shutdownTasks.push(async () => {
       try {
-        await probePoller!.stop();
+        await poller.stop();
       } catch (err) {
         processorLogger.warn(
           { component: "analytics-projector.clickhouse-probe", err: errSummary(err) },
@@ -278,9 +282,10 @@ export async function buildAnalyticsProjectorApp(
     });
   }
   if (probeClient !== null) {
+    const client = probeClient;
     shutdownTasks.push(async () => {
       try {
-        await probeClient!.close();
+        await client.close();
       } catch (err) {
         processorLogger.warn(
           { component: "analytics-projector.clickhouse-probe", err: errSummary(err) },

@@ -525,10 +525,10 @@ function filterAndSlice(
   return matches.slice(0, clampListLimit(filter.limit));
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Kysely query-builder generics make
-// a narrow query type prohibitively verbose; the function only chains
-// `.where(...)` calls that return the same builder, so the runtime contract
-// is honored.
+// Kysely query-builder generics make a narrow query type prohibitively
+// verbose; the function only chains `.where(...)` calls that return the
+// same builder, so the runtime contract is honored.
+// biome-ignore lint/suspicious/noExplicitAny: see comment above
 function applyFilter<Q extends { where: (...args: any[]) => Q }>(
   query: Q,
   filter: ListDlqRecordsFilter,
