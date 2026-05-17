@@ -329,30 +329,30 @@ describe("end-to-end against the real sql/clickhouse/ tree", () => {
 });
 
 describe("expandClientMacros", () => {
-  const originalReplicated = process.env.POLARIS_CLICKHOUSE_REPLICATED;
+  const originalReplicated = process.env["POLARIS_CLICKHOUSE_REPLICATED"];
 
   afterEach(() => {
     if (originalReplicated === undefined) {
-      delete process.env.POLARIS_CLICKHOUSE_REPLICATED;
+      delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     } else {
-      process.env.POLARIS_CLICKHOUSE_REPLICATED = originalReplicated;
+      process.env["POLARIS_CLICKHOUSE_REPLICATED"] = originalReplicated;
     }
   });
 
   it("expands {replicated} to '' by default (local engine family)", () => {
-    delete process.env.POLARIS_CLICKHOUSE_REPLICATED;
+    delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     expect(expandClientMacros("ENGINE = {replicated}MergeTree")).toBe("ENGINE = MergeTree");
   });
 
   it("expands {replicated} to its env-var value when set (production)", () => {
-    process.env.POLARIS_CLICKHOUSE_REPLICATED = "Replicated";
+    process.env["POLARIS_CLICKHOUSE_REPLICATED"] = "Replicated";
     expect(expandClientMacros("ENGINE = {replicated}ReplacingMergeTree(_version)")).toBe(
       "ENGINE = ReplicatedReplacingMergeTree(_version)",
     );
   });
 
   it("expands every occurrence in the input", () => {
-    delete process.env.POLARIS_CLICKHOUSE_REPLICATED;
+    delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     const sql =
       "CREATE TABLE a (x UInt32) ENGINE = {replicated}MergeTree;\n" +
       "CREATE TABLE b (x UInt32) ENGINE = {replicated}MergeTree;";
@@ -363,7 +363,7 @@ describe("expandClientMacros", () => {
   });
 
   it("leaves unrelated macro-like tokens alone (e.g. {cluster} is server-side)", () => {
-    delete process.env.POLARIS_CLICKHOUSE_REPLICATED;
+    delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     expect(expandClientMacros("CREATE TABLE x (y UInt32) ON CLUSTER '{cluster}'")).toBe(
       "CREATE TABLE x (y UInt32) ON CLUSTER '{cluster}'",
     );
