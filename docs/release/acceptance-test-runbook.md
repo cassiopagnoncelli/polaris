@@ -40,7 +40,7 @@ the per-step table the runner prints.
 
 | Requirement | Why |
 | --- | --- |
-| `docker compose up -d --wait` against the repo root compose file | Brings up Redpanda, PostgreSQL, Redis, ClickHouse. The acceptance test posts to a real ingester at `http://localhost:8080` by default. |
+| `docker compose up -d --wait` against the repo root compose file | Brings up Redpanda, PostgreSQL, Redis, ClickHouse. The acceptance test posts to a real ingester at `http://localhost:4000` by default. |
 | `pnpm install` | Workspace dependencies. |
 | `pnpm -r build` | The acceptance scenario shells out to the compiled `polaris` CLI binary at `apps/polaris-cli/dist/bin/polaris.js` and imports `@polaris/node-sdk` by name. Both surfaces must be built. |
 | `pnpm db:migrate` | PostgreSQL migrations at HEAD — control-plane tables (`projects`, `sources`, `api_keys`, `destinations`, `delivery_records`, `replay_jobs`, `audit_records`) must exist. |
@@ -80,7 +80,7 @@ where they overlap, plus a few of its own.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `POLARIS_ACCEPTANCE_TEST` | _(unset)_ | Set by `pnpm test:acceptance`. When `1`, the Vitest scenario runs; otherwise it skips. |
-| `POLARIS_INGESTER_URL` | `http://localhost:8080` | Where the Node SDK posts the event. |
+| `POLARIS_INGESTER_URL` | `http://localhost:4000` | Where the Node SDK posts the event. |
 | `POLARIS_ACCEPTANCE_PROJECT_ID` | `storefront` | Project under test. Must exist in `catalog/projects/`. |
 | `POLARIS_ACCEPTANCE_ENVIRONMENT` | `development` | Environment string stamped onto the API key, destination, and replay job. |
 | `POLARIS_ACCEPTANCE_SOURCE_ID` | `payments-api` | Source under test. Must exist in `catalog/sources/<project>/`. |
@@ -110,7 +110,7 @@ Abridged — the actual run prints the full Vitest reporter as well.
   services. ...
 
   Scenario      : tests/acceptance/scenarios/full-pipeline.test.ts
-  Ingester      : http://localhost:8080
+  Ingester      : http://localhost:4000
   Project / env : storefront / development
 ==============================================================================
 
@@ -141,7 +141,7 @@ Abridged — the actual run prints the full Vitest reporter as well.
 | `control_plane_catalog` | `DATABASE_URL` wrong, PostgreSQL not up, migrations not applied | `docker compose ps postgres`, `pnpm db:status`, [docs/development/getting-started.md](../development/getting-started.md) |
 | `control_plane_api_key` | API key INSERT collides with a stale row from a previous failed run | `psql -c "DELETE FROM api_keys WHERE source_id='payments-api' AND environment='development'"` (the test does not auto-clean to preserve a forensic trail) |
 | `control_plane_destination` | Webhook URL empty, vendor mismatch, secret-ref validation failed | Either set `POLARIS_ACCEPTANCE_WEBHOOK_URL` or set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` to skip the destination steps |
-| `sdk_track` | Ingester not running, API key never propagated, SDK queue/transport regression | `docker compose logs ingester-api`, `curl http://localhost:8080/health`, check the SDK's `onDrop` diagnostic in the scenario output |
+| `sdk_track` | Ingester not running, API key never propagated, SDK queue/transport regression | `docker compose logs ingester-api`, `curl http://localhost:4000/health`, check the SDK's `onDrop` diagnostic in the scenario output |
 | `analytics_persisted` | `analytics-projector` not running, ClickHouse not consuming, ReplacingMergeTree merge race | [docs/implementation/runbooks/vertical-slice-smoke.md](../implementation/runbooks/vertical-slice-smoke.md) "Common failure modes" — same triage as the smoke |
 | `delivery_observed` | webhook-sink consumer not running, destination disabled, destination filter dropping the event | [docs/operations/destination-dlq-triage.md](../operations/destination-dlq-triage.md) walks the DLQ triage flow |
 | `replay_dry_run` | `replay_jobs` migration missing, replay planner regression | `pnpm db:status`, [docs/architecture/05-processors-and-replay.md](../architecture/05-processors-and-replay.md) "Replay Control Plane" |

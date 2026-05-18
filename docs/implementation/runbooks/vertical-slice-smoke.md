@@ -45,7 +45,7 @@ pnpm clickhouse:bootstrap-local
 
 # 3. start the ingester and the analytics-projector in two terminals,
 #    or background them. The smoke runner expects:
-#      - the ingester on http://localhost:8080
+#      - the ingester on http://localhost:4000
 #      - the analytics-projector connected to redpanda:9092 (compose
 #        internal hostname) — already the default.
 pnpm --filter @polaris/ingester-api run start &
@@ -59,7 +59,7 @@ Expected output (abridged):
 
 ```text
 [polaris-smoke] start
-[polaris-smoke] ingester=http://localhost:8080
+[polaris-smoke] ingester=http://localhost:4000
 [polaris-smoke] clickhouse=http://localhost:8123
 [polaris-smoke] project=storefront env=development source=payments-api
 [polaris-smoke] step=seed mode=mint database=set
@@ -97,7 +97,7 @@ POLARIS_SMOKE_DOCKER=1 pnpm test:smoke
 
 | Variable                            | Default                                            | Purpose                                                                       |
 | ----------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `POLARIS_INGESTER_URL`              | `http://localhost:8080`                            | Where the smoke posts the event.                                              |
+| `POLARIS_INGESTER_URL`              | `http://localhost:4000`                            | Where the smoke posts the event.                                              |
 | `POLARIS_SMOKE_API_KEY`             | _(unset)_                                          | When set, bypasses seeding; the runner uses this token verbatim.              |
 | `POLARIS_SMOKE_PROJECT_ID`          | `storefront`                                       | Stamped into the envelope and the seeded API key.                             |
 | `POLARIS_SMOKE_ENVIRONMENT`         | `development`                                      | Stamped into the envelope and the seeded API key.                             |
@@ -143,7 +143,7 @@ pnpm smoke:vertical-slice
 
 | Symptom                                                              | Likely cause                                                                            | Fix                                                                                                                  |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `failed to POST http://localhost:8080/v1/events: ... ECONNREFUSED`   | The ingester is not running.                                                            | `pnpm --filter @polaris/ingester-api run start` and retry.                                                            |
+| `failed to POST http://localhost:4000/v1/events: ... ECONNREFUSED`   | The ingester is not running.                                                            | `pnpm --filter @polaris/ingester-api run start` and retry.                                                            |
 | `ingester did not accept the event: ... http_error 401`              | The API key is invalid or the seed step did not run.                                    | Check `pg_hba.conf` / DATABASE_URL, or export `POLARIS_SMOKE_API_KEY` directly.                                       |
 | `timed out after 60000ms waiting for analytics_raw`                  | The analytics-projector is not running, ClickHouse is not consuming, or the MV is down. | `docker compose logs analytics-projector clickhouse`. Bump `POLARIS_SMOKE_POLL_TIMEOUT_MS` for slow CI runners.       |
 | `psql: command not found`                                            | The seed step shells out to `psql`.                                                     | Install postgresql-client (`brew install postgresql` / `apt-get install postgresql-client`), or pass `POLARIS_SMOKE_API_KEY`. |
