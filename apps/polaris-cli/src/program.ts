@@ -181,9 +181,11 @@ export function buildProgram(options: BuildOptions): Command {
       [
         "Polaris control-plane CLI — thin client for the control-plane API.",
         "",
-        "Authentication: bash-invocable, no interactive login. Set two env vars:",
-        "  POLARIS_API_URL  base URL of the control-plane API",
-        "  POLARIS_TOKEN    bearer token issued by `polaris operators create`",
+        "Authentication: bash-invocable, no interactive login. The CLI reads:",
+        "  POLARIS_API_URL  base URL of the control-plane API (required only for HTTP commands)",
+        "  POLARIS_TOKEN    bearer token issued by `polaris operators create` (same)",
+        "",
+        "v1 commands are DATABASE_URL-direct and do not require either var.",
         "",
         "Production mutations require an authenticated operator token. Set",
         "POLARIS_OPERATOR_TOKEN to a value issued via `polaris operators create`",
@@ -211,8 +213,8 @@ export function buildProgram(options: BuildOptions): Command {
       [
         "",
         "Environment variables:",
-        "  POLARIS_API_URL          Base URL of the control-plane API",
-        "  POLARIS_TOKEN            Bearer token (used when no profile is selected)",
+        "  POLARIS_API_URL          Base URL of the control-plane API (required for HTTP commands only)",
+        "  POLARIS_TOKEN            Bearer token, used when no profile is selected (HTTP commands only)",
         "  POLARIS_PROFILE          Default profile name",
         "  POLARIS_OPERATOR_TOKEN   Operator credential for production mutations",
         "  POLARIS_ENV              Effective environment for the gate (development|staging|production)",
@@ -391,8 +393,9 @@ async function buildContextForCommand(options: {
  * we fall back to the profile name — `production`, `staging`, etc. The shared
  * logger only uses this as a string label on every line.
  */
-function deriveLogEnvLabel(config: { profile: string; apiUrl: string }): string | undefined {
+function deriveLogEnvLabel(config: { profile: string; apiUrl: string | null }): string | undefined {
   if (config.profile !== "default") return config.profile;
+  if (config.apiUrl === null) return undefined;
   // Best-effort guess from the URL: localhost/127.0.0.1 implies local dev.
   try {
     const url = new URL(config.apiUrl);

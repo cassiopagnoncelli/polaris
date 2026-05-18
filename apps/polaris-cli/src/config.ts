@@ -8,22 +8,34 @@ import { ConfigError } from "./errors.js";
 /**
  * Resolved CLI runtime configuration.
  *
- * The CLI is a thin client — it carries exactly the values needed to call the
+ * The CLI is a thin client — it carries the values needed to call the
  * control-plane API: a base URL, a bearer token, an output mode, and a logger
  * verbosity. Everything else (commands, business state) is server-owned.
+ *
+ * `apiUrl` and `token` are nullable because every v1 CLI command is
+ * DATABASE_URL-direct (see `db/connect.ts`) and none construct an HTTP
+ * client. Commands that *do* need the HTTP boundary call
+ * {@link requireHttpAuth} to narrow the config to {@link AuthenticatedCliConfig},
+ * which moves the "required" error from process startup to the call site.
+ * In v1 nothing calls it; the helper is forward-looking infrastructure.
  */
 export interface CliConfig {
   /** Active profile name. `default` when no profile is selected. */
   readonly profile: string;
-  /** Base URL of the control-plane API (no trailing slash). */
-  readonly apiUrl: string;
   /**
-   * Bearer token read from the env var declared by the active profile.
-   *
-   * The token is NEVER stored in the config file or in process state beyond
-   * this struct. Callers should treat it as a secret and avoid logging it.
+   * Base URL of the control-plane API (no trailing slash). `null` when
+   * `POLARIS_API_URL` is unset and no profile supplied it — fine for v1's
+   * DB-direct commands; an HTTP command call site must {@link requireHttpAuth}.
    */
-  readonly token: string;
+  readonly apiUrl: string | null;
+  /**
+   * Bearer token read from the env var declared by the active profile. `null`
+   * when the env var is unset. The token is NEVER stored in the config file
+   * or in process state beyond this struct. Callers should treat it as a
+   * secret and avoid logging it (`@polaris/shared-logger`'s redaction list
+   * masks `config.token` for safety).
+   */
+  readonly token: string | null;
   /** Name of the env var the token came from. Useful for diagnostics. */
   readonly tokenEnvName: string;
   /** Output mode requested via `--output` (default `human`). */
@@ -33,6 +45,16 @@ export interface CliConfig {
   /** Resolved path of the config file consulted, if any. */
   readonly configFilePath: string | undefined;
 }
+
+/**
+ * A {@link CliConfig} narrowed to "ready to make an HTTP call" — both
+ * `apiUrl` and `token` are known non-null. Obtain one by calling
+ * {@link requireHttpAuth}.
+ */
+export type AuthenticatedCliConfig = CliConfig & {
+  readonly apiUrl: string;
+  readonly token: string;
+};
 
 export const OUTPUT_FORMATS = ["human", "json"] as const;
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
@@ -126,7 +148,7 @@ export function loadCliConfig(options: LoadConfigOptions = {}): CliConfig {
   const profileEntry =
     selectedProfileName === "default" ? undefined : configFile?.profiles[selectedProfileName];
 
-  let apiUrl: string;
+  let apiUrl: string | null;
   let tokenEnvName: string;
   if (profileEntry !== undefined) {
     apiUrl = profileEntry.url;
@@ -137,35 +159,54 @@ export function loadCliConfig(options: LoadConfigOptions = {}): CliConfig {
       configFile: configFilePath,
     });
   } else {
-    const fallbackUrl = trim(env["POLARIS_API_URL"]);
-    if (fallbackUrl === undefined) {
-      throw new ConfigError(
-        "POLARIS_API_URL is required when no profile is selected. Set the env var or pass --profile <name>.",
-      );
-    }
-    apiUrl = fallbackUrl;
+    apiUrl = trim(env["POLARIS_API_URL"]) ?? null;
     tokenEnvName = "POLARIS_TOKEN";
   }
 
-  const token = trim(env[tokenEnvName]);
-  if (token === undefined) {
-    throw new ConfigError(
-      `${tokenEnvName} is required (the bearer token for the "${selectedProfileName}" profile).`,
-      { tokenEnvName, profile: selectedProfileName },
-    );
-  }
+  const token = trim(env[tokenEnvName]) ?? null;
 
-  validateApiUrl(apiUrl);
+  if (apiUrl !== null) validateApiUrl(apiUrl);
 
   return {
     profile: selectedProfileName,
-    apiUrl: stripTrailingSlash(apiUrl),
+    apiUrl: apiUrl === null ? null : stripTrailingSlash(apiUrl),
     token,
     tokenEnvName,
     output: options.output ?? "human",
     logLevel: options.logLevel ?? defaultLogLevel(env),
     configFilePath: configFile === undefined ? undefined : configFilePath,
   };
+}
+
+/**
+ * Narrow a {@link CliConfig} to one ready for HTTP calls — both `apiUrl` and
+ * `token` are non-null. Call this at the entry point of any command that
+ * constructs an HTTP client; the resulting {@link AuthenticatedCliConfig} can
+ * be safely indexed for the URL and bearer.
+ *
+ * The error messages match those the parse-time check used to emit, so the
+ * failure surface for a fresh operator who forgot to export `POLARIS_API_URL`
+ * / `POLARIS_TOKEN` is unchanged at the point where it actually matters.
+ *
+ * In v1 no shipping command calls this — every CLI command is DATABASE_URL
+ * direct (see `db/connect.ts`). The helper is forward-looking infrastructure
+ * for the first HTTP command.
+ *
+ * @throws {ConfigError} when `apiUrl` or `token` is null.
+ */
+export function requireHttpAuth(config: CliConfig): AuthenticatedCliConfig {
+  if (config.apiUrl === null) {
+    throw new ConfigError(
+      "POLARIS_API_URL is required when no profile is selected. Set the env var or pass --profile <name>.",
+    );
+  }
+  if (config.token === null) {
+    throw new ConfigError(
+      `${config.tokenEnvName} is required (the bearer token for the "${config.profile}" profile).`,
+      { tokenEnvName: config.tokenEnvName, profile: config.profile },
+    );
+  }
+  return config as AuthenticatedCliConfig;
 }
 
 /**

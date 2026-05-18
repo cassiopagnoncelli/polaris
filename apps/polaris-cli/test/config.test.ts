@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ConfigError, DEFAULT_CONFIG_PATH, loadCliConfig, readConfigFile } from "../src/index.js";
+import {
+  ConfigError,
+  DEFAULT_CONFIG_PATH,
+  loadCliConfig,
+  readConfigFile,
+  requireHttpAuth,
+} from "../src/index.js";
 
 describe("loadCliConfig", () => {
   let tmp: string;
@@ -44,22 +50,67 @@ describe("loadCliConfig", () => {
     expect(config.apiUrl).toBe("https://polaris.example.internal");
   });
 
-  it("rejects missing POLARIS_TOKEN", () => {
-    expect(() =>
-      loadCliConfig({
-        env: { POLARIS_API_URL: "https://polaris.example.internal" },
-        configFile: join(tmp, "missing.toml"),
-      }),
-    ).toThrow(ConfigError);
+  it("returns a fully-nullable default config when no env vars are set", () => {
+    // Every v1 CLI command is DATABASE_URL-direct and doesn't need
+    // POLARIS_API_URL / POLARIS_TOKEN; loadCliConfig must succeed so those
+    // commands can run on a fresh checkout without env-var ceremony. The
+    // bearer-token check moves to requireHttpAuth (called only by commands
+    // that build an HTTP client — none ship in v1).
+    const config = loadCliConfig({
+      env: {},
+      configFile: join(tmp, "missing.toml"),
+    });
+    expect(config.profile).toBe("default");
+    expect(config.apiUrl).toBeNull();
+    expect(config.token).toBeNull();
+    expect(config.tokenEnvName).toBe("POLARIS_TOKEN");
   });
 
-  it("rejects missing POLARIS_API_URL when no profile is selected", () => {
-    expect(() =>
-      loadCliConfig({
-        env: { POLARIS_TOKEN: "tok" },
-        configFile: join(tmp, "missing.toml"),
-      }),
-    ).toThrow(/POLARIS_API_URL is required/);
+  it("returns apiUrl with token null when only POLARIS_API_URL is set", () => {
+    const config = loadCliConfig({
+      env: { POLARIS_API_URL: "https://polaris.example.internal" },
+      configFile: join(tmp, "missing.toml"),
+    });
+    expect(config.apiUrl).toBe("https://polaris.example.internal");
+    expect(config.token).toBeNull();
+  });
+
+  it("returns token with apiUrl null when only POLARIS_TOKEN is set", () => {
+    const config = loadCliConfig({
+      env: { POLARIS_TOKEN: "tok" },
+      configFile: join(tmp, "missing.toml"),
+    });
+    expect(config.apiUrl).toBeNull();
+    expect(config.token).toBe("tok");
+  });
+
+  it("requireHttpAuth throws when POLARIS_API_URL is missing", () => {
+    const config = loadCliConfig({
+      env: { POLARIS_TOKEN: "tok" },
+      configFile: join(tmp, "missing.toml"),
+    });
+    expect(() => requireHttpAuth(config)).toThrow(/POLARIS_API_URL is required/);
+  });
+
+  it("requireHttpAuth throws when POLARIS_TOKEN is missing", () => {
+    const config = loadCliConfig({
+      env: { POLARIS_API_URL: "https://polaris.example.internal" },
+      configFile: join(tmp, "missing.toml"),
+    });
+    expect(() => requireHttpAuth(config)).toThrow(/POLARIS_TOKEN is required/);
+  });
+
+  it("requireHttpAuth narrows a fully-populated config", () => {
+    const config = loadCliConfig({
+      env: {
+        POLARIS_API_URL: "https://polaris.example.internal",
+        POLARIS_TOKEN: "polaris_ot_abc",
+      },
+      configFile: join(tmp, "missing.toml"),
+    });
+    const authed = requireHttpAuth(config);
+    expect(authed.apiUrl).toBe("https://polaris.example.internal");
+    expect(authed.token).toBe("polaris_ot_abc");
   });
 
   it("rejects an API URL with a non-http scheme", () => {
@@ -152,7 +203,7 @@ describe("loadCliConfig", () => {
     ).toThrow(/profile "missing" is not defined/);
   });
 
-  it("rejects missing token env var declared by a profile", () => {
+  it("returns a profile config with token null when the profile's env var is unset", () => {
     const path = join(tmp, "config.toml");
     writeFileSync(
       path,
@@ -162,13 +213,16 @@ describe("loadCliConfig", () => {
         'token_env = "POLARIS_PROD_TOKEN"',
       ].join("\n"),
     );
-    expect(() =>
-      loadCliConfig({
-        profile: "production",
-        env: {},
-        configFile: path,
-      }),
-    ).toThrow(/POLARIS_PROD_TOKEN is required/);
+    const config = loadCliConfig({
+      profile: "production",
+      env: {},
+      configFile: path,
+    });
+    expect(config.profile).toBe("production");
+    expect(config.apiUrl).toBe("https://polaris.example.internal");
+    expect(config.token).toBeNull();
+    expect(config.tokenEnvName).toBe("POLARIS_PROD_TOKEN");
+    expect(() => requireHttpAuth(config)).toThrow(/POLARIS_PROD_TOKEN is required/);
   });
 
   it("rejects unknown TOML top-level keys", () => {

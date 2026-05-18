@@ -449,6 +449,7 @@ export {
   type TopicsListStore,
 } from "./commands/topics/list.js";
 export {
+  type AuthenticatedCliConfig,
   CLI_LOG_LEVELS,
   type CliConfig,
   type CliLogLevel,
@@ -459,6 +460,7 @@ export {
   type OutputFormat,
   type ProfileEntry,
   readConfigFile,
+  requireHttpAuth,
 } from "./config.js";
 export {
   ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,

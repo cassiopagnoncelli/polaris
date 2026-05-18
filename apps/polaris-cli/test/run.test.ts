@@ -75,16 +75,19 @@ describe("run / polaris version", () => {
     });
   });
 
-  it("returns exit code 3 with a config error when POLARIS_TOKEN is missing", async () => {
+  it("runs `version` successfully even with no auth env vars set", async () => {
+    // v1 CLI commands are DATABASE_URL-direct; POLARIS_TOKEN / POLARIS_API_URL
+    // are required only at the HTTP boundary (none ship in v1). loadCliConfig
+    // therefore returns a nullable config on a fresh shell, and non-HTTP
+    // commands like `version` succeed.
     const capture = captureOutput();
     const code = await run({
       argv: ["version"],
-      env: { POLARIS_API_URL: "https://polaris.example.internal" },
+      env: {},
       output: capture.streams,
       meta: META,
     });
-    expect(code).toBe(ExitCode.ConfigError);
-    expect(capture.stderr.join("")).toContain("POLARIS_TOKEN is required");
+    expect(code).toBe(ExitCode.Ok);
   });
 
   it("returns exit code 2 on an unknown command", async () => {
@@ -144,10 +147,17 @@ describe("run / polaris version", () => {
   });
 
   it("emits a JSON-formatted error envelope when POLARIS_OUTPUT=json", async () => {
+    // Trigger a real config error (malformed URL) so the JSON envelope shape
+    // gets exercised. The "missing token / api-url" path no longer reaches
+    // here because v1 commands don't require either at parse time.
     const capture = captureOutput();
     const code = await run({
       argv: ["version"],
-      env: { POLARIS_OUTPUT: "json" },
+      env: {
+        POLARIS_OUTPUT: "json",
+        POLARIS_API_URL: "ftp://oops",
+        POLARIS_TOKEN: "tok",
+      },
       output: capture.streams,
       meta: META,
     });
