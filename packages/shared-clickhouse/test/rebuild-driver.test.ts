@@ -484,9 +484,7 @@ describe("createClickhouseRebuildDriver", () => {
 
 describe("buildRebuildQueryId", () => {
   it("returns a stable {jobId}_p{partition} pair", () => {
-    expect(buildRebuildQueryId("polaris_chr_test1", "202604")).toBe(
-      "polaris_chr_test1_p202604",
-    );
+    expect(buildRebuildQueryId("polaris_chr_test1", "202604")).toBe("polaris_chr_test1_p202604");
   });
 
   it("is deterministic across calls", () => {

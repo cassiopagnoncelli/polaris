@@ -14,10 +14,7 @@
  * `5282a0f` — production passes `ctx.env`, tests pass a synthetic
  * env object, no module-level `process.env` lookup at any call site.
  */
-import {
-  type ClickHouseOperatorClient,
-  createClickHouseClient,
-} from "@polaris/shared-clickhouse";
+import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/shared-clickhouse";
 import { clickhouseEnvSchema } from "@polaris/shared-config";
 
 import { ConfigError } from "../errors.js";
@@ -39,9 +36,7 @@ export interface OperatorClickHouseHandle {
  *
  * Callers MUST `close()` the handle.
  */
-export function connectOperatorClickHouse(
-  env: NodeJS.ProcessEnv,
-): OperatorClickHouseHandle {
+export function connectOperatorClickHouse(env: NodeJS.ProcessEnv): OperatorClickHouseHandle {
   let parsed: ReturnType<typeof clickhouseEnvSchema.parse>;
   try {
     parsed = clickhouseEnvSchema.parse(env);

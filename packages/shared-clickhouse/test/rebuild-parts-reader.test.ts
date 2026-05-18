@@ -32,7 +32,9 @@ interface RecordedCall {
   readonly reason: string;
 }
 
-function makeRaw<TRow extends Record<string, unknown> = Record<string, unknown>>(rows: TRow[]): {
+function makeRaw<TRow extends Record<string, unknown> = Record<string, unknown>>(
+  rows: TRow[],
+): {
   readonly raw: OperatorRaw;
   readonly calls: RecordedCall[];
 } {
@@ -104,7 +106,9 @@ describe("createPartsReader", () => {
       from: from.toISOString(),
       to: to.toISOString(),
     });
-    expect(calls[0]?.reason).toBe(`plan ${TABLE} from=${from.toISOString()} to=${to.toISOString()}`);
+    expect(calls[0]?.reason).toBe(
+      `plan ${TABLE} from=${from.toISOString()} to=${to.toISOString()}`,
+    );
     expect(calls[0]?.caller).toBe(REBUILD_PARTS_READER_CALLER);
   });
 

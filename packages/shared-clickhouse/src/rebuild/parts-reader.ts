@@ -100,9 +100,8 @@ export function createPartsReader(
 
     const partitions = result.rows.map((row) => ({
       partition: row.partition,
-      rowsEstimated: typeof row.rows_estimated === "number"
-        ? row.rows_estimated
-        : Number(row.rows_estimated),
+      rowsEstimated:
+        typeof row.rows_estimated === "number" ? row.rows_estimated : Number(row.rows_estimated),
     }));
     return { partitions };
   };

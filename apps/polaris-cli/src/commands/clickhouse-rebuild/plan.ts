@@ -156,9 +156,7 @@ export function buildClickhouseRebuildPlanRunner(hooks: ClickhouseRebuildPlanHoo
  * Tests inject their own handle via `hooks.openReadPartitions`, so
  * this function is only consulted in production.
  */
-function defaultReadPartitions(
-  env: NodeJS.ProcessEnv,
-): ClickhouseRebuildPlanReadPartitionsHandle {
+function defaultReadPartitions(env: NodeJS.ProcessEnv): ClickhouseRebuildPlanReadPartitionsHandle {
   const handle = connectOperatorClickHouse(env);
   const readPartitions = createPartsReader({
     raw: handle.client.raw,

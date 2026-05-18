@@ -526,9 +526,7 @@ async function defaultDriver(input: {
  * Tests inject their own handle via `hooks.openReadPartitions`, so
  * this function is only consulted in production.
  */
-function defaultReadPartitions(
-  env: NodeJS.ProcessEnv,
-): ClickhouseRebuildReadPartitionsHandle {
+function defaultReadPartitions(env: NodeJS.ProcessEnv): ClickhouseRebuildReadPartitionsHandle {
   const handle = connectOperatorClickHouse(env);
   const readPartitions = createPartsReader({
     raw: handle.client.raw,
