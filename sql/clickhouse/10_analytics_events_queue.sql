@@ -79,7 +79,15 @@ SETTINGS
     kafka_thread_per_consumer   = 0,
     -- Tolerate envelope evolution: skip unknown top-level JSON fields
     -- rather than failing the whole batch.
-    input_format_skip_unknown_fields = 1;
+    input_format_skip_unknown_fields = 1,
+    -- The polaris envelope emits ISO-8601 datetimes with a trailing 'Z'
+    -- (`"occurred_at":"2026-05-18T08:14:06.976Z"`). CH 24.x parsed these
+    -- with the `basic` DateTime input format because the parser was lenient
+    -- about the timezone suffix; CH 25+ tightened it and rejects the value
+    -- with `Cannot parse input ... expected '"' before: 'Z'`. `best_effort`
+    -- handles the canonical ISO-8601 shape (and other RFC variants) without
+    -- producer-side changes.
+    date_time_input_format      = 'best_effort';
 
 -- IMPORTANT: do not add SELECT-friendly indexes or run SELECT against
 -- this table from application code. The two materialized views below

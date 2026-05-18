@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.15
         version: 2.4.15
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:packages/shared-secrets
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19

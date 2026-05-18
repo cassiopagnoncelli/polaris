@@ -122,25 +122,36 @@ function sqlString(value) {
 // users_xml access storage and no polaris cluster/macros. Auto-install a
 // config.d overlay so the rest of the bootstrap can proceed. Idempotent:
 // only writes files that are missing or differ.
-async function ensureLocalServerConfig({ url, adminUser, adminPassword, dryRun }) {
+//
+// Probes use whichever user is already authenticated:
+//   - docker compose: `polaris` (created via CLICKHOUSE_USER, has
+//     CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 — can read system tables;
+//     `default` is locked behind CLICKHOUSE_PASSWORD on this image).
+//   - bare-metal: `default` (no-password superuser; polaris doesn't
+//     exist yet — its CREATE is phase 1, after this function).
+async function ensureLocalServerConfig({ url, user, password, adminUser, adminPassword, dryRun }) {
   logger.info("[clickhouse-bootstrap-local] phase=server-config-check");
+
+  const probeUser = (await probe(url, user, password)).ok ? user : adminUser;
+  const probePassword = probeUser === user ? password : adminPassword;
+  logger.info(`[clickhouse-bootstrap-local] probing server config as ${probeUser}`);
 
   const macroRow = await queryAs(
     url,
-    adminUser,
-    adminPassword,
+    probeUser,
+    probePassword,
     "SELECT substitution FROM system.macros WHERE macro = 'cluster' FORMAT TabSeparated",
   );
   const clusterRow = await queryAs(
     url,
-    adminUser,
-    adminPassword,
+    probeUser,
+    probePassword,
     "SELECT cluster FROM system.clusters WHERE cluster = 'polaris_local' FORMAT TabSeparated",
   );
   const writeableStorageRow = await queryAs(
     url,
-    adminUser,
-    adminPassword,
+    probeUser,
+    probePassword,
     "SELECT name FROM system.user_directories WHERE type = 'local_directory' FORMAT TabSeparated",
   );
   // Probe whether the distributed DDL queue is wired up. ClickHouse 25+
@@ -151,7 +162,7 @@ async function ensureLocalServerConfig({ url, adminUser, adminPassword, dryRun }
   // covers both Keeper and distributed_ddl in one shot.
   const ddlProbe = await fetch(
     `${url}/?query=${encodeURIComponent("SELECT 1 FROM system.distributed_ddl_queue LIMIT 0")}`,
-    { headers: { Authorization: basicAuth(adminUser, adminPassword) } },
+    { headers: { Authorization: basicAuth(probeUser, probePassword) } },
   );
   const needsKeeper = !ddlProbe.ok;
   await ddlProbe.text();
@@ -478,6 +489,8 @@ async function main() {
   try {
     await ensureLocalServerConfig({
       url: client.url,
+      user: client.user,
+      password: client.password,
       adminUser,
       adminPassword,
       dryRun,

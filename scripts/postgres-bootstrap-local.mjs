@@ -96,7 +96,37 @@ function exec(user, sql) {
   return res.stdout.trim();
 }
 
+function polarisAlreadyUsable() {
+  // Short-circuit when the target role/db are already in place AND the
+  // canonical polaris/polaris credentials work. Docker compose pre-creates
+  // both via POSTGRES_USER / POSTGRES_DB env vars, so there's nothing for
+  // this script to do (and trying to probe a host-side superuser against
+  // the docker postgres fails with "no password supplied" because the
+  // container's pg_hba.conf requires md5 for all logins).
+  //
+  // PGPASSWORD=polaris is the canonical password defined in
+  // docker-compose.yml; bare-metal users who picked a different password
+  // can still run this script — the polaris-as-polaris probe will fail
+  // and we fall through to the superuser-bootstrap path.
+  const res = spawnSync(
+    "psql",
+    ["-X", "-h", HOST, "-p", PORT, "-U", TARGET_ROLE, "-d", TARGET_DB, "-w", "-tAc", "SELECT 1"],
+    {
+      encoding: "utf8",
+      env: { ...process.env, PGPASSWORD: TARGET_PASSWORD },
+    },
+  );
+  return res.status === 0 && res.stdout.trim() === "1";
+}
+
 function main() {
+  if (polarisAlreadyUsable()) {
+    console.log(
+      `[postgres-bootstrap-local] role ${TARGET_ROLE} + database ${TARGET_DB} already usable at ${HOST}:${PORT} — nothing to do`,
+    );
+    return;
+  }
+
   const admin = pickSuperuser();
   console.log(`[postgres-bootstrap-local] superuser=${admin} host=${HOST}:${PORT}`);
 
