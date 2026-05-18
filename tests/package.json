@@ -1,0 +1,10 @@
+{
+  "name": "@polaris/tests",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Repo-root integration and acceptance scenarios. Imports published workspace entry points by name (`@polaris/node-sdk`, etc.) to exercise the same surface an internal team would consume.",
+  "dependencies": {
+    "@polaris/node-sdk": "workspace:*"
+  }
+}

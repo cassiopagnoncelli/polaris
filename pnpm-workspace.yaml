@@ -3,3 +3,4 @@ packages:
   - "packages/*"
   - "processors/*/*"
   - "consumers/*/*"
+  - "tests"

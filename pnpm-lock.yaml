@@ -722,6 +722,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  tests:
+    dependencies:
+      '@polaris/node-sdk':
+        specifier: workspace:*
+        version: link:../packages/node-sdk
+
 packages:
 
   '@babel/helper-string-parser@7.27.1':
