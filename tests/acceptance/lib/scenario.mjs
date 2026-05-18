@@ -515,7 +515,17 @@ async function stepSendViaNodeSdk(cfg, apiKey) {
       sdkVersion: "polaris-acceptance/0.0.0",
     },
     defaultContext: {},
-    batchSize: 1,
+    // Use a large batchSize so track() does NOT trigger an auto-flush;
+    // the explicit `await sdk.flush()` below then performs the actual
+    // drain and returns a populated FlushResult. With batchSize:1 the
+    // auto-flush ran first and drained the queue, so the explicit
+    // flush() chained after observed an empty queue and returned
+    // delivered=0 even though the event had been delivered — the SDK
+    // comment at packages/node-sdk/src/sdk.ts:238 documents the
+    // contract: "track() returns once the event is durably enqueued.
+    // The diagnostic onFlush callback is the right place to observe
+    // outcomes."
+    batchSize: 100,
     flushIntervalMs: 0,
     retry: { maxAttempts: 3 },
   });

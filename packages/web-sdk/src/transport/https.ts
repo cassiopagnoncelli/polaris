@@ -231,7 +231,12 @@ export class HttpsTransport implements Transport {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${this.apiKey}`,
+      // Ingester auth contract: the API key travels in the
+      // `x-polaris-api-key` header as `<api_key_id>.<secret>` (see
+      // apps/ingester-api/src/auth/api-key.ts). `Authorization: Bearer`
+      // is reserved for the control-plane operator-token flow, which is
+      // a separate auth surface and not what the browser SDK hits.
+      "x-polaris-api-key": this.apiKey,
       Accept: "application/json",
     };
     if (this.userAgent !== undefined) {

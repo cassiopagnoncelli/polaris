@@ -126,7 +126,10 @@ describe("HttpsTransport", () => {
 
     const recorded = server.recorded[0];
     expect(recorded?.method).toBe("POST");
-    expect(recorded?.headers["authorization"]).toBe("Bearer test-key");
+    // The ingester reads only `x-polaris-api-key`; Bearer must not appear
+    // on the wire because the ingester ignores `Authorization`.
+    expect(recorded?.headers["x-polaris-api-key"]).toBe("test-key");
+    expect(recorded?.headers["authorization"]).toBeUndefined();
     expect(recorded?.headers["user-agent"]).toBe("test-ua");
     expect(JSON.parse(recorded?.body ?? "{}")).toEqual({
       events: [

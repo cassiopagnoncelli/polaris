@@ -265,7 +265,10 @@ describe("HttpsTransport — urgent mode", () => {
 });
 
 describe("HttpsTransport — request shape", () => {
-  it("sends the API key as Bearer authorization", async () => {
+  it("sends the API key in the x-polaris-api-key header (not Authorization)", async () => {
+    // The ingester reads only `x-polaris-api-key`; Authorization: Bearer
+    // is reserved for the control-plane operator-token flow. The SDK
+    // must use the data-plane header or every request gets 401.
     const fakeFetch = vi.fn(async () => fakeResponse(200, ""));
     const transport = new HttpsTransport({
       endpoint: "https://example.invalid/events",
@@ -276,7 +279,8 @@ describe("HttpsTransport — request shape", () => {
     const callArgs = fakeFetch.mock.calls[0];
     const init = callArgs?.[1] as RequestInit | undefined;
     const headers = init?.headers as Record<string, string> | undefined;
-    expect(headers?.Authorization).toBe("Bearer secret-key");
+    expect(headers?.["x-polaris-api-key"]).toBe("secret-key");
+    expect(headers?.Authorization).toBeUndefined();
   });
 
   it("posts JSON containing the events", async () => {
