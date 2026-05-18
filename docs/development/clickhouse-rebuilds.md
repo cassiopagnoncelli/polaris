@@ -199,6 +199,58 @@ helper that both `defaultDriver` and `defaultReadPartitions` use.
 Plan / dry-run runs hit the same env-validation failure when
 operator credentials are absent.
 
+### Known limitations
+
+**Cross-month-revision rebuilds aren't pulled by a ranged rebuild.**
+The rebuild SELECT (see
+`sql/clickhouse/projections/40_event_daily_counts_rebuild.sql`)
+filters source rows by `_partition_id` and then projects
+`occurred_date = toDate(argMax(occurred_at, _version))` over that
+filtered set. That works because `analytics_raw` and
+`event_daily_counts` share a partition expression
+(`toYYYYMM(occurred_at)` ↔ `toYYYYMM(occurred_date)`). It does NOT
+work in one edge case: a revision that moves a row's `occurred_at`
+across a month boundary. The revised row lives in a different
+`_partition_id` than the original; rebuilding partition `202604`
+won't pull the revision that landed in `202605`, so the rebuilt
+counts for `202604` will reflect the older `_version` rather than
+the latest.
+
+In practice this needs both (a) the same `event_id` to appear in
+multiple `analytics_raw` partitions AND (b) a correction that moves
+`occurred_at` across a month boundary. Both are uncommon. The
+correction workflow that triggered it is also uncommon: a
+backfill that re-emits the same `event_id` with a different
+`occurred_at` is a deliberate operator action, not an ingest-time
+phenomenon.
+
+Operators verify whether the gap matters for a specific rebuild by
+running this query against `polaris.analytics_raw` before the
+rebuild:
+
+```sql
+SELECT count() AS cross_month_revisions
+FROM polaris.analytics_raw
+WHERE event_id IN (
+  SELECT event_id
+  FROM polaris.analytics_raw
+  WHERE _partition_id = {partition:String}
+)
+  AND _partition_id != {partition:String}
+SETTINGS max_execution_time = 30;
+```
+
+A non-zero count means at least one event_id in the target
+partition has revisions in other partitions. Investigate before
+rebuilding; in most cases the right move is to rebuild a wider
+range that covers all affected partitions.
+
+If this turns out to bite in practice, the fix is to rewrite the
+rebuild SELECT to filter source rows by event_id (selected from the
+target partition) rather than by `_partition_id`. That's a bigger
+change than this v1 sanctions; ship it as a follow-up only with
+evidence.
+
 ### Adding a new projection
 
 When extending `REBUILDABLE_CLICKHOUSE_PROJECTIONS`, the four-step
