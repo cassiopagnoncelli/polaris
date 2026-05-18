@@ -175,3 +175,131 @@ jobs:
             kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
           fi
           docker compose down -v || true
+
+  product-acceptance:
+    # P12-003 product acceptance — the canonical release gate. Drives the
+    # full pipeline end-to-end through the published CLI + Node SDK
+    # surfaces against a freshly-booted compose stack. Mirrors the smoke
+    # job's setup; the only differences are the final test command and
+    # the POLARIS_ACCEPTANCE_* env vars.
+    name: P12-003 product acceptance
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration'))
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable
+      CLICKHOUSE_URL: http://localhost:8123
+      CLICKHOUSE_USER: polaris
+      CLICKHOUSE_PASSWORD: polaris
+      POLARIS_INGESTER_URL: http://localhost:8080
+      POLARIS_ACCEPTANCE_PROJECT_ID: storefront
+      POLARIS_ACCEPTANCE_ENVIRONMENT: development
+      POLARIS_ACCEPTANCE_SOURCE_ID: payments-api
+      POLARIS_ACCEPTANCE_SOURCE_TYPE: backend
+      # No webhook receiver in CI — the destination + delivery steps skip
+      # cleanly (overall verdict still PASS). Set POLARIS_ACCEPTANCE_WEBHOOK_URL
+      # in a future card when we wire a sandbox receiver.
+      POLARIS_ACCEPTANCE_SKIP_DESTINATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tsc emit)
+        run: pnpm build
+
+      - name: Start local stack
+        run: docker compose up -d --wait
+
+      - name: Apply PostgreSQL migrations
+        run: pnpm db:migrate
+
+      - name: Apply ClickHouse schema (incl. local users)
+        run: pnpm clickhouse:bootstrap-local
+
+      - name: Start ingester
+        run: |
+          mkdir -p /tmp/polaris-logs
+          pnpm --filter @polaris/ingester-api run start \
+            > /tmp/polaris-logs/ingester.log 2>&1 &
+          echo $! > /tmp/polaris-logs/ingester.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-ingester
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8080"
+          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_REDIS_HOST: localhost
+          POLARIS_REDIS_PORT: "6379"
+
+      - name: Start analytics-projector
+        run: |
+          pnpm --filter @polaris/processor-analytics-projector-v1 run start \
+            > /tmp/polaris-logs/analytics-projector.log 2>&1 &
+          echo $! > /tmp/polaris-logs/analytics-projector.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-analytics-projector
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8081"
+          POLARIS_REDPANDA_BROKERS: localhost:19092
+
+      - name: Wait for ingester readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/ready >/dev/null; then
+              echo "ingester ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "ingester did not become ready"
+          exit 1
+
+      - name: Run product acceptance (P12-003)
+        run: pnpm test:acceptance
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "=== docker compose ps ==="
+          docker compose ps || true
+          echo "=== ingester ==="
+          tail -n 200 /tmp/polaris-logs/ingester.log || true
+          echo "=== analytics-projector ==="
+          tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== docker compose logs (last 200 lines) ==="
+          docker compose logs --tail=200 || true
+
+      - name: Tear down local stack
+        if: always()
+        run: |
+          if [ -f /tmp/polaris-logs/ingester.pid ]; then
+            kill "$(cat /tmp/polaris-logs/ingester.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
+            kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          fi
+          docker compose down -v || true
