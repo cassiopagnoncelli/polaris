@@ -23,6 +23,7 @@
  */
 
 export {
+  buildRebuildQueryId,
   type CreateClickhouseRebuildDriverInput,
   createClickhouseRebuildDriver,
   REBUILD_DRIVER_CALLER,

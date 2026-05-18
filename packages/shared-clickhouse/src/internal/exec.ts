@@ -21,18 +21,26 @@ export interface RunQueryInput<TRow> {
   abortSignal?: AbortSignal;
   /** Optional decoder. Defaults to identity. */
   decode?: (row: unknown) => TRow;
+  /**
+   * Optional `query_id` forwarded to the underlying ClickHouse
+   * client. ClickHouse tags the query with this id in
+   * `system.query_log` so callers can look up `written_rows` for
+   * INSERTs that don't return rows in their response body.
+   */
+  queryId?: string;
 }
 
 export async function runQuery<TRow = Record<string, unknown>>(
   input: RunQueryInput<TRow>,
 ): Promise<TRow[]> {
-  const { underlying, query, parameters, abortSignal, decode } = input;
+  const { underlying, query, parameters, abortSignal, decode, queryId } = input;
   try {
     const result = await underlying.query({
       query,
       format: "JSONEachRow",
       ...(parameters ? { query_params: parameters } : {}),
       ...(abortSignal ? { abort_signal: abortSignal } : {}),
+      ...(queryId !== undefined ? { query_id: queryId } : {}),
     });
     const rows = (await result.json()) as unknown[];
     return decode ? rows.map(decode) : (rows as TRow[]);

@@ -150,13 +150,27 @@ The executor is pure orchestration over two injected adapters:
      `<select>` is the SELECT body checked in under the projection's
      `rebuildSelectFile` slot, with `{partition:String}` bound as a
      query parameter. The driver does not interpolate the partition
-     label into the SQL.
+     label into the SQL. The INSERT carries a deterministic
+     `query_id` (`<jobId>_p<partition>`) so a follow-up
+     `system.query_log` read can recover `written_rows` —
+     ClickHouse INSERTs don't return row counts in their response
+     body, so without this lookup the partition's `rows_inserted`
+     would always be 0.
+
+The `system.query_log` lookup is best-effort: the driver issues a
+`SYSTEM FLUSH LOGS` after the INSERT, then SELECTs `written_rows`
+with a bounded backoff schedule (0ms → 300ms → 700ms). If all three
+attempts come back empty (or fail), `rows_inserted` resolves to 0
+for that partition and the rebuild proceeds — the row's status
+still reaches `completed`, just with an under-reported total. An
+operator who needs the exact count after the fact can SELECT
+`system.query_log` directly using the same query_id format.
 
 Every raw SQL call carries `caller="polaris-cli/clickhouse-rebuild"`
 and `reason` stamped with the job id, so the
 `polaris_clickhouse_operator_raw_query_total` metric and the
 operator audit log have a one-to-many breakdown from job id to
-clearSlice + INSERT calls.
+clearSlice + INSERT + (FLUSH LOGS + log SELECT) calls.
 
 The exit-code contract:
 

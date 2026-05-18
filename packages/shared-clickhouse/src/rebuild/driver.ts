@@ -14,6 +14,18 @@
  *     `INSERT INTO <projection> <select>` where `<select>` is the
  *     SELECT body checked in under `descriptor.rebuildSelectFile`,
  *     bound to the partition via the `{partition:String}` parameter.
+ *     The INSERT carries a deterministic `query_id`
+ *     (`<jobId>_p<partition>`) so the driver can read
+ *     `system.query_log.written_rows` for the actual count.
+ *
+ * `system.query_log` writes are asynchronous — ClickHouse flushes
+ * the buffer every ~7.5s by default, with a hard flush on
+ * `SYSTEM FLUSH LOGS`. The driver issues a `SYSTEM FLUSH LOGS`
+ * after the INSERT, then retries the SELECT with bounded backoff.
+ * Both operations are scoped under the operator caller / reason
+ * audit stamp; the `system.query_log` SELECT is best-effort and a
+ * failure to read the log resolves the rebuild count to `0` rather
+ * than failing the partition.
  *
  * Why a separate rebuild SELECT file (and not parsing the live MV
  * SQL): the MV statement is a `CREATE MATERIALIZED VIEW … AS SELECT`
@@ -37,12 +49,24 @@ import {
 /** Caller label stamped onto every raw.query call this driver makes. */
 export const REBUILD_DRIVER_CALLER = "polaris-cli/clickhouse-rebuild" as const;
 
+/**
+ * `system.query_log` backoff schedule, in milliseconds. Three
+ * attempts: an immediate read (the SYSTEM FLUSH LOGS we issue
+ * right before should have written the QueryFinish entry by the
+ * time we get back), then two retries with growing delays to cover
+ * any flush-buffer lag on a busy server. After exhaustion the
+ * driver returns `rows_inserted = 0` for the partition; the
+ * rebuild itself is unaffected.
+ */
+const QUERY_LOG_BACKOFFS_MS = [0, 300, 700] as const;
+
 export interface CreateClickhouseRebuildDriverInput {
   /** Operator escape hatch this driver routes every SQL call through. */
   readonly raw: OperatorRaw;
   /**
    * Job id of the rebuild row. Stamped into every raw.query `reason`
-   * so the escape-hatch audit log carries it.
+   * (and into the INSERT's `query_id` prefix) so the escape-hatch
+   * audit log + system.query_log carry it.
    */
   readonly jobId: string;
   /**
@@ -63,6 +87,13 @@ export interface CreateClickhouseRebuildDriverInput {
    * `readFileSync`. Injected for tests.
    */
   readonly readFile?: (absolutePath: string) => string;
+  /**
+   * Async sleep used between `system.query_log` retry attempts.
+   * Defaults to a real `setTimeout`-backed sleep. Injected for tests
+   * so the backoff schedule is exercised without real wall-clock
+   * waits.
+   */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -77,6 +108,8 @@ export function createClickhouseRebuildDriver(
   const projections = input.projections ?? REBUILDABLE_CLICKHOUSE_PROJECTIONS;
   const repoRoot = input.repoRoot ?? process.cwd();
   const readFile = input.readFile ?? ((p: string): string => readFileSync(p, "utf8"));
+  const sleep =
+    input.sleep ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)));
 
   // Eagerly load every projection's rebuild SELECT. Failing here
   // surfaces as `clickhouse_rebuild_driver_select_unreadable` at
@@ -148,19 +181,115 @@ export function createClickhouseRebuildDriver(
       }
       const sql = `INSERT INTO ${p.qualifiedTable}
 ${selectBody}`;
-      const result = await input.raw.query(
+      const queryId = buildRebuildQueryId(input.jobId, p.partition);
+      await input.raw.query(
         sql,
         { partition: p.partition },
         {
           caller: REBUILD_DRIVER_CALLER,
           reason: `rebuild ${p.qualifiedTable} ${input.jobId} partition=${p.partition}`,
+          queryId,
         },
       );
-      // ClickHouse INSERTs don't return rows in the result body, so
-      // `result.rowCount` is 0. Surface that honestly; if we ever
-      // need real inserted-row counts we can issue a follow-up
-      // `system.query_log` lookup in the same audited transaction.
-      return { rows_inserted: result.rowCount };
+      // ClickHouse INSERTs don't return rows in their response body,
+      // so the row count must come from `system.query_log`. Best
+      // effort: flush logs to get the QueryFinish entry into the
+      // table, then retry the SELECT with bounded backoff. On
+      // exhaustion the row's `rows_inserted` is 0 — honest for "we
+      // couldn't read the log", and the rebuild still resolves as
+      // completed.
+      const rowsInserted = await readWrittenRowsFromQueryLog({
+        raw: input.raw,
+        jobId: input.jobId,
+        partition: p.partition,
+        queryId,
+        sleep,
+      });
+      return { rows_inserted: rowsInserted };
     },
   };
+}
+
+interface QueryLogRow {
+  readonly written_rows: string | number;
+}
+
+async function readWrittenRowsFromQueryLog(input: {
+  readonly raw: OperatorRaw;
+  readonly jobId: string;
+  readonly partition: string;
+  readonly queryId: string;
+  readonly sleep: (ms: number) => Promise<void>;
+}): Promise<number> {
+  // `SYSTEM FLUSH LOGS` is synchronous and forces the buffered
+  // `system.query_log` rows to disk. Without it, the SELECT below
+  // can race the default ~7.5s buffer flush. The flush takes <100ms
+  // on every cluster I've measured; the cost is acceptable for the
+  // per-partition lookup.
+  try {
+    await input.raw.query(
+      "SYSTEM FLUSH LOGS",
+      {},
+      {
+        caller: REBUILD_DRIVER_CALLER,
+        reason: `rebuild ${input.jobId} partition=${input.partition} flush_query_log`,
+      },
+    );
+  } catch {
+    // Flush failures don't fail the rebuild — fall through to the
+    // retry loop; if the log entry has already landed naturally the
+    // SELECT still works.
+  }
+
+  const sql = [
+    "SELECT written_rows",
+    "FROM system.query_log",
+    "WHERE query_id = {qid:String}",
+    "  AND type = 'QueryFinish'",
+    "ORDER BY event_time DESC",
+    "LIMIT 1",
+  ].join("\n");
+
+  for (let attempt = 0; attempt < QUERY_LOG_BACKOFFS_MS.length; attempt++) {
+    // biome-ignore lint/style/noNonNullAssertion: index always in range
+    const delayMs = QUERY_LOG_BACKOFFS_MS[attempt]!;
+    if (delayMs > 0) await input.sleep(delayMs);
+    try {
+      const result = await input.raw.query<QueryLogRow>(
+        sql,
+        { qid: input.queryId },
+        {
+          caller: REBUILD_DRIVER_CALLER,
+          reason: `rebuild ${input.jobId} partition=${input.partition} read_written_rows attempt=${attempt + 1}`,
+        },
+      );
+      if (result.rowCount === 1) {
+        const raw = result.rows[0]?.written_rows;
+        if (raw !== undefined) {
+          // `written_rows` is UInt64 in ClickHouse; the HTTP JSON
+          // driver returns it as a string by default. Coerce here so
+          // the executor sees a real number.
+          return typeof raw === "number" ? raw : Number(raw);
+        }
+      }
+    } catch {
+      // Best-effort: SELECT failures don't fail the rebuild. Keep
+      // retrying within the bounded schedule, then give up to 0.
+    }
+  }
+  return 0;
+}
+
+/**
+ * Build the `query_id` for a single partition's INSERT. Stable per
+ * (jobId, partition) so the follow-up `system.query_log` SELECT
+ * keys on the same value. ClickHouse requires query_ids unique
+ * within a window; the jobId is uuidv7-based so this is fine even
+ * across concurrent rebuild jobs.
+ *
+ * Exported for tests that need to assert the exact id the driver
+ * passes to raw.query.
+ */
+export function buildRebuildQueryId(jobId: string, partition: string): string {
+  return `${jobId}_p${partition}`;
 }

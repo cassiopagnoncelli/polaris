@@ -218,6 +218,15 @@ export interface RawQueryContext {
   reason: string;
   /** Optional ticket/incident reference. */
   ticket?: string;
+  /**
+   * Optional `query_id` forwarded to ClickHouse. When set, ClickHouse
+   * tags the query with this id in `system.query_log` so callers can
+   * look up `written_rows` / `read_rows` for INSERTs that don't
+   * return rows in their response body. Must be unique per
+   * concurrent query (ClickHouse rejects duplicates within a window).
+   * When omitted, ClickHouse generates one server-side.
+   */
+  queryId?: string;
 }
 
 /**

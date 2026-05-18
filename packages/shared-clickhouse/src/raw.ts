@@ -76,6 +76,7 @@ export function createOperatorRaw(input: CreateOperatorRawInput): OperatorRaw {
           caller: context.caller,
           reason: context.reason,
           ticket: context.ticket,
+          queryId: context.queryId,
           queryDigest,
           parameterKeys: Object.keys(parameters).sort(),
         },
@@ -87,6 +88,7 @@ export function createOperatorRaw(input: CreateOperatorRawInput): OperatorRaw {
           underlying,
           query: sql,
           parameters,
+          ...(context.queryId !== undefined ? { queryId: context.queryId } : {}),
         });
         const durationMs = Number((process.hrtime.bigint() - startNs) / 1_000_000n);
         logger?.info(
