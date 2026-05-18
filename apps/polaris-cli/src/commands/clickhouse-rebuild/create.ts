@@ -30,7 +30,6 @@
  * @see docs/development/clickhouse-rebuilds.md
  * @see packages/shared-clickhouse/src/rebuild/
  */
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
 import {
   type ClickhouseRebuildDriver,
   type ClickhouseRebuildOutcome,
@@ -38,6 +37,7 @@ import {
   type ClickhouseRebuildPlanned,
   type ClickhouseRebuildStore,
   createClickhouseRebuildDriver,
+  createPartsReader,
   executeClickhouseRebuild,
   findRebuildableProjection,
   type PlanClickhouseRebuildOptions,
@@ -45,8 +45,8 @@ import {
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
 } from "@polaris/shared-clickhouse/rebuild";
-import { clickhouseEnvSchema } from "@polaris/shared-config";
 import { v7 as uuidv7 } from "uuid";
+import { connectOperatorClickHouse } from "../../clickhouse/connect.js";
 import type { CommandContext, CommandDefinition, CommandResult } from "../../command.js";
 import {
   type AuditActorSource,
@@ -58,7 +58,7 @@ import {
   markClickhouseRebuildJobFailed,
   markClickhouseRebuildJobRunning,
 } from "../../db/index.js";
-import { CliError, ConfigError, ExitCode, UsageError } from "../../errors.js";
+import { CliError, ExitCode, UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
 import { generateClickhouseRebuildJobId } from "./id.js";
 
@@ -112,11 +112,16 @@ export interface ClickhouseRebuildCreateHooks {
   readonly actorLabel?: () => string;
   /**
    * Adapter that reads `system.parts` for the planner. Injected for
-   * tests; in production this wraps the shared-clickhouse operator
-   * client's `raw.query` escape hatch with an audit reason of
-   * `clickhouse-rebuild-plan`.
+   * tests; in production the runner falls back to
+   * `defaultReadPartitions(ctx.env)`, which wraps the shared-clickhouse
+   * operator client's `raw.query` escape hatch in a handle whose
+   * `close()` releases the connection.
    *
-   * Omit to test the `clickhouse_unreachable` path explicitly.
+   * Supplying this skips the production wiring entirely (no
+   * ClickHouse client construction, no env validation). Use this for
+   * unit tests that want a synthetic adapter or to exercise the
+   * `clickhouse_unreachable` planner path explicitly by passing an
+   * always-throwing stub.
    */
   readonly readPartitions?: PlanClickhouseRebuildOptions["readPartitions"];
   /**
@@ -145,6 +150,11 @@ export interface ClickhouseRebuildExecutorStoreHandle {
 
 export interface ClickhouseRebuildDriverHandle {
   readonly driver: ClickhouseRebuildDriver;
+  close(): Promise<void>;
+}
+
+export interface ClickhouseRebuildReadPartitionsHandle {
+  readonly readPartitions: NonNullable<PlanClickhouseRebuildOptions["readPartitions"]>;
   close(): Promise<void>;
 }
 
@@ -193,7 +203,6 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
-  const readPartitions = hooks.readPartitions;
 
   return async function runner(
     args: ClickhouseRebuildCreateArgs,
@@ -211,18 +220,37 @@ export function buildClickhouseRebuildCreateRunner(hooks: ClickhouseRebuildCreat
     // Run the planner regardless of --dry-run; the persisted row
     // benefits from the estimate. The planner is read-only so this
     // is safe on the non-dry-run path too.
+    //
+    // The `readPartitions` adapter is either the test-supplied
+    // function (no close) or a production handle backed by an
+    // operator-profile ClickHouse client (close releases the
+    // connection). Tests pass a function directly so they never
+    // touch ClickHouse env.
+    const readPartitionsHandle: ClickhouseRebuildReadPartitionsHandle =
+      hooks.readPartitions !== undefined
+        ? { readPartitions: hooks.readPartitions, close: async () => undefined }
+        : defaultReadPartitions(ctx.env);
     const planOptions: PlanClickhouseRebuildOptions = {
       now,
-      ...(readPartitions !== undefined ? { readPartitions } : {}),
+      readPartitions: readPartitionsHandle.readPartitions,
     };
-    const plan = await planClickhouseRebuild(
-      {
-        projection: validated.projection,
-        fromTs: validated.from ?? null,
-        toTs: validated.to ?? null,
-      },
-      planOptions,
-    );
+    let plan: ClickhouseRebuildPlan;
+    try {
+      plan = await planClickhouseRebuild(
+        {
+          projection: validated.projection,
+          fromTs: validated.from ?? null,
+          toTs: validated.to ?? null,
+        },
+        planOptions,
+      );
+    } finally {
+      try {
+        await readPartitionsHandle.close();
+      } catch {
+        // best-effort
+      }
+    }
 
     if (plan.kind === "rejected") {
       // Surface the planner's structured code in the exit-code
@@ -466,11 +494,9 @@ function defaultExecutorStore(env: NodeJS.ProcessEnv): ClickhouseRebuildExecutor
 
 /**
  * Production default driver: an operator-profile ClickHouse client
- * wrapped by `createClickhouseRebuildDriver`. Reads
- * `POLARIS_CLICKHOUSE_*` from the CLI invocation's env (threaded via
- * `ctx.env`), refuses with a `ConfigError` (exit code 3) if operator
- * credentials are not configured — same shape `connectDb` uses for
- * the Postgres URL.
+ * (constructed via {@link connectOperatorClickHouse}) wrapped by
+ * `createClickhouseRebuildDriver`. Refuses with `ConfigError` (exit
+ * code 3) when operator credentials are absent.
  *
  * Tests inject their own driver via `hooks.openDriver`, so this
  * function is only consulted in production.
@@ -479,38 +505,38 @@ async function defaultDriver(input: {
   readonly jobId: string;
   readonly env: NodeJS.ProcessEnv;
 }): Promise<ClickhouseRebuildDriverHandle> {
-  let parsed: ReturnType<typeof clickhouseEnvSchema.parse>;
-  try {
-    parsed = clickhouseEnvSchema.parse(input.env);
-  } catch (cause) {
-    throw new ConfigError(
-      `POLARIS_CLICKHOUSE_* env is required for non-dry-run rebuilds: ${cause instanceof Error ? cause.message : String(cause)}`,
-    );
-  }
-  if (parsed.operator === undefined) {
-    throw new ConfigError(
-      "POLARIS_CLICKHOUSE_OPERATOR_USER and POLARIS_CLICKHOUSE_OPERATOR_PASSWORD are required to run a non-dry-run rebuild. The rebuild driver uses the operator profile so its raw SQL leaves an audit trail.",
-    );
-  }
-  const client = createClickHouseClient({
-    role: "operator",
-    url: parsed.url,
-    database: parsed.database,
-    credential: {
-      username: parsed.operator.user,
-      password: parsed.operator.password,
-    },
-    requestTimeoutMs: parsed.requestTimeoutMs,
-    maxOpenConnections: parsed.maxOpenConnections,
-    application: "polaris-cli",
-  });
+  const handle = connectOperatorClickHouse(input.env);
   const driver = createClickhouseRebuildDriver({
-    raw: client.raw,
+    raw: handle.client.raw,
     jobId: input.jobId,
   });
   return {
     driver,
-    close: () => client.close(),
+    close: () => handle.close(),
+  };
+}
+
+/**
+ * Production default `readPartitions` handle: an operator-profile
+ * ClickHouse client wrapped by `createPartsReader`. Refuses with
+ * `ConfigError` (exit code 3) when operator credentials are absent —
+ * even on the `--dry-run` path, because dry-runs still need to
+ * touch `system.parts` for the estimate.
+ *
+ * Tests inject their own handle via `hooks.openReadPartitions`, so
+ * this function is only consulted in production.
+ */
+function defaultReadPartitions(
+  env: NodeJS.ProcessEnv,
+): ClickhouseRebuildReadPartitionsHandle {
+  const handle = connectOperatorClickHouse(env);
+  const readPartitions = createPartsReader({
+    raw: handle.client.raw,
+    database: handle.database,
+  });
+  return {
+    readPartitions,
+    close: () => handle.close(),
   };
 }
 

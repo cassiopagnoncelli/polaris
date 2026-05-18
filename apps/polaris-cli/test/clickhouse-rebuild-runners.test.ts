@@ -476,10 +476,13 @@ describe("clickhouse-rebuild plan runner", () => {
     await expect(runner({ projection: "   " }, ctx)).rejects.toBeInstanceOf(UsageError);
   });
 
-  it("surfaces clickhouse_unreachable as a usage error when no adapter is wired", async () => {
+  it("surfaces clickhouse_unreachable when the wired adapter throws", async () => {
     const cap = captureOutput();
     const ctx = makeContext(cap.streams);
-    const runner = buildClickhouseRebuildPlanRunner({ now: () => NOW });
+    const runner = buildClickhouseRebuildPlanRunner({
+      now: () => NOW,
+      readPartitions: stubAdapter(new Error("system.parts query failed: connection refused")),
+    });
     await expect(runner({ projection: "event_daily_counts" }, ctx)).rejects.toMatchObject({
       message: expect.stringContaining("clickhouse_rebuild_rejected:clickhouse_unreachable"),
     });
@@ -742,10 +745,11 @@ describe("clickhouse-rebuild create runner", () => {
     const store = new InMemoryStore();
     const cap = captureOutput();
     const ctx = makeContext(cap.streams);
-    // No readPartitions adapter → planner returns clickhouse_unreachable.
+    // Adapter throws → planner returns clickhouse_unreachable.
     const runner = buildClickhouseRebuildCreateRunner({
       openStore: () => store.asCreateStore(),
       now: () => NOW,
+      readPartitions: stubAdapter(new Error("system.parts query failed: connection refused")),
     });
     await expect(
       runner({ projection: "event_daily_counts", dryRun: true, reason: "x" }, ctx),

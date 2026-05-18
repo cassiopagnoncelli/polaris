@@ -187,8 +187,17 @@ POLARIS_CLICKHOUSE_OPERATOR_PASSWORD
 
 Missing operator credentials fail with `ConfigError` (exit code 3)
 before the executor runs — no row gets stamped, no SQL gets issued.
-The `--dry-run` path is unaffected; it only reads via the planner
-adapter.
+
+The `--dry-run` path (and `polaris clickhouse-rebuild plan`) also
+need the operator profile: the planner reads `system.parts` for the
+partition estimate through the same `raw.query` escape hatch. The
+adapter lives in
+[`packages/shared-clickhouse/src/rebuild/parts-reader.ts`](../../packages/shared-clickhouse/src/rebuild/parts-reader.ts);
+the CLI wires it via the shared
+[`connectOperatorClickHouse`](../../apps/polaris-cli/src/clickhouse/connect.ts)
+helper that both `defaultDriver` and `defaultReadPartitions` use.
+Plan / dry-run runs hit the same env-validation failure when
+operator credentials are absent.
 
 ### Adding a new projection
 

@@ -28,6 +28,11 @@ export {
   REBUILD_DRIVER_CALLER,
 } from "./driver.js";
 export {
+  type CreatePartsReaderInput,
+  createPartsReader,
+  REBUILD_PARTS_READER_CALLER,
+} from "./parts-reader.js";
+export {
   CLICKHOUSE_REBUILD_EXECUTOR_REFUSAL_CODES,
   type ClearSliceInput,
   type ClickhouseRebuildDriver,

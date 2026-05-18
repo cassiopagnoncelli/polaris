@@ -26,12 +26,15 @@
  * @see docs/architecture/07-clickhouse.md "Replay and Rebuild"
  */
 import {
+  type ClickhouseRebuildPlan,
   type ClickhouseRebuildPlanned,
+  createPartsReader,
   type PlanClickhouseRebuildOptions,
   planClickhouseRebuild,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
 } from "@polaris/shared-clickhouse/rebuild";
+import { connectOperatorClickHouse } from "../../clickhouse/connect.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
@@ -42,13 +45,22 @@ interface ClickhouseRebuildPlanArgs {
   readonly to?: string;
 }
 
+export interface ClickhouseRebuildPlanReadPartitionsHandle {
+  readonly readPartitions: NonNullable<PlanClickhouseRebuildOptions["readPartitions"]>;
+  close(): Promise<void>;
+}
+
 export interface ClickhouseRebuildPlanHooks {
   readonly now?: () => Date;
   /**
-   * Partition reader adapter. Required for the happy path; tests
-   * inject a stub. The production wiring (deferred to follow-up)
-   * uses the shared-clickhouse operator client's `raw.query`
-   * escape hatch.
+   * Partition reader adapter. Injected for tests; in production the
+   * runner falls back to `defaultReadPartitions(ctx.env)` which wraps
+   * the shared-clickhouse operator client's `raw.query` escape hatch.
+   *
+   * Supplying this skips the production wiring entirely (no
+   * ClickHouse client construction, no env validation). Pass an
+   * always-throwing stub to exercise the planner's
+   * `clickhouse_unreachable` path.
    */
   readonly readPartitions?: PlanClickhouseRebuildOptions["readPartitions"];
 }
@@ -79,7 +91,6 @@ export const clickhouseRebuildPlanCommand: CommandDefinition = {
 
 export function buildClickhouseRebuildPlanRunner(hooks: ClickhouseRebuildPlanHooks = {}) {
   const nowFn = hooks.now ?? (() => new Date());
-  const readPartitions = hooks.readPartitions;
 
   return async function runner(
     args: ClickhouseRebuildPlanArgs,
@@ -93,19 +104,38 @@ export function buildClickhouseRebuildPlanRunner(hooks: ClickhouseRebuildPlanHoo
         "--from and --to must be supplied together (full-table plan uses neither).",
       );
     }
+
+    // The `readPartitions` adapter is either the test-supplied
+    // function (no close) or a production handle backed by an
+    // operator-profile ClickHouse client (close releases the
+    // connection). Tests pass a function directly so they never
+    // touch ClickHouse env.
+    const readPartitionsHandle: ClickhouseRebuildPlanReadPartitionsHandle =
+      hooks.readPartitions !== undefined
+        ? { readPartitions: hooks.readPartitions, close: async () => undefined }
+        : defaultReadPartitions(ctx.env);
     const planOptions: PlanClickhouseRebuildOptions = {
       now: nowFn(),
-      ...(readPartitions !== undefined ? { readPartitions } : {}),
+      readPartitions: readPartitionsHandle.readPartitions,
     };
 
-    const plan = await planClickhouseRebuild(
-      {
-        projection,
-        fromTs: fromStr ?? null,
-        toTs: toStr ?? null,
-      },
-      planOptions,
-    );
+    let plan: ClickhouseRebuildPlan;
+    try {
+      plan = await planClickhouseRebuild(
+        {
+          projection,
+          fromTs: fromStr ?? null,
+          toTs: toStr ?? null,
+        },
+        planOptions,
+      );
+    } finally {
+      try {
+        await readPartitionsHandle.close();
+      } catch {
+        // best-effort
+      }
+    }
 
     if (plan.kind === "rejected") {
       throw new UsageError(`clickhouse_rebuild_rejected:${plan.code}: ${plan.message}`, {
@@ -115,6 +145,28 @@ export function buildClickhouseRebuildPlanRunner(hooks: ClickhouseRebuildPlanHoo
 
     emit(ctx, plan);
     return undefined;
+  };
+}
+
+/**
+ * Production default `readPartitions` handle: same shape the
+ * `create` runner uses, factored here so both commands share the
+ * operator-client wiring through `connectOperatorClickHouse`.
+ *
+ * Tests inject their own handle via `hooks.openReadPartitions`, so
+ * this function is only consulted in production.
+ */
+function defaultReadPartitions(
+  env: NodeJS.ProcessEnv,
+): ClickhouseRebuildPlanReadPartitionsHandle {
+  const handle = connectOperatorClickHouse(env);
+  const readPartitions = createPartsReader({
+    raw: handle.client.raw,
+    database: handle.database,
+  });
+  return {
+    readPartitions,
+    close: () => handle.close(),
   };
 }
 
