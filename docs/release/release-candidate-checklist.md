@@ -177,22 +177,22 @@ captain reviews this section every RC cycle and prunes / extends it.
 Consolidated from each consumer's `SPEC.md`. The destination owner
 confirms each row matches the live consumer code.
 
-- **Meta CAPI v1:** `signup.completed` and `subscription.renewed` are
-  not in v1 (future minor releases). Mobile-source detection (`app`
-  channel for `action_source`) is deferred until the normalize layer
-  carries `app_*` slots. See
+- **Meta CAPI v1:** Mobile-source detection (`app` channel for
+  `action_source`) is deferred until the normalize layer carries
+  `app_*` slots. See
   [`consumers/meta-capi/v1/SPEC.md`](../../consumers/meta-capi/v1/SPEC.md).
-- **TikTok v1:** Same event-coverage gap as Meta CAPI (`signup.completed`,
-  `subscription.renewed` deferred); mobile-source detection deferred.
-  See
+- **TikTok v1:** Same mobile-source deferral as Meta CAPI (`app`
+  channel inference pending the normalize-layer `app_*` slots). See
   [`consumers/tiktok/v1/SPEC.md`](../../consumers/tiktok/v1/SPEC.md).
 - **Webhook sink v1:** Passthrough mapper only; per-event vendor-style
   mappers are the structural template for future vendors but the
   webhook sink itself stays event-agnostic. See
   [`consumers/webhook-sink/v1/SPEC.md`](../../consumers/webhook-sink/v1/SPEC.md).
-- **GA4 v1:** Same event-coverage gap as Meta/TikTok; uses GA4
-  Measurement Protocol with API-secret URL-redaction defense in the
-  deliverer summary. See
+- **GA4 v1:** Uses GA4 Measurement Protocol with API-secret
+  URL-redaction defense in the deliverer summary. GA4 has no
+  recommended event for recurring billing, so `subscription.renewed`
+  is mapped to a snake_case custom event (`subscription_renewed`),
+  which GA4 does not cross-channel dedupe. See
   [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
 - **Braze v1:** Braze provides no vendor-side event dedupe; the
   Polaris-side `(destination_id, delivery_key)` defense in

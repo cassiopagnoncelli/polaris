@@ -21,8 +21,12 @@ import {
   GA4_EVENT_BEGIN_CHECKOUT,
   GA4_EVENT_LOGIN,
   GA4_EVENT_PURCHASE,
+  GA4_EVENT_SIGN_UP,
+  GA4_EVENT_SUBSCRIPTION_RENEWED,
   GA4_LOGIN_METHOD_POLARIS,
   paymentApprovedMapper,
+  signupCompletedMapper,
+  subscriptionRenewedMapper,
   userIdentifiedMapper,
 } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
@@ -170,10 +174,94 @@ describe("userIdentifiedMapper", () => {
   });
 });
 
+describe("signupCompletedMapper", () => {
+  it("returns sign_up with method='polaris' and dedupe_key = event_id", () => {
+    const ctx = fixtureMapperContext({ event: "signup.completed", properties: {} });
+    const result = signupCompletedMapper(ctx);
+    expect(result.kind).toBe("mapped");
+    if (result.kind !== "mapped") return;
+    expect(result.payload.name).toBe(GA4_EVENT_SIGN_UP);
+    expect(result.payload.params?.method).toBe(GA4_LOGIN_METHOD_POLARIS);
+    // GA4 does not dedupe sign_up — Polaris-side key falls through to event_id.
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+
+  it("ignores envelope properties (sign_up is identity-only)", () => {
+    const ctx = fixtureMapperContext({
+      event: "signup.completed",
+      properties: { currency: "USD", predicted_ltv_minor: 9999 },
+    });
+    const result = signupCompletedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.params).toEqual({ method: GA4_LOGIN_METHOD_POLARIS });
+  });
+});
+
+describe("subscriptionRenewedMapper", () => {
+  it("returns subscription_renewed with currency + value + transaction_id", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: {
+        currency: "USD",
+        amount_minor: 1999,
+        subscription_id: "sub_abc",
+      },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.name).toBe(GA4_EVENT_SUBSCRIPTION_RENEWED);
+    expect(result.payload.params).toEqual({
+      currency: "USD",
+      value: 19.99,
+      transaction_id: "sub_abc",
+    });
+  });
+
+  it("accepts `amount` as an alias for `amount_minor` (legacy producers)", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { amount: 1999, currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.params?.value).toBe(19.99);
+  });
+
+  it("emits currency-only params when amount is missing", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.params).toEqual({ currency: "USD" });
+    expect(result.payload.params?.value).toBeUndefined();
+  });
+
+  it("omits params entirely when no relevant slot is present", () => {
+    const ctx = fixtureMapperContext({ event: "subscription.renewed", properties: {} });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.params).toBeUndefined();
+  });
+
+  it("keeps dedupe_key on canonical event_id (GA4 does not dedupe custom events)", () => {
+    const ctx = fixtureMapperContext({
+      event: "subscription.renewed",
+      properties: { subscription_id: "sub_xyz", amount_minor: 1999, currency: "USD" },
+    });
+    const result = subscriptionRenewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+});
+
 describe("CANONICAL_TO_GA4_EVENT", () => {
-  it("pins the v1 event matrix", () => {
+  it("pins the v1.x event matrix", () => {
     expect(CANONICAL_TO_GA4_EVENT["checkout.started"]).toBe(GA4_EVENT_BEGIN_CHECKOUT);
     expect(CANONICAL_TO_GA4_EVENT["payment.approved"]).toBe(GA4_EVENT_PURCHASE);
     expect(CANONICAL_TO_GA4_EVENT["user.identified"]).toBe(GA4_EVENT_LOGIN);
+    expect(CANONICAL_TO_GA4_EVENT["signup.completed"]).toBe(GA4_EVENT_SIGN_UP);
+    expect(CANONICAL_TO_GA4_EVENT["subscription.renewed"]).toBe(GA4_EVENT_SUBSCRIPTION_RENEWED);
   });
 });

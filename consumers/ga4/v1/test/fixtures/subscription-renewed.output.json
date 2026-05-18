@@ -1,0 +1,15 @@
+{
+  "client_id": "anon_abc",
+  "user_id": "cust_12345",
+  "timestamp_micros": 1778587200000000,
+  "events": [
+    {
+      "name": "subscription_renewed",
+      "params": {
+        "currency": "USD",
+        "value": 19.99,
+        "transaction_id": "sub_42"
+      }
+    }
+  ]
+}

@@ -19,9 +19,18 @@
  * v1 covers the commerce subset that production GA4 integrations
  * usually start with:
  *
- *   - `checkout.started`  → `begin_checkout`
- *   - `payment.approved`  → `purchase`
- *   - `user.identified`   → `login` (method='polaris')
+ *   - `checkout.started`     → `begin_checkout`
+ *   - `payment.approved`     → `purchase`
+ *   - `user.identified`      → `login` (method='polaris')
+ *   - `signup.completed`     → `sign_up` (method='polaris')
+ *   - `subscription.renewed` → `subscription_renewed` (custom event)
+ *
+ * GA4 has no recommended event for subscription renewals, so v1 emits
+ * a snake_case custom event (`subscription_renewed`) carrying the
+ * canonical `currency`, `value` (minor → major), and the
+ * subscription's per-cycle id stamped on `params.transaction_id` for
+ * operator triage parity with `purchase`. Only `purchase` retains the
+ * cross-channel dedupe promise — GA4 does not dedupe custom events.
  *
  * Events outside this set produce `mapped_failed` records at the
  * runtime layer (no mapper registered).
@@ -49,11 +58,20 @@ type ParamsBuilder = {
 export const GA4_EVENT_PURCHASE = "purchase" as const;
 export const GA4_EVENT_BEGIN_CHECKOUT = "begin_checkout" as const;
 export const GA4_EVENT_LOGIN = "login" as const;
+export const GA4_EVENT_SIGN_UP = "sign_up" as const;
+/**
+ * GA4 custom event for subscription renewals. GA4 has no recommended
+ * event for recurring billing; the snake_case name follows GA4's
+ * documented custom-event naming convention. Operators see this
+ * verbatim in the GA4 Events report.
+ */
+export const GA4_EVENT_SUBSCRIPTION_RENEWED = "subscription_renewed" as const;
 
 /**
- * GA4 `login.method` value the v1 mapper stamps on `user.identified`.
+ * GA4 `method` value the v1 mapper stamps on `login` and `sign_up`.
  * Keeps the canonical identity-emission source labeled so GA4 reports
- * can split out Polaris-driven logins from organic gtag logins.
+ * can split out Polaris-driven logins / signups from organic gtag
+ * events that share the same vendor event name.
  */
 export const GA4_LOGIN_METHOD_POLARIS = "polaris" as const;
 
@@ -65,6 +83,8 @@ export const CANONICAL_TO_GA4_EVENT = Object.freeze({
   "checkout.started": GA4_EVENT_BEGIN_CHECKOUT,
   "payment.approved": GA4_EVENT_PURCHASE,
   "user.identified": GA4_EVENT_LOGIN,
+  "signup.completed": GA4_EVENT_SIGN_UP,
+  "subscription.renewed": GA4_EVENT_SUBSCRIPTION_RENEWED,
 }) as Readonly<Record<string, string>>;
 
 // ---------------------------------------------------------------------------
@@ -155,6 +175,55 @@ export const userIdentifiedMapper: Mapper<Ga4EventPayload> = (
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
   return buildResult(GA4_EVENT_LOGIN, params, ctx.normalized.event_id);
+};
+
+/**
+ * `signup.completed` → `sign_up` (method=`polaris`).
+ *
+ * GA4's recommended `sign_up` event carries a `method` parameter that
+ * labels the auth provider, mirroring the `login` event shape. v1
+ * stamps `polaris` so GA4 reports can split Polaris-driven signups
+ * out from organic gtag-fired ones. GA4 has no documented cross-event
+ * dedupe for `sign_up`, so the Polaris-side dedupe_key falls through
+ * to the canonical `event_id`.
+ */
+export const signupCompletedMapper: Mapper<Ga4EventPayload> = (
+  ctx: MapperContext,
+): MapperResult<Ga4EventPayload> => {
+  const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
+  return buildResult(GA4_EVENT_SIGN_UP, params, ctx.normalized.event_id);
+};
+
+/**
+ * `subscription.renewed` → `subscription_renewed` (custom event).
+ *
+ * GA4 has no recommended event for recurring billing; v1 emits a
+ * snake_case custom event. Pulls `amount_minor` (or legacy `amount`) +
+ * `currency` off `properties` and converts to GA4's decimal `value`.
+ * The per-cycle `subscription_id` lands on `params.transaction_id` for
+ * triage parity with `purchase`, but GA4 does NOT dedupe custom events
+ * — the Polaris-side dedupe_key still keys on the canonical
+ * `event_id` so retries against the same renewal envelope stay stable.
+ */
+export const subscriptionRenewedMapper: Mapper<Ga4EventPayload> = (
+  ctx: MapperContext,
+): MapperResult<Ga4EventPayload> => {
+  const props = ctx.normalized.properties;
+  const currency = readString(props, "currency");
+  const amountMinor = readInteger(props, "amount_minor") ?? readInteger(props, "amount");
+  const subscriptionId = readString(props, "subscription_id");
+
+  const params: ParamsBuilder = {};
+  if (currency !== null && amountMinor !== null) {
+    params.currency = currency;
+    const value = safeMinorToMajor(amountMinor, currency);
+    if (value !== undefined) params.value = value;
+  } else if (currency !== null) {
+    params.currency = currency;
+  }
+  if (subscriptionId !== null) params.transaction_id = subscriptionId;
+
+  return buildResult(GA4_EVENT_SUBSCRIPTION_RENEWED, params, ctx.normalized.event_id);
 };
 
 // ---------------------------------------------------------------------------

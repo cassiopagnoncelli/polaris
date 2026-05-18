@@ -13,16 +13,16 @@
 ## Supported canonical events
 
 ```text
-checkout.started   →  begin_checkout
-payment.approved   →  purchase
-user.identified    →  login (method='polaris')
+checkout.started       →  begin_checkout
+payment.approved       →  purchase
+user.identified        →  login (method='polaris')
+signup.completed       →  sign_up (method='polaris')
+subscription.renewed   →  subscription_renewed (custom event)
 ```
 
-Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
+GA4 has no recommended event for recurring billing, so v1 emits a snake_case custom event (`subscription_renewed`) for `subscription.renewed`. Per GA4's documented dedupe contract, only `purchase` dedupes cross-channel via `transaction_id`; `subscription_renewed` carries `transaction_id` for triage parity but GA4 will not dedupe it. Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
 
 ```text
-signup.completed       not in v1 (future minor; would map to `sign_up`)
-subscription.renewed   not in v1 (future minor; GA4 has no native renewal recommended event — would map to a custom event)
 support.ticket.opened  GA4 has no canonical equivalent; never delivered
 polaris.diagnostics.*  internal-only platform telemetry; never delivered
 ```
@@ -66,6 +66,32 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 
 No additional event-specific properties are populated — `login` is a lightweight identity-emission signal.
 
+### `signup.completed` → `sign_up`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `identity.anonymous_id` | request `client_id` | none | wrapper-level |
+| `identity.customer_id` | request `user_id` | none | wrapper-level; pairs with `client_id` so GA4 stitches the new account |
+| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | optional |
+| inferred | `event.name` | constant | `sign_up` |
+| constant | `event.params.method` | constant | `polaris` (labels the auth provider so GA4 reports can split Polaris signups out from organic gtag signups) |
+
+No additional event-specific properties are populated — `sign_up` is a lightweight identity-emission signal that mirrors `login` on the vendor side. GA4 has no documented cross-event dedupe for `sign_up`, so the Polaris-side `dedupe_key` falls through to the canonical `event_id`.
+
+### `subscription.renewed` → `subscription_renewed` (custom event)
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `identity.anonymous_id` | request `client_id` | none | wrapper-level |
+| `identity.customer_id` | request `user_id` | none | wrapper-level |
+| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | optional |
+| inferred | `event.name` | constant | `subscription_renewed` (snake_case per GA4's custom-event naming convention) |
+| `properties.amount_minor` (or `amount`) | `event.params.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
+| `properties.currency` | `event.params.currency` | none | ISO 4217 |
+| `properties.subscription_id` | `event.params.transaction_id` | none | Stable per-cycle id on the renewal. Mirrors the `purchase` slot so triage queries against duplicates have a stable handle; GA4 does NOT dedupe custom events. |
+
+GA4 has no recommended event for recurring billing — v1 emits a snake_case custom event. The Polaris-side `dedupe_key` falls through to the canonical `event_id`; GA4 will not cross-channel dedupe this event.
+
 ## Normalization rules
 
 The shared `@polaris/shared-destination-normalize` package handles:
@@ -88,12 +114,12 @@ GA4-specific rules (in `src/mapper.ts`):
 - **Vendor dedupe field:** GA4 `transaction_id` (inside `params` on `purchase` events). GA4 does not document a cross-event dedupe slot for non-purchase events.
 - **Polaris source field:**
   - `purchase`: canonical `properties.transaction_id` (preferred) or `properties.order_id` (fallback). The same value lands on both the vendor `params.transaction_id` slot and the Polaris-side `delivery_records.dedupe_key` so the two stay aligned.
-  - `begin_checkout` / `login`: canonical `event_id` for the Polaris-side dedupe key only. GA4 does not dedupe these.
+  - `begin_checkout` / `login` / `sign_up` / `subscription_renewed`: canonical `event_id` for the Polaris-side dedupe key only. GA4 does not dedupe these. `subscription_renewed` carries the `subscription_id` on `params.transaction_id` for operator-side parity with `purchase`, but it is a custom event and GA4 has no cross-event dedupe contract for custom events.
 - **Stability across retries:** confirmed — the destination runtime preserves the delivery key across retry attempts; the canonical `transaction_id` is stable per purchase, and the mapper is pure so the same envelope always produces the same wire `transaction_id`.
 
 Cross-channel dedupe works for `purchase` because GA4 deduplicates against the same `transaction_id` whether it arrives via the gtag (browser) or the Measurement Protocol (server). Running Polaris alongside the GA4 web SDK lets GA4 dedupe matching attempts on GA4's side as long as both pipelines stamp the same `transaction_id`.
 
-**v1 does NOT promise universal GA4 event dedupe.** Only `purchase` has documented vendor dedupe; `begin_checkout` and `login` may surface as duplicates on the GA4 side if a retry storm and the gtag race the Measurement Protocol — there is no GA4-side mechanism to prevent this. Operators triage duplicates via the Polaris-side `dedupe_key` instead.
+**v1 does NOT promise universal GA4 event dedupe.** Only `purchase` has documented vendor dedupe; `begin_checkout`, `login`, `sign_up`, and `subscription_renewed` may surface as duplicates on the GA4 side if a retry storm and the gtag race the Measurement Protocol — there is no GA4-side mechanism to prevent this. Operators triage duplicates via the Polaris-side `dedupe_key` instead.
 
 ## Consent slot mapping
 

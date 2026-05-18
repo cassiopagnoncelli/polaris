@@ -1,0 +1,13 @@
+{
+  "client_id": "anon_abc",
+  "user_id": "cust_12345",
+  "timestamp_micros": 1778587200000000,
+  "events": [
+    {
+      "name": "sign_up",
+      "params": {
+        "method": "polaris"
+      }
+    }
+  ]
+}

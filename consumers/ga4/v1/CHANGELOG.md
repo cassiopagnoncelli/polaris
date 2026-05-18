@@ -1,5 +1,12 @@
 # `@polaris/consumer-ga4-v1` changelog
 
+## v1.1.0 — additive event-matrix expansion
+
+- Added `signup.completed` → `sign_up` mapper. Params populate `method: 'polaris'` so GA4 reports can split Polaris-driven signups out from organic gtag-fired ones; mirrors the `login` mapper shape.
+- Added `subscription.renewed` → `subscription_renewed` mapper. GA4 has no recommended event for recurring billing, so v1 emits a snake_case custom event carrying `currency`, `value` (from `amount_minor` / legacy `amount`), and `transaction_id` (from `subscription_id`). GA4 does NOT dedupe custom events; the Polaris-side dedupe_key stays on the canonical `event_id`.
+- New `GA4_EVENT_SIGN_UP` and `GA4_EVENT_SUBSCRIPTION_RENEWED` constants exported from `src/mapper.ts`.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.0.0 — initial release (P9-004)
 
 - Third real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003) and `@polaris/consumer-tiktok-v1` (P9-005).

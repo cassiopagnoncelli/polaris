@@ -312,6 +312,85 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(records.snapshot()).toHaveLength(0);
   });
 
+  it("delivers a signup.completed event as sign_up with method='polaris'", async () => {
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const instance = fixtureDestinationInstance();
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
+
+    const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      secrets,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_ga4_signup",
+        event: "signup.completed",
+        properties: { registration_method: "email" },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    expect(record?.dedupe_key).toBe("evt_int_ga4_signup");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.events[0].name).toBe("sign_up");
+    expect(body.events[0].params).toEqual({ method: "polaris" });
+  });
+
+  it("delivers a subscription.renewed event as subscription_renewed with currency + value + transaction_id", async () => {
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const instance = fixtureDestinationInstance();
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
+
+    const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      secrets,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_ga4_sub",
+        event: "subscription.renewed",
+        properties: {
+          subscription_id: "sub_42",
+          amount_minor: 1999,
+          currency: "USD",
+        },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    // GA4 does not dedupe custom events; Polaris-side key stays on event_id.
+    expect(record?.dedupe_key).toBe("evt_int_ga4_sub");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.events[0].name).toBe("subscription_renewed");
+    expect(body.events[0].params).toEqual({
+      currency: "USD",
+      value: 19.99,
+      transaction_id: "sub_42",
+    });
+  });
+
   it("maps a 401 to failed_permanent + auth and writes a dlq_records row", async () => {
     const { fetch } = makeFetch(() => new Response("nope", { status: 401 }));
     const instance = fixtureDestinationInstance();
