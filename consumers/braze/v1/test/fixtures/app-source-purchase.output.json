@@ -1,0 +1,12 @@
+{
+  "purchases": [
+    {
+      "external_id": "cust_12345",
+      "device_id": "11111111-2222-3333-4444-555555555555",
+      "product_id": "cart_42",
+      "currency": "USD",
+      "price": 49.99,
+      "time": "2026-05-14T12:00:00.000Z"
+    }
+  ]
+}

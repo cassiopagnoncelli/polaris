@@ -1,11 +1,18 @@
 # `@polaris/consumer-ga4-v1` changelog
 
+## v1.2.0 — mobile-app stream routing via `app_instance_id` (KCS3ATPC)
+
+- The mapper now synthesizes a wrapper-level `app_instance_id` from `context.app_idfv` (preferred) or `context.app_gaid` when the canonical envelope reports an app source. The slot rides on `Ga4EventPayload.app_instance_id` as a Polaris-internal hint that the deliverer lifts to the request wrapper.
+- The deliverer's wrapper builder produces either `{ client_id, events: [...] }` (web stream) or `{ app_instance_id, events: [...] }` (Firebase / app stream). The Polaris-internal `app_instance_id` hint is stripped from the wire event payload.
+- The deliverer's URL builder selects `?measurement_id=<id>&api_secret=<secret>` (web stream) or `?firebase_app_id=<id>&api_secret=<secret>` (Firebase / app stream). The Firebase URL flavor only activates when the resolved secret carries `firebase_app_id` AND the mapper produced an `app_instance_id` hint; operators who haven't rotated their secret yet continue to flow app-source events through the web-stream URL with the synthesized `client_id`.
+- `ResolvedGa4Secret` gains an optional `firebase_app_id` slot; existing `{measurement_id, api_secret}` secrets keep working unchanged.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.1.0 — additive event-matrix expansion
 
 - Added `signup.completed` → `sign_up` mapper. Params populate `method: 'polaris'` so GA4 reports can split Polaris-driven signups out from organic gtag-fired ones; mirrors the `login` mapper shape.
 - Added `subscription.renewed` → `subscription_renewed` mapper. GA4 has no recommended event for recurring billing, so v1 emits a snake_case custom event carrying `currency`, `value` (from `amount_minor` / legacy `amount`), and `transaction_id` (from `subscription_id`). GA4 does NOT dedupe custom events; the Polaris-side dedupe_key stays on the canonical `event_id`.
 - New `GA4_EVENT_SIGN_UP` and `GA4_EVENT_SUBSCRIPTION_RENEWED` constants exported from `src/mapper.ts`.
-- No deliverer or descriptor identity changes; v1 contract preserved.
 
 ## v1.0.0 — initial release (P9-004)
 

@@ -1,0 +1,13 @@
+{
+  "app_instance_id": "11111111-2222-3333-4444-555555555555",
+  "events": [
+    {
+      "name": "purchase",
+      "params": {
+        "currency": "USD",
+        "value": 49.99,
+        "transaction_id": "tx_42"
+      }
+    }
+  ]
+}

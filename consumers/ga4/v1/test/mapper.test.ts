@@ -25,6 +25,7 @@ import {
   GA4_EVENT_SUBSCRIPTION_RENEWED,
   GA4_LOGIN_METHOD_POLARIS,
   paymentApprovedMapper,
+  resolveAppInstanceId,
   signupCompletedMapper,
   subscriptionRenewedMapper,
   userIdentifiedMapper,
@@ -253,6 +254,72 @@ describe("subscriptionRenewedMapper", () => {
     const result = subscriptionRenewedMapper(ctx);
     if (result.kind !== "mapped") throw new Error("expected mapped");
     expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+});
+
+describe("resolveAppInstanceId — app channel (KCS3ATPC)", () => {
+  it("returns null when no app_* slot is populated", () => {
+    expect(resolveAppInstanceId(fixtureNormalizedEvent())).toBeNull();
+  });
+
+  it("prefers app_idfv over app_gaid (iOS first)", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(
+      resolveAppInstanceId({
+        ...normalized,
+        context: { ...normalized.context, app_idfv: "ios-uuid", app_gaid: "android-id" },
+      }),
+    ).toBe("ios-uuid");
+  });
+
+  it("falls back to app_gaid when only an Android device id is present", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(
+      resolveAppInstanceId({
+        ...normalized,
+        context: { ...normalized.context, app_gaid: "android-id" },
+      }),
+    ).toBe("android-id");
+  });
+
+  it("returns null when app context is populated but no device id is set", () => {
+    // app_bundle_id alone is not a stable per-device identifier; GA4 won't accept it as
+    // `app_instance_id`. Operators relying on bundle-id-only events still flow through the
+    // web-stream URL with the synthesized client_id.
+    const normalized = fixtureNormalizedEvent();
+    expect(
+      resolveAppInstanceId({
+        ...normalized,
+        context: { ...normalized.context, app_bundle_id: "com.example.app" },
+      }),
+    ).toBeNull();
+  });
+
+  it("propagates app_instance_id onto the purchase payload via the mapper", () => {
+    const normalized = fixtureNormalizedEvent({
+      event: "payment.approved",
+      properties: { amount_minor: 4999, currency: "USD", transaction_id: "tx_999" },
+    });
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        context: {
+          ...normalized.context,
+          app_bundle_id: "com.example.storefront",
+          app_idfv: "11111111-2222-3333-4444-555555555555",
+        },
+      },
+    };
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.app_instance_id).toBe("11111111-2222-3333-4444-555555555555");
+  });
+
+  it("leaves app_instance_id undefined on the begin_checkout payload when no app context is present", () => {
+    const result = checkoutStartedMapper(fixtureMapperContext());
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.app_instance_id).toBeUndefined();
   });
 });
 

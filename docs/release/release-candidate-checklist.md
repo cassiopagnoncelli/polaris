@@ -177,28 +177,35 @@ captain reviews this section every RC cycle and prunes / extends it.
 Consolidated from each consumer's `SPEC.md`. The destination owner
 confirms each row matches the live consumer code.
 
-- **Meta CAPI v1:** Mobile-source detection (`app` channel for
-  `action_source`) is deferred until the normalize layer carries
-  `app_*` slots. See
+- **Meta CAPI v1:** No outstanding v1 caveats — the v1.x event matrix
+  is closed (`checkout.started`, `payment.approved`, `user.identified`,
+  `signup.completed`, `subscription.renewed`) and mobile-source
+  detection lands `action_source: "app"` on the wire. See
   [`consumers/meta-capi/v1/SPEC.md`](../../consumers/meta-capi/v1/SPEC.md).
-- **TikTok v1:** Same mobile-source deferral as Meta CAPI (`app`
-  channel inference pending the normalize-layer `app_*` slots). See
+- **TikTok v1:** No outstanding v1 caveats — same event-matrix and
+  mobile-source coverage as Meta CAPI; `event_source: "app"` lands on
+  the request wrapper. See
   [`consumers/tiktok/v1/SPEC.md`](../../consumers/tiktok/v1/SPEC.md).
 - **Webhook sink v1:** Passthrough mapper only; per-event vendor-style
   mappers are the structural template for future vendors but the
-  webhook sink itself stays event-agnostic. See
+  webhook sink itself stays event-agnostic. No app-channel branching by
+  design — receivers consume `event.context.app_*` directly off the
+  canonical envelope. See
   [`consumers/webhook-sink/v1/SPEC.md`](../../consumers/webhook-sink/v1/SPEC.md).
 - **GA4 v1:** Uses GA4 Measurement Protocol with API-secret
   URL-redaction defense in the deliverer summary. GA4 has no
   recommended event for recurring billing, so `subscription.renewed`
   is mapped to a snake_case custom event (`subscription_renewed`),
-  which GA4 does not cross-channel dedupe. See
+  which GA4 does not cross-channel dedupe. Firebase / app-stream
+  routing (via the resolved secret's optional `firebase_app_id` slot)
+  requires operators to rotate the secret to include the Firebase
+  app id; without it, app-source events flow through the web-stream
+  URL with the synthesized `client_id`. See
   [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
 - **Braze v1:** Braze provides no vendor-side event dedupe; the
   Polaris-side `(destination_id, delivery_key)` defense in
   `@polaris/shared-destinations` is the canonical idempotency guard.
-  No `user_alias` mapping for email-only / phone-only identities; no
-  first/last-name slots (canonical envelope lacks them). See
+  No first/last-name slots (canonical envelope lacks them). See
   [`consumers/braze/v1/SPEC.md`](../../consumers/braze/v1/SPEC.md).
 
 ### Open production decisions (wait-for-data)

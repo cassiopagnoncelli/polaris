@@ -7,8 +7,8 @@
 - **Name:** Google Analytics 4 — Measurement Protocol
 - **API version this consumer targets:** `mp` (the Measurement Protocol endpoint has no numeric API version — Google evolves the contract in place; pinned conceptually in `consumer.manifest.yaml` as `vendor_api_version: mp`)
 - **Documentation:** [GA4 Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4)
-- **Auth scheme:** Property-scoped `api_secret` (rotated via the GA4 Admin UI) passed as a URL query-string parameter alongside the property's `measurement_id`. GA4 has no header-based auth option for the Measurement Protocol.
-- **Base URL(s):** `https://www.google-analytics.com/mp/collect`. The host is overridable via `POLARIS_GA4_API_HOST` for staging endpoints; production is the canonical literal. A debug variant `/debug/mp/collect` on the same host returns verbose validation responses — v1 does not target the debug endpoint at runtime; operators can flip the path manually during triage.
+- **Auth scheme:** Property-scoped `api_secret` (rotated via the GA4 Admin UI) passed as a URL query-string parameter alongside the property's `measurement_id` (web stream) or `firebase_app_id` (app stream, KCS3ATPC). GA4 has no header-based auth option for the Measurement Protocol.
+- **Base URL(s):** `https://www.google-analytics.com/mp/collect`. The host is overridable via `POLARIS_GA4_API_HOST` for staging endpoints; production is the canonical literal. A debug variant `/debug/mp/collect` on the same host returns verbose validation responses — v1 does not target the debug endpoint at runtime; operators can flip the path manually during triage. The query string carries `measurement_id=<id>` for web-stream events and `firebase_app_id=<id>` for app-stream events (the deliverer chooses based on the resolved secret + the mapper's `app_instance_id` hint).
 
 ## Supported canonical events
 
@@ -40,13 +40,15 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `properties.total` | `event.params.value` | `minorToMajor(value, currency)` | GA4 wants decimal; minor → major per ISO 4217 exponent |
 | `properties.currency` | `event.params.currency` | none | ISO 4217 alphabetic |
 | `properties.items[]` | `event.params.items[]` | per-item builder | sku → `item_id`; name → `item_name`; quantity → `quantity`; `unit_price` → `price` (minor → major) |
+| `context.app_idfv` (fallback `context.app_gaid`) | request `app_instance_id` | first-non-null wins | wrapper-level; populated only when the canonical envelope reports an app source AND the secret carries `firebase_app_id`. Replaces `client_id` in that case (KCS3ATPC) |
 
 ### `payment.approved` → `purchase`
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.anonymous_id` | request `client_id` | none | wrapper-level; required by GA4 |
+| `identity.anonymous_id` | request `client_id` | none | wrapper-level; required by GA4 on web-stream requests |
 | `identity.customer_id` | request `user_id` | none | wrapper-level; optional |
+| `context.app_idfv` (fallback `context.app_gaid`) | request `app_instance_id` | first-non-null wins | wrapper-level; Firebase / app-stream alternative to `client_id` (KCS3ATPC) |
 | `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | optional; absent → GA4 stamps receive-time |
 | inferred | `event.name` | branch on canonical event | `payment.approved` → `purchase` |
 | `properties.amount_minor` (or `amount`) | `event.params.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
@@ -105,7 +107,8 @@ GA4 does NOT require hashed identifiers — the consumer's `identityHashing` fla
 
 GA4-specific rules (in `src/mapper.ts`):
 
-- **`client_id` synthesis** — GA4 requires `client_id` on every request. The deliverer prefers the canonical `anonymous_id` (matches the gtag client id shape) but falls back to `delivery_key` so the same envelope produces a stable `client_id` across retries. In a future minor version, `anonymous_id` will become the source of truth once the normalized envelope's identity surfaces to the deliverer alongside the mapped payload.
+- **`client_id` synthesis (web-stream)** — GA4 requires `client_id` on every web-stream request. The deliverer prefers the canonical `anonymous_id` (matches the gtag client id shape) but falls back to `delivery_key` so the same envelope produces a stable `client_id` across retries. In a future minor version, `anonymous_id` will become the source of truth once the normalized envelope's identity surfaces to the deliverer alongside the mapped payload.
+- **`app_instance_id` synthesis (Firebase / app-stream, KCS3ATPC)** — when the canonical envelope reports an app source (any `context.app_*` slot populated) the mapper synthesizes `app_instance_id` from `context.app_idfv` (preferred — iOS Vendor Identifier, UUID format) falling back to `context.app_gaid` (Android Advertising Id). The synthesized value rides on the per-event payload's `app_instance_id` slot (Polaris-internal hint) and the deliverer lifts it to the request wrapper, stripping it from the wire event payload. App-stream routing only activates when the resolved secret also carries `firebase_app_id`; operators who haven't rotated their secret stay on the web-stream wrapper.
 - **`timestamp_micros` derivation** — when populated, derived from `occurred_at_epoch_ms * 1000`. GA4 accepts up to ~72h in the past. If omitted, GA4 stamps the receive-time.
 - **`params.items[]` builder** — GA4's preferred per-product detail slot. The mapper emits one entry per canonical `properties.items[]` with `item_id` (sku), `item_name`, `quantity`, and `price` (unit_price minor → major). Entries with no usable fields are dropped from the array; an empty array is omitted entirely.
 
@@ -184,8 +187,10 @@ The canonical `email_sha256` / `phone_sha256` slots are NOT mapped — GA4 has n
 
 ```text
 consumers/ga4/v1/test/fixtures/normalized.ts                    builders
-consumers/ga4/v1/test/fixtures/checkout-started.input.json      canonical event
-consumers/ga4/v1/test/fixtures/checkout-started.output.json     GA4 payload (illustrative shape)
+consumers/ga4/v1/test/fixtures/checkout-started.input.json      canonical web-stream event
+consumers/ga4/v1/test/fixtures/checkout-started.output.json     GA4 web-stream payload (illustrative shape)
+consumers/ga4/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (KCS3ATPC)
+consumers/ga4/v1/test/fixtures/app-source-purchase.output.json  GA4 Firebase app-stream payload
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Tests cover the `payment.approved` → `purchase` purchase-dedupe behaviour (transaction_id preferred over order_id; fallback to event_id when both are absent) directly inside `test/mapper.test.ts` against the in-memory fixture builders so the goldens stay readable without becoming brittle.
@@ -194,6 +199,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 
 ## Known divergences from canonical
 
+- **GA4 splits web and Firebase data streams at the Measurement Protocol URL level** (KCS3ATPC): web-stream events use `?measurement_id=<id>&api_secret=<secret>` with `client_id` on the wrapper; Firebase / app-stream events use `?firebase_app_id=<id>&api_secret=<secret>` with `app_instance_id` on the wrapper. The deliverer routes based on (a) whether the mapper produced an `app_instance_id` from `context.app_*` slots AND (b) whether the resolved secret carries `firebase_app_id`. Operators who haven't rotated their secret to add `firebase_app_id` continue to flow app-source events through the web-stream URL (Polaris won't half-route).
 - **GA4 does NOT require hashed identifiers** — canonical events MAY pass raw email and phone, but GA4 consumes only `client_id` / `user_id`. The `identityHashing` flags are off so the normalize layer skips the email / phone hashing pass for this consumer. Email matching on the GA4 side happens through the `user_id` join.
 - **GA4 returns HTTP 204 No Content on success** — unlike TikTok / Meta CAPI which return a small JSON document with a `request_id`. The deliverer treats every 2xx (including 204) as `accepted` and surfaces "204 No Content" as the `vendor_response_summary`.
 - **GA4 places the credential in the URL query string** — unlike TikTok (Access-Token header) and Meta CAPI (Authorization Bearer). The deliverer redacts the `api_secret` from every `vendor_response_summary` before it lands in PostgreSQL, in case Google's error pages echo request URLs.

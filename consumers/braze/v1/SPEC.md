@@ -35,7 +35,8 @@ Each per-event mapper produces a `BrazePayload` populated with exactly one of `a
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys all wire entries on `external_id` |
+| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys all wire entries on `external_id`. App-channel anonymous sessions key on `device_id` instead (5UCTHNCR) |
+| `context.app_idfv` (fallback `context.app_gaid` → `context.app_idfa`) | `device_id` | first-non-null wins | App-channel only. Rides alongside `external_id` for logged-in mobile users; replaces `external_id` / `user_alias` when neither resolves on an app-source event |
 | n/a (constant) | `name` | none | `checkout_started` per the Braze naming convention |
 | `occurred_at` | `time` | passthrough | Braze REST accepts ISO 8601 directly |
 | `properties.currency` | `properties.currency` | none | ISO 4217 |
@@ -48,7 +49,8 @@ Each per-event mapper produces a `BrazePayload` populated with exactly one of `a
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys purchases on `external_id` |
+| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys purchases on `external_id`. App-channel anonymous sessions key on `device_id` instead (5UCTHNCR) |
+| `context.app_idfv` (fallback `context.app_gaid` → `context.app_idfa`) | `device_id` | first-non-null wins | App-channel only. Same semantics as the `checkout.started` mapping |
 | `properties.cart_id` (fallback `properties.order_id` → `properties.transaction_id`) | `product_id` | first-non-null wins | Braze's documentation explicitly allows a single purchase record per transaction; v1 uses `cart_id` as the stable product identifier when no per-line-item breakdown is shipped |
 | `properties.currency` | `currency` | none | Required by Braze on every purchase entry |
 | `properties.amount_minor` (fallback `properties.amount`) | `price` | `minorToMajor(amount, currency)` | Required by Braze on every purchase entry; `amount` alias supports legacy producers |
@@ -60,11 +62,12 @@ If `currency`, `amount`/`amount_minor`, or a derivable `product_id` is missing t
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys attribute updates on `external_id` |
+| `identity.customer_id` (fallback `identity.anonymous_id`) | `external_id` | lowercase + trim | Braze keys attribute updates on `external_id`. App-channel anonymous sessions key on `device_id` instead (5UCTHNCR) |
+| `context.app_idfv` (fallback `context.app_gaid` → `context.app_idfa`) | `device_id` | first-non-null wins | App-channel only. Same semantics as the `checkout.started` mapping |
 | `identity.email` | `email` | passthrough | RAW (NOT hashed) — Braze hashes server-side |
 | `identity.phone` | `phone` | passthrough | RAW (NOT hashed) — Braze hashes server-side |
 | `context.locale` | `language` | passthrough | Braze stores locale on the user profile |
-| n/a (constant) | `_update_existing_only` | constant `false` | Braze creates the profile when one does not already exist (first-touch identification) |
+| n/a (constant) | `_update_existing_only` | constant `false` | Braze creates the profile when one does not already exist (first-touch identification). The same `_update_existing_only=false` applies on app-channel attribute updates so Braze auto-stitches the device-anchored stub profile into the identified profile when an `external_id` later arrives |
 
 ## Normalization rules
 
@@ -83,9 +86,12 @@ currency    minorToMajor (consumer applies this)
 
 Braze-specific rules (in `src/mapper.ts`):
 
-- **Identifier resolution** — the mapper picks exactly one of `external_id` or `user_alias` per entry:
+- **Identifier resolution** — the mapper picks exactly one PRIMARY identifier per entry, in this order:
   - `external_id` is the first non-null of `identity.user_id` (canonical `customer_id`) → `identity.anonymous_id`. Trimmed + lowercased before emission.
-  - `user_alias` (BJPQSPE5) is the email-only / phone-only fallback: `{ alias_label: "email", alias_name: ... }` when only `identity.email` is present, or `{ alias_label: "phone", alias_name: ... }` when only `identity.phone` is present. Email wins when both are present and `external_id` is absent. The alias name is raw (unhashed) — Braze does not accept hashed alias names. Events with neither slot still produce a `skip` outcome.
+  - `user_alias` (BJPQSPE5) is the email-only / phone-only fallback: `{ alias_label: "email", alias_name: ... }` when only `identity.email` is present, or `{ alias_label: "phone", alias_name: ... }` when only `identity.phone` is present. Email wins when both are present and `external_id` is absent. The alias name is raw (unhashed) — Braze does not accept hashed alias names.
+  - `device_id` (5UCTHNCR) is the app-channel anonymous fallback: first non-null of `context.app_idfv` → `context.app_gaid` → `context.app_idfa` when the canonical envelope reports an app source. Only used as the primary identifier when neither `external_id` nor `user_alias` resolves on an app-source event (e.g. a not-yet-logged-in mobile SDK user).
+  - Events with none of the three still produce a `skip` outcome.
+- **Additive `device_id` for logged-in mobile users** (5UCTHNCR) — when the primary identifier is `external_id` (or `user_alias`) AND the canonical envelope is app-source, the mapper also stamps `device_id` on the entry so Braze stitches the anonymous device-anchored profile to the identified profile.
 - **`product_id` resolution (purchases)** — first non-null of `properties.cart_id` → `properties.order_id` → `properties.transaction_id`. Braze requires `product_id` on every purchase entry; missing slots produce a `skip` outcome.
 - **`name` (events)** — constant per canonical event mapping. v1 emits `checkout_started`; future canonical events get a stable underscore-snake-case Braze name agreed with the receiver.
 - **`_update_existing_only=false` (attributes)** — first-touch identification: Braze creates the user profile when one does not already exist. A future minor may surface a per-instance override (e.g. data-engineering-owned destinations may want strict update-only semantics).
@@ -168,6 +174,8 @@ Events without `external_id` AND without a `user_alias`-eligible identity (no em
 consumers/braze/v1/test/fixtures/normalized.ts                    builders
 consumers/braze/v1/test/fixtures/checkout-started.input.json      canonical event
 consumers/braze/v1/test/fixtures/checkout-started.output.json     Braze payload (illustrative shape)
+consumers/braze/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (5UCTHNCR)
+consumers/braze/v1/test/fixtures/app-source-purchase.output.json  Braze purchases[] payload with device_id
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. The unit tests assert against computed values so the goldens stay readable without becoming brittle.
@@ -183,6 +191,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 - **Braze's wire body is the `BrazePayload` shape directly.** Unlike Meta CAPI (wraps in `{ data: [event] }`) or TikTok (wraps in `{ event_source, event_source_id, data: [payload] }`), Braze accepts `{ attributes?, events?, purchases? }` at the top level with at least one populated. The deliverer JSON-serializes the mapper output directly into the body.
 - **Braze's instance slug is part of the URL host, not the API key.** The resolved secret carries `{ instance, api_key }` and the deliverer substitutes `instance` into the host template. Wrong-instance routing returns 401/403 (Braze treats the key as bound to a specific workspace + instance), which the deliverer classifies as `failed_permanent` + `auth`.
 - **Per-event mapper `skip` outcomes are surfaced as `mapped_failed` records.** The shared runtime supports `{ kind: 'skip', reason }` from the mapper; v1's purchases mapper uses it when `currency` / `amount` / `product_id` cannot be resolved. The reason string is label-safe and lands in `vendor_response_summary` for operator triage.
+- **Braze REST `events[]` / `purchases[]` have no top-level `platform` slot.** Braze's mobile SDKs surface platform metadata via the SDK device handshake; the REST `/users/track` contract does not document a per-event `platform` field. The v1 consumer therefore does NOT set a `platform` slot on app-channel entries — the `device_id` family (IDFV = iOS, GAID = Android) is the operator-visible signal Braze uses to bucket anonymous app sessions.
 
 ## Vendor API changelog
 

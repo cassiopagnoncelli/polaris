@@ -1,5 +1,13 @@
 # `@polaris/consumer-braze-v1` changelog
 
+## v1.2.0 — mobile-app `device_id` anchoring (5UCTHNCR)
+
+- The mapper now stamps `device_id` on `events[]` / `purchases[]` / `attributes[]` entries when the canonical envelope reports an app source. The value is the first non-null of `context.app_idfv` → `context.app_gaid` → `context.app_idfa` (iOS Vendor Identifier preferred — UUID format).
+- For logged-in mobile users (`external_id` resolves AND envelope is app-source) the device_id rides ALONGSIDE `external_id` so Braze stitches the anonymous device-anchored profile into the identified profile.
+- For not-yet-logged-in mobile users (no `external_id`, no `user_alias`) the device_id becomes the PRIMARY identifier on the entry — previously these events landed as `skip` outcomes. The identifier ladder is now `external_id` → `user_alias` → `device_id`; events with none of the three still skip.
+- The mapper does NOT set a per-event `platform` slot. Braze REST `/users/track` has no documented `platform` field on track entries; the device_id family (IDFV vs GAID) is the operator-visible signal Braze uses to bucket anonymous app sessions.
+- No deliverer or descriptor identity changes; v1 contract preserved.
+
 ## v1.1.0 — `user_alias` mapping for email-only / phone-only identities (BJPQSPE5)
 
 - The mapper now emits a `user_alias` entry when `external_id` cannot be derived but `identity.email` or `identity.phone` is present. Email wins when both are populated.

@@ -53,12 +53,21 @@ export interface BrazeUserAlias {
 export interface BrazeAttributeObject {
   /**
    * Canonical `customer_id` (lowercased, trimmed). Required when no
-   * `user_alias` is supplied. The mapper emits exactly one of
-   * `external_id` or `user_alias` per entry; Braze rejects entries
-   * carrying both.
+   * `user_alias` AND no `device_id` is supplied. The mapper emits
+   * exactly one of `external_id` / `user_alias` / `device_id` as the
+   * primary identifier per entry; Braze rejects entries with zero.
+   * When the event is app-source AND an external_id is also resolvable
+   * the mapper attaches `device_id` ALONGSIDE `external_id` so Braze
+   * stitches the anonymous device session to the identified profile.
    */
   readonly external_id?: string;
   readonly user_alias?: BrazeUserAlias;
+  /**
+   * Mobile-app device identifier (5UCTHNCR). Synthesized from the
+   * canonical `context.app_idfv` / `context.app_gaid` slot when the
+   * canonical envelope reports an app source.
+   */
+  readonly device_id?: string;
   readonly email?: string;
   readonly phone?: string;
   readonly _update_existing_only?: boolean;
@@ -80,11 +89,20 @@ export interface BrazeAttributeObject {
 export interface BrazeEventObject {
   /**
    * Canonical `customer_id` (lowercased, trimmed). Required when no
-   * `user_alias` is supplied. The mapper emits exactly one of
-   * `external_id` or `user_alias` per entry.
+   * `user_alias` AND no `device_id` is supplied. See
+   * `BrazeAttributeObject` for the full identifier ladder.
    */
   readonly external_id?: string;
   readonly user_alias?: BrazeUserAlias;
+  /**
+   * Mobile-app device identifier (5UCTHNCR). Synthesized from the
+   * canonical `context.app_idfv` / `context.app_gaid` slot when the
+   * canonical envelope reports an app source. Anchors the event to a
+   * specific device when no `external_id` / `user_alias` resolves
+   * (anonymous app session) and rides alongside `external_id` when one
+   * does (logged-in mobile user).
+   */
+  readonly device_id?: string;
   readonly name: string;
   readonly time: string;
   readonly properties?: BrazeEventProperties;
@@ -123,11 +141,16 @@ export interface BrazeEventProperties {
 export interface BrazePurchaseObject {
   /**
    * Canonical `customer_id` (lowercased, trimmed). Required when no
-   * `user_alias` is supplied. The mapper emits exactly one of
-   * `external_id` or `user_alias` per entry.
+   * `user_alias` AND no `device_id` is supplied. See
+   * `BrazeAttributeObject` for the full identifier ladder.
    */
   readonly external_id?: string;
   readonly user_alias?: BrazeUserAlias;
+  /**
+   * Mobile-app device identifier (5UCTHNCR). Same semantics as
+   * `BrazeEventObject.device_id`.
+   */
+  readonly device_id?: string;
   readonly product_id: string;
   readonly currency: string;
   readonly price: number;

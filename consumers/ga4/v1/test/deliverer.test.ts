@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildFirebaseAppStreamUrl,
   buildGa4Deliverer,
   buildMeasurementProtocolUrl,
   buildRequestBody,
@@ -266,6 +267,30 @@ describe("parseResolvedSecret", () => {
     });
   });
 
+  it("threads firebase_app_id through when the operator includes it (KCS3ATPC)", () => {
+    expect(
+      parseResolvedSecret(
+        JSON.stringify({
+          measurement_id: "G-XYZ",
+          api_secret: "s1",
+          firebase_app_id: "1:NNN:android:abcdef",
+        }),
+      ),
+    ).toEqual({
+      measurement_id: "G-XYZ",
+      api_secret: "s1",
+      firebase_app_id: "1:NNN:android:abcdef",
+    });
+  });
+
+  it("treats firebase_app_id='' as absent (operator hasn't rotated yet)", () => {
+    expect(
+      parseResolvedSecret(
+        JSON.stringify({ measurement_id: "G-XYZ", api_secret: "s1", firebase_app_id: "" }),
+      ),
+    ).toEqual({ measurement_id: "G-XYZ", api_secret: "s1" });
+  });
+
   it("rejects empty + non-JSON + missing-required-field shapes", () => {
     expect(parseResolvedSecret("")).toBeNull();
     expect(parseResolvedSecret("not json")).toBeNull();
@@ -306,7 +331,113 @@ describe("buildRequestBody", () => {
     const ctx = fixtureDelivererContext();
     const body = buildRequestBody(ctx);
     expect(body.client_id).toBe(ctx.delivery_key);
+    expect(body.app_instance_id).toBeUndefined();
     expect(body.events).toEqual([ctx.payload]);
+  });
+
+  it("flips to { app_instance_id, events: [...] } when the mapper supplied a hint AND the secret carries firebase_app_id (KCS3ATPC)", () => {
+    const ctx = fixtureDelivererContext({
+      payload: {
+        name: "purchase",
+        params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
+        app_instance_id: "11111111-2222-3333-4444-555555555555",
+      },
+    });
+    const body = buildRequestBody(ctx, {
+      measurement_id: "G-XYZ",
+      api_secret: "s1",
+      firebase_app_id: "1:NNN:ios:abcdef",
+    });
+    expect(body.client_id).toBeUndefined();
+    expect(body.app_instance_id).toBe("11111111-2222-3333-4444-555555555555");
+    // Polaris-internal hint is stripped from the wire event payload.
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0]).not.toHaveProperty("app_instance_id");
+    expect(body.events[0]?.name).toBe("purchase");
+  });
+
+  it("stays on the web-stream wrapper when the mapper supplied an app_instance_id but the secret has no firebase_app_id", () => {
+    const ctx = fixtureDelivererContext({
+      payload: {
+        name: "purchase",
+        params: { currency: "USD", value: 49.99 },
+        app_instance_id: "11111111-2222-3333-4444-555555555555",
+      },
+    });
+    const body = buildRequestBody(ctx, { measurement_id: "G-XYZ", api_secret: "s1" });
+    expect(body.client_id).toBe(ctx.delivery_key);
+    expect(body.app_instance_id).toBeUndefined();
+    // The Polaris-internal hint is still stripped from the wire event payload — operators
+    // who haven't rotated their secret get a clean web-stream payload, not a half-routed body.
+    expect(body.events[0]).not.toHaveProperty("app_instance_id");
+  });
+});
+
+describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
+  it("POSTs to /mp/collect?firebase_app_id=...&api_secret=... and stamps app_instance_id on the wrapper", async () => {
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "www.google-analytics.test",
+    });
+    await deliver(
+      fixtureDelivererContext({
+        secret: JSON.stringify({
+          measurement_id: "G-TEST123456",
+          api_secret: "ga4-test-api-secret-xyz123",
+          firebase_app_id: "1:NNN:ios:abcdef",
+        }),
+        payload: {
+          name: "purchase",
+          params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
+          app_instance_id: "11111111-2222-3333-4444-555555555555",
+        },
+      }),
+    );
+    expect(calls).toHaveLength(1);
+    const url = calls[0]?.url ?? "";
+    expect(url).toContain("https://www.google-analytics.test/mp/collect?");
+    expect(url).toContain("firebase_app_id=1%3ANNN%3Aios%3Aabcdef");
+    expect(url).toContain("api_secret=ga4-test-api-secret-xyz123");
+    expect(url).not.toContain("measurement_id=");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.app_instance_id).toBe("11111111-2222-3333-4444-555555555555");
+    expect(body.client_id).toBeUndefined();
+    expect(body.events[0].app_instance_id).toBeUndefined();
+  });
+
+  it("stays on the web-stream URL when the mapper supplied an app_instance_id but the operator hasn't rotated the secret to add firebase_app_id", async () => {
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({ fetch, requestTimeoutMs: 5000 });
+    await deliver(
+      fixtureDelivererContext({
+        payload: {
+          name: "purchase",
+          params: { currency: "USD", value: 49.99 },
+          app_instance_id: "11111111-2222-3333-4444-555555555555",
+        },
+      }),
+    );
+    const url = calls[0]?.url ?? "";
+    expect(url).toContain("measurement_id=G-TEST123456");
+    expect(url).not.toContain("firebase_app_id");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.client_id).toBeDefined();
+    expect(body.app_instance_id).toBeUndefined();
+  });
+});
+
+describe("buildFirebaseAppStreamUrl", () => {
+  it("produces a GA4 Firebase MP URL with firebase_app_id and api_secret query params", () => {
+    const url = buildFirebaseAppStreamUrl(
+      "www.google-analytics.com",
+      "1:NNN:ios:abcdef",
+      "secret123",
+    );
+    expect(url).toBe(
+      "https://www.google-analytics.com/mp/collect?firebase_app_id=1%3ANNN%3Aios%3Aabcdef&api_secret=secret123",
+    );
   });
 });
 

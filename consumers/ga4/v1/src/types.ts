@@ -28,6 +28,16 @@ export interface Ga4EventPayload {
   readonly name: string;
   /** Event-specific params (currency, value, transaction_id, ...). */
   readonly params?: Ga4EventParams;
+  /**
+   * Polaris-internal wrapper hint (KCS3ATPC). When populated, the
+   * deliverer lifts this value to the request-wrapper `app_instance_id`
+   * slot and strips it from the per-event payload before serializing —
+   * GA4 Measurement Protocol carries `app_instance_id` at the request
+   * level for Firebase / app streams (not on individual events).
+   * Synthesized by the mapper from `context.app_idfv` / `context.app_gaid`
+   * when the canonical envelope reports an app source.
+   */
+  readonly app_instance_id?: string;
 }
 
 /**
@@ -80,7 +90,16 @@ export interface Ga4EventItem {
  * the Unix epoch.
  */
 export interface Ga4RequestBody {
-  readonly client_id: string;
+  /**
+   * GA4 stream identifier at the wrapper level. EXACTLY ONE of
+   * `client_id` (web-stream, Measurement Protocol) or `app_instance_id`
+   * (Firebase / app-stream) is set per request — GA4's two URL flavors
+   * key on different wrapper identifiers. The deliverer chooses based
+   * on the resolved secret (`measurement_id` vs `firebase_app_id`) and
+   * the mapper-supplied `Ga4EventPayload.app_instance_id` hint.
+   */
+  readonly client_id?: string;
+  readonly app_instance_id?: string;
   readonly user_id?: string;
   readonly timestamp_micros?: number;
   readonly events: readonly Ga4EventPayload[];
@@ -104,4 +123,15 @@ export interface Ga4RequestBody {
 export interface ResolvedGa4Secret {
   readonly measurement_id: string;
   readonly api_secret: string;
+  /**
+   * Firebase app id (`1:NNN:PLATFORM:HASH`) for routing mobile-app
+   * events to a Firebase / app data stream (KCS3ATPC). Optional —
+   * operators opt in by rotating their `destinations.secret_ref` to
+   * include the field. When absent, app-source events fall back to
+   * the web-stream URL with the synthesized `client_id`; when present
+   * AND the mapper produced an `app_instance_id` hint, the deliverer
+   * routes via `?firebase_app_id=...&api_secret=...` and stamps
+   * `app_instance_id` on the wrapper instead of `client_id`.
+   */
+  readonly firebase_app_id?: string;
 }

@@ -24,6 +24,7 @@ import {
   CANONICAL_TO_BRAZE_FAMILY,
   checkoutStartedMapper,
   paymentApprovedMapper,
+  resolveDeviceId,
   resolveExternalId,
   resolveUserAlias,
   userIdentifiedMapper,
@@ -476,6 +477,166 @@ describe("resolveUserAlias (BJPQSPE5)", () => {
       },
     });
     expect(resolveUserAlias(normalized)?.alias_name).toBe("buyer@storefront.example");
+  });
+});
+
+describe("resolveDeviceId (5UCTHNCR)", () => {
+  it("returns null when no app context is present", () => {
+    expect(resolveDeviceId(fixtureNormalizedEvent())).toBeNull();
+  });
+
+  it("prefers app_idfv over app_gaid over app_idfa", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(
+      resolveDeviceId({
+        ...normalized,
+        context: {
+          ...normalized.context,
+          app_idfv: "ios-vendor-id",
+          app_gaid: "android-id",
+          app_idfa: "ios-ad-id",
+        },
+      }),
+    ).toBe("ios-vendor-id");
+    expect(
+      resolveDeviceId({
+        ...normalized,
+        context: { ...normalized.context, app_gaid: "android-id", app_idfa: "ios-ad-id" },
+      }),
+    ).toBe("android-id");
+    expect(
+      resolveDeviceId({
+        ...normalized,
+        context: { ...normalized.context, app_idfa: "ios-ad-id" },
+      }),
+    ).toBe("ios-ad-id");
+  });
+
+  it("returns null when app context is populated but no device id is set (bundle_id only)", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(
+      resolveDeviceId({
+        ...normalized,
+        context: { ...normalized.context, app_bundle_id: "com.example.app" },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("app-channel mapping (5UCTHNCR)", () => {
+  it("attaches device_id alongside external_id on checkout events when the envelope is app-source", () => {
+    const normalized = fixtureNormalizedEvent();
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        context: {
+          ...normalized.context,
+          app_bundle_id: "com.example.storefront",
+          app_idfv: "11111111-2222-3333-4444-555555555555",
+        },
+      },
+    };
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const event = result.payload.events?.[0];
+    expect(event?.external_id).toBe("cust_12345");
+    expect(event?.device_id).toBe("11111111-2222-3333-4444-555555555555");
+  });
+
+  it("attaches device_id alongside external_id on purchase entries", () => {
+    const normalized = fixtureNormalizedEvent({
+      event: "payment.approved",
+      properties: { amount_minor: 4999, currency: "USD", cart_id: "cart_42" },
+    });
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        context: {
+          ...normalized.context,
+          app_bundle_id: "com.example.storefront",
+          app_idfv: "11111111-2222-3333-4444-555555555555",
+        },
+      },
+    };
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const purchase = result.payload.purchases?.[0];
+    expect(purchase?.external_id).toBe("cust_12345");
+    expect(purchase?.device_id).toBe("11111111-2222-3333-4444-555555555555");
+  });
+
+  it("attaches device_id alongside external_id on attribute entries", () => {
+    const normalized = fixtureNormalizedEvent({ event: "user.identified" });
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        context: {
+          ...normalized.context,
+          app_bundle_id: "com.example.storefront",
+          app_gaid: "android-advertising-id",
+        },
+      },
+    };
+    const result = userIdentifiedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0];
+    expect(attribute?.external_id).toBe("cust_12345");
+    expect(attribute?.device_id).toBe("android-advertising-id");
+    expect(attribute?._update_existing_only).toBe(false);
+  });
+
+  it("uses device_id as the PRIMARY identifier when no external_id / user_alias resolves on an app-source event", () => {
+    const ctx = fixtureMapperContext({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const ctxWithApp = {
+      ...ctx,
+      normalized: {
+        ...ctx.normalized,
+        context: {
+          ...ctx.normalized.context,
+          app_bundle_id: "com.example.storefront",
+          app_idfv: "device-uuid",
+        },
+      },
+    };
+    const result = checkoutStartedMapper(ctxWithApp);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const event = result.payload.events?.[0];
+    expect(event?.external_id).toBeUndefined();
+    expect(event?.user_alias).toBeUndefined();
+    expect(event?.device_id).toBe("device-uuid");
+  });
+
+  it("still skips when neither external_id nor user_alias nor device_id resolves", () => {
+    const ctx = fixtureMapperContext({
+      identity: {
+        user_id: null,
+        anonymous_id: null,
+        email: null,
+        email_sha256: null,
+        phone: null,
+        phone_sha256: null,
+      },
+    });
+    const result = checkoutStartedMapper(ctx);
+    expect(result.kind).toBe("skip");
+  });
+
+  it("leaves device_id unset on web-source events (no app context)", () => {
+    const result = checkoutStartedMapper(fixtureMapperContext());
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.events?.[0]?.device_id).toBeUndefined();
   });
 });
 

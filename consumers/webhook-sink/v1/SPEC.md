@@ -152,6 +152,7 @@ Future vendor consumers should fill the golden-fixture pairs per their event mat
 - **No event filtering.** Every canonical event reaches the receiver, including events a particular receiver does not care about. Receivers MUST be prepared to ignore unrecognised events.
 - **Mapper-supplied `dedupe_key` equals `event_id`.** Vendor consumers typically derive their own dedupe key from the vendor's idempotency contract; webhook-sink does not, because the receiver is not vendor-aware.
 - **Identity hashing is on by default.** Some webhook receivers want raw email/phone instead of (or in addition to) hashes; that is handled by the normalize layer's shared `keepRaw` behavior and by passing both forms on the payload. Receivers that need raw-only can read `event.identity.email` / `event.identity.phone` directly.
+- **No app-channel branching** (deliberate). The vendor consumers (Meta CAPI, TikTok, GA4, Braze) infer a mobile-app channel from `event.context.app_*` slots and stamp vendor-specific wrapper fields accordingly. Webhook-sink is passthrough — receivers that care about app-source events read `event.context.app_*` directly off the canonical envelope. No web/app routing happens at this consumer.
 
 ## Vendor API changelog
 

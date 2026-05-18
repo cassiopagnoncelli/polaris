@@ -34,7 +34,7 @@
  */
 
 import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
-import { minorToMajor } from "@polaris/shared-destination-normalize";
+import { hasAppContext, minorToMajor } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
 
 import type {
@@ -128,14 +128,16 @@ export const checkoutStartedMapper: Mapper<BrazePayload> = (
     properties.page_url = ctx.normalized.context.page_url;
   }
 
-  const event = applyBrazeIdentifier(
+  const eventBuilder = applyBrazeIdentifier(
     {
       name: BRAZE_EVENT_CHECKOUT_STARTED,
       time: ctx.normalized.occurred_at,
       ...(Object.keys(properties).length > 0 ? { properties: freezeProperties(properties) } : {}),
     },
     identifier,
-  ) as BrazeEventObject;
+  );
+  attachDeviceIdIfApp(eventBuilder, identifier, ctx.normalized);
+  const event = eventBuilder as BrazeEventObject;
   const payload: BrazePayload = { events: Object.freeze([Object.freeze(event)]) };
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
 };
@@ -189,7 +191,7 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
     return { kind: "skip", reason: "no_product_id_for_braze_purchase" };
   }
 
-  const purchase = applyBrazeIdentifier(
+  const purchaseBuilder = applyBrazeIdentifier(
     {
       product_id: productId,
       currency,
@@ -197,7 +199,9 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
       time: ctx.normalized.occurred_at,
     },
     identifier,
-  ) as BrazePurchaseObject;
+  );
+  attachDeviceIdIfApp(purchaseBuilder, identifier, ctx.normalized);
+  const purchase = purchaseBuilder as BrazePurchaseObject;
   const payload: BrazePayload = { purchases: Object.freeze([Object.freeze(purchase)]) };
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
 };
@@ -227,6 +231,7 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
   const attribute: {
     external_id?: string;
     user_alias?: { alias_label: string; alias_name: string };
+    device_id?: string;
     email?: string;
     phone?: string;
     _update_existing_only: boolean;
@@ -246,6 +251,7 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
     attribute.language = ctx.normalized.context.locale;
   }
 
+  attachDeviceIdIfApp(attribute, identifier, ctx.normalized);
   const frozen = Object.freeze(attribute) as BrazeAttributeObject;
   const payload: BrazePayload = { attributes: Object.freeze([frozen]) };
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
@@ -318,36 +324,91 @@ export function resolveUserAlias(
   return null;
 }
 
-/**
- * Helper used by every per-event mapper: a deterministic identifier
- * record carrying EITHER `external_id` OR `user_alias`. Braze rejects
- * entries that carry both; the mapper picks one based on the canonical
- * identity ladder.
- */
-function resolveBrazeIdentifier(
-  normalized: NormalizedEvent,
-):
+type BrazeIdentifier =
   | { kind: "external_id"; value: string }
   | { kind: "user_alias"; value: { alias_label: string; alias_name: string } }
-  | null {
+  | { kind: "device_id"; value: string };
+
+/**
+ * Helper used by every per-event mapper: a deterministic identifier
+ * record carrying ONE of `external_id`, `user_alias`, or `device_id`.
+ * Braze rejects entries that carry both `external_id` and `user_alias`;
+ * `device_id` is the app-channel anonymous fallback when neither
+ * resolves (5UCTHNCR). The mapper picks the highest-precedence kind:
+ *
+ *   external_id (canonical customer_id → anonymous_id)
+ *     ↳ user_alias (canonical email → phone)
+ *       ↳ device_id (canonical app_idfv → app_gaid → app_idfa) — only
+ *         considered when the canonical envelope is app-source.
+ *
+ * Returns `null` when no slot resolves — the mapper then emits `skip`.
+ */
+function resolveBrazeIdentifier(normalized: NormalizedEvent): BrazeIdentifier | null {
   const externalId = resolveExternalId(normalized);
   if (externalId !== null) return { kind: "external_id", value: externalId };
   const alias = resolveUserAlias(normalized);
   if (alias !== null) return { kind: "user_alias", value: alias };
+  const deviceId = resolveDeviceId(normalized);
+  if (deviceId !== null) return { kind: "device_id", value: deviceId };
   return null;
 }
 
 function applyBrazeIdentifier<T extends Record<string, unknown>>(
   target: T,
-  identifier:
-    | { kind: "external_id"; value: string }
-    | { kind: "user_alias"; value: { alias_label: string; alias_name: string } },
+  identifier: BrazeIdentifier,
 ): T {
   if (identifier.kind === "external_id") {
     (target as Record<string, unknown>)["external_id"] = identifier.value;
-  } else {
+  } else if (identifier.kind === "user_alias") {
     (target as Record<string, unknown>)["user_alias"] = identifier.value;
+  } else {
+    (target as Record<string, unknown>)["device_id"] = identifier.value;
   }
+  return target;
+}
+
+/**
+ * Resolve the Braze `device_id` from the canonical envelope's app
+ * context (5UCTHNCR). Order:
+ *
+ *   1. `context.app_idfv`  — iOS Vendor Identifier (UUID; Braze's
+ *                            documented preferred mobile id)
+ *   2. `context.app_gaid`  — Android Advertising Id
+ *   3. `context.app_idfa`  — iOS Advertising Id; fallback for
+ *                            integrations that don't surface IDFV
+ *
+ * Returns `null` when the envelope carries no app context. Lowercasing
+ * is left to the receiver — Braze treats the slot as opaque.
+ */
+export function resolveDeviceId(normalized: NormalizedEvent): string | null {
+  if (!hasAppContext(normalized.context)) return null;
+  return (
+    normalized.context.app_idfv ??
+    normalized.context.app_gaid ??
+    normalized.context.app_idfa ??
+    null
+  );
+}
+
+/**
+ * Attach `device_id` to an entry when the canonical envelope is
+ * app-source AND a device id is resolvable. Skipped when the primary
+ * identifier IS already `device_id` (the slot is set during
+ * `applyBrazeIdentifier`) and when there is no app context. Called
+ * AFTER `applyBrazeIdentifier` so the additive device_id rides
+ * alongside `external_id` / `user_alias` for logged-in mobile users —
+ * Braze stitches the anonymous device session to the identified
+ * profile when both are present.
+ */
+function attachDeviceIdIfApp<T extends Record<string, unknown>>(
+  target: T,
+  identifier: BrazeIdentifier,
+  normalized: NormalizedEvent,
+): T {
+  if (identifier.kind === "device_id") return target;
+  const deviceId = resolveDeviceId(normalized);
+  if (deviceId === null) return target;
+  (target as Record<string, unknown>)["device_id"] = deviceId;
   return target;
 }
 

@@ -110,11 +110,18 @@ export function buildGa4Deliverer(options: BuildDelivererOptions): Deliverer<Ga4
       };
     }
 
-    // 2. URL.
-    const url = buildMeasurementProtocolUrl(host, secret.measurement_id, secret.api_secret);
+    // 2. URL. App-stream routing kicks in when the mapper produced an
+    //    `app_instance_id` hint AND the operator has rotated their
+    //    secret to include `firebase_app_id`; otherwise we stay on the
+    //    web-stream URL with the synthesized `client_id`.
+    const wrapper = buildRequestBody(context, secret);
+    const useAppStream = wrapper.app_instance_id !== undefined;
+    const url = useAppStream
+      ? buildFirebaseAppStreamUrl(host, secret.firebase_app_id as string, secret.api_secret)
+      : buildMeasurementProtocolUrl(host, secret.measurement_id, secret.api_secret);
 
     // 3. Body.
-    const body = JSON.stringify(buildRequestBody(context));
+    const body = JSON.stringify(wrapper);
 
     // 4. POST with timeout.
     const controller = new AbortController();
@@ -189,12 +196,22 @@ export function buildGa4Deliverer(options: BuildDelivererOptions): Deliverer<Ga4
  * "the mapper carried over a timestamp"); otherwise GA4 stamps its own
  * receive-time.
  */
-export function buildRequestBody(context: DelivererContext<Ga4EventPayload>): Ga4RequestBody {
-  const clientId = context.delivery_key;
-  return Object.freeze({
-    client_id: clientId,
-    events: [context.payload],
-  }) as Ga4RequestBody;
+export function buildRequestBody(
+  context: DelivererContext<Ga4EventPayload>,
+  secret?: ResolvedGa4Secret,
+): Ga4RequestBody {
+  const { app_instance_id: payloadAppInstanceId, ...wireEvent } = context.payload;
+  const events = [wireEvent as Ga4EventPayload];
+  // App-stream routing only fires when BOTH the mapper supplied a hint
+  // AND the operator's secret carries `firebase_app_id`. Operators on a
+  // web-only data stream (no `firebase_app_id` in their secret yet) get
+  // the legacy `client_id` wrapper even if the envelope is app-source —
+  // GA4 Web rejects `app_instance_id` requests so we cannot ship a half
+  // routing.
+  if (payloadAppInstanceId !== undefined && secret?.firebase_app_id !== undefined) {
+    return Object.freeze({ app_instance_id: payloadAppInstanceId, events }) as Ga4RequestBody;
+  }
+  return Object.freeze({ client_id: context.delivery_key, events }) as Ga4RequestBody;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +245,14 @@ export function parseResolvedSecret(secret: string): ResolvedGa4Secret | null {
   const apiSecret = obj["api_secret"];
   if (typeof measurementId !== "string" || measurementId.length === 0) return null;
   if (typeof apiSecret !== "string" || apiSecret.length === 0) return null;
+  const firebaseAppId = obj["firebase_app_id"];
+  if (typeof firebaseAppId === "string" && firebaseAppId.length > 0) {
+    return {
+      measurement_id: measurementId,
+      api_secret: apiSecret,
+      firebase_app_id: firebaseAppId,
+    };
+  }
   return { measurement_id: measurementId, api_secret: apiSecret };
 }
 
@@ -253,6 +278,25 @@ export function buildMeasurementProtocolUrl(
 ): string {
   const params = new URLSearchParams();
   params.set("measurement_id", measurementId);
+  params.set("api_secret", apiSecret);
+  return `https://${host}/mp/collect?${params.toString()}`;
+}
+
+/**
+ * Build the GA4 Firebase / app-stream URL flavor (KCS3ATPC).
+ *
+ * GA4 routes mobile-app events through a different query-string
+ * credential — `firebase_app_id=<id>` instead of `measurement_id=<id>`.
+ * Same host, same path, same `api_secret` redaction posture as the
+ * web-stream URL; the contract is otherwise identical.
+ */
+export function buildFirebaseAppStreamUrl(
+  host: string,
+  firebaseAppId: string,
+  apiSecret: string,
+): string {
+  const params = new URLSearchParams();
+  params.set("firebase_app_id", firebaseAppId);
   params.set("api_secret", apiSecret);
   return `https://${host}/mp/collect?${params.toString()}`;
 }

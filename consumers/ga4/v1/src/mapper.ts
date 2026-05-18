@@ -36,7 +36,8 @@
  * runtime layer (no mapper registered).
  */
 
-import { minorToMajor } from "@polaris/shared-destination-normalize";
+import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
+import { hasAppContext, minorToMajor } from "@polaris/shared-destination-normalize";
 import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
 
 import type { Ga4EventItem, Ga4EventParams, Ga4EventPayload } from "./types.js";
@@ -125,7 +126,12 @@ export const checkoutStartedMapper: Mapper<Ga4EventPayload> = (
   // (which gets stamped on `delivery_records.dedupe_key`) so operators
   // have a stable Polaris-side handle when triaging duplicate
   // deliveries inside Polaris; on the GA4 side the event just lands.
-  return buildResult(GA4_EVENT_BEGIN_CHECKOUT, params, ctx.normalized.event_id);
+  return buildResult(
+    GA4_EVENT_BEGIN_CHECKOUT,
+    params,
+    ctx.normalized.event_id,
+    resolveAppInstanceId(ctx.normalized),
+  );
 };
 
 /**
@@ -159,7 +165,7 @@ export const paymentApprovedMapper: Mapper<Ga4EventPayload> = (
   if (transactionId !== null) params.transaction_id = transactionId;
 
   const dedupeKey = transactionId ?? ctx.normalized.event_id;
-  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey);
+  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey, resolveAppInstanceId(ctx.normalized));
 };
 
 /**
@@ -174,7 +180,12 @@ export const userIdentifiedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(GA4_EVENT_LOGIN, params, ctx.normalized.event_id);
+  return buildResult(
+    GA4_EVENT_LOGIN,
+    params,
+    ctx.normalized.event_id,
+    resolveAppInstanceId(ctx.normalized),
+  );
 };
 
 /**
@@ -191,7 +202,12 @@ export const signupCompletedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(GA4_EVENT_SIGN_UP, params, ctx.normalized.event_id);
+  return buildResult(
+    GA4_EVENT_SIGN_UP,
+    params,
+    ctx.normalized.event_id,
+    resolveAppInstanceId(ctx.normalized),
+  );
 };
 
 /**
@@ -223,7 +239,12 @@ export const subscriptionRenewedMapper: Mapper<Ga4EventPayload> = (
   }
   if (subscriptionId !== null) params.transaction_id = subscriptionId;
 
-  return buildResult(GA4_EVENT_SUBSCRIPTION_RENEWED, params, ctx.normalized.event_id);
+  return buildResult(
+    GA4_EVENT_SUBSCRIPTION_RENEWED,
+    params,
+    ctx.normalized.event_id,
+    resolveAppInstanceId(ctx.normalized),
+  );
 };
 
 // ---------------------------------------------------------------------------
@@ -234,12 +255,29 @@ function buildResult(
   eventName: string,
   params: ParamsBuilder,
   dedupeKey: string,
+  appInstanceId: string | null,
 ): MapperResult<Ga4EventPayload> {
   const payload: Ga4EventPayload = {
     name: eventName,
     ...(Object.keys(params).length > 0 ? { params: freezeParams(params) } : {}),
+    ...(appInstanceId !== null ? { app_instance_id: appInstanceId } : {}),
   };
   return { kind: "mapped", payload, dedupe_key: dedupeKey };
+}
+
+/**
+ * Synthesize an `app_instance_id` from the canonical envelope's
+ * `context.app_*` slots when the event is sourced from a mobile app
+ * (KCS3ATPC). GA4 Firebase / app streams require `app_instance_id` at
+ * the request wrapper level; we use the platform-stable device-vendor
+ * id (`app_idfv` for iOS — UUID; `app_gaid` for Android) so the value
+ * is consistent across retries for the same device. Returns `null` for
+ * envelopes that carry no app context, leaving the deliverer on the
+ * web-stream path with the synthesized `client_id`.
+ */
+export function resolveAppInstanceId(normalized: NormalizedEvent): string | null {
+  if (!hasAppContext(normalized.context)) return null;
+  return normalized.context.app_idfv ?? normalized.context.app_gaid ?? null;
 }
 
 /**
