@@ -99,6 +99,12 @@ GRANT ON CLUSTER '{cluster}' SELECT ON system.merges            TO polaris_opera
 GRANT ON CLUSTER '{cluster}' SELECT ON system.mutations         TO polaris_operator;
 GRANT ON CLUSTER '{cluster}' SELECT ON system.tables            TO polaris_operator;
 GRANT ON CLUSTER '{cluster}' SELECT ON system.columns           TO polaris_operator;
+-- system.query_log carries the per-INSERT `written_rows` the rebuild
+-- driver looks up after each `rebuildPartition` (ENCXI9BE). Without
+-- this grant the driver's lookup returns ACCESS_DENIED, the backoff
+-- retry exhausts, and the rebuild's `rows_inserted_total` silently
+-- resolves to zero.
+GRANT ON CLUSTER '{cluster}' SELECT ON system.query_log         TO polaris_operator;
 
 -- Even for operators, the Kafka Engine table is never granted for
 -- direct SELECT. The MV pipeline is the only authorized reader.
