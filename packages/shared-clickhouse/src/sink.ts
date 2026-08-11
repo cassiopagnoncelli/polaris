@@ -23,7 +23,10 @@
  * @see sql/clickhouse/roles/01_grants.sql
  */
 
-import { type ClickHouseClient as UnderlyingClickHouseClient, createClient } from "@clickhouse/client";
+import {
+  type ClickHouseClient as UnderlyingClickHouseClient,
+  createClient,
+} from "@clickhouse/client";
 import type { Logger } from "@polaris/shared-logger";
 import { ClickHouseConnectionError, ClickHouseQueryError } from "./errors.js";
 

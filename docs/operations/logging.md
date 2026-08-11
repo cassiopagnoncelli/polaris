@@ -30,14 +30,14 @@ defaults live in
 
 ## Loki is optional
 
-The Polaris core data path is `redpanda + postgres + redis + clickhouse`
+The Polaris core data path is `rabbitmq + postgres + redis + clickhouse`
 and runs from `docker-compose.yml` alone. The optional overlay at
 `docker-compose.observability.yml` adds Loki + promtail. No service in
 the core compose depends on Loki or promtail. If Loki is down,
 services continue to:
 
 - accept ingest requests,
-- consume from Redpanda,
+- consume from RabbitMQ,
 - write to ClickHouse / PostgreSQL,
 - emit Pino JSON to stdout exactly as before.
 
@@ -79,7 +79,7 @@ container started by `docker-compose.yml` and
 
 - Polaris services that emit Pino JSON via `@polaris/shared-logger`
   (ingester, processors, consumers, control-plane).
-- Infrastructure containers that emit plaintext (`redpanda`,
+- Infrastructure containers that emit plaintext (`rabbitmq`,
   `postgres`, `redis`, `clickhouse`).
 
 The pipeline stages in [`infra/loki/promtail-config.yaml`](../../infra/loki/promtail-config.yaml)
@@ -113,7 +113,7 @@ LogQL `| json` extraction:
 | `event_id`                      | UUIDv7 per event — unbounded, would blow up the index.                                |
 | `request_id`                    | UUIDv7 per HTTP request — unbounded.                                                  |
 | `trace_id` / `span_id`          | Trace IDs, unbounded.                                                                 |
-| `offset`, `partition`           | Kafka coordinates, high cardinality across topics.                                    |
+| `offset`, `partition`           | Stream coordinates, high cardinality across streams.                                    |
 | `processor_name`, `processor_version`, `consumer_name`, `consumer_version` | Bounded but not needed for stream-level routing; cheaper as line content.   |
 | `replay_job_id`, `destination_id`, `source_id` | High cardinality; queried by grep, not by stream.                       |
 
@@ -197,7 +197,7 @@ Or extract structurally and filter:
 {service="analytics-projector", level=~"warn|error"}
   | json
   | __error__=""
-  | message =~ "publish.*fail|kafka.*error"
+  | message =~ "publish.*fail|transport.*error"
 ```
 
 Replace `analytics-projector` with the specific processor name
@@ -228,7 +228,7 @@ volumes match.
 ### Tail one container, raw
 
 ```logql
-{service="redpanda"}
+{service="rabbitmq"}
 ```
 
 Plaintext containers come through too — the JSON parse stage

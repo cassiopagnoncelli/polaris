@@ -52,7 +52,6 @@
  * @see docs/implementation/tasks/P7-004-destination-replay-guardrails.md
  */
 
-
 /**
  * Header name the replay tooling stamps when redelivering an event for
  * replay purposes. Matches the platform header convention from

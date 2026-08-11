@@ -328,7 +328,7 @@ An optional diagnostic stream is available for operators who want SDK-side opera
 
 - The SDK emits to a Polaris ingestion endpoint using the same canonical envelope.
 - Event names live in the `polaris.diagnostics.*` namespace.
-- Events route to the `polaris.diagnostics.events` topic (see [Redpanda Topics / SDK Diagnostics Topic](./03-redpanda-topics.md)).
+- Events route to the `polaris.diagnostics.events` topic (see [RabbitMQ Streams / SDK Diagnostics Topic](./03-rabbitmq-streams.md)).
 - The diagnostic stream is not consumed by analytics processors or destination consumers.
 - The SDK must never include canonical event payloads, user PII, or secrets in diagnostic events.
 

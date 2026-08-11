@@ -212,7 +212,10 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
       });
       channel = next;
       emitHook(hooks, "producer.connected", { client_id: config.clientId });
-      logger?.info({ component: "transport.producer", producer: producerName }, "producer connected");
+      logger?.info(
+        { component: "transport.producer", producer: producerName },
+        "producer connected",
+      );
       return next;
     })().finally(() => {
       opening = undefined;
@@ -298,11 +301,7 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
   }
 
   async function publishEvent(input: PublishEventInput): Promise<PublishResult> {
-    const family = resolveStreamFamilySync(
-      input.family,
-      input.event.project_id,
-      input.isolation,
-    );
+    const family = resolveStreamFamilySync(input.family, input.event.project_id, input.isolation);
     const partitionKey =
       input.partitionKey ??
       buildRawEventsPartitionKey({

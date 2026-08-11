@@ -126,7 +126,7 @@ invalid_properties            properties failed the Zod schema for (event, versi
 invalid_envelope              the canonical envelope itself is malformed
 forbidden_field_rejected      hit the reject list (e.g. cvv, password) — fix your producer
 duplicate                     short-window dedupe caught a re-send (not an error)
-publish_failed                transient ingester->Redpanda failure; retry with backoff
+publish_failed                transient ingester->RabbitMQ failure; retry with backoff
 invalid_request               the batch envelope itself is malformed (status 400)
 ```
 
@@ -168,7 +168,7 @@ polaris audit list \
 
 > `polaris audit list` shows **mutating CLI commands** (key creates,
 > destination changes, replay jobs, DLQ retries, etc.) — not raw ingestion
-> events. To see whether a *specific event* reached Redpanda
+> events. To see whether a *specific event* reached RabbitMQ
 > `raw.events`, you go through `clickhouse-client` /
 > `@polaris/shared-clickhouse` against `analytics_raw` (next phase) or ask
 > the operator to tail the topic. Routine "did my event land" verification
@@ -199,8 +199,8 @@ That is *expected* during the first few hundred milliseconds — the path
 is:
 
 ```text
-Ingester -> Redpanda raw.events -> processors -> Redpanda derived topics
-        -> destination consumers + ClickHouse Kafka Engine
+Ingester -> RabbitMQ raw.events -> processors -> RabbitMQ derived topics
+        -> destination consumers + clickhouse-sink
         -> analytics_raw -> projection tables
 ```
 

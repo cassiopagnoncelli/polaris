@@ -45,7 +45,8 @@ export const analyticsProjectorEnvSchema = z
     }),
   );
 
-export interface AnalyticsProjectorConfig {  /**
+export interface AnalyticsProjectorConfig {
+  /**
    * Polaris consumer-group identifier: the namespace this processor's
    * stream checkpoints live under in `transport_checkpoints`. The default
    * matches the processor directory name + version so a v2 deployment
@@ -55,9 +56,7 @@ export interface AnalyticsProjectorConfig {  /**
   readonly consumerGroup: string;
 }
 
-export const analyticsProjectorEnvKeys = [
-  "POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP",
-] as const;
+export const analyticsProjectorEnvKeys = ["POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP"] as const;
 
 /**
  * Full runtime configuration for the analytics-projector v1 service.

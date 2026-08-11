@@ -5,15 +5,15 @@ The vertical-slice smoke proves the canonical Polaris event path end-to-end:
 ```text
 curl POST /v1/events
   -> apps/ingester-api
-  -> Redpanda raw.events
+  -> RabbitMQ raw.events
   -> processors/analytics-projector/v1
-  -> Redpanda analytics.events
-  -> ClickHouse Kafka Engine (analytics_events_queue)
+  -> RabbitMQ analytics.events
+  -> clickhouse-sink (analytics_events_queue)
   -> analytics_raw
 ```
 
 The test is a black-box exercise. It talks to the ingester over HTTP and
-asserts the row by querying ClickHouse. No KafkaJS / Redis / PostgreSQL
+asserts the row by querying ClickHouse. No AMQP client / Redis / PostgreSQL
 introspection at the topic level — the whole point is to prove the real
 wire.
 
@@ -21,7 +21,7 @@ wire.
 
 - Locally, before merging changes that touch any of: ingester, SDK
   envelope shape, the analytics-projector v1, ClickHouse DDL, or the
-  Redpanda topic resolver.
+  RabbitMQ topic resolver.
 - In CI, automatically on label `integration`, scheduled at 06:00 UTC,
   or on demand via the Actions UI (Workflow: **Integration**).
 
@@ -46,7 +46,7 @@ pnpm clickhouse:bootstrap-local
 # 3. start the ingester and the analytics-projector in two terminals,
 #    or background them. The smoke runner expects:
 #      - the ingester on http://localhost:4000
-#      - the analytics-projector connected to redpanda:9092 (compose
+#      - the analytics-projector connected to rabbitmq:9092 (compose
 #        internal hostname) — already the default.
 pnpm --filter @polaris/ingester-api run start &
 pnpm --filter @polaris/processor-analytics-projector-v1 run start &
@@ -74,9 +74,9 @@ Expected output (abridged):
 A pass means:
 
 1. The ingester accepted the event and per-event response carried `status: "accepted"`.
-2. Redpanda durably accepted the message on `raw.events`.
+2. RabbitMQ durably accepted the message on `raw.events`.
 3. The analytics-projector v1 consumed it and emitted to `analytics.events`.
-4. ClickHouse's Kafka Engine table read the message into `analytics_ingest_log`
+4. ClickHouse's ingestion interface table read the message into `analytics_ingest_log`
    and the MV propagated it into `analytics_raw`.
 5. The row carries the expected envelope fields plus
    `processor_name='analytics-projector'`, `processor_version='v1'`.
@@ -148,7 +148,7 @@ pnpm smoke:vertical-slice
 | `timed out after 60000ms waiting for analytics_raw`                  | The analytics-projector is not running, ClickHouse is not consuming, or the MV is down. | `docker compose logs analytics-projector clickhouse`. Bump `POLARIS_SMOKE_POLL_TIMEOUT_MS` for slow CI runners.       |
 | `psql: command not found`                                            | The seed step shells out to `psql`.                                                     | Install postgresql-client (`brew install postgresql` / `apt-get install postgresql-client`), or pass `POLARIS_SMOKE_API_KEY`. |
 | `@polaris/shared-secrets is not available`                           | The smoke runner ran from a tree without `pnpm install`.                                | Run `pnpm install` from the repo root, or pass `POLARIS_SMOKE_API_KEY`.                                               |
-| `ClickHouse 500 ... Cannot resolve host: redpanda`                   | ClickHouse is running outside the compose network and cannot reach Redpanda.            | Use `docker compose up -d` (which the smoke expects), not standalone `docker run` for ClickHouse.                     |
+| `ClickHouse 500 ... Cannot resolve host: rabbitmq`                   | ClickHouse is running outside the compose network and cannot reach RabbitMQ.            | Use `docker compose up -d` (which the smoke expects), not standalone `docker run` for ClickHouse.                     |
 
 ## CI integration
 

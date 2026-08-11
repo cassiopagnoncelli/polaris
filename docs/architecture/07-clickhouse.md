@@ -9,10 +9,10 @@ It is part of the stream graph, not just an afterthought database.
 The mature ingestion path is:
 
 ```text
-Redpanda analytics.events
+RabbitMQ analytics.events
     |
     v
-ClickHouse Kafka Engine table
+ClickHouse ingestion interface table
     |
     v
 analytics_ingest_log
@@ -27,7 +27,7 @@ materialized views
 projection tables
 ```
 
-Kafka Engine tables are transient ingestion interfaces. They are not queried directly.
+The ingestion interface table is transient. They are not queried directly.
 
 ## Initial Format
 
@@ -82,17 +82,29 @@ schema_version
 
 These defaults are configurable, but they define the initial physical model.
 
-### Kafka Engine Table
+### Ingestion Interface Table
 
-The Kafka Engine table is transient and must not be queried directly.
-
-Example:
+The ingestion interface table is transient and must not be queried
+directly. It is a `Null` engine: rows are dropped on write and reach
+only the materialized views.
 
 ```text
 analytics_events_queue
-ENGINE = Kafka
-FORMAT = JSONEachRow
+ENGINE = Null
 ```
+
+`consumers/clickhouse-sink` INSERTs batches into it as `JSONEachRow`,
+stamping the transport lineage columns (`_topic`, `_partition`,
+`_offset`) that used to be Kafka Engine virtual columns.
+
+**Why ClickHouse no longer consumes for itself.** Until the RabbitMQ
+migration this table was `ENGINE = Kafka` and ClickHouse held its own
+consumer group. RabbitMQ streams have no ClickHouse engine, and the AMQP
+`RabbitMQ` engine that does exist has no offset concept — so no
+offset-based recovery after a restart, and no lineage columns. Polaris
+owns the delivery instead, which also means ingestion lag is a Polaris
+metric (`polaris_clickhouse_sink_lag_seconds`) rather than a
+ClickHouse-internal one.
 
 ### Append-Only Ingest Log
 
@@ -221,7 +233,7 @@ WHERE project_id = 'storefront' AND occurred_at >= now() - INTERVAL 1 DAY;
 
 - Plain `SELECT *` on `analytics_raw` without `argMax`, `SETTINGS final = 1`, or a `count(DISTINCT event_id)` shape.
 - Production dashboards that use `FINAL` on hot data without an explicit review note.
-- Querying `analytics_events_queue` (the Kafka Engine table) directly.
+- Querying `analytics_events_queue` (the ingestion interface table) directly.
 
 ## Access Control
 

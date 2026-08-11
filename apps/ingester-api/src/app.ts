@@ -234,11 +234,11 @@ export async function buildIngesterApp(
   const metrics = options.metrics ?? new IngestMetrics();
 
   // ---- producer --------------------------------------------------------
-  const { producer, ownedProducer, connection: transportConnection } = buildProducer(
-    config,
-    options.producer,
-    logger,
-  );
+  const {
+    producer,
+    ownedProducer,
+    connection: transportConnection,
+  } = buildProducer(config, options.producer, logger);
   if (ownedProducer) {
     try {
       await producer.connect();

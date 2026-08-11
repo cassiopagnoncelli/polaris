@@ -68,8 +68,8 @@ numbers directly:
 
 | SLO surface | Defending alert(s) |
 |---|---|
-| Ingester accept latency | `PolarisRedpandaPublishFailureRate` (publish failures dominate the p999 tail); `PolarisIngestionSchemaRejectionRate` (rejection-storm CPU pressure climbs the latency tail) |
-| End-to-end raw → analytics | `PolarisRedpandaConsumerLagWarn` / `Page`; `PolarisProcessorDLQGrowthWarn` / `Page`; `PolarisClickHouseIngestionLagWarn` / `Page` |
+| Ingester accept latency | `PolarisRabbitMQPublishFailureRate` (publish failures dominate the p999 tail); `PolarisIngestionSchemaRejectionRate` (rejection-storm CPU pressure climbs the latency tail) |
+| End-to-end raw → analytics | `PolarisRabbitMQConsumerLagWarn` / `Page`; `PolarisProcessorDLQGrowthWarn` / `Page`; `PolarisClickHouseIngestionLagWarn` / `Page` |
 | Destination delivery latency | `PolarisDestinationDeliveryFailureRate`; `PolarisDestinationDLQGrowth` |
 
 When burn-rate alerts land, the mapping flips: each SLO surface gets

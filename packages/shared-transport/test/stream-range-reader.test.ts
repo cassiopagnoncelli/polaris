@@ -54,7 +54,9 @@ function scriptedDriver(deliveries: ReadonlyArray<StreamRangeDelivery>): {
 describe("rangeOffsetSpec", () => {
   it("attaches at the window's start timestamp, in seconds", () => {
     // RabbitMQ interprets an AMQP timestamp offset as POSIX seconds.
-    expect(rangeOffsetSpec({ stream: "raw.events-0", fromTimestampMs: 1_760_000_500, toTimestampMs: 0 })).toEqual({
+    expect(
+      rangeOffsetSpec({ stream: "raw.events-0", fromTimestampMs: 1_760_000_500, toTimestampMs: 0 }),
+    ).toEqual({
       "!": "timestamp",
       value: 1_760_000,
     });

@@ -29,13 +29,13 @@ in the deliverer (`failed_retryable` / `failed_permanent`). The row is
 mutable lives on `dlq_records`.
 
 **`dlq_records`** is the active triage queue. The destination runtime
-writes one row per Kafka DLQ publish, alongside the canonical Kafka
+writes one row per DLQ publish, alongside the canonical broker
 republish to the `<vendor>.<consumer_version>.dlq` topic family. Each
 row carries:
 
-- the original Kafka bytes (`payload`) so a retry can republish the
+- the original message bytes (`payload`) so a retry can republish the
   byte-identical envelope back onto `analytics.events`;
-- the original Kafka headers (`headers`) so a retry preserves the
+- the original message headers (`headers`) so a retry preserves the
   `polaris-delivery-key` + retry-attempt counter the runtime needs to
   short-circuit duplicate delivery;
 - the stage-version snapshot (`consumer_version`, `normalize_version`,
@@ -99,7 +99,7 @@ forensic context is needed.
 polaris dlq show polaris_dlq_01HZZ...
 ```
 
-Renders the full row including Kafka coordinates (`source_topic`,
+Renders the full row including transport coordinates (`source_topic`,
 `source_partition`, `source_offset`), every header, and a
 payload-preview (first 400 chars of the canonical envelope JSON). Use
 this view to determine the root cause:
@@ -117,8 +117,8 @@ this view to determine the root cause:
   `mark-resolved` with a note pointing to the follow-up ticket.
 - **`reason='decode_failed'` / `'missing_destination_id'`** — early-
   stage failures that pre-date instance resolution. These are
-  Kafka-only (no `dlq_records` row); triage them from the DLQ topic
-  directly using `kafkacat` / your Redpanda console. (They are loud
+  broker-only (no `dlq_records` row); triage them from the DLQ queue
+  directly in the RabbitMQ management console. (They are loud
   but rare — usually a producer-side regression.)
 
 ### 4. Retry the entry
@@ -130,8 +130,8 @@ polaris dlq retry polaris_dlq_01HZZ... --note "vendor cred rotated 14:32 UTC"
 The CLI:
 
 1. reads the row from `dlq_records`,
-2. opens a short-lived Kafka producer against
-   `POLARIS_REDPANDA_BROKERS`,
+2. opens a short-lived producer against
+   `POLARIS_RABBITMQ_URL`,
 3. publishes the byte-identical envelope back to the row's
    `source_topic` with the original headers,
 4. closes the producer,
@@ -150,10 +150,10 @@ Failure modes during retry:
 
 | Failure | Effect | Recovery |
 |---|---|---|
-| Kafka producer connect/send fails | Exception; row stays unresolved | Re-run `polaris dlq retry` after restoring broker access |
+| Producer connect/publish fails | Exception; row stays unresolved | Re-run `polaris dlq retry` after restoring broker access |
 | `dlq_records` row missing | `UsageError` (exit 2) | Verify the id |
 | Row already resolved | exit 0 with `already resolved` | Idempotent — no action |
-| Row has `payload IS NULL` (early-stage failure) | `UsageError` | Use `mark-resolved` instead; the bytes are only in Kafka |
+| Row has `payload IS NULL` (early-stage failure) | `UsageError` | Use `mark-resolved` instead; the bytes are only on the broker |
 
 ### 5. Or mark the entry resolved without retrying
 

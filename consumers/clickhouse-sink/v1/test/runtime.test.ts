@@ -260,7 +260,9 @@ describe("SinkMetrics", () => {
     const ingestedAt = "2026-08-01T10:00:00.000Z";
     metrics.recordLag(ingestedAt, Date.parse(ingestedAt) + 4_500);
 
-    const sample = metrics.getSamples().find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
+    const sample = metrics
+      .getSamples()
+      .find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
     expect(sample?.value).toBeCloseTo(4.5, 3);
     expect(sample?.labels).toEqual({ table: "analytics_events_queue" });
   });
@@ -268,7 +270,9 @@ describe("SinkMetrics", () => {
   it("ignores an unparsable timestamp instead of reporting a huge lag", () => {
     const metrics = new SinkMetrics();
     metrics.recordLag("not-a-date", Date.now());
-    const sample = metrics.getSamples().find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
+    const sample = metrics
+      .getSamples()
+      .find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
     // Paging someone because one message had a malformed timestamp is a
     // worse failure than under-reporting lag for that message.
     expect(sample?.value).toBe(0);

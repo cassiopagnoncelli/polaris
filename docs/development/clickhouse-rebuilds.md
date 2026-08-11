@@ -42,9 +42,9 @@ polaris.analytics_raw …` directly through `clickhouse-client`. This
 1. **Audit story breaks.** There is no row in `clickhouse_rebuild_jobs`
    recording who ran the rebuild, what range it covered, or why. A
    future incident review has no context.
-2. **Kafka Engine consumers race.** The same partition that the
+2. **The live sink races the rebuild.** The same partition that the
    operator just dropped is in the live ingest path —
-   `analytics.events` → `analytics_events_queue` (Kafka Engine) →
+   `analytics.events` → `clickhouse-sink` → `analytics_events_queue` →
    `analytics_raw` is always running. A drop+reinsert without
    coordinating with the runtime can re-introduce duplicates the
    ReplacingMergeTree won't notice until a merge happens. The rebuild

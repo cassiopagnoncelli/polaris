@@ -15,7 +15,7 @@ Both files are **generated** from the Zod sources in [`packages/shared-schemas`]
 
 - `POST /v1/events` — the only ingestion path. Authentication via `X-Polaris-Api-Key`, batch request body, per-event response with stable reason codes, and RFC 7807 Problem Details for request-level errors.
 - `GET /health` — liveness probe. Does not check downstream dependencies.
-- `GET /ready` — readiness probe. Aggregates registered probes (PostgreSQL, Redis, Redpanda, ...).
+- `GET /ready` — readiness probe. Aggregates registered probes (PostgreSQL, Redis, RabbitMQ, ...).
 - `GET /metrics` — Prometheus text exposition.
 
 ## Source pointers

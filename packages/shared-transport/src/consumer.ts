@@ -149,15 +149,8 @@ interface Reader {
 }
 
 export function createPolarisConsumer(options: CreatePolarisConsumerOptions): PolarisConsumer {
-  const {
-    connection,
-    groupName,
-    checkpoints,
-    hooks,
-    logger,
-    consumerName,
-    consumerVersion,
-  } = options;
+  const { connection, groupName, checkpoints, hooks, logger, consumerName, consumerVersion } =
+    options;
   const config = connection.config;
   const prefetch = options.prefetch ?? config.prefetch;
   const startPosition: StreamStartPosition = options.startPosition ?? "next";
@@ -298,10 +291,7 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
     if (reader.stopped) return;
     await detach(reader);
     if (stopped) return;
-    const delay = Math.min(
-      baseRetryDelayMs * 2 ** reader.reattachAttempt,
-      maxRetryDelayMs,
-    );
+    const delay = Math.min(baseRetryDelayMs * 2 ** reader.reattachAttempt, maxRetryDelayMs);
     reader.reattachAttempt += 1;
     emitHook(hooks, "consumer.rewound", {
       topic: reader.source,

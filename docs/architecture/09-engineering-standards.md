@@ -59,7 +59,7 @@ Required test styles:
 - unit tests for TypeScript logic
 - contract tests for event schemas and mapper behavior
 - golden fixtures for canonical event input/output examples
-- integration tests for PostgreSQL, Redis, Redpanda, and ClickHouse behavior
+- integration tests for PostgreSQL, Redis, RabbitMQ, and ClickHouse behavior
 - vertical-slice smoke test for the first end-to-end event path
 
 Docker-backed services may be required for integration/e2e tests. Do not build a large platform simulator before the first vertical slice exists.
@@ -132,9 +132,9 @@ Rules:
 - `.env` is acceptable for local development.
 - Semantic config remains in versioned files/code, not environment variables.
 
-## Redpanda Client Usage
+## RabbitMQ Client Usage
 
-Use KafkaJS through a thin `shared-kafka` package.
+Use amqplib through the `shared-transport` port. No driver type crosses that boundary.
 
 The package standardizes:
 
@@ -149,7 +149,7 @@ The package standardizes:
 - topic constants
 - DLQ publishing helpers
 
-Do not build a full stream-processing framework in v1. Keep wrappers thin and preserve escape hatches for advanced KafkaJS behavior.
+Do not build a full stream-processing framework in v1. Keep wrappers thin and keep the port broker-neutral.
 
 ## ClickHouse Access
 
@@ -157,7 +157,7 @@ Use SQL files for ClickHouse DDL/migrations and the shared ClickHouse client pac
 
 Rules:
 
-- ClickHouse table definitions, Kafka Engine tables, materialized views, and projections live as SQL files.
+- ClickHouse table definitions, ingestion interface tables, materialized views, and projections live as SQL files.
 - Do not use an ORM for ClickHouse.
 - Use `packages/shared-clickhouse/` (which wraps the official `@clickhouse/client`) when services or CLI code need to query ClickHouse.
 - Direct imports of `@clickhouse/client` outside `shared-clickhouse` are blocked by a workspace import rule.
@@ -238,7 +238,7 @@ Docker-backed integration checks run scheduled, pre-release, or on explicit inte
 ```text
 PostgreSQL
 Redis
-Redpanda
+RabbitMQ
 ClickHouse
 vertical-slice smoke test
 ```

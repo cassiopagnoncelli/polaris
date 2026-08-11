@@ -128,7 +128,9 @@ function printPlan(plan) {
 }
 
 export async function provision(plan, { logger = console } = {}) {
-  const connection = await connect(plan.url, { clientProperties: { connection_name: "polaris-provision" } });
+  const connection = await connect(plan.url, {
+    clientProperties: { connection_name: "polaris-provision" },
+  });
   const channel = await connection.createChannel();
   // A failed assert kills the channel, so surface the reason rather than
   // letting the process die with an unhandled 'error' event.

@@ -173,7 +173,6 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<void> {
       }
     }
   }
-
 }
 
 /**

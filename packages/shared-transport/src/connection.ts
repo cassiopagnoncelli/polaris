@@ -48,7 +48,10 @@ export interface CreateTransportConnectionOptions {
    * Injection seam for tests: replaces `amqplib.connect`. Production leaves
    * it undefined.
    */
-  readonly connectFn?: (url: string, socketOptions: Record<string, unknown>) => Promise<ChannelModel>;
+  readonly connectFn?: (
+    url: string,
+    socketOptions: Record<string, unknown>,
+  ) => Promise<ChannelModel>;
 }
 
 /** Callback invoked every time a fresh connection becomes available. */
@@ -120,7 +123,10 @@ export function createTransportConnection(
     next.on("close", () => {
       model = undefined;
       if (closed) return;
-      logger?.warn({ component: "transport.connection" }, "rabbitmq connection closed, reconnecting");
+      logger?.warn(
+        { component: "transport.connection" },
+        "rabbitmq connection closed, reconnecting",
+      );
       void scheduleReconnect();
     });
     logger?.info(

@@ -26,7 +26,7 @@ Rules:
 
 ## Regional Posture
 
-Polaris is **single-region** in v1. One Redpanda cluster, one ClickHouse cluster, one PostgreSQL primary, one Redis. Multi-region (active-active, active-passive, regional sharding) is not in scope until a concrete project requires it.
+Polaris is **single-region** in v1. One RabbitMQ cluster, one ClickHouse cluster, one PostgreSQL primary, one Redis. Multi-region (active-active, active-passive, regional sharding) is not in scope until a concrete project requires it.
 
 PII residency is **not a v1 constraint**. Polaris does not promise per-region storage of personal data; projects with data-residency obligations are not in v1's target use cases. If a future project requires residency, the design pattern is per-project topic isolation routed to a regionally-deployed Polaris instance, not in-cluster sharding.
 
@@ -121,7 +121,7 @@ Example path shape:
 
 All lifecycle values are configurable. These defaults are a starting point for v1.
 
-Redpanda:
+RabbitMQ:
 
 ```text
 raw.events              90 days
@@ -168,11 +168,11 @@ web queued events        bounded by count/bytes; max age configurable
 node memory queue        process lifetime only unless durable adapter is configured
 ```
 
-Object-storage raw archive is a future extension. Until it exists, Redpanda `raw.events` retention defines the practical raw replay window. The replayability principle is bounded by this window — Polaris does not promise replay beyond the operational retention window in v1.
+Object-storage raw archive is a future extension. Until it exists, RabbitMQ `raw.events` retention defines the practical raw replay window. The replayability principle is bounded by this window — Polaris does not promise replay beyond the operational retention window in v1.
 
-## Redpanda Production Defaults
+## RabbitMQ Production Defaults
 
-Redpanda sizing is configurable per environment. Start with boring high-availability defaults in production.
+RabbitMQ sizing is configurable per environment. Start with boring high-availability defaults in production.
 
 Production:
 
@@ -219,7 +219,7 @@ Rules:
 ClickHouse starts with a simple, SQL-native physical model:
 
 ```text
-Kafka Engine table     transient ingestion interface
+ingestion interface table     transient ingestion interface
 analytics_ingest_log   MergeTree / ReplicatedMergeTree append-only log
 analytics_raw          ReplacingMergeTree / ReplicatedReplacingMergeTree deduped analytical facts
 projection tables      MergeTree / SummingMergeTree / AggregatingMergeTree depending on purpose
@@ -247,8 +247,8 @@ DDL is parameterized through a `{replicated}` macro so the same SQL file works i
 
 ### Query patterns
 
-- Kafka Engine tables are never queried directly.
-- Persist Kafka Engine rows before querying.
+- The ingestion interface table is never queried directly.
+- Persist ingested rows before querying.
 - `analytics_raw` is never queried without explicit dedupe (`argMax(_version)` aggregation, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
 - MVs use `argMax` to feed deduped rows into projection tables.
 - Projection tables are the read surface for dashboards; they use plain `SELECT`.
@@ -271,7 +271,7 @@ Recovery objectives per store. Numbers are v1 defaults; production tuning may ti
 | ClickHouse `analytics_raw` | deduped analytical facts | 24 h | 4 h (recent partitions) | daily `BACKUP TABLE` to object storage |
 | ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time, documented at projection creation | no backup; rebuild from `analytics_raw` |
 | ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly snapshot, monthly cold archive |
-| Redpanda | canonical event topics | 0 under normal operation (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster RF; tiered storage future work |
+| RabbitMQ | canonical event topics | 0 under normal operation (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster RF; tiered storage future work |
 | Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss = transient duplicate increase, downstream handles |
 | Secret provider | references (no plaintext) | provider-managed | provider-managed | out of scope for Polaris backups |
 
@@ -287,9 +287,9 @@ Rules:
 
 These are wait-for-data items. Each has a structural decision locked and a numeric/inventory tail that gets revisited after observed production traffic. Re-review after the first project's first production month.
 
-- **Redpanda retention byte caps and tiered storage.** Time-based retention is locked (90 days for `raw.events`). Byte caps as a backstop and tiered storage offload are evaluated when first-project disk usage data exists.
+- **RabbitMQ retention byte caps and tiered storage.** Time-based retention is locked (90 days for `raw.events`). Byte caps as a backstop and tiered storage offload are evaluated when first-project disk usage data exists.
 - **Per-project ingress dedupe window overrides.** Default 15 min is locked. Per-project opt-ins up to 24h are evaluated when a project demonstrates a producer-side reliability need.
-- **Topic isolation activation thresholds.** Triggers are locked structurally (volume share, retention divergence, lag isolation, schema risk, operational quarantine — see [Redpanda Topics](./03-redpanda-topics.md)). The `>25%` threshold and similar numbers are revisited after observed traffic.
+- **Topic isolation activation thresholds.** Triggers are locked structurally (volume share, retention divergence, lag isolation, schema risk, operational quarantine — see [RabbitMQ Streams](./03-rabbitmq-streams.md)). The `>25%` threshold and similar numbers are revisited after observed traffic.
 - **Alert thresholds and SLOs.** Initial defaults are locked in [P10-005](../../agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md); tightened after observed traffic.
 
 ## Methodology Decisions (No Single Lock)

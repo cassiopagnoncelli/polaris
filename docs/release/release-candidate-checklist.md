@@ -104,7 +104,7 @@ sanity; the order is not load-bearing.
 
 | Item | Evidence required | Owner role | Pass criteria | Notes |
 | --- | --- | --- | --- | --- |
-| **Dashboards available** | Captain brings up the local Grafana via `docker compose -f docker-compose.observability.yml up -d`, opens each P10-003 service-level dashboard JSON from [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/) (`polaris-ingestion`, `polaris-redpanda`, `polaris-processors`, `polaris-destinations`, `polaris-clickhouse`) plus the P11-008 per-project drilldowns (`per-project-consumer-lag`, `per-project-schema-validation`, `per-partition-skew`, `per-project-shared-topic-throughput`), and confirms each panel has recent data when traffic is flowing. The canonical index is [`docs/operations/dashboards.md`](../operations/dashboards.md). | Operator-on-call | Every committed dashboard JSON loads in Grafana; every panel shows non-empty data against the local stack with the smoke test traffic flowing. | Some panels are placeholders pending a dedicated ClickHouse Prometheus exporter and histogram metrics; these gaps are listed verbatim in `docs/operations/dashboards.md`. |
+| **Dashboards available** | Captain brings up the local Grafana via `docker compose -f docker-compose.observability.yml up -d`, opens each P10-003 service-level dashboard JSON from [`infra/grafana/dashboards/`](../../infra/grafana/dashboards/) (`polaris-ingestion`, `polaris-rabbitmq`, `polaris-processors`, `polaris-destinations`, `polaris-clickhouse`) plus the P11-008 per-project drilldowns (`per-project-consumer-lag`, `per-project-schema-validation`, `per-partition-skew`, `per-project-shared-topic-throughput`), and confirms each panel has recent data when traffic is flowing. The canonical index is [`docs/operations/dashboards.md`](../operations/dashboards.md). | Operator-on-call | Every committed dashboard JSON loads in Grafana; every panel shows non-empty data against the local stack with the smoke test traffic flowing. | Some panels are placeholders pending a dedicated ClickHouse Prometheus exporter and histogram metrics; these gaps are listed verbatim in `docs/operations/dashboards.md`. |
 | **Alert / runbook links available** | Captain reads [`docs/operations/alerts.md`](../operations/alerts.md) (14 alert rules — 10 page + 4 warn), spot-checks 3 alerts and confirms each `runbook_url` resolves to an existing runbook anchor under [`docs/operations/`](../operations/). The recording-rule + alert-rule files are at [`infra/prometheus/rules/`](../../infra/prometheus/rules/). | Operator-on-call | Every `runbook_url` in `alerts.md` resolves to an existing anchor; SLOs in [`docs/operations/slos.md`](../operations/slos.md) match what the dashboards surface. | Six v1 metric placeholders are flagged as `_TODO_` in `alerts.md` with `vector(0) > N` guards so the alert never fires until the metric ships — the operator-on-call reviews the list. |
 | **Logging pipeline reviewed** | Captain reads [`docs/operations/logging.md`](../operations/logging.md), confirms the promtail config at [`infra/loki/promtail-config.yaml`](../../infra/loki/promtail-config.yaml) tails the Pino stdout streams, and verifies the four-label cardinality posture (`service`/`env`/`level`/`project_id` only). | Operator-on-call | Loki + promtail come up via the observability compose, services do not depend on them, and no plaintext-payload logging escapes the shared logger's redaction. | Redaction lives in `@polaris/shared-logger`; Loki sees what the logger emits. |
 
@@ -149,7 +149,7 @@ captain reviews this section every RC cycle and prunes / extends it.
   `cli_oidc` actor source is a P11+ stretch goal. Reference:
   [Production Readiness / Control-Plane Permissions](../architecture/11-production-readiness.md#control-plane-permissions).
 - **No object-storage raw archive.** Replay is bounded by the 90-day
-  Redpanda retention window. Tiered storage or out-of-cluster archive
+  RabbitMQ retention window. Tiered storage or out-of-cluster archive
   is honest future work, gated on first-production-month data.
   Reference:
   [`docs/operations/backup-and-retention.md` / Future Extensions](../operations/backup-and-retention.md#future-extensions).
@@ -214,7 +214,7 @@ These are not gaps so much as deliberate "decide after observing real
 traffic" parking spaces. Listed for transparency; the captain
 references them when sizing the RC's operational expectations.
 
-- **Redpanda byte-cap retention and tiered storage.** Time-based
+- **RabbitMQ byte-cap retention and tiered storage.** Time-based
   retention is locked at 90 days for `raw.events`; byte caps revisited
   after first-project disk data.
 - **Per-project ingress dedupe window overrides.** 15-min default
@@ -238,7 +238,7 @@ the checklist above is green. Encouraged but not load-bearing — the
 captain may sequence differently if the deployment topology demands it,
 provided every step lands.
 
-1. **Provision infrastructure.** Redpanda cluster (RF=3, min-ISR=2),
+1. **Provision infrastructure.** RabbitMQ cluster (RF=3, min-ISR=2),
    PostgreSQL primary + WAL streaming, ClickHouse Replicated engines +
    Keeper, Redis. Reference: [Data
    Classes](../deployment/data-classes.md) for store-level retention.

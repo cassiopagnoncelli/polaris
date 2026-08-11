@@ -47,9 +47,7 @@ export interface IdentityResolverConfig {
   readonly consumerGroup: string;
 }
 
-export const identityResolverEnvKeys = [
-  "POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP",
-] as const;
+export const identityResolverEnvKeys = ["POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP"] as const;
 
 /**
  * Full runtime config: service / http / redpanda / postgres / resolver.

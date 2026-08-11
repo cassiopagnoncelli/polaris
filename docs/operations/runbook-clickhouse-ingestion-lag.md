@@ -1,6 +1,6 @@
 # ClickHouse Ingestion Lag Runbook
 
-Operators use this runbook when ClickHouse's Kafka-engine ingestion
+Operators use this runbook when ClickHouse ingestion
 falls behind the analytics events topic, or when a materialized view
 falls into a failed state.
 
@@ -22,30 +22,31 @@ The Prometheus rules that trigger this runbook live at
 
 | Alert | Severity | Threshold |
 |---|---|---|
-| `PolarisClickHouseIngestionLagWarn` | warn | ClickHouse Kafka ingestion lag >2 min |
-| `PolarisClickHouseIngestionLagPage` | page | ClickHouse Kafka ingestion lag >10 min |
+| `PolarisClickHouseIngestionLagWarn` | warn | ClickHouse ingestion lag >2 min |
+| `PolarisClickHouseIngestionLagPage` | page | ClickHouse ingestion lag >10 min |
 | `PolarisClickHouseMVFailure` | page | any materialized view in `failed` state |
 
-**v1 metric gap.** Polaris does not yet ship a ClickHouse exporter,
-so these rules are wired with the v1 thresholds but will not fire
-until the exporter lands. Until then, operators discover lag and
-MV-state issues by querying ClickHouse directly (see
-"Investigation"). The gap is tracked in
-[`docs/operations/alerts.md`](alerts.md).
+**Where the lag signal comes from.** `consumers/clickhouse-sink`
+emits `polaris_clickhouse_sink_lag_seconds{table}` — now minus the
+envelope's `ingested_at` for the last row it wrote. This replaced
+`polaris_clickhouse_kafka_ingestion_lag_seconds`, which the
+analytics-projector derived from `system.kafka_consumers`. That system
+table is permanently empty since the RabbitMQ migration (ClickHouse
+consumes nothing), so the old gauge would have reported a confident
+zero forever — a lag alert that silently stops firing is worse than
+one that fails loudly.
 
-When the exporter lands it scrapes:
-
-- `system.kafka_consumers` → `polaris_clickhouse_kafka_ingestion_lag_seconds{table=...}`
-- `system.materialized_views` → `polaris_clickhouse_mv_state{view=...,state=...}`
+MV state still comes from the analytics-projector's probe poller:
+`system.materialized_views` → `polaris_clickhouse_mv_state{view,state}`.
 
 ## Symptoms
 
 - Analytical queries against `polaris.analytics_raw` (or its
   projection tables) return stale results compared to the last
   `polaris ingest` write the operator can confirm via ingester logs.
-- The ClickHouse `system.kafka_consumers` table reports a Kafka
-  consumer with growing lag for one of the Polaris analytics-events
-  topics.
+- `polaris_clickhouse_sink_lag_seconds` is climbing, or the sink's
+  `polaris_clickhouse_sink_batches_total` has stopped advancing while
+  `analytics.events` is still receiving traffic.
 - A materialized view is missing rows that should exist by now (the
   projection-table-freshness signal).
 
@@ -56,39 +57,47 @@ When the exporter lands it scrapes:
    merges; `MergeTree parts count` is high.
 2. **Materialized view exception.** A MV that fans out from
    `analytics_raw` threw during processing of a recent batch. The
-   Kafka consumer suspends until the MV is fixed or marked invalid.
+   INSERT fails, so the sink does not advance its checkpoint and
+   retries the same batch until the MV is fixed.
 3. **Disk full / disk-pressure.** ClickHouse refuses to insert when
    the data volume is approaching the configured threshold.
-4. **Kafka consumer engine misconfigured.** A schema mismatch
-   (envelope changed, MV expects an older column shape, etc.) causes
-   per-message errors. `system.kafka_consumers.last_exception`
-   carries the reason.
+4. **Schema mismatch.** The envelope changed, or a MV expects an
+   older column shape, so every INSERT fails. The sink's logs carry
+   the ClickHouse error verbatim, and the batch repeats — a flat
+   checkpoint with a rising error rate is the signature.
 5. **Slow MV target table.** A downstream projection table is the
    bottleneck (e.g. `analytics_first_touch` rebuilding under load);
    inserts to `analytics_raw` succeed but the MV chain stalls.
-6. **Broker-side consumer offset drift.** Rare; Kafka consumer-group
-   offsets stuck because of a config change.
+6. **The sink is not running, or owns no partitions.** With static
+   partition assignment nothing rebalances: a sink replica that is
+   down, or a partition no replica is assigned, backs up silently.
+   Check `rabbitmqctl list_queues name consumers` for
+   `analytics.events-*` with `consumers = 0`.
 
 ## Investigation
 
-### 1. Check Kafka-engine consumer lag
+### 1. Check the sink's position and its errors
+
+The sink's checkpoint is the authoritative "how far has ClickHouse
+ingestion got" signal:
 
 ```sql
-SELECT
-  database,
-  table,
-  consumer_id,
-  assignments.partition_id AS partition,
-  assignments.current_offset AS current_offset,
-  exceptions.text AS last_exception,
-  is_currently_used
-FROM system.kafka_consumers
-WHERE database = 'polaris'
-ORDER BY current_offset ASC;
+-- PostgreSQL, not ClickHouse
+SELECT stream, last_offset, updated_at
+FROM transport_checkpoints
+WHERE group_name = 'polaris-clickhouse-sink-v1'
+ORDER BY stream;
 ```
 
-`last_exception` is the smoking gun for cause #2 / #4 — a MV failure
-or a schema mismatch leaves the exception message there.
+A stale `updated_at` while `analytics.events` is receiving traffic
+means the sink is stuck rather than idle. Its logs carry the reason:
+
+```logql
+{polaris_service="clickhouse-sink"} | json | component=~"clickhouse-sink.*"
+```
+
+A repeating ClickHouse error with a flat checkpoint is the smoking gun
+for cause #2 / #4 — an MV failure or a schema mismatch.
 
 ### 2. Check materialized-view state
 
@@ -169,7 +178,7 @@ with the query digest from `polaris_clickhouse_operator_raw_query_total`
 ### Short-term
 
 - **Detach the broken materialized view (cause #2):** the surgical
-  step that unblocks the Kafka consumer without losing source data.
+  step that unblocks the sink without losing source data.
   ```sql
   DETACH TABLE polaris.<failing_mv>;
   ```
@@ -196,7 +205,7 @@ with the query digest from `polaris_clickhouse_operator_raw_query_total`
 
 Page the on-call data engineer if:
 
-- Kafka ingestion lag exceeds 30 minutes,
+- ClickHouse ingestion lag exceeds 30 minutes,
 - multiple materialized views are simultaneously failed,
 - disk free is below 10%.
 

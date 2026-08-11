@@ -9,7 +9,7 @@ plus the ClickHouse access enforcement from
 | Workflow                                    | Trigger                                              | Purpose                                                                                    |
 | ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)           | every PR and push to `main`, manual dispatch         | typecheck, lint (Biome + ClickHouse import rule), format check, tests, build, migration smoke |
-| [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml) | schedule (06:00 UTC), manual dispatch, `integration` PR label | Docker-backed checks against Postgres, Redis, Redpanda, ClickHouse                         |
+| [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml) | schedule (06:00 UTC), manual dispatch, `integration` PR label | Docker-backed checks against Postgres, Redis, RabbitMQ, ClickHouse                         |
 
 The integration workflow is opt-in on PRs because the service matrix is slow
 and still stabilising. Once the vertical-slice smoke test is reliable

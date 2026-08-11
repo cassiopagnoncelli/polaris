@@ -119,9 +119,7 @@ export interface PublishToDestinationDlqInput {
  * Returns once the broker has confirmed the DLQ publish —
  * callers usually ignore it but tests assert delivery.
  */
-export async function publishToDestinationDlq(
-  input: PublishToDestinationDlqInput,
-): Promise<void> {
+export async function publishToDestinationDlq(input: PublishToDestinationDlqInput): Promise<void> {
   const failedAt = input.failedAt ?? new Date().toISOString();
 
   const errorClass = input.error instanceof Error ? input.error.name : undefined;

@@ -32,9 +32,9 @@ Alertmanager routing tree consumes that label to decide who and how.
 |---|---|---|---|---|
 | `PolarisIngestionSchemaRejectionRate` | page | ingester-api | schema rejection rate >5% over 5 minutes (per `project_id`, `environment`) | [Ingestion Rejection Spike](runbook-ingestion-rejection-spike.md) |
 | `PolarisIngestionForbiddenFieldRejectionRate` | page | ingester-api | forbidden-field rejection rate >1% over 5 minutes (per `project_id`, `environment`) | [Ingestion Rejection Spike](runbook-ingestion-rejection-spike.md) |
-| `PolarisRedpandaPublishFailureRate` | page | ingester-api | publish failure rate >0.5% over 1 minute | [Redpanda Publish Failures](runbook-redpanda-publish-failures.md) |
-| `PolarisRedpandaConsumerLagWarn` | warn | redpanda | `polaris_processor_lag_ms_last` >5 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
-| `PolarisRedpandaConsumerLagPage` | page | redpanda | `polaris_processor_lag_ms_last` >15 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
+| `PolarisRabbitMQPublishFailureRate` | page | ingester-api | publish failure rate >0.5% over 1 minute | [RabbitMQ Publish Failures](runbook-rabbitmq-publish-failures.md) |
+| `PolarisRabbitMQConsumerLagWarn` | warn | rabbitmq | `polaris_processor_lag_ms_last` >5 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
+| `PolarisRabbitMQConsumerLagPage` | page | rabbitmq | `polaris_processor_lag_ms_last` >15 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
 | `PolarisProcessorDLQGrowthWarn` | warn | processor | processor DLQ growth >100/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisProcessorDLQGrowthPage` | page | processor | processor DLQ growth >1000/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisDestinationDeliveryFailureRate` | page | destination | per-instance delivery failure rate >1% over 5 minutes | [Destination API Failure](runbook-destination-api-failure.md) |
@@ -52,14 +52,14 @@ Severity distribution: **10 page, 4 warn**, 14 alerts total.
 All 14 alert rules now reference real metrics; none use a
 `vector(0)` placeholder. The metrics close out as follows:
 
-- **Ingester** (`PolarisRedpandaPublishFailureRate`): emitted by
+- **Ingester** (`PolarisRabbitMQPublishFailureRate`): emitted by
   `apps/ingester-api/src/metrics/registry.ts` via
   `polaris_ingest_publish_failed_total` /
   `polaris_ingest_publish_success_total` (MKEF1I9G).
 - **ClickHouse** (`PolarisClickHouseIngestionLagWarn`/`...Page`,
   `PolarisClickHouseMVFailure`): emitted by the analytics-projector
   via the ClickHouse probe poller (PI2CRFZC). The poller queries
-  `system.kafka_consumers` and `system.materialized_views` on a 30s
+  `system.materialized_views` on a 30s
   cadence.
 - **Operator gate** (`PolarisOperatorGateDenialRate`): emitted by
   `enforceProductionMutationGate` via the `OperatorGateMetricsSink`
@@ -97,13 +97,13 @@ Every alert carries:
 | Label | Always present | Meaning |
 |---|---|---|
 | `severity` | yes | `page` or `warn` |
-| `service` | yes | one of `ingester-api`, `redpanda`, `processor`, `destination`, `clickhouse`, `replay-coordinator`, `control-plane` |
+| `service` | yes | one of `ingester-api`, `rabbitmq`, `processor`, `destination`, `clickhouse`, `replay-coordinator`, `control-plane` |
 | `team` | yes | `platform-data` (the Polaris on-call rotation) |
 | `project_id` | when applicable | per-project pivot |
 | `environment` | when applicable | `development` / `staging` / `production` |
 | `processor_name`, `processor_version` | processor alerts | from the shared-processor metric labels |
 | `vendor`, `consumer_version`, `destination_id` | destination alerts | the immutable destination-instance identity |
-| `topic_family`, `concrete_topic`, `partition` | Redpanda-touching alerts | from the topic-family triple per P11-008 |
+| `topic_family`, `concrete_topic`, `partition` | RabbitMQ-touching alerts | from the topic-family triple per P11-008 |
 
 ## Cross-references
 
@@ -112,7 +112,7 @@ Every alert carries:
 - Runbooks: every alert links to one of the seven runbook files
   under `docs/operations/`.
 - [Dashboards index](dashboards.md) — the P10-003 service-level
-  Grafana dashboards (`polaris-ingestion`, `polaris-redpanda`,
+  Grafana dashboards (`polaris-ingestion`, `polaris-rabbitmq`,
   `polaris-processors`, `polaris-destinations`, `polaris-clickhouse`)
   are the visual companion to these alert rules; the per-project
   dashboards from P11-008 stay for project-level drilldown.

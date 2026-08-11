@@ -5,7 +5,7 @@ Polaris is not a browser UI. It is a local event-ingestion platform made of:
 - a Fastify ingester API
 - a PostgreSQL-backed operator CLI
 - Redis for short-window dedupe
-- Redpanda for event streaming
+- RabbitMQ for event streaming
 - ClickHouse for analytics storage
 
 ## 1. Start the Local Stack
@@ -29,7 +29,7 @@ All four services should be healthy:
 
 - `polaris-postgres`
 - `polaris-redis`
-- `polaris-redpanda`
+- `polaris-rabbitmq`
 - `polaris-clickhouse`
 
 ## 2. Build the Workspace
@@ -103,8 +103,8 @@ POLARIS_POSTGRES_HOST=127.0.0.1 \
 POLARIS_POSTGRES_DATABASE=polaris \
 POLARIS_POSTGRES_USER=polaris \
 POLARIS_POSTGRES_PASSWORD=polaris \
-POLARIS_REDPANDA_BROKERS=127.0.0.1:19092 \
-POLARIS_REDPANDA_CLIENT_ID=ingester-api-local \
+POLARIS_RABBITMQ_URL=127.0.0.1:19092 \
+POLARIS_RABBITMQ_CLIENT_ID=ingester-api-local \
 POLARIS_REDIS_HOST=127.0.0.1 \
 pnpm --filter @polaris/ingester-api run start
 ```
@@ -207,7 +207,7 @@ pnpm clickhouse:bootstrap-local
 
 At the time this usage note was written, local bootstrap can fail because the
 ClickHouse DDL uses `ON CLUSTER '{cluster}'` while the local container does not
-run Keeper/ZooKeeper. The ingester, CLI, PostgreSQL, Redis, and Redpanda path is
+run Keeper/ZooKeeper. The ingester, CLI, PostgreSQL, Redis, and RabbitMQ path is
 usable without that ClickHouse bootstrap; analytics queries need the local DDL
 bootstrap issue fixed first.
 

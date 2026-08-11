@@ -163,7 +163,7 @@ Rules:
 
 ### Replay Window
 
-The practical replay window equals the retention of the source topic in Redpanda. With the v1 defaults, that is **90 days for `raw.events`** and shorter for derived topics.
+The practical replay window equals the retention of the source topic in RabbitMQ. With the v1 defaults, that is **90 days for `raw.events`** and shorter for derived topics.
 
 Polaris does not promise replay beyond the operational retention window. Any incident requiring older replay is out of scope until object-storage raw archive exists. The principle is "replayability within the operational retention window" — not unbounded replay.
 

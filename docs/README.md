@@ -2,16 +2,16 @@
 
 Polaris is an internal multi-project event infrastructure platform. It is designed for attribution, analytics, activation, and operational intelligence inside one organization.
 
-Redpanda is the immutable streaming backbone. Polaris is the platform built around it.
+RabbitMQ is the immutable streaming backbone. Polaris is the platform built around it.
 
 ## Core Architecture
 
 ```text
 SDKs / producers
   -> Ingester API
-  -> Redpanda raw.events
+  -> RabbitMQ raw.events
   -> versioned processors
-  -> Redpanda derived topics
+  -> RabbitMQ derived topics
   -> destination consumers
   -> ClickHouse analytical storage
 ```
@@ -21,7 +21,7 @@ SDKs / producers
 - [Architecture Overview](./architecture/00-overview.md)
 - [Event Contract](./architecture/01-event-contract.md)
 - [Control Plane](./architecture/02-control-plane.md)
-- [Redpanda Topics](./architecture/03-redpanda-topics.md)
+- [RabbitMQ Streams](./architecture/03-rabbitmq-streams.md)
 - [Ingestion and SDKs](./architecture/04-ingestion-and-sdks.md)
 - [Processors and Replay](./architecture/05-processors-and-replay.md)
 - [Destinations](./architecture/06-destinations.md)
@@ -52,5 +52,5 @@ SDKs / producers
 - SDKs are transport and identity helpers, not analytics engines.
 - Processors and consumers are independent and versioned.
 - Destination consumers are vendor adapters: normalize, map, deliver. Mapping is the only stage that is purely protocol translation.
-- ClickHouse consumes `analytics.events` through Kafka Engine and persists rows before querying. `analytics_raw` is never queried without explicit dedupe.
+- ClickHouse is fed by `consumers/clickhouse-sink`, which consumes `analytics.events` and INSERTs batches; rows are persisted before querying. `analytics_raw` is never queried without explicit dedupe.
 - Replayability within the operational retention window is a primary architectural constraint.

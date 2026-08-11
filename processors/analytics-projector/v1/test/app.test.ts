@@ -11,7 +11,11 @@
  *   - shutdown tasks tear the runtime down deterministically.
  */
 
-import type { PolarisConsumer, PolarisProducer, PublishEventInput } from "@polaris/shared-transport";
+import type {
+  PolarisConsumer,
+  PolarisProducer,
+  PublishEventInput,
+} from "@polaris/shared-transport";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildAnalyticsProjectorApp } from "../src/app.js";

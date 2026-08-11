@@ -43,7 +43,9 @@ class RecordingReader implements ScopedIsolationLookup {
 describe("InMemoryScopedIsolationLookup", () => {
   it("reports the shared topic when no triple is registered", async () => {
     const lookup = new InMemoryScopedIsolationLookup();
-    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "production")).toBe(false);
+    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "production")).toBe(
+      false,
+    );
   });
 
   it("reports the dedicated topic for added triples and nothing else", async () => {
@@ -57,14 +59,18 @@ describe("InMemoryScopedIsolationLookup", () => {
     // Different environment — not isolated.
     expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "staging")).toBe(false);
     // Different project — not isolated.
-    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-b", "production")).toBe(false);
+    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-b", "production")).toBe(
+      false,
+    );
   });
 
   it("supports removal", async () => {
     const lookup = new InMemoryScopedIsolationLookup();
     lookup.add(STREAM_FAMILY_RAW_EVENTS, "project-a", "production");
     lookup.remove(STREAM_FAMILY_RAW_EVENTS, "project-a", "production");
-    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "production")).toBe(false);
+    expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "production")).toBe(
+      false,
+    );
   });
 });
 
@@ -73,8 +79,12 @@ describe("StreamIsolationCache", () => {
     const reader = new RecordingReader();
     reader.answer = true;
     const cache = new StreamIsolationCache({ reader, now: () => 1_000 });
-    expect(await cache.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production")).toBe(true);
-    expect(await cache.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production")).toBe(true);
+    expect(await cache.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production")).toBe(
+      true,
+    );
+    expect(await cache.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production")).toBe(
+      true,
+    );
     expect(reader.seen).toHaveLength(1);
   });
 
@@ -171,7 +181,12 @@ describe("resolveStreamFamilyScoped", () => {
     const reader = new RecordingReader();
     reader.answer = false;
     expect(
-      await resolveStreamFamilyScoped(STREAM_FAMILY_RAW_EVENTS, "project-shared", "production", reader),
+      await resolveStreamFamilyScoped(
+        STREAM_FAMILY_RAW_EVENTS,
+        "project-shared",
+        "production",
+        reader,
+      ),
     ).toBe("raw.events");
   });
 
@@ -179,7 +194,12 @@ describe("resolveStreamFamilyScoped", () => {
     const reader = new RecordingReader();
     reader.answer = true;
     expect(
-      await resolveStreamFamilyScoped(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production", reader),
+      await resolveStreamFamilyScoped(
+        STREAM_FAMILY_RAW_EVENTS,
+        "project-iso",
+        "production",
+        reader,
+      ),
     ).toBe("raw.events.project-iso");
   });
 
@@ -187,10 +207,20 @@ describe("resolveStreamFamilyScoped", () => {
     const lookup = new InMemoryScopedIsolationLookup();
     lookup.add(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production");
     expect(
-      await resolveStreamFamilyScoped(STREAM_FAMILY_RAW_EVENTS, "project-iso", "production", lookup),
+      await resolveStreamFamilyScoped(
+        STREAM_FAMILY_RAW_EVENTS,
+        "project-iso",
+        "production",
+        lookup,
+      ),
     ).toBe("raw.events.project-iso");
     expect(
-      await resolveStreamFamilyScoped(STREAM_FAMILY_RAW_EVENTS, "project-shared", "production", lookup),
+      await resolveStreamFamilyScoped(
+        STREAM_FAMILY_RAW_EVENTS,
+        "project-shared",
+        "production",
+        lookup,
+      ),
     ).toBe("raw.events");
   });
 

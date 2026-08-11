@@ -27,10 +27,10 @@ Grafana lands at <http://localhost:3000> (admin/admin, local-only).
 | Dashboard | UID | Purpose | Source metrics package |
 |---|---|---|---|
 | [Polaris — Ingestion](#ingestion) | `polaris-ingestion` | Accept/reject rate, reject reason breakdown, dedupe, origin/rate-limit, redactions, deprecated schema usage | [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
-| [Polaris — Redpanda](#redpanda) | `polaris-redpanda` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
+| [Polaris — RabbitMQ](#rabbitmq) | `polaris-rabbitmq` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 | [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`packages/shared-destinations/src/metrics.ts`](../../packages/shared-destinations/src/metrics.ts) |
-| [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | Kafka-engine ingest lag proxy via analytics-projector, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+| [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 
 The per-project topic-isolation dashboards from **P11-008**
 (`polaris-per-project-throughput`, `polaris-per-project-schema`,
@@ -65,33 +65,47 @@ Panels and the metric each uses:
   next round of metrics could add one alongside the accept-duration
   histogram from CSH8YAL6.
 
-## Redpanda
+## RabbitMQ
 
-**File:** [`infra/grafana/dashboards/polaris-redpanda.json`](../../infra/grafana/dashboards/polaris-redpanda.json)
-**UID:** `polaris-redpanda`
+**File:** [`infra/grafana/dashboards/polaris-rabbitmq.json`](../../infra/grafana/dashboards/polaris-rabbitmq.json)
+**UID:** `polaris-rabbitmq`
 **Default range:** last 6 hours
 
 Panels and the metric each uses:
 
 | Panel | Metric expression |
 |---|---|
-| Broker scrape health | `up{job="polaris-redpanda"}` |
-| Produce throughput per topic (5m, bytes/s) | `sum by (topic) (rate(redpanda_kafka_request_bytes_total{redpanda_request="produce"}[5m]))` |
-| Fetch throughput per topic (5m, bytes/s) | `sum by (topic) (rate(redpanda_kafka_request_bytes_total{redpanda_request="fetch"}[5m]))` |
-| Consumer group lag (records) | `sum by (group, topic) (redpanda_kafka_consumer_group_lag)` |
+| Broker scrape health | `up{job="polaris-rabbitmq"}` |
+| Publish rate per stream (5m, msg/s) | `sum by (queue) (rate(rabbitmq_queue_messages_published_total[5m]))` |
+| Deliver rate per stream (5m, msg/s) | `sum by (queue) (rate(rabbitmq_queue_messages_delivered_total[5m]))` |
+| Retry / DLQ queue depth (messages) | `sum by (queue) (rabbitmq_queue_messages_ready{queue=~".*\\.(retry\\..*|redeliver|dlq)"})` |
+| Unroutable publishes (5m) | `sum(rate(rabbitmq_channel_messages_unroutable_dropped_total[5m]))` |
 | Publish failure rate (proxy) | `sum(rate(polaris_ingest_batch_rejected_total{reason="publish_failed"}[5m]))` |
-| Per-family processor lag (proxy, ms) | `max by (topic_family, processor_name) (polaris_processor_lag_ms_last)` |
+| Per-family processor lag (authoritative, ms) | `max by (topic_family, processor_name) (polaris_processor_lag_ms_last)` |
 
 **Known gaps:**
 
-- **Native Redpanda metrics depend on `/public_metrics` exposing the
-  expected series.** The Polaris scrape config in
+- **Per-queue series need the detailed scrape endpoint.** The Polaris
+  scrape config in
   [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml)
-  targets `polaris-redpanda:9644/public_metrics`; the exact metric names
-  (`redpanda_kafka_request_bytes_total`, `redpanda_kafka_consumer_group_lag`)
-  are stable in current Redpanda releases but may shift between major
-  versions. If a panel shows no data, validate against the broker's
-  `/public_metrics` directly.
+  targets `polaris-rabbitmq:15692/metrics/detailed` with the
+  `queue_coarse_metrics` / `queue_metrics` families. The default
+  aggregated `/metrics` endpoint collapses every stream into one number,
+  which makes "which family is backing up?" unanswerable. If a panel
+  shows no data, check that the `family` params survived a config edit.
+
+- **There is no consumer-group lag metric, by construction.** RabbitMQ
+  streams do not track per-consumer position server-side — that is why
+  Polaris owns checkpoints in `transport_checkpoints`. The authoritative
+  lag signal is `polaris_processor_lag_ms_last` (event-time based,
+  emitted by every processor), which is what the alert rules page on.
+  For "is anyone reading this stream at all", use
+  `rabbitmq_queue_consumers`.
+
+- **Unroutable publishes are a topology alarm, not a capacity one.** A
+  non-zero rate means something is publishing to an exchange with no
+  binding. See
+  [runbook-rabbitmq-topology.md](runbook-rabbitmq-topology.md).
 - **No Polaris-side publish-failure counter.** The proxy is the ingester's
   per-batch reject counter with `reason="publish_failed"`. A dedicated
   `polaris_ingest_publish_failed_total` would let us split publish vs
@@ -178,7 +192,7 @@ Panels and the metric each uses:
 
 | Panel | Metric expression |
 |---|---|
-| Kafka-engine → analytics insert lag (ms, proxy) | `max by (partition) (polaris_processor_lag_ms_last{processor_name="analytics-projector"})` |
+| ClickHouse ingestion lag (s) | `max by (table) (polaris_clickhouse_sink_lag_seconds)` |
 | Analytics insert rate (5m, ops; proxy) | `sum(rate(polaris_processor_events_emitted_total{processor_name="analytics-projector"}[5m]))` |
 | Materialized-view / insert failures (5m, proxy) | `sum by (reason) (rate(polaris_processor_events_failed_total{processor_name="analytics-projector"}[5m]))` |
 | Operator escape-hatch raw query rate (5m, audit) | `sum by (caller) (rate(polaris_clickhouse_operator_raw_query_total[5m]))` |

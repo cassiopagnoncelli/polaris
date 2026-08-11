@@ -11,8 +11,8 @@ Node.js
 TypeScript
 Fastify
 Zod
-KafkaJS
-Redpanda
+amqplib (via @polaris/shared-transport)
+RabbitMQ
 Redis
 PostgreSQL
 ```
@@ -30,7 +30,7 @@ The ingester does:
 - event ID enforcement
 - forbidden-field rejection/redaction
 - short-window idempotency checks
-- publication to Redpanda
+- publication to RabbitMQ
 
 The ingester must not do:
 

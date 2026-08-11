@@ -13,7 +13,7 @@ The platform must support multiple internal projects, products, applications, an
 Polaris provides:
 
 - canonical event ingestion
-- immutable raw event transport through Redpanda
+- immutable raw event transport through RabbitMQ
 - strict event contract validation
 - downstream processing and enrichment
 - identity resolution
@@ -32,17 +32,17 @@ SDKs / Producers
 Ingester API
     |
     v
-Redpanda: raw.events
+RabbitMQ: raw.events
     |
     v
 Versioned processors
     |
     v
-Redpanda: identity.events / enriched.events / attribution.events / analytics.events
+RabbitMQ: identity.events / enriched.events / attribution.events / analytics.events
     |
     +--> Destination consumers
     |
-    +--> ClickHouse Kafka Engine -> persisted analytical tables
+    +--> clickhouse-sink -> persisted analytical tables
 ```
 
 ## Primary Stack
@@ -51,8 +51,8 @@ Redpanda: identity.events / enriched.events / attribution.events / analytics.eve
 Node.js + TypeScript      services, SDKs, processors, consumers
 Fastify                   ingestion API
 Zod                       HTTP and event schema validation
-KafkaJS                   Redpanda producer/consumer client
-Redpanda                  event backbone
+amqplib                   RabbitMQ AMQP 0-9-1 client
+RabbitMQ                  event backbone
 Redis                     short-lived dedupe, rate limit, cache, processor state
 PostgreSQL                mutable runtime/control state
 ClickHouse                analytical ingestion and OLAP storage
@@ -63,7 +63,7 @@ OpenTelemetry             tracing hooks
 
 ## Architectural Principles
 
-- Redpanda is the canonical event backbone.
+- RabbitMQ is the canonical event backbone.
 - Raw events are immutable and append-only.
 - Ingestion performs validation and publication, not enrichment.
 - Enrichment, identity resolution, attribution, and destination delivery happen downstream.
@@ -84,10 +84,10 @@ registered event schema
 minimal SDK sender
 Fastify ingester
 API key authentication
-Redpanda raw.events
+RabbitMQ raw.events
 one simple processor
-Redpanda analytics.events
-ClickHouse Kafka Engine
+RabbitMQ analytics.events
+clickhouse-sink
 analytics ingest log
 deduped analytics raw table
 basic query

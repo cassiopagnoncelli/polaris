@@ -3,11 +3,11 @@
 This is the operator entry point for triaging Polaris DLQ events end-to-end.
 It covers both destination-side DLQs (per consumer instance, mirrored to
 PostgreSQL `dlq_records`) and processor-side DLQs (per processor, dual-written
-to Kafka + PostgreSQL `processor_dlq_records` as of 3L2HKMND).
+to the broker + PostgreSQL `processor_dlq_records` as of 3L2HKMND).
 
 Binding architecture references:
 
-- [Redpanda Topics](../architecture/03-redpanda-topics.md) — DLQ topic
+- [RabbitMQ Streams](../architecture/03-rabbitmq-streams.md) — DLQ topic
   conventions.
 - [Destinations](../architecture/06-destinations.md) — destination DLQ
   semantics, `error_class`, vendor response summary.
@@ -26,20 +26,20 @@ Polaris produces two classes of DLQ:
 ### 1a. Destination DLQs
 
 When a destination consumer's deliverer fails permanently (or exhausts
-retries), it republishes the offending Kafka message to
+retries), it republishes the offending message to
 `<vendor>.<consumer_version>.dlq` (see
-[Retry and DLQ Topics](../architecture/03-redpanda-topics.md#retry-and-dlq-topics))
+[Retry and DLQ Topics](../architecture/03-rabbitmq-streams.md#retry-and-dlq-topics))
 AND writes a row to the PostgreSQL
 [`dlq_records`](../../packages/shared-destinations/src/db/dlq-records.ts)
 table.
 
 The PostgreSQL row is the active triage queue. Each row carries the
-original Kafka bytes (`payload`), the original Kafka headers (`headers`)
+original message bytes (`payload`), the original message headers (`headers`)
 including the Polaris delivery key, the stage-version snapshot
 (`consumer_version`, `normalize_version`, `mapper_version`,
 `deliverer_version`), and mutable resolution slots (`resolved_at`,
 `resolved_by`, `resolution_note`). Operators triage from the PostgreSQL
-rows; the Kafka topic is the durable byte-identical buffer.
+rows; the stream is the durable byte-identical buffer.
 
 ### 1b. Processor DLQs
 
@@ -48,25 +48,25 @@ analytics-projector, attribution-engine) fails permanently on a message,
 the shared runtime calls
 [`publishToDlq`](../../packages/shared-processor/src/dlq.ts) which
 delegates to
-[`republishToDlq`](../../packages/shared-kafka/src/dlq.ts). The message
+[`republishToDlq`](../../packages/shared-transport/src/dlq.ts). The message
 lands on `<processor_name>.dlq` with the failure metadata as headers
 (reason, error class, error message, source topic/partition/offset,
-attempt counter, failed-at timestamp). The original Kafka bytes are
+attempt counter, failed-at timestamp). The original message bytes are
 preserved byte-identically so replay tooling can rely on `event_id`
 equality across topics.
 
-Processor DLQs **dual-write** as of 3L2HKMND: the Kafka publish to
+Processor DLQs **dual-write** as of 3L2HKMND: the broker publish to
 `<processor_name>.dlq` still happens (so existing topic consumers and
 runbooks stay unbroken) AND a row lands in the PostgreSQL
 [`processor_dlq_records`](../../packages/shared-processor/src/db/processor-dlq-records.ts)
-table. Each row carries the original Kafka bytes (`payload`), the
+table. Each row carries the original message bytes (`payload`), the
 original headers (`headers`), the failing processor identity
 (`processor_name`, `processor_version`), classifier output
 (`reason`, `error_class`, `error_message`), source-topic coordinates
 (`source_topic` / `source_partition` / `source_offset`), and the
 mutable resolution slots (`resolved_at`, `resolved_by`,
 `resolution_note`). Operators triage from PostgreSQL via the CLI
-commands documented in §3b; the Kafka topic remains the durable
+commands documented in §3b; the stream remains the durable
 byte-identical buffer.
 
 ## 2. SLA targets
@@ -146,9 +146,9 @@ polaris processors dlq list --processor geoip-enricher --limit 50
 polaris processors dlq list --processor analytics-projector --since 2026-05-14T00:00:00Z
 ```
 
-The `--include-resolved` flag widens to the full history. The Kafka
+The `--include-resolved` flag widens to the full history. The broker
 topic (`<processor_name>.dlq`) is still written byte-identically for
-backward compatibility with Redpanda-console workflows and existing
+backward compatibility with RabbitMQ-console workflows and existing
 streaming consumers:
 
 ```bash
@@ -177,7 +177,7 @@ Renders the full row including:
   `environment`, stage-version snapshot),
 - failure context (`reason`, `error_class`,
   `vendor_response_code`, `vendor_response_summary`, `attempts`),
-- Kafka coordinates (`source_topic`, `source_partition`, `source_offset`),
+- transport coordinates (`source_topic`, `source_partition`, `source_offset`),
 - every header,
 - `delivery_key` — the Polaris-owned idempotency key the destination
   runtime dedupes on,
@@ -188,7 +188,7 @@ Renders the full row including:
 
 ### Processor DLQs
 
-No CLI surface in v1. Use Redpanda console or `rpk`:
+No CLI surface in v1. Use RabbitMQ console or `rpk`:
 
 ```bash
 rpk topic consume geoip-enricher.dlq --offset oldest --num 1 --format '%h\n%v\n'
@@ -236,8 +236,8 @@ Source: [`apps/polaris-cli/src/commands/dlq/retry.ts`](../../apps/polaris-cli/sr
 The CLI:
 
 1. reads the row from `dlq_records`,
-2. opens a short-lived Kafka producer against
-   `POLARIS_REDPANDA_BROKERS`,
+2. opens a short-lived producer against
+   `POLARIS_RABBITMQ_URL`,
 3. publishes the byte-identical envelope back to the row's
    `source_topic` with the original headers,
 4. closes the producer,
@@ -279,10 +279,10 @@ Failure modes during retry:
 
 | Failure                                            | Effect                              | Recovery |
 |----------------------------------------------------|-------------------------------------|----------|
-| Kafka producer connect/send fails                  | Exception; row stays unresolved     | Re-run `polaris dlq retry` after restoring broker access |
+| Producer connect/publish fails                     | Exception; row stays unresolved     | Re-run `polaris dlq retry` after restoring broker access |
 | `dlq_records` row missing                          | `UsageError` (exit 2)               | Verify the id |
 | Row already resolved                               | exit 0 with `already resolved`      | Idempotent — no action |
-| Row has `payload IS NULL` (early-stage failure)    | `UsageError`                        | Use `mark-resolved` instead; the bytes are only in Kafka |
+| Row has `payload IS NULL` (early-stage failure)    | `UsageError`                        | Use `mark-resolved` instead; the bytes are only on the broker |
 
 ### Processor retry
 

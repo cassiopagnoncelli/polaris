@@ -1,7 +1,7 @@
 # Observability
 
 Polaris ships an OPTIONAL local observability stack as a separate
-compose overlay. The four core data-path services (Redpanda,
+compose overlay. The four core data-path services (RabbitMQ,
 PostgreSQL, Redis, ClickHouse) run without it — observability backends
 are preferred but not hard runtime dependencies, per
 [Observability and Operations](../architecture/08-observability-and-operations.md).
@@ -14,7 +14,7 @@ downstream P10-* task owns which surface.
 
 | Component        | URL                       | Purpose                                                                 |
 | ---------------- | ------------------------- | ----------------------------------------------------------------------- |
-| Prometheus       | <http://localhost:9090>   | Scrapes `polaris_*` metrics from the ingester, processors, and Redpanda. |
+| Prometheus       | <http://localhost:9090>   | Scrapes `polaris_*` metrics from the ingester, processors, and RabbitMQ. |
 | Grafana          | <http://localhost:3000>   | Dashboards + datasource fanout. Default login: `admin` / `admin`.        |
 | Loki             | <http://localhost:3100>   | Log store. Tail Pino logs from local services and the smoke runs.        |
 | OTel Collector   | gRPC `localhost:4317`, HTTP `localhost:4318` | OTLP intake. Forwards metrics to Prometheus, logs to Loki.      |
@@ -120,7 +120,7 @@ The local scrape config points at:
 | `prometheus`                     | `localhost:9090`                    | Prometheus itself (self-scrape).                                       |
 | `polaris-ingester`               | `host.docker.internal:8080/metrics` | Ingester API — `apps/ingester-api/src/metrics/registry.ts`.            |
 | `polaris-analytics-projector`    | `host.docker.internal:8081/metrics` | Analytics projector — `packages/shared-processor/src/metrics.ts`.       |
-| `polaris-redpanda`               | `polaris-redpanda:9644/public_metrics` | Redpanda admin API (Prometheus-shape).                              |
+| `polaris-rabbitmq`               | `polaris-rabbitmq:9644/public_metrics` | RabbitMQ admin API (Prometheus-shape).                              |
 | `polaris-otel-collector`         | `otel-collector:8889/metrics`       | Collector self-metrics.                                                |
 
 `host.docker.internal` resolves to the host machine from inside the
@@ -152,7 +152,7 @@ a 'no dashboards found' warning.
 
 [P10-003 Grafana Dashboards](../../agents/pm/kanban/done/P10-003-grafana-dashboards.md)
 replaces the placeholder with the real Polaris dashboards
-(Ingestion, Processors, Destinations, ClickHouse, Redpanda). To add
+(Ingestion, Processors, Destinations, ClickHouse, RabbitMQ). To add
 a dashboard in the meantime, drop its JSON export into
 `infra/grafana/dashboards/`. The provider syncs every 10 seconds.
 

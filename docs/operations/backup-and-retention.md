@@ -10,7 +10,7 @@ Binding architecture references:
 - [Production Readiness / Backup and Recovery](../architecture/11-production-readiness.md#backup-and-recovery)
 - [Production Readiness / Data Lifecycle Defaults](../architecture/11-production-readiness.md#data-lifecycle-defaults)
 - [ClickHouse](../architecture/07-clickhouse.md)
-- [Redpanda Topics](../architecture/03-redpanda-topics.md)
+- [RabbitMQ Streams](../architecture/03-rabbitmq-streams.md)
 - [Control Plane](../architecture/02-control-plane.md)
 
 The matching data-class one-pager lives at
@@ -30,7 +30,7 @@ This is the canonical table. It mirrors and binds to
 | ClickHouse `analytics_raw` | deduped analytical facts | 24 h | 4 h (recent partitions) | daily `BACKUP TABLE` to object storage |
 | ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time | no backup; rebuild via [P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md) |
 | ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly `BACKUP TABLE`, monthly cold archive |
-| Redpanda | canonical event topics | 0 (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster replication factor; tiered storage future work |
+| RabbitMQ | canonical event topics | 0 (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster replication factor; tiered storage future work |
 | Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss is acceptable transient duplicate increase, downstream idempotency handles |
 | Secret provider | references only (no plaintext) | provider-managed | provider-managed | out of scope; Vault / equivalent owns its own backup |
 
@@ -399,9 +399,9 @@ ALTER TABLE polaris.analytics_raw MATERIALIZE TTL;
 ALTER TABLE polaris.analytics_ingest_log MATERIALIZE TTL;
 ```
 
-## Redpanda
+## RabbitMQ
 
-Redpanda is not "backed up" in the conventional sense. Its recovery
+RabbitMQ is not "backed up" in the conventional sense. Its recovery
 profile is in-cluster: RF=3 with `min.insync.replicas=2`. A broker
 failure is absorbed; broker replacement is the routine operational
 procedure.
@@ -424,7 +424,7 @@ Per
 The active levers are:
 
 ```ini
-# Redpanda topic config — example for raw.events
+# RabbitMQ topic config — example for raw.events
 retention.ms=7776000000        # 90 days
 segment.ms=86400000            # 1 day per segment
 segment.bytes=1073741824       # 1 GiB cap per segment
@@ -444,7 +444,7 @@ becomes impossible. The replayability principle in Polaris is explicit:
 It is also explicit that the window is bounded:
 
 > Object-storage raw archive is a future extension. Until it exists,
-> Redpanda `raw.events` retention defines the practical raw replay
+> RabbitMQ `raw.events` retention defines the practical raw replay
 > window. The replayability principle is bounded by this window —
 > Polaris does not promise replay beyond the operational retention
 > window in v1.
@@ -457,7 +457,7 @@ Two operational consequences:
 2. ClickHouse `analytics_raw` is the long-horizon record for
    analytics-shaped reasoning. It holds 400 days. It is not a
    substitute for `raw.events` (different envelope, different
-   semantics), but it survives the Redpanda retention window for
+   semantics), but it survives the RabbitMQ retention window for
    analytical purposes.
 
 Object-storage raw archive is honest future work, gated on first
@@ -467,13 +467,13 @@ and is intentionally not in this runbook's v1 scope.
 
 ### Broker replacement
 
-Broker replacement is the only recovery procedure for Redpanda in v1.
+Broker replacement is the only recovery procedure for RabbitMQ in v1.
 Outline (cluster operator owns the full runbook; this is the Polaris
 view of it):
 
-1. Drain the failing broker (`rpk redpanda admin brokers decommission`).
+1. Drain the failing broker (`rpk rabbitmq admin brokers decommission`).
 2. Provision a replacement node with the same disk layout.
-3. Add it to the cluster (`rpk redpanda admin brokers add`).
+3. Add it to the cluster (`rpk rabbitmq admin brokers add`).
 4. Wait for partition rebalance — `min.insync.replicas=2` keeps
    producers writable throughout.
 5. Confirm `rpk cluster health` returns green and the new broker is
@@ -647,7 +647,7 @@ issue is fixed. The drill is not "done" with a partial result.
 
 Honest future work, not v1 scope:
 
-- **Object-storage raw archive**. Redpanda tiered storage or an
+- **Object-storage raw archive**. RabbitMQ tiered storage or an
   out-of-cluster archive of `raw.events`. Unblocks replay beyond the
   90-day window. Decision deferred until first-production-month volume
   data exists (see

@@ -134,9 +134,7 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  * server-side macros and do not interact with ClickHouse's parameter
  * syntax (`{name:Type}`).
  */
-const CLIENT_MACROS = [
-  { name: "replicated", env: "POLARIS_CLICKHOUSE_REPLICATED", default: "" },
-];
+const CLIENT_MACROS = [{ name: "replicated", env: "POLARIS_CLICKHOUSE_REPLICATED", default: "" }];
 
 export function expandClientMacros(sql) {
   let out = sql;

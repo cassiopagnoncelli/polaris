@@ -118,7 +118,7 @@ polaris dlq show <dlq_id>
 
 For processor DLQ, locate the DLQ topic for the processor (per the
 processor's README) and inspect with `rpk topic consume` or the
-Redpanda console.
+RabbitMQ console.
 
 ### 3. Cross-reference processor logs
 

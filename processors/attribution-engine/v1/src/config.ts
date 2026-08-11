@@ -49,9 +49,7 @@ export interface AttributionEngineConfig {
   readonly consumerGroup: string;
 }
 
-export const attributionEngineEnvKeys = [
-  "POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP",
-] as const;
+export const attributionEngineEnvKeys = ["POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP"] as const;
 
 /**
  * Full runtime configuration for the attribution-engine v1 service.

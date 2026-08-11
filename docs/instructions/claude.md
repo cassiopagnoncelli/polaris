@@ -5,7 +5,7 @@ Use these instructions when generating or modifying Polaris code.
 ## Names
 
 - Polaris is the event infrastructure platform.
-- Redpanda is the streaming backbone.
+- RabbitMQ is the streaming backbone.
 - Do not call the platform Panda in generated docs or code.
 
 ## Core Architecture
@@ -15,24 +15,24 @@ Generate code around this path:
 ```text
 SDKs/producers
   -> Fastify ingester
-  -> Redpanda raw.events
+  -> RabbitMQ raw.events
   -> versioned processors
-  -> Redpanda derived topics
+  -> RabbitMQ derived topics
   -> destination consumers
-  -> ClickHouse Kafka Engine
+  -> clickhouse-sink
 ```
 
 ## Hard Rules
 
 - Do not enrich at ingress.
 - Do not call external destination APIs from the ingester.
-- Do not expose Redpanda directly to browser clients.
+- Do not expose RabbitMQ directly to browser clients.
 - Keep SDKs thin.
 - Keep raw events immutable.
 - Keep processors and consumers independent and versioned.
 - Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `packages/shared-destination-normalize/`.
-- Feed ClickHouse through Kafka Engine from `analytics.events`.
-- Persist Kafka Engine rows before querying.
+- Feed ClickHouse through `consumers/clickhouse-sink` from `analytics.events`.
+- Persist ingested rows before querying.
 - `analytics_raw` is never queried without explicit dedupe (`argMax(_version)`, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
 - Preserve replayability within the operational retention window as a primary architectural constraint.
 
@@ -75,7 +75,7 @@ packages/
   web-sdk/
   node-sdk/
   shared-schemas/                  envelope + event Zod schemas
-  shared-kafka/                    KafkaJS wrapper + topic-family resolver
+  shared-transport/                    transport port + RabbitMQ driver + stream-family resolver
   shared-logger/                   Pino setup
   shared-config/                   Zod-validated runtime config
   shared-secrets/                  secret provider interface + env / Vault adapters
@@ -124,7 +124,7 @@ consumers/
 
 infra/
   docker/
-  redpanda/
+  rabbitmq/
   clickhouse/
   prometheus/
   grafana/
@@ -135,7 +135,7 @@ sql/
     roles/                         polaris_service / polaris_operator definitions + grants
     projections/                   one .sql file per projection table
     materialized-views/            MVs that feed projections (argMax pattern)
-    <ddl files>                    Kafka Engine table, analytics_ingest_log, analytics_raw
+    <ddl files>                    ingestion interface table, analytics_ingest_log, analytics_raw
 
 db/
 migrations/                        SQL-first PostgreSQL migrations (dbmate by default)
@@ -160,7 +160,7 @@ Use these defaults unless a task explicitly changes them:
 - RFC 7807 Problem Details for request-level HTTP errors
 - Pino for JSON logs
 - shared Zod-validated runtime config
-- KafkaJS through a thin `shared-kafka` package
+- amqplib behind the `shared-transport` port
 - ClickHouse SQL files plus official ClickHouse JavaScript client
 - OpenAPI generated from Fastify/Zod route schemas
 - Biome for formatting/linting
@@ -249,7 +249,7 @@ The ingester should:
 - enforce the two-tier forbidden-field policy (reject vs redact, from `catalog/policy/forbidden-fields.ts`) before any logging
 - perform 15-minute event ID dedupe as a retry-storm absorber (per-project override up to 24h is opt-in)
 - emit reason codes `unsupported_schema_version` and `schema_version_sunset` when applicable
-- publish valid events to Redpanda
+- publish valid events to RabbitMQ
 - return per-event batch results
 
 It should not:
@@ -304,12 +304,12 @@ Destination sends during replay are disabled by default.
 
 ## ClickHouse
 
-Do not query Kafka Engine tables directly.
+Do not query ingestion interface tables directly.
 
 Use:
 
 ```text
-Kafka Engine table
+ingestion interface table
   -> analytics_ingest_log
   -> analytics_raw
   -> materialized views

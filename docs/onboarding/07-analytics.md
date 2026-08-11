@@ -1,10 +1,10 @@
 # Phase 7 — View it in analytics
 
-Polaris feeds ClickHouse through Redpanda Kafka Engine. The flow is:
+Polaris feeds ClickHouse through `consumers/clickhouse-sink`. The flow is:
 
 ```text
-Redpanda analytics.events
-  -> ClickHouse Kafka Engine table (analytics_events_queue)
+RabbitMQ analytics.events
+  -> ClickHouse ingestion interface table (analytics_events_queue)
   -> Materialized view
   -> analytics_raw (immutable, append-only, deduped on read)
   -> projection tables (e.g. event_daily_counts) read directly
@@ -115,9 +115,9 @@ the supported escape hatch in
 
 ## What is NOT supported
 
-- **Querying `analytics_events_queue` directly.** That is the Kafka
-  Engine table; querying it consumes messages and breaks downstream
-  consumers.
+- **Querying `analytics_events_queue` directly.** It is a `Null`
+  engine — a SELECT returns nothing at all, which during an incident
+  reads as "no data ingested" and sends you down the wrong path.
 - **Querying `analytics_raw` without the `argMax(col, _version)` dedupe
   pattern.** Replays write duplicate rows by design; the dedupe pattern
   is how reads stay correct.

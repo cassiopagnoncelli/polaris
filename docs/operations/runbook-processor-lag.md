@@ -7,7 +7,7 @@ five minutes of lag (warn) or fifteen minutes (page).
 Binding architecture references:
 
 - [Processors and Replay](../architecture/05-processors-and-replay.md)
-- [Redpanda Topics](../architecture/03-redpanda-topics.md)
+- [RabbitMQ Streams](../architecture/03-rabbitmq-streams.md)
 - [Observability and Operations](../architecture/08-observability-and-operations.md)
 
 The processor runtime emitting the lag metric lives at
@@ -22,8 +22,8 @@ this runbook live at
 
 | Alert | Severity | Threshold |
 |---|---|---|
-| `PolarisRedpandaConsumerLagWarn` | warn | `polaris_processor_lag_ms_last > 300_000` for 5m (any pivot) |
-| `PolarisRedpandaConsumerLagPage` | page | `polaris_processor_lag_ms_last > 900_000` for 5m (any pivot) |
+| `PolarisRabbitMQConsumerLagWarn` | warn | `polaris_processor_lag_ms_last > 300_000` for 5m (any pivot) |
+| `PolarisRabbitMQConsumerLagPage` | page | `polaris_processor_lag_ms_last > 900_000` for 5m (any pivot) |
 
 Pivots include `processor_name`, `processor_version`, `project_id`,
 `environment`, `topic_family`, `concrete_topic`, `partition`. The
@@ -125,7 +125,7 @@ Open Grafana, dashboard UID `polaris-per-partition-skew`
 ([`per-partition-skew.json`](../../infra/grafana/dashboards/per-partition-skew.json)).
 If one partition is carrying most of one project's traffic, the
 isolation trigger from
-[`docs/architecture/03-redpanda-topics.md`](../architecture/03-redpanda-topics.md)
+[`docs/architecture/03-rabbitmq-streams.md`](../architecture/03-rabbitmq-streams.md)
 applies; cross-reference
 [`topic-isolation-cutover.md`](topic-isolation-cutover.md).
 
@@ -147,10 +147,21 @@ way the schema-validation gate at ingest didn't catch.
 
 ### Short-term
 
-- **Scale up the processor.** Increase the processor's replica count
-  (or partition-consumer assignments) to drain the backlog. Polaris
-  uses Kafka consumer groups so adding a replica picks up unassigned
-  partitions on rebalance.
+- **Scale up the processor.** Increase the replica count AND
+  redistribute `POLARIS_RABBITMQ_ASSIGNED_PARTITIONS` so the new
+  replica owns a disjoint slice.
+
+  **RabbitMQ has no rebalance.** Adding a replica without changing the
+  assignment does nothing — the new pod reads the same partitions as
+  the old one, or none at all. Confirm ownership afterwards:
+
+  ```bash
+  docker compose exec polaris-rabbitmq \
+    rabbitmqctl list_queues name consumers | grep '^raw\.events-'
+  ```
+
+  A partition with `consumers = 0` is an unowned backlog. See
+  [RabbitMQ Topology](runbook-rabbitmq-topology.md).
 - **Slow the producer.** When the lag is destination-bound and the
   downstream API is the bottleneck, throttle the producer via the
   ingester's rate-limit knob (per-key, per-project). The SDK retries
@@ -177,7 +188,7 @@ way the schema-validation gate at ingest didn't catch.
 Page the infrastructure rotation if:
 
 - lag exceeds 15 minutes on more than one processor simultaneously
-  (suggests a Redpanda-side issue, not a processor issue),
+  (suggests a RabbitMQ-side issue, not a processor issue),
 - scaling the processor doesn't visibly drain the backlog within 10
   minutes,
 - the lag dashboard correlates with `under_replicated_partitions > 0`

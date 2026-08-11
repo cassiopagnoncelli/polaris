@@ -32,7 +32,7 @@ If you skip the verify-your-base step and silently work against a stale base, th
 Orchestrator-side check: before any `git merge --squash <worktree-branch>`, the orchestrator runs `git -C <worktree-path> log --oneline -1` and confirms the HEAD matches the latest main commit. Worktrees that diverge are flagged loudly so the worker output can be cleaned up (root pollution dropped, package directory kept, missing rebase noted in the integration commit). Workers that DO follow the verify-your-base step save the orchestrator that cleanup pass.
 
 Hard rules:
-- Polaris is the platform; Redpanda is only the streaming backbone.
+- Polaris is the platform; RabbitMQ is only the streaming backbone.
 - Keep semantic truth in files/code.
 - PostgreSQL stores mutable runtime/control state only.
 - Use strict TypeScript, ESM-first, pnpm, Biome, Vitest.

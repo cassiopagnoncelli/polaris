@@ -79,20 +79,29 @@ These compose into every service.
 | `POLARIS_REDIS_CONNECT_TIMEOUT_MS` | optional | Defaults to `5000`. |
 | `POLARIS_REDIS_KEY_PREFIX` | optional | |
 
-### redpanda (shared, any service that produces or consumes events)
+### rabbitmq (shared, any service that produces or consumes events)
 
-[`packages/shared-config/src/schemas/redpanda.ts`](../../packages/shared-config/src/schemas/redpanda.ts)
+[`packages/shared-config/src/schemas/rabbitmq.ts`](../../packages/shared-config/src/schemas/rabbitmq.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
-| `POLARIS_REDPANDA_BROKERS` | required | Comma-separated `host:port`. |
-| `POLARIS_REDPANDA_CLIENT_ID` | required | |
-| `POLARIS_REDPANDA_SSL` | optional | Defaults to false; set true in production. |
-| `POLARIS_REDPANDA_SASL_MECHANISM` | optional | If set, USERNAME and PASSWORD must both be set. |
-| `POLARIS_REDPANDA_SASL_USERNAME` | conditional | Required when SASL_MECHANISM is set. |
-| `POLARIS_REDPANDA_SASL_PASSWORD` | conditional (secret) | OBTAIN FROM secret provider. |
-| `POLARIS_REDPANDA_CONNECTION_TIMEOUT_MS` | optional | Defaults to `10000`. |
-| `POLARIS_REDPANDA_REQUEST_TIMEOUT_MS` | optional | Defaults to `30000`. |
+| `POLARIS_RABBITMQ_URL` | required (secret) | `amqp(s)://user:pass@host:port/vhost`. OBTAIN FROM secret provider. Rejected at load if TLS is on and the scheme is plaintext `amqp://`. |
+| `POLARIS_RABBITMQ_MANAGEMENT_URL` | optional | HTTP management API. Provisioning and operator tooling only, never the data path. |
+| `POLARIS_RABBITMQ_CLIENT_ID` | required | Connection name shown in the management UI. Set it to the service name so broker-side connection lists are attributable. |
+| `POLARIS_RABBITMQ_TLS` | optional | Defaults to false; set true in production. |
+| `POLARIS_RABBITMQ_HEARTBEAT_SECONDS` | optional | Defaults to `30`. |
+| `POLARIS_RABBITMQ_CONNECTION_TIMEOUT_MS` | optional | Defaults to `10000`. |
+| `POLARIS_RABBITMQ_PARTITIONS` | optional | Default super-stream width. Defaults to `3`. **Changing it is a migration, not a restart** — the publisher hashes the partition key modulo this value, so two instances disagreeing breaks per-identity ordering. See [runbook-rabbitmq-topology.md](../operations/runbook-rabbitmq-topology.md). |
+| `POLARIS_RABBITMQ_PARTITION_OVERRIDES` | optional | Per-family widths, `raw.events=6,analytics.events=3`. Same migration rule as above. |
+| `POLARIS_RABBITMQ_ASSIGNED_PARTITIONS` | optional | Static partition assignment for THIS instance, e.g. `0,1`. Empty means "own every partition". RabbitMQ has no consumer-group rebalancing, so scaling out means giving each replica a disjoint slice — a partition nobody is assigned is a silent backlog. |
+| `POLARIS_RABBITMQ_PREFETCH` | optional | Per-partition QoS window. Defaults to `100`. Controls how far the broker runs ahead, NOT handler concurrency — handlers stay serial per partition so per-identity ordering holds. |
+| `POLARIS_RABBITMQ_CHECKPOINT_EVERY` | optional | Messages between checkpoint writes. Defaults to `500`. |
+| `POLARIS_RABBITMQ_CHECKPOINT_INTERVAL_MS` | optional | Time between checkpoint writes. Defaults to `5000`. Larger values mean fewer Postgres writes and more redelivery after a crash. |
+| `POLARIS_RABBITMQ_STREAM_RETENTION_DAYS` | optional | Applied as `x-max-age` at declaration time, so it affects only streams that do not exist yet. Defaults to `90`. |
+
+> Every service that consumes also needs the `postgres` block: stream
+> consumers own their resume point in `transport_checkpoints` because
+> AMQP has no server-side offset store.
 
 ### clickhouse (shared, operator/CLI; future analytics services)
 
@@ -115,7 +124,7 @@ These compose into every service.
 
 Source: [`apps/ingester-api/src/config.ts`](../../apps/ingester-api/src/config.ts).
 
-Composes: **service + http + postgres + redpanda + redis** plus the local
+Composes: **service + http + postgres + rabbitmq + redis** plus the local
 blocks below.
 
 #### authCache
@@ -151,11 +160,11 @@ blocks below.
 
 Source: [`apps/control-plane-api/src/config.ts`](../../apps/control-plane-api/src/config.ts).
 
-Composes: **service + http + postgres**. No Redpanda or Redis in v1.
+Composes: **service + http + postgres**. No RabbitMQ or Redis in v1.
 
 ### processors
 
-All processors compose **service + http + redpanda** plus their own block.
+All processors compose **service + http + rabbitmq** plus their own block.
 The `identity-resolver` is the only one that also composes **postgres** today.
 
 #### analytics-projector v1
@@ -215,7 +224,7 @@ Source: [`processors/attribution-engine/v1/src/config.ts`](../../processors/attr
 
 ### consumers (destinations)
 
-All destination consumers compose **service + http + redpanda + postgres** plus
+All destination consumers compose **service + http + rabbitmq + postgres** plus
 their own block.
 
 #### webhook-sink v1
@@ -291,7 +300,7 @@ injects them at boot.
 | --- | --- |
 | `POLARIS_POSTGRES_PASSWORD` | every service touching PostgreSQL |
 | `POLARIS_REDIS_PASSWORD` | ingester-api (optional unless Redis ACL is on) |
-| `POLARIS_REDPANDA_SASL_PASSWORD` | every service touching Redpanda (when SASL is enabled) |
+| `POLARIS_RABBITMQ_URL` | every service touching RabbitMQ (credentials are in the URL) |
 | `POLARIS_CLICKHOUSE_SERVICE_PASSWORD` | operators / future analytics services |
 | `POLARIS_CLICKHOUSE_OPERATOR_PASSWORD` | operators / replay-rebuild workflows |
 | `POLARIS_TOKEN` | `polaris` CLI |
@@ -306,7 +315,7 @@ resolves them at delivery time inside the consumer process.
 ## Composition map (cheat sheet)
 
 ```text
-                    service  http  postgres  redis  redpanda  ingester  proc   consumer  + local
+                    service  http  postgres  redis  rabbitmq  ingester  proc   consumer  + local
 ingester-api          x       x       x        x       x         x                       authCache, ingest, rateLimit
 control-plane-api     x       x       x                                                  (none)
 analytics-projector   x       x                        x                  x              projector

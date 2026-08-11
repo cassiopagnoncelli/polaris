@@ -156,7 +156,7 @@ change on every record-writing path. See
 | --------------------------------------------------------------- | --------- | ---------- |
 | Bug fix in `processors/identity-resolver/v1/src/runtime.ts`     | no        | yes        |
 | Tightening a typo log message                                   | no        | yes        |
-| Patch upgrade of `kafkajs`                                      | no        | yes        |
+| Patch upgrade of `amqplib`                                      | no        | yes        |
 | Adding a new vendor field to `consumers/meta-capi/v1/mappers/`  | YES (v2)  | yes        |
 | Changing identity-graph merge rules                             | YES (v2)  | yes        |
 | Changing default dedupe window                                  | no        | yes        |

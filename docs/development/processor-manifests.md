@@ -79,7 +79,7 @@ runtime helpers (which use this package) accept them.
 | `description`    | string, 1-8192                      | yes             | Multi-paragraph prose. Owns the "what this processor does" explanation.                                                                              |
 | `release_status` | `released` / `deprecated` / `experimental` | **new in P8-006** | Lifecycle flag. Production-active processors are `released`. See "Release lifecycle".                                                                |
 | `mode`           | `streaming` / `batch`               | yes             | Closed set. `streaming` maps inputs 1:1, 1:n, or 1:0 to outputs; `batch` aggregates. Mode is semantic.                                                |
-| `inputs`         | array of `{family, schema_versions}` | yes (≥1)        | Topic families and accepted schema versions. The shared-kafka topic-family resolver turns these into concrete topic names per project isolation state. |
+| `inputs`         | array of `{family, schema_versions}` | yes (≥1)        | Topic families and accepted schema versions. The shared-transport topic-family resolver turns these into concrete topic names per project isolation state. |
 | `outputs`        | array of `{family, schema_versions}` | yes (≥1)        | Same shape as `inputs`. Output topic families are the contract downstream consumers join against.                                                    |
 | `state_stores`   | array of strings                    | yes (default `[]`) | Strings of the form `<backend>:<resource>` (e.g. `postgres:identity_links`, `memory:sessions`, `memory:touchpoints`). Empty for stateless processors. |
 | `defaults`       | object (passthrough)                | optional        | Operational knobs the runtime falls back to when no activation row overrides them. Mostly non-semantic; see "Semantic-vs-operational defaults".      |
@@ -264,7 +264,7 @@ input/output examples" is a required test style. The P8-006 convention:
   a SEMANTIC change and is forbidden by the Semantic Immutability Rule;
   any output diff means "create v2", not "patch v1".
 - Fixtures are JSON, not YAML. The on-disk wire format is JSON for
-  Kafka payloads and ClickHouse rows; keeping fixtures in JSON makes
+  event payloads and ClickHouse rows; keeping fixtures in JSON makes
   them paste-and-diff against the actual streamed bytes.
 - Determinism is enforced by:
   - pinned event IDs (UUIDv7-shaped strings),

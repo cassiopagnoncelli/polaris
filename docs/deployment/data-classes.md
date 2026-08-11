@@ -20,7 +20,7 @@ the recovery procedure for each row of this table lives in
 | **regulatory** | Held for compliance / audit obligations, not operational need. | `audit_records` |
 | **operational** | Mutable runtime / control state. Not regulated; held as long as the platform needs it. | `projects`, `sources`, `destinations`, `processor_activations`, `processor_runs`, `replay_jobs`, `delivery_records` |
 | **analytical** | Aggregate / event-shaped data for analytics. | `analytics_raw`, `analytics_ingest_log`, projection tables |
-| **transport** | In-flight event records on the streaming backbone. | Redpanda topics (`raw.events`, `analytics.events`, ...) |
+| **transport** | In-flight event records on the streaming backbone. | RabbitMQ topics (`raw.events`, `analytics.events`, ...) |
 | **ephemeral** | Caches, counters, dedupe windows. No durability commitment. | Redis keys |
 
 ## Data class reference
@@ -42,13 +42,13 @@ the recovery procedure for each row of this table lives in
 | `analytics_raw` | ClickHouse | 400 days (TTL) | analytical (contains pseudonymized PII) | Platform operator |
 | Projection tables | ClickHouse | per projection (default 400 days, TTL) | analytical | Projection owner |
 | Operational metrics | ClickHouse | 180 days | analytical | Observability owner |
-| `raw.events` | Redpanda | 90 days | transport (canonical raw, contains pseudonymized PII) | Platform operator |
-| `identity.events` | Redpanda | 30 days | transport | Platform operator |
-| `enriched.events` | Redpanda | 30 days | transport | Platform operator |
-| `attribution.events` | Redpanda | 30 days | transport | Platform operator |
-| `analytics.events` | Redpanda | 30 days | transport | Platform operator |
-| Retry topics | Redpanda | 7 days | transport | Destination owner |
-| DLQ topics | Redpanda | retain unresolved + 30 days after resolution | transport | Destination owner |
+| `raw.events` | RabbitMQ | 90 days | transport (canonical raw, contains pseudonymized PII) | Platform operator |
+| `identity.events` | RabbitMQ | 30 days | transport | Platform operator |
+| `enriched.events` | RabbitMQ | 30 days | transport | Platform operator |
+| `attribution.events` | RabbitMQ | 30 days | transport | Platform operator |
+| `analytics.events` | RabbitMQ | 30 days | transport | Platform operator |
+| Retry topics | RabbitMQ | 7 days | transport | Destination owner |
+| DLQ topics | RabbitMQ | retain unresolved + 30 days after resolution | transport | Destination owner |
 | Ingress dedupe window | Redis | 15 min default; up to 24 h on opt-in | ephemeral | Platform operator |
 | Rate-limit counters | Redis | window-scoped TTL | ephemeral | Platform operator |
 | Processor ephemeral state | Redis | processor-specific TTL | ephemeral | Processor owner |

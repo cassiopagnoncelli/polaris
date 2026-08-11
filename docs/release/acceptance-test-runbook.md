@@ -40,7 +40,7 @@ the per-step table the runner prints.
 
 | Requirement | Why |
 | --- | --- |
-| `docker compose up -d --wait` against the repo root compose file | Brings up Redpanda, PostgreSQL, Redis, ClickHouse. The acceptance test posts to a real ingester at `http://localhost:4000` by default. |
+| `docker compose up -d --wait` against the repo root compose file | Brings up RabbitMQ, PostgreSQL, Redis, ClickHouse. The acceptance test posts to a real ingester at `http://localhost:4000` by default. |
 | `pnpm install` | Workspace dependencies. |
 | `pnpm -r build` | The acceptance scenario shells out to the compiled `polaris` CLI binary at `apps/polaris-cli/dist/bin/polaris.js` and imports `@polaris/node-sdk` by name. Both surfaces must be built. |
 | `pnpm db:migrate` | PostgreSQL migrations at HEAD — control-plane tables (`projects`, `sources`, `api_keys`, `destinations`, `delivery_records`, `replay_jobs`, `audit_records`) must exist. |

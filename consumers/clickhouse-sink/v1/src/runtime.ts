@@ -149,20 +149,23 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
 
     // A low-traffic partition would otherwise hold rows until the next
     // message arrives, which could be minutes. The ticker bounds that.
-    ticker = setInterval(() => {
-      if (batch.length === 0) return;
-      if (now() - batchOpenedAt < deps.batchMaxMs) return;
-      void flush().catch((err: unknown) => {
-        const error = err as Error;
-        deps.logger.error(
-          {
-            component: "clickhouse-sink.flush",
-            err: { name: error.name, message: error.message },
-          },
-          "timed batch flush failed; rows stay buffered for the next attempt",
-        );
-      });
-    }, Math.max(deps.batchMaxMs, 250));
+    ticker = setInterval(
+      () => {
+        if (batch.length === 0) return;
+        if (now() - batchOpenedAt < deps.batchMaxMs) return;
+        void flush().catch((err: unknown) => {
+          const error = err as Error;
+          deps.logger.error(
+            {
+              component: "clickhouse-sink.flush",
+              err: { name: error.name, message: error.message },
+            },
+            "timed batch flush failed; rows stay buffered for the next attempt",
+          );
+        });
+      },
+      Math.max(deps.batchMaxMs, 250),
+    );
     ticker.unref?.();
   }
 

@@ -40,7 +40,7 @@ From the repo root:
 # 1. Install workspace dependencies.
 pnpm install
 
-# 2. Bring up the local data-path stack (Redpanda, Postgres, Redis, ClickHouse).
+# 2. Bring up the local data-path stack (RabbitMQ, Postgres, Redis, ClickHouse).
 docker compose up -d --wait
 # or: make up
 
@@ -68,13 +68,14 @@ The four local services and their host ports default to:
 
 | Service     | Host port  | Override env var                       |
 | ----------- | ---------- | -------------------------------------- |
-| Redpanda    | `19092`    | `REDPANDA_KAFKA_HOST_PORT`             |
+| RabbitMQ (AMQP)   | `5672`  | `RABBITMQ_AMQP_HOST_PORT`       |
+| RabbitMQ (mgmt)   | `15672` | `RABBITMQ_MANAGEMENT_HOST_PORT` |
 | PostgreSQL  | `5432`     | `POSTGRES_HOST_PORT`                   |
 | Redis       | `6379`     | `REDIS_HOST_PORT`                      |
 | ClickHouse  | `8123` (HTTP), `9000` (native) | `CLICKHOUSE_HTTP_HOST_PORT`, `CLICKHOUSE_NATIVE_HOST_PORT` |
 
 The compose definitions live in [`docker-compose.yml`](../../docker-compose.yml).
-See the inline comments there for the rationale (single-broker Redpanda, no
+See the inline comments there for the rationale (single-broker RabbitMQ, no
 ClickHouse Keeper, ephemeral Redis).
 
 ## Daily workflow
@@ -102,7 +103,7 @@ POLARIS_HTTP_PORT=8081 \
 
 The projector consumes `raw.events`, stamps `processor_name=analytics-projector`
 + `processor_version=v1` onto each envelope, and republishes to
-`analytics.events`. From there, the ClickHouse Kafka Engine table picks it up
+`analytics.events`. From there, the ClickHouse ingestion interface table picks it up
 into `analytics_ingest_log` and the materialized view propagates it into
 `analytics_raw`.
 
@@ -149,7 +150,7 @@ full gate list and how to opt a PR into integration runs.
 The integration-tier suite (the full vertical-slice smoke under real Docker)
 is covered by the [Vertical-Slice Smoke runbook](../implementation/runbooks/vertical-slice-smoke.md).
 Run that runbook end-to-end whenever you touch the ingester, the SDK envelope
-shape, the analytics-projector, ClickHouse DDL, or the Redpanda topic
+shape, the analytics-projector, ClickHouse DDL, or the RabbitMQ topic
 resolver.
 
 ## Common tasks
@@ -574,7 +575,7 @@ zero state.
     `schema_version`, forbidden-field policy.
   - [02 Control Plane](../architecture/02-control-plane.md) — projects,
     sources, API keys, runtime/control state.
-  - [03 Redpanda Topics](../architecture/03-redpanda-topics.md) —
+  - [03 RabbitMQ Streams](../architecture/03-rabbitmq-streams.md) —
     `raw.events`, derived topics, partition discipline.
   - [04 Ingestion and SDKs](../architecture/04-ingestion-and-sdks.md) —
     what the ingester does and does not do.

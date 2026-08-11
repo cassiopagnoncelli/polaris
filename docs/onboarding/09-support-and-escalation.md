@@ -43,7 +43,7 @@ Before paging anyone:
 ## When to file a DLQ ticket
 
 Destinations that fail delivery enter the **DLQ** (dead-letter queue).
-The destination runtime writes one row to `dlq_records` per Kafka DLQ
+The destination runtime writes one row to `dlq_records` per DLQ
 publish. The operator-facing triage CLI surface is:
 
 ```bash

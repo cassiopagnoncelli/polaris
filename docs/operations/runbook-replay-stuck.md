@@ -55,8 +55,8 @@ that fires it overlaps with replay-operator workflows.
    is lagging or DLQ-flooding; the coordinator throttles emit to
    match. Cross-reference
    [`runbook-processor-lag.md`](runbook-processor-lag.md).
-3. **Kafka publisher errors.** Same root cause as
-   [`runbook-redpanda-publish-failures.md`](runbook-redpanda-publish-failures.md);
+3. **Publisher errors.** Same root cause as
+   [`runbook-rabbitmq-publish-failures.md`](runbook-rabbitmq-publish-failures.md);
    the replay coordinator can't push events into the replay topic.
 4. **Replay window mis-specified.** The `--window` start is after
    the end (so no events match) or the `--target` resolves to an
@@ -176,7 +176,7 @@ A burst of denials points at cause #6 (gate denied a step).
   checkpoint), cancel the job and re-plan from scratch with a
   validated window.
 - **Fix downstream first.** When the cause is cause #2 (lagging
-  processor) or cause #3 (Redpanda publish failures), the replay is
+  processor) or cause #3 (RabbitMQ publish failures), the replay is
   correctly waiting; resolve the downstream per the corresponding
   runbook, then `polaris replay resume`.
 
@@ -209,7 +209,7 @@ either a credential issue or an attempted unauthorized replay.
 
 - [Processor Lag Runbook](runbook-processor-lag.md) — common
   downstream cause of stuck replays.
-- [Redpanda Publish Failures Runbook](runbook-redpanda-publish-failures.md) —
+- [RabbitMQ Publish Failures Runbook](runbook-rabbitmq-publish-failures.md) —
   common upstream cause of stuck replays.
 - [DLQ Growth Runbook](runbook-dlq-growth.md) — when a stuck
   replay's DLQ traffic exceeds thresholds.

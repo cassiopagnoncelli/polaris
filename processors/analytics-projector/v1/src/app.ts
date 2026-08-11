@@ -219,7 +219,10 @@ export async function buildAnalyticsProjectorApp(
   // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
   // over AMQP have no server-side offset store, so the resume point is
   // Polaris-owned (see db/migrations/*_create_transport_checkpoints.sql).
-  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: processorLogger });
+  const connection = createTransportConnection({
+    rabbitmq: config.rabbitmq,
+    logger: processorLogger,
+  });
   const checkpointDb = createDb({ postgres: config.postgres });
   const checkpoints = new PostgresCheckpointStore(checkpointDb);
   const { producer, ownsProducer } = buildProducer(

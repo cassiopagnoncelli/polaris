@@ -163,7 +163,7 @@ When bumping, the previous version remains in the catalog with `lifecycle: depre
 ### Coexistence rules
 
 - Both versions are validated independently by the ingester.
-- Both versions land in the same Redpanda topic with the canonical envelope.
+- Both versions land in the same RabbitMQ topic with the canonical envelope.
 - Processors and consumers must declare which `schema_version` values they handle. Events with unsupported versions are routed to the consumer's DLQ with reason `unsupported_schema_version`, not silently dropped.
 - Golden fixtures exist per version.
 

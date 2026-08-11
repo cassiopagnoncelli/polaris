@@ -4,7 +4,7 @@ Polaris is an internal multi-project event infrastructure platform. It is the
 event backbone for attribution, analytics, activation, and operational
 intelligence inside one organisation.
 
-Polaris is the platform. **Redpanda is the streaming backbone** Polaris is
+Polaris is the platform. **RabbitMQ is the streaming backbone** Polaris is
 built around — not the other way around.
 
 ## Core architecture
@@ -12,17 +12,17 @@ built around — not the other way around.
 ```text
 SDKs / producers
   -> Fastify ingester (apps/ingester-api)
-  -> Redpanda raw.events
+  -> RabbitMQ raw.events
   -> versioned processors (processors/<name>/v<n>/)
-  -> Redpanda derived topics
+  -> RabbitMQ derived topics
   -> destination consumers (consumers/<vendor>/v<n>/)
-  -> ClickHouse Kafka Engine -> analytics_raw -> projection tables
+  -> clickhouse-sink -> analytics_raw -> projection tables
 ```
 
 The full path is documented in
 [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md). The
 non-negotiable rules (immutable raw events, file-heavy semantic truth, ingress
-stays thin, ClickHouse Kafka Engine feeds `analytics.events`, ...) are listed
+stays thin, clickhouse-sink feeds `analytics.events`, ...) are listed
 in [`docs/README.md`](docs/README.md).
 
 ## Getting started

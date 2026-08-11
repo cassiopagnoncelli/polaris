@@ -58,9 +58,9 @@ Ingestion:
 - schema rejection rate
 - forbidden-field rejection/redaction count
 - publish latency
-- Redpanda publish failures
+- RabbitMQ publish failures
 
-Redpanda:
+RabbitMQ:
 
 - topic throughput
 - consumer lag
@@ -90,7 +90,7 @@ Destination consumers:
 
 ClickHouse:
 
-- Kafka ingestion lag
+- ClickHouse ingestion lag
 - materialized view failures
 - insert throughput
 - query latency
@@ -112,7 +112,7 @@ Polaris uses a lean profile-based local development stack.
 The main `docker-compose.yml` should run the core data path:
 
 ```text
-Redpanda
+RabbitMQ
 PostgreSQL
 Redis
 ClickHouse

@@ -49,7 +49,8 @@ export const geoipEnricherEnvSchema = z
     }),
   );
 
-export interface GeoipEnricherConfig {  /**
+export interface GeoipEnricherConfig {
+  /**
    * Polaris consumer-group identifier: the namespace this processor's
    * stream checkpoints live under in `transport_checkpoints`. The default
    * matches the processor directory name + version so a v2 deployment
@@ -59,9 +60,7 @@ export interface GeoipEnricherConfig {  /**
   readonly consumerGroup: string;
 }
 
-export const geoipEnricherEnvKeys = [
-  "POLARIS_GEOIP_ENRICHER_CONSUMER_GROUP",
-] as const;
+export const geoipEnricherEnvKeys = ["POLARIS_GEOIP_ENRICHER_CONSUMER_GROUP"] as const;
 
 /**
  * Full runtime configuration for the geoip-enricher v1 service.

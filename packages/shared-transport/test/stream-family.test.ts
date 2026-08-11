@@ -55,7 +55,9 @@ describe("resolveStreamFamily (async)", () => {
         return false;
       },
     };
-    expect(await resolveStreamFamily(STREAM_FAMILY_RAW_EVENTS, "project-x", lookup)).toBe("raw.events");
+    expect(await resolveStreamFamily(STREAM_FAMILY_RAW_EVENTS, "project-x", lookup)).toBe(
+      "raw.events",
+    );
   });
 });
 

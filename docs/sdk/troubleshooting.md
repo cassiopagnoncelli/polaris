@@ -163,7 +163,7 @@ await polaris.close();          // bounded drain + cleanup
 The interval timer is `unref()`-ed where supported, so the SDK should not by itself keep the loop alive. If your process refuses to exit:
 
 - Make sure you actually called `await polaris.close()`.
-- Make sure no other code (the HTTP server, a Kafka client, a Postgres pool) is keeping the loop alive. The SDK is rarely the actual blocker.
+- Make sure no other code (the HTTP server, an AMQP client, a Postgres pool) is keeping the loop alive. The SDK is rarely the actual blocker.
 
 `autoFlushOnShutdown: true` registers `SIGTERM`/`SIGINT` handlers that call `close()`. Use it when your service does not have its own shutdown coordination.
 

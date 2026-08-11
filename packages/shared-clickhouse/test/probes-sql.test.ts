@@ -11,10 +11,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  buildMaterializedViewStatesSql,
-  buildPartsSummarySql,
-} from "../src/probes/index.js";
+import { buildMaterializedViewStatesSql, buildPartsSummarySql } from "../src/probes/index.js";
 
 describe("buildPartsSummarySql", () => {
   it("does NOT contain the FINAL keyword", () => {
@@ -66,4 +63,3 @@ describe("buildMaterializedViewStatesSql", () => {
     expect(sql).toMatch(/\{limit:UInt32\}/);
   });
 });
-

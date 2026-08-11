@@ -1,22 +1,22 @@
 # Topic Isolation Cutover Runbook
 
 Operators use this runbook when a project graduates from a shared
-canonical Redpanda topic to a dedicated topic
+canonical RabbitMQ topic to a dedicated topic
 (`<family>.<project_id>`), or rolls the move back once the trigger has
 resolved.
 
 Binding architecture references:
 
-- [Redpanda Topics / Topic Isolation Triggers](../architecture/03-redpanda-topics.md)
-- [Redpanda Topics / Topic Families](../architecture/03-redpanda-topics.md)
+- [RabbitMQ Streams / Topic Isolation Triggers](../architecture/03-rabbitmq-streams.md)
+- [RabbitMQ Streams / Topic Families](../architecture/03-rabbitmq-streams.md)
 - [Observability and Operations](../architecture/08-observability-and-operations.md)
 
 The CLI surface this runbook depends on lives at
 [`apps/polaris-cli/src/commands/topics/`](../../apps/polaris-cli/src/commands/topics/).
 The matching resolver and cache live in
-[`packages/shared-kafka/src/topic-family.ts`](../../packages/shared-kafka/src/topic-family.ts)
+[`packages/shared-transport/src/topic-family.ts`](../../packages/shared-transport/src/topic-family.ts)
 and
-[`packages/shared-kafka/src/topic-isolation-cache.ts`](../../packages/shared-kafka/src/topic-isolation-cache.ts).
+[`packages/shared-transport/src/topic-isolation-cache.ts`](../../packages/shared-transport/src/topic-isolation-cache.ts).
 The migration that owns the persistent state is
 [`db/migrations/20260514000003_create_topic_isolations.sql`](../../db/migrations/20260514000003_create_topic_isolations.sql).
 
@@ -24,7 +24,7 @@ The migration that owns the persistent state is
 
 Polaris references logical **topic families** in code (`raw.events`,
 `identity.events`, `enriched.events`, `attribution.events`,
-`analytics.events`). The resolver in `@polaris/shared-kafka` returns:
+`analytics.events`). The resolver in `@polaris/shared-transport` returns:
 
 - the shared family topic (e.g. `raw.events`) for projects on the
   shared default;
@@ -38,7 +38,7 @@ cache TTL without restart.
 
 ## When to isolate
 
-Per `docs/architecture/03-redpanda-topics.md`, a project moves to a
+Per `docs/architecture/03-rabbitmq-streams.md`, a project moves to a
 dedicated topic when any of the documented triggers fires AND the
 trigger has persisted for at least one operational review cycle:
 
@@ -46,8 +46,8 @@ trigger has persisted for at least one operational review cycle:
 |---|---|---|
 | **Volume share** | One project drives more than 25% of a shared topic's sustained throughput. | `Polaris — Per-Project Shared-Topic Throughput` |
 | **Volume share (skew)** | A single partition is repeatedly hot because of one project's identity-key distribution. | `Polaris — Per-Partition Skew (Per-Project)` |
-| **Retention divergence** | The project requires a materially different retention than the shared default (would change Redpanda disk sizing or break the shared TTL contract). | Operator-driven from compliance / archive requirements. |
-| **Lag isolation** | The project's primary consumer cannot keep up with shared-topic offsets and is dragging end-to-end lag SLOs for unrelated projects. | `Polaris — Per-Project Consumer Lag` |
+| **Retention divergence** | The project requires a materially different retention than the shared default (would change RabbitMQ disk sizing or break the shared TTL contract). | Operator-driven from compliance / archive requirements. |
+| **Lag isolation** | The project's primary consumer cannot keep up with the shared stream and is dragging end-to-end lag SLOs for unrelated projects. | `Polaris — Per-Project Consumer Lag` |
 | **Schema risk** | The project's experimental or high-cardinality event traffic would meaningfully degrade validation latency or skew metrics for unrelated projects. | `Polaris — Per-Project Schema Validation` |
 | **Operational quarantine** | An incident requires temporarily isolating a project's traffic so other projects continue flowing. | Incident commander's call. |
 
@@ -81,14 +81,21 @@ have persisted for **one operational review cycle** (the default is
 two consecutive review meetings; per-team policy may extend that
 window). Capture screenshots for the audit record.
 
-### 2. Provision the dedicated topic
+### 2. Provision the dedicated super stream
 
-The CLI does NOT create the Redpanda topic itself (that is an
-infrastructure concern). Provision the dedicated topic through the
-same Terraform / pulumi module that owns the shared family:
+The CLI does NOT create the RabbitMQ objects itself (that is an
+infrastructure concern), and **RabbitMQ auto-creates nothing** — a
+publish to an undeclared exchange is returned as unroutable and the
+event never lands.
+
+Declare the dedicated super stream (exchange + partition streams +
+index bindings) BEFORE activating the isolation. Its width must match
+the parent family's, or the isolated project's per-identity ordering
+changes as it moves. Provision through the same Terraform / pulumi
+module that owns the shared family:
 
 ```hcl
-resource "redpanda_topic" "raw_events_storefront" {
+resource "rabbitmq_topic" "raw_events_storefront" {
   name               = "raw.events.storefront"
   partition_count    = var.raw_events_partition_count
   replication_factor = var.raw_events_replication_factor
@@ -127,11 +134,11 @@ triple) returns a typed usage error.
 
 Within one resolver-cache TTL window (default 60s), every Polaris
 service that imports
-`@polaris/shared-kafka`'s `TopicIsolationCache` starts producing to
+`@polaris/shared-transport`'s `StreamIsolationCache` starts producing to
 the dedicated topic. Verify on the throughput dashboard:
 
 - `polaris_ingest_batch_accepted_total{topic_family="raw.events", concrete_topic="raw.events.storefront", project_id="storefront"}` should start climbing;
-- `polaris_ingest_batch_accepted_total{topic_family="raw.events", concrete_topic="raw.events", project_id="storefront"}` should flatten to zero new acceptances after the TTL window (existing in-flight batches finish on the old topic).
+- `polaris_ingest_batch_accepted_total{topic_family="raw.events", concrete_topic="raw.events", project_id="storefront"}` should flatten to zero new acceptances after the TTL window (existing in-flight batches finish on the old stream).
 
 ### 5. Drain the shared topic for this project
 
@@ -144,12 +151,21 @@ dashboard:
 
 ### 6. Restart consumers (cold migration) OR rely on dynamic subscribe
 
-Consumers built on `@polaris/shared-kafka`'s
-`consumerTopicsForFamily(family, isolatedProjectIds)` helper already
-subscribe to the union (`family` + dedicated topics). For consumers
-that subscribe through `family` alone, a rolling restart picks up the
-new topic. Verify the consumer group's `members` and `assignment` on
-the Redpanda broker to confirm.
+Consumers built on `@polaris/shared-transport`'s
+`consumerFamiliesFor(family, isolatedProjectIds)` helper already read
+the union (`family` + dedicated families). For consumers that read
+`family` alone, a rolling restart picks up the new one.
+
+Verify that every partition of the dedicated super stream has a reader
+— RabbitMQ will not rebalance one to you:
+
+```bash
+docker compose exec polaris-rabbitmq \
+  rabbitmqctl list_queues name consumers | grep '<dedicated_family>-'
+```
+
+A partition with `consumers = 0` is an unowned backlog; fix the
+replicas' `POLARIS_RABBITMQ_ASSIGNED_PARTITIONS`.
 
 ### 7. Verify dashboards
 
@@ -176,9 +192,23 @@ republish onto it).
 
 ### 1. Verify drain
 
-Use the Redpanda console / `rpk topic describe <dedicated_topic>` to
-confirm the consumer group's high watermark matches the topic
-end-offsets. Use
+Compare each partition's checkpoint against the stream's message count:
+
+```sql
+-- PostgreSQL
+SELECT stream, last_offset, updated_at
+FROM transport_checkpoints
+WHERE family = '<dedicated_family>'
+ORDER BY stream;
+```
+
+```bash
+docker compose exec polaris-rabbitmq \
+  rabbitmqctl list_queues name messages | grep '<dedicated_family>-'
+```
+
+A checkpoint that has stopped advancing while messages remain means the
+stream has NOT drained. Use
 `polaris dlq list --vendor <vendor>` to confirm no DLQ entries
 reference the dedicated topic.
 

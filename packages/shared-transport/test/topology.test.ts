@@ -155,9 +155,7 @@ describe("declareTopologyOnChannel", () => {
   it("declares streams and component queues on one channel", async () => {
     const channel = new FakeChannel();
     await declareTopologyOnChannel(channel.asChannel(), {
-      superStreams: [
-        { family: "raw.events", partitions: 1, retentionDays: 90, maxLengthBytes: 1 },
-      ],
+      superStreams: [{ family: "raw.events", partitions: 1, retentionDays: 90, maxLengthBytes: 1 }],
       components: [{ component: "sessionizer" }],
     });
 

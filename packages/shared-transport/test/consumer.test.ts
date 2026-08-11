@@ -69,9 +69,9 @@ describe("createPolarisConsumer", () => {
       groupName: "g",
       checkpoints: new InMemoryCheckpointStore(),
     });
-    await expect(
-      consumer.subscribe({ families: ["raw.events"], partitions: [5] }),
-    ).rejects.toThrow(/outside/);
+    await expect(consumer.subscribe({ families: ["raw.events"], partitions: [5] })).rejects.toThrow(
+      /outside/,
+    );
   });
 
   it("attaches each stream at its stored checkpoint and one channel per partition", async () => {
@@ -293,9 +293,7 @@ describe("createPolarisConsumer", () => {
 
     // Quorum queues carry a delivery limit and dead-letter poison
     // messages, so a bounded requeue is the right move here.
-    expect(connection.channels[0]?.nacked).toEqual([
-      { message: expect.anything(), requeue: true },
-    ]);
+    expect(connection.channels[0]?.nacked).toEqual([{ message: expect.anything(), requeue: true }]);
     await consumer.disconnect();
   });
 

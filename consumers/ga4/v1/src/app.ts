@@ -127,7 +127,10 @@ export async function buildGa4App(options: BuildAppOptions): Promise<BuiltGa4App
   // One AMQP connection per process, shared by the DLQ producer and the
   // analytics.events consumer. Checkpoints live in PostgreSQL because
   // RabbitMQ streams consumed over AMQP have no server-side offset store.
-  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: consumerLogger });
+  const connection = createTransportConnection({
+    rabbitmq: config.rabbitmq,
+    logger: consumerLogger,
+  });
   const checkpoints = new PostgresCheckpointStore(db);
   const { producer, ownsProducer } = buildProducer(
     config,

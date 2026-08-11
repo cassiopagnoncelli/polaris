@@ -160,7 +160,6 @@ export function createClickHouseHealthProbes(input: {
         last_exception: row.last_exception ?? "",
       }));
     },
-
   };
 }
 

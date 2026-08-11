@@ -56,7 +56,7 @@ The worker must not:
 - introduce new frameworks without the task asking for it
 - move semantic truth into PostgreSQL
 - rename Polaris to Panda
-- treat Redpanda as the platform
+- treat RabbitMQ as the platform
 
 ## Parallelism Policy
 

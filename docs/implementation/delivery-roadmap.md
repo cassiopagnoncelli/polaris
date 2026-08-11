@@ -46,9 +46,9 @@ Goal:
 ```text
 SDK/test client
   -> ingester
-  -> Redpanda raw.events
+  -> RabbitMQ raw.events
   -> simple processor
-  -> Redpanda analytics.events
+  -> RabbitMQ analytics.events
   -> ClickHouse
   -> smoke test
 ```
@@ -174,7 +174,7 @@ Exit criteria:
 
 - local observability stack starts optionally
 - core services emit standard metrics and logs
-- dashboards cover ingestion, Redpanda, processors, destinations, and ClickHouse
+- dashboards cover ingestion, RabbitMQ, processors, destinations, and ClickHouse
 - alerts and runbooks exist for obvious failure modes
 
 ## P11: Deployment, Security, and Data Lifecycle
@@ -238,5 +238,5 @@ Examples of changes that require explicit review:
 - adding automatic SDK page tracking
 - adding fingerprinting
 - making destination replay sends default-on
-- querying ClickHouse Kafka Engine tables directly
+- querying ClickHouse ingestion interface tables directly
 

@@ -110,7 +110,11 @@ export function fromAmqpHeaders(headers: AmqpHeaders | undefined): MessageHeader
       out[key] = value;
     } else if (Buffer.isBuffer(value)) {
       out[key] = value.toString("utf8");
-    } else if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+    } else if (
+      typeof value === "number" ||
+      typeof value === "bigint" ||
+      typeof value === "boolean"
+    ) {
       out[key] = String(value);
     } else {
       try {
