@@ -8,7 +8,8 @@ import {
   portSchema,
   postgresEnvSchema,
   redisEnvSchema,
-  redpandaEnvSchema,
+  partitionsForFamily,
+  rabbitmqEnvSchema,
   secretProviderEnvSchema,
   serviceEnvSchema,
 } from "../src/index.js";
@@ -210,50 +211,110 @@ describe("redisEnvSchema", () => {
   });
 });
 
-describe("redpandaEnvSchema", () => {
-  it("parses brokers as a list", () => {
-    const config = redpandaEnvSchema.parse({
-      POLARIS_REDPANDA_BROKERS: "broker1:9092, broker2:9092",
-      POLARIS_REDPANDA_CLIENT_ID: "ingester-api",
-    });
-    expect(config.brokers).toEqual(["broker1:9092", "broker2:9092"]);
-    expect(config.sasl).toBeUndefined();
+describe("rabbitmqEnvSchema", () => {
+  const baseEnv = {
+    POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@rabbitmq:5672/%2F",
+    POLARIS_RABBITMQ_CLIENT_ID: "ingester-api",
+  };
+
+  it("parses the minimal config with sane defaults", () => {
+    const config = rabbitmqEnvSchema.parse(baseEnv);
+    expect(config.url).toBe("amqp://polaris:polaris@rabbitmq:5672/%2F");
+    expect(config.partitions).toBe(3);
+    expect(config.partitionOverrides).toEqual({});
+    // Empty assignment means "this instance owns every partition", which
+    // is the right default for single-instance and local runs.
+    expect(config.assignedPartitions).toEqual([]);
+    expect(config.streamRetentionDays).toBe(90);
   });
 
-  it("requires SASL username and password when mechanism is set", () => {
+  it("rejects a URL that is not AMQP", () => {
     expect(() =>
-      redpandaEnvSchema.parse({
-        POLARIS_REDPANDA_BROKERS: "broker1:9092",
-        POLARIS_REDPANDA_CLIENT_ID: "ingester-api",
-        POLARIS_REDPANDA_SASL_MECHANISM: "scram-sha-256",
+      rabbitmqEnvSchema.parse({ ...baseEnv, POLARIS_RABBITMQ_URL: "http://rabbitmq:15672" }),
+    ).toThrow();
+  });
+
+  it("rejects TLS enabled against a plaintext URL", () => {
+    // Silently running unencrypted while believing TLS is on is the
+    // failure this guard exists for.
+    expect(() => rabbitmqEnvSchema.parse({ ...baseEnv, POLARIS_RABBITMQ_TLS: "true" })).toThrow();
+  });
+
+  it("accepts TLS with an amqps URL", () => {
+    const config = rabbitmqEnvSchema.parse({
+      ...baseEnv,
+      POLARIS_RABBITMQ_URL: "amqps://polaris:polaris@rabbitmq:5671/%2F",
+      POLARIS_RABBITMQ_TLS: "true",
+    });
+    expect(config.tls).toBe(true);
+  });
+
+  it("parses per-family partition overrides", () => {
+    const config = rabbitmqEnvSchema.parse({
+      ...baseEnv,
+      POLARIS_RABBITMQ_PARTITION_OVERRIDES: "raw.events=6, analytics.events=4",
+    });
+    expect(config.partitionOverrides).toEqual({ "raw.events": 6, "analytics.events": 4 });
+  });
+
+  it("rejects a malformed partition override", () => {
+    expect(() =>
+      rabbitmqEnvSchema.parse({
+        ...baseEnv,
+        POLARIS_RABBITMQ_PARTITION_OVERRIDES: "raw.events=zero",
       }),
     ).toThrow();
   });
 
-  it("accepts a complete SASL config", () => {
-    const config = redpandaEnvSchema.parse({
-      POLARIS_REDPANDA_BROKERS: "broker1:9092",
-      POLARIS_REDPANDA_CLIENT_ID: "ingester-api",
-      POLARIS_REDPANDA_SSL: "true",
-      POLARIS_REDPANDA_SASL_MECHANISM: "scram-sha-256",
-      POLARIS_REDPANDA_SASL_USERNAME: "u",
-      POLARIS_REDPANDA_SASL_PASSWORD: "p",
+  it("parses, dedupes, and sorts the static partition assignment", () => {
+    const config = rabbitmqEnvSchema.parse({
+      ...baseEnv,
+      POLARIS_RABBITMQ_ASSIGNED_PARTITIONS: "2, 0, 2",
     });
-    expect(config.ssl).toBe(true);
-    expect(config.sasl).toEqual({
-      mechanism: "scram-sha-256",
-      username: "u",
-      password: "p",
-    });
+    expect(config.assignedPartitions).toEqual([0, 2]);
   });
 
-  it("rejects an empty broker list", () => {
+  it("rejects an assignment outside the widest configured super stream", () => {
     expect(() =>
-      redpandaEnvSchema.parse({
-        POLARIS_REDPANDA_BROKERS: "",
-        POLARIS_REDPANDA_CLIENT_ID: "ingester-api",
+      rabbitmqEnvSchema.parse({
+        ...baseEnv,
+        POLARIS_RABBITMQ_PARTITIONS: "3",
+        POLARIS_RABBITMQ_ASSIGNED_PARTITIONS: "5",
       }),
     ).toThrow();
+  });
+
+  it("allows an assignment that only fits an overridden family", () => {
+    const config = rabbitmqEnvSchema.parse({
+      ...baseEnv,
+      POLARIS_RABBITMQ_PARTITIONS: "3",
+      POLARIS_RABBITMQ_PARTITION_OVERRIDES: "raw.events=6",
+      POLARIS_RABBITMQ_ASSIGNED_PARTITIONS: "5",
+    });
+    expect(config.assignedPartitions).toEqual([5]);
+  });
+});
+
+describe("partitionsForFamily", () => {
+  const config = rabbitmqEnvSchema.parse({
+    POLARIS_RABBITMQ_URL: "amqp://rabbitmq:5672",
+    POLARIS_RABBITMQ_CLIENT_ID: "svc",
+    POLARIS_RABBITMQ_PARTITIONS: "3",
+    POLARIS_RABBITMQ_PARTITION_OVERRIDES: "raw.events=6",
+  });
+
+  it("returns the override when the family has one", () => {
+    expect(partitionsForFamily(config, "raw.events")).toBe(6);
+  });
+
+  it("falls back to the global default", () => {
+    expect(partitionsForFamily(config, "analytics.events")).toBe(3);
+  });
+
+  it("inherits the parent family's width for a dedicated per-project stream", () => {
+    // An isolated project must keep the ordering guarantees of the shared
+    // stream it graduated from.
+    expect(partitionsForFamily(config, "raw.events.project-alpha")).toBe(6);
   });
 });
 

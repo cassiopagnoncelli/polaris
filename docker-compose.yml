@@ -3,7 +3,7 @@
 # This compose file is intentionally lean. It runs only the four services that
 # sit on the canonical event path:
 #
-#   - Redpanda     event transport backbone (single broker, RF=1)
+#   - RabbitMQ     event transport backbone (single node, streams + quorum)
 #   - PostgreSQL   mutable runtime/control state
 #   - Redis        short-lived dedupe, rate-limit, processor cache
 #   - ClickHouse   analytical storage (single node, no Keeper)
@@ -14,7 +14,7 @@
 #
 # See:
 #   docs/architecture/08-observability-and-operations.md  (local stack contract)
-#   docs/architecture/03-redpanda-topics.md               (broker/topic defaults)
+#   docs/architecture/03-rabbitmq-streams.md              (broker/stream defaults)
 #   docs/architecture/07-clickhouse.md                    (engine families)
 #   docs/architecture/11-production-readiness.md          (local vs production)
 #
@@ -27,51 +27,50 @@
 name: polaris
 
 services:
-  redpanda:
-    # Single-broker Redpanda for local/dev. Replication factor 1, 1-3
-    # partitions per topic, no tiered storage. Production uses a 3-broker
-    # cluster with RF=3 and lives in its own deployment, not this compose.
-    image: redpandadata/redpanda:v24.3.1
-    container_name: polaris-redpanda
+  rabbitmq:
+    # Single-node RabbitMQ for local/dev: streams with replication factor 1
+    # and quorum queues that degrade to a single replica. Production runs a
+    # 3-node cluster (RF=3) and lives in its own deployment, not this
+    # compose.
+    #
+    # The image is the `-management` variant so `rabbitmqctl`, the HTTP API,
+    # and the management UI are all available without a second container.
+    # `rabbitmq_stream` and `rabbitmq_prometheus` are enabled below.
+    image: rabbitmq:4.1-management
+    container_name: polaris-rabbitmq
     restart: unless-stopped
-    command:
-      - redpanda
-      - start
-      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      # Address advertised to clients. `redpanda` works for in-cluster
-      # services (other compose containers); `localhost:19092` works for
-      # host-side tools (rpk, KafkaJS running on the developer machine).
-      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
-      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
-      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
-      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
-      - --rpc-addr=redpanda:33145
-      - --advertise-rpc-addr=redpanda:33145
-      - --mode=dev-container
-      - --smp=1
-      - --memory=1G
-      - --reserve-memory=0M
-      - --overprovisioned
-      - --default-log-level=info
+    hostname: polaris-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-polaris}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-polaris}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      # A stable node name keeps the mnesia/khepri directory stable across
+      # container recreation, so streams survive `docker compose up -d`.
+      RABBITMQ_NODENAME: rabbit@polaris-rabbitmq
     ports:
-      # Kafka API (external listener) — host tools and apps running outside
-      # the compose network connect here.
-      - "${REDPANDA_KAFKA_HOST_PORT:-19092}:19092"
-      # Admin API — `rpk cluster ...`, health checks.
-      - "${REDPANDA_ADMIN_HOST_PORT:-9644}:9644"
-      # Schema Registry (HTTP) — reserved for future use (P0-007+).
-      - "${REDPANDA_SCHEMA_REGISTRY_HOST_PORT:-18081}:18081"
-      # Pandaproxy (HTTP) — not used by Polaris services but exposed for
-      # operator convenience.
-      - "${REDPANDA_PROXY_HOST_PORT:-18082}:18082"
+      # AMQP 0-9-1 — every Polaris service connects here.
+      - "${RABBITMQ_AMQP_HOST_PORT:-5672}:5672"
+      # Management UI + HTTP API — provisioning and operator tooling.
+      - "${RABBITMQ_MANAGEMENT_HOST_PORT:-15672}:15672"
+      # Native stream protocol — not used by v1 services (see the protocol
+      # decision in docs/implementation/rabbitmq-redesign-plan.md), exposed
+      # so `rabbitmq-streams` tooling and a future native client work
+      # without recreating the container.
+      - "${RABBITMQ_STREAM_HOST_PORT:-5552}:5552"
+      # Prometheus scrape endpoint.
+      - "${RABBITMQ_PROMETHEUS_HOST_PORT:-15692}:15692"
     volumes:
-      - redpanda-data:/var/lib/redpanda/data
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/10-polaris.conf:ro
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy || exit 1"]
+      # `check_running` alone returns healthy before the stream plugin is
+      # ready; `check_port_connectivity` covers the listeners Polaris needs.
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity || exit 1"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 30
-      start_period: 20s
+      start_period: 30s
     networks:
       - polaris
 
@@ -181,7 +180,7 @@ services:
       - polaris
 
 volumes:
-  redpanda-data:
+  rabbitmq-data:
   postgres-data:
   clickhouse-data:
   clickhouse-logs:

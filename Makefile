@@ -57,7 +57,7 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap). Assumes infra is running at default endpoints.
+setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-provision ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq topology). Assumes infra is running at default endpoints.
 
 install: ## Install pnpm workspace dependencies
 	pnpm install
@@ -120,8 +120,9 @@ stats: ## Show project LOC (current tree + historical churn)
 		awk '($$1 ~ /^[0-9]+$$/ && $$2 ~ /^[0-9]+$$/) { total += $$1 + $$2 } END { print total + 0 }') && \
 	printf "  Historical: %s\n" "$$historical_loc"
 
-docker-up: ## Start the local infra stack with docker compose (daemonised, waits for health)
+docker-up: ## Start the local infra stack with docker compose (daemonised, waits for health) and declare the RabbitMQ topology
 	docker compose up -d --wait
+	$(MAKE) rabbitmq-provision
 
 docker-down: ## Stop the docker compose stack (preserves named volumes)
 	docker compose down
@@ -155,6 +156,12 @@ clickhouse-bootstrap: ## Create local ClickHouse DB + apply DDL + local-only use
 
 clickhouse-migrate: ## Apply ClickHouse SQL migrations only (no local-user init)
 	pnpm clickhouse:migrate
+
+rabbitmq-provision: ## Declare the RabbitMQ topology (super streams + retry/DLQ queues). Idempotent; required before any service starts.
+	pnpm rabbitmq:provision
+
+rabbitmq-plan: ## Print the RabbitMQ topology that would be declared, without touching the broker
+	pnpm rabbitmq:provision:dry-run
 
 clean: ## Remove built artefacts (per-package "clean" scripts)
 	pnpm clean

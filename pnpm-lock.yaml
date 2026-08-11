@@ -14,12 +14,18 @@ importers:
       '@polaris/shared-secrets':
         specifier: workspace:*
         version: link:packages/shared-secrets
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:packages/shared-transport
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19
       '@vitest/coverage-v8':
         specifier: 4.1.6
         version: 4.1.6(vitest@4.1.6)
+      amqplib:
+        specifier: ^2.0.1
+        version: 2.0.1
       tsx:
         specifier: ^4.20.3
         version: 4.22.0
@@ -546,6 +552,24 @@ importers:
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
+
+  packages/shared-transport:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../shared-logger
+      amqplib:
+        specifier: ^2.0.1
+        version: 2.0.1
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
 
   packages/web-sdk:
     dependencies:
@@ -1326,6 +1350,10 @@ packages:
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
+
+  amqplib@2.0.1:
+    resolution: {integrity: sha512-a3P2MgfCf9nzVis12VxWEn0dS6hcqve7dlEAhXDtIWR27BlhtMkILOc+H9aeHjDi6i6r94dYKc2Kx2OFe3avvg==}
+    engines: {node: '>=18'}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -2433,6 +2461,8 @@ snapshots:
       fast-uri: 3.1.2
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+
+  amqplib@2.0.1: {}
 
   assertion-error@2.0.1: {}
 
