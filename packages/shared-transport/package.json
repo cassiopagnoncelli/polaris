@@ -1,0 +1,70 @@
+{
+  "name": "@polaris/shared-transport",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polaris event transport: broker-neutral port (producer/consumer/checkpoints/replay) with a RabbitMQ streams driver over AMQP 0-9-1.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./streams": {
+      "types": "./dist/streams.d.ts",
+      "import": "./dist/streams.js"
+    },
+    "./partition-key": {
+      "types": "./dist/partition-key.d.ts",
+      "import": "./dist/partition-key.js"
+    },
+    "./headers": {
+      "types": "./dist/headers.d.ts",
+      "import": "./dist/headers.js"
+    },
+    "./serialization": {
+      "types": "./dist/serialization.d.ts",
+      "import": "./dist/serialization.js"
+    },
+    "./dlq": {
+      "types": "./dist/dlq.d.ts",
+      "import": "./dist/dlq.js"
+    },
+    "./checkpoints": {
+      "types": "./dist/checkpoints.d.ts",
+      "import": "./dist/checkpoints.js"
+    },
+    "./topology": {
+      "types": "./dist/topology.d.ts",
+      "import": "./dist/topology.js"
+    },
+    "./stream-range-reader": {
+      "types": "./dist/stream-range-reader.d.ts",
+      "import": "./dist/stream-range-reader.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "amqplib": "^2.0.1",
+    "kysely": "^0.29.0"
+  }
+}

@@ -15,19 +15,19 @@
  *   loadConfig,
  *   serviceEnvSchema,
  *   postgresEnvSchema,
- *   redpandaEnvSchema,
+ *   rabbitmqEnvSchema,
  * } from "@polaris/shared-config";
  *
  * const schema = z
  *   .object({
  *     service: serviceEnvSchema,
  *     postgres: postgresEnvSchema,
- *     redpanda: redpandaEnvSchema,
+ *     rabbitmq: rabbitmqEnvSchema,
  *   })
  *   .transform((parsed) => ({
  *     service: parsed.service,
  *     postgres: parsed.postgres,
- *     redpanda: parsed.redpanda,
+ *     rabbitmq: parsed.rabbitmq,
  *   }));
  *
  * const config = loadConfig({

@@ -80,7 +80,7 @@ function loadEnvFromOptions<Schema extends ZodType>(options: LoadConfigOptions<S
  * const schema = composeConfigSchema({
  *   service: serviceEnvSchema,
  *   postgres: postgresEnvSchema,
- *   redpanda: redpandaEnvSchema,
+ *   rabbitmq: rabbitmqEnvSchema,
  * });
  * const config = loadConfig({ serviceName: "ingester-api", schema });
  * config.service.serviceName; // typed

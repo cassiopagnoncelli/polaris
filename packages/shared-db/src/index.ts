@@ -47,4 +47,5 @@ export type {
   SourcesTable,
   SourceType,
   TopicIsolationsTable,
+  TransportCheckpointsTable,
 } from "./database.js";

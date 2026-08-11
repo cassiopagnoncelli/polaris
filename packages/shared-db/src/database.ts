@@ -563,6 +563,45 @@ export interface TopicIsolationsTable {
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 }
 
+/**
+ * `transport_checkpoints` table.
+ *
+ * The authoritative resume point for every Polaris stream consumer —
+ * what Kafka consumer-group offsets used to be. RabbitMQ streams consumed
+ * over AMQP 0-9-1 have no server-side offset store, so a reconnecting
+ * consumer must be told where to attach; this table is where it is told
+ * from.
+ *
+ * `last_offset` is the offset of the last **successfully handled**
+ * message. Resume attaches at `last_offset + 1`.
+ *
+ * Schema reference:
+ *   db/migrations/20260810000001_create_transport_checkpoints.sql
+ */
+export interface TransportCheckpointsTable {
+  /**
+   * Polaris consumer-group identifier (e.g. `sessionizer-v1`). Not an AMQP
+   * concept — changing it rewinds the consumer, so it is part of the
+   * component's contract.
+   */
+  group_name: string;
+  /** Concrete partition stream, e.g. `raw.events-2`. */
+  stream: string;
+  /** Logical stream family, e.g. `raw.events`. Derived from `stream`. */
+  family: string;
+  /** Partition index within the family's super stream. */
+  partition: number;
+  /**
+   * Offset of the last successfully handled message. `bigint` in
+   * PostgreSQL; `pg` returns it as a string to avoid precision loss, and
+   * writes accept either.
+   */
+  last_offset: ColumnType<string, bigint | string | number, bigint | string | number>;
+  /** Last time the checkpoint advanced. Drives the stalled-consumer query. */
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  created_at: Generated<Date>;
+}
+
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
@@ -580,4 +619,5 @@ export interface Database {
   projects: ProjectsTable;
   sources: SourcesTable;
   topic_isolations: TopicIsolationsTable;
+  transport_checkpoints: TransportCheckpointsTable;
 }
