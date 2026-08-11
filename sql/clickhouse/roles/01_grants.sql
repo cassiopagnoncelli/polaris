@@ -129,9 +129,16 @@ REVOKE ON CLUSTER '{cluster}'
 --
 -- The ClickHouse sink (consumers/clickhouse-sink) is the only writer
 -- into ClickHouse. It needs INSERT on the ingestion interface table
--- and nothing else: the materialized views run under the table's own
--- privileges, so the sink never touches analytics_ingest_log,
--- analytics_raw, or any projection directly.
+-- and nothing else: the materialized views carry `SQL SECURITY NONE`
+-- so their SELECT is not checked against the inserting user, and the
+-- sink never touches analytics_ingest_log, analytics_raw, or any
+-- projection directly.
+--
+-- That clause is load-bearing, not decoration. A materialized view
+-- without it runs its SELECT as whoever performed the INSERT, and an
+-- INSERT-only role cannot satisfy that — every sink write fails with
+-- ACCESS_DENIED "while pushing to view". See the note on the CREATE
+-- statement in sql/clickhouse/21_mv_queue_to_ingest_log.sql.
 --
 -- Read privileges are deliberately absent rather than merely unused.
 -- A sink that could SELECT would be a full read path into every

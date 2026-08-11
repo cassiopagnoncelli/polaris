@@ -51,7 +51,9 @@ import type { DestinationInstance } from "./db/destination-instance.js";
  * descriptor" — a static declaration of a vendor consumer that the runtime
  * binds to.
  *
- *   - `vendor`              matches the directory name under `consumers/`.
+ *   - `vendor`              the vendor literal from the consumer manifest,
+ *                           stamped onto every delivery record.
+ *   - `component`           the consumer's queue-topology name.
  *   - `consumerVersion`     immutable version directory under the vendor.
  *   - `normalizeVersion`    per-vendor normalize-stage version.
  *   - `mapperVersion`       per-vendor mapper-stage version.
@@ -62,9 +64,17 @@ import type { DestinationInstance } from "./db/destination-instance.js";
  * deliverer/v1". The vendor's directory tree on disk is the source of
  * truth for which versions actually exist; the runtime does not validate
  * the literals against the tree.
+ *
+ * `component` is separate from `vendor` because the two are not always the
+ * same string: webhook-sink's vendor is `webhook` (webhooks are
+ * vendor-agnostic) while its queue set is `webhook-sink.*`. It must match
+ * an entry in `POLARIS_COMPONENTS` — that list is what
+ * `pnpm rabbitmq:provision` declares, and a DLQ publish to an undeclared
+ * queue is discarded by the broker without an error.
  */
 export interface ConsumerIdentity {
   readonly vendor: string;
+  readonly component: string;
   readonly consumerVersion: string;
   readonly normalizeVersion: string;
   readonly mapperVersion: string;

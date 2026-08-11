@@ -178,6 +178,7 @@ function makeEnv({
   const descriptor: DestinationDescriptor<TestPayload> = {
     identity: {
       vendor: "test-vendor",
+      component: "test-vendor",
       consumerVersion: "v1",
       normalizeVersion: "v1",
       mapperVersion: "v1",
@@ -356,6 +357,154 @@ describe("destination runtime — happy path", () => {
     expect(names.has("polaris_destination_events_consumed_total")).toBe(true);
     // 'delivered' is recorded as part of the recordOutcome path; the
     // consumed counter is the always-on increment.
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fan-out
+// ---------------------------------------------------------------------------
+
+/**
+ * `analytics.events` is the shared canonical stream — its producer knows
+ * nothing about destinations, so nothing stamps a destination id onto the
+ * message. These tests drive `consumer.handler` (the transport entry
+ * point) rather than `handleEvent`, because deciding WHICH instances an
+ * envelope goes to is the handler's job.
+ */
+describe("destination runtime — fan-out to active instances", () => {
+  function secondInstance(overrides: Partial<DestinationInstance> = {}): DestinationInstance {
+    return {
+      ...SEED_INSTANCE,
+      destination_id: "polaris_dst_test2",
+      instance_label: "test-instance-2",
+      ...overrides,
+    };
+  }
+
+  function makeStreamPayload(headers: MessageHeaders = {}) {
+    return {
+      stream: "analytics.events-0",
+      family: "analytics.events",
+      partition: 0,
+      message: {
+        value: Buffer.from(JSON.stringify(makeEnvelope()), "utf8"),
+        headers,
+        offset: "42",
+        key: null,
+      },
+    } as unknown as Parameters<ReturnType<typeof buildConsumer>["handler"]>[0];
+  }
+
+  it("no destination-id header: delivers once per active instance of this vendor", async () => {
+    const env = makeEnv();
+    env.instances.set(secondInstance());
+    const consumer = buildConsumer(env);
+
+    await consumer.handler(makeStreamPayload());
+
+    expect(env.delivererCalls).toHaveLength(2);
+    expect(
+      env.records
+        .snapshot()
+        .map((r) => r.destination_id)
+        .sort(),
+    ).toEqual(["polaris_dst_test1", "polaris_dst_test2"]);
+  });
+
+  it("skips instances belonging to another vendor or another environment", async () => {
+    const env = makeEnv();
+    env.instances.set(secondInstance({ destination_id: "polaris_dst_other", vendor: "other" }));
+    env.instances.set(
+      secondInstance({ destination_id: "polaris_dst_prod", environment: "production" }),
+    );
+    const consumer = buildConsumer(env);
+
+    await consumer.handler(makeStreamPayload());
+
+    expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test1"]);
+  });
+
+  it("a destination-id header pins the envelope to one instance (the replay path)", async () => {
+    const env = makeEnv();
+    env.instances.set(secondInstance());
+    const consumer = buildConsumer(env);
+
+    await consumer.handler(makeStreamPayload({ "polaris-destination-id": "polaris_dst_test2" }));
+
+    expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test2"]);
+  });
+
+  it("no active instances: counts a skip and does NOT route to the DLQ", async () => {
+    const env = makeEnv({ instance: { ...SEED_INSTANCE, status: "disabled" } });
+    const consumer = buildConsumer(env);
+
+    await consumer.handler(makeStreamPayload());
+
+    expect(env.delivererCalls).toHaveLength(0);
+    expect(env.records.snapshot()).toHaveLength(0);
+    // The pre-fan-out design DLQ-routed every header-less message here,
+    // which meant a vendor nobody had enabled filled its DLQ with
+    // healthy traffic.
+    expect(env.producerSends).toHaveLength(0);
+    const skipped = consumer.metrics
+      .getSamples()
+      .find((s) => s.name === "polaris_destination_events_skipped_total");
+    expect(skipped?.labels["reason"]).toBe("no_active_destinations");
+  });
+
+  it("one failing target does not stop the others, and still re-throws for redelivery", async () => {
+    const env = makeEnv({
+      deliverer: async (ctx) => {
+        env.delivererCalls.push({ payload: ctx.payload, attempt: ctx.attempt, secretLength: 0 });
+        if (ctx.instance.destination_id === "polaris_dst_test1") {
+          return { kind: "failed_retryable", vendor_response_summary: "503" };
+        }
+        return { kind: "accepted", vendor_response_code: "200", vendor_response_summary: "ok" };
+      },
+    });
+    env.instances.set(secondInstance());
+    const consumer = buildConsumer(env);
+
+    await expect(consumer.handler(makeStreamPayload())).rejects.toThrow();
+
+    // The healthy instance was still delivered to; the throw is what asks
+    // the transport to redeliver, and the dedupe window is what keeps the
+    // redelivery from double-sending to this one.
+    const delivered = env.records.snapshot().find((r) => r.destination_id === "polaris_dst_test2");
+    expect(delivered?.status).toBe("accepted");
+  });
+
+  it("re-reads the active list once the TTL expires", async () => {
+    const env = makeEnv();
+    let nowMs = 1_000_000;
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+      activeInstanceTtlMs: 10_000,
+      now: () => new Date(nowMs),
+    });
+
+    await consumer.handler(makeStreamPayload());
+    expect(env.records.snapshot()).toHaveLength(1);
+
+    // A destination created after the first message is invisible until
+    // the TTL lapses — the cache is what keeps the fan-out from querying
+    // PostgreSQL on every event.
+    env.instances.set(secondInstance());
+    await consumer.handler(makeStreamPayload());
+    expect(env.records.snapshot()).toHaveLength(2);
+
+    nowMs += 10_001;
+    await consumer.handler(makeStreamPayload());
+    expect(
+      env.records.snapshot().filter((r) => r.destination_id === "polaris_dst_test2"),
+    ).toHaveLength(1);
   });
 });
 

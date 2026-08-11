@@ -120,6 +120,20 @@ export function createAnalyticsSinkWriter(
           table: ANALYTICS_QUEUE_TABLE,
           values: rows,
           format: "JSONEachRow",
+          clickhouse_settings: {
+            // `occurred_at` / `ingested_at` arrive as the envelope's
+            // ISO-8601 UTC literals (`2026-08-11T10:47:39.315Z`), which is
+            // what the canonical event contract specifies and what
+            // `AnalyticsQueueRow` declares. ClickHouse's default
+            // `date_time_input_format` is `basic`, which accepts neither
+            // the `T` separator nor the trailing `Z` — the INSERT fails
+            // with CANNOT_PARSE_INPUT_ASSERTION_FAILED on the first row,
+            // and because the sink rolls its checkpoint back on a failed
+            // batch, every row after it retries forever. `best_effort` is
+            // the parser that understands ISO-8601 with a timezone
+            // designator.
+            date_time_input_format: "best_effort",
+          },
         });
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "non-Error cause";

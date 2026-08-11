@@ -116,7 +116,13 @@ export const destinationsCreateCommand: CommandDefinition = {
       )
       .requiredOption("--project <project_id>", "Project this destination belongs to.")
       .requiredOption("--env <environment>", "Environment: development | staging | production.")
-      .requiredOption("--vendor <vendor>", "Vendor adapter (e.g. meta-capi, ga4, webhook-sink).")
+      .requiredOption(
+        "--vendor <vendor>",
+        "Vendor adapter: braze | ga4 | meta-capi | tiktok | webhook. " +
+          "Must match the `vendor` in the consumer's manifest — that is what the " +
+          "consumer looks for when it fans an event out to its destinations. " +
+          "Note webhook-sink's vendor is `webhook`.",
+      )
       .requiredOption("--instance-label <label>", "Operator-supplied short label.")
       .requiredOption(
         "--secret-ref <provider:ref>",

@@ -18,6 +18,13 @@
 import type { ConsumerIdentity } from "@polaris/shared-destinations";
 
 export const CONSUMER_VENDOR = "braze" as const;
+/**
+ * Queue-topology name for this consumer. Must match the
+ * `POLARIS_COMPONENTS` entry that `pnpm rabbitmq:provision` declares —
+ * it is what names `braze.retry.*`, `braze.redeliver`, and
+ * `braze.dlq`.
+ */
+export const CONSUMER_COMPONENT = "braze" as const;
 export const CONSUMER_VERSION = "v1" as const;
 export const NORMALIZE_VERSION = "v1" as const;
 export const MAPPER_VERSION = "v1" as const;
@@ -25,6 +32,7 @@ export const DELIVERER_VERSION = "v1" as const;
 
 export const CONSUMER_IDENTITY: ConsumerIdentity = {
   vendor: CONSUMER_VENDOR,
+  component: CONSUMER_COMPONENT,
   consumerVersion: CONSUMER_VERSION,
   normalizeVersion: NORMALIZE_VERSION,
   mapperVersion: MAPPER_VERSION,

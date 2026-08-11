@@ -193,6 +193,19 @@ If the canonical event does not include `consent` fields, normalize stages defau
 
 This default is per consumer-version normalize stage, not a platform-wide rule. A consumer that needs different default behavior for a specific vendor codifies that in its normalize stage and ships it as part of the version's contract.
 
+## Fan-out
+
+`analytics.events` is the shared canonical stream. Its producer, the analytics-projector, knows nothing about destinations — so nothing on the message says where it should go. The consumer decides.
+
+Each destination consumer reads every message on the stream and delivers one copy per **active destination instance of its own vendor in the envelope's environment**. A vendor with no destination rows delivers nothing; that is the normal state of a consumer nobody has enabled, not an error, and it is counted as `polaris_destination_events_skipped_total{reason="no_active_destinations"}` rather than routed to a DLQ.
+
+Two consequences worth stating:
+
+- The `vendor` column on a `destinations` row must match the `vendor` in the consumer's manifest exactly. `webhook-sink` looks for `webhook`; a row created against `webhook-sink` is a row no consumer reads.
+- One retryable failure redelivers the message for every target, not just the one that failed. The destination-side dedupe window, keyed on `(destination_id, delivery_key)`, is what stops the targets that already succeeded from receiving a second copy.
+
+A `polaris-destination-id` header overrides the fan-out and pins the envelope to exactly one instance. That is the replay path: replayed traffic targets one named destination and must not splash across every instance that happens to be active now.
+
 ## Delivery Model
 
 Destination consumers use reliable at-least-once delivery with Polaris-owned idempotency and vendor-specific best-effort dedupe.
@@ -219,7 +232,7 @@ Vendor-specific notes:
 
 ## Retry and DLQ Policy
 
-Each consumer owns retry and DLQ topics:
+Each consumer owns retry and DLQ topics, named after the consumer's component — the same names `POLARIS_COMPONENTS` declares, not the vendor and not the consumer version:
 
 ```text
 meta-capi.retry
@@ -228,7 +241,11 @@ ga4.retry
 ga4.dlq
 tiktok.retry
 tiktok.dlq
+webhook-sink.retry
+webhook-sink.dlq
 ```
+
+The consumer version rides along as a message header. It is deliberately absent from the queue name: a publish to a queue the provisioner never declared is unroutable on the default exchange, and RabbitMQ drops it without raising anything, so a versioned DLQ name would turn every DLQ-bound failure into silence.
 
 DLQ events must preserve:
 

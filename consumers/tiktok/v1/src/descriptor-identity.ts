@@ -11,6 +11,13 @@
 import type { ConsumerIdentity } from "@polaris/shared-destinations";
 
 export const CONSUMER_VENDOR = "tiktok" as const;
+/**
+ * Queue-topology name for this consumer. Must match the
+ * `POLARIS_COMPONENTS` entry that `pnpm rabbitmq:provision` declares —
+ * it is what names `tiktok.retry.*`, `tiktok.redeliver`, and
+ * `tiktok.dlq`.
+ */
+export const CONSUMER_COMPONENT = "tiktok" as const;
 export const CONSUMER_VERSION = "v1" as const;
 export const NORMALIZE_VERSION = "v1" as const;
 export const MAPPER_VERSION = "v1" as const;
@@ -28,6 +35,7 @@ export const TIKTOK_EVENTS_API_VERSION = "v1.3" as const;
 
 export const CONSUMER_IDENTITY: ConsumerIdentity = {
   vendor: CONSUMER_VENDOR,
+  component: CONSUMER_COMPONENT,
   consumerVersion: CONSUMER_VERSION,
   normalizeVersion: NORMALIZE_VERSION,
   mapperVersion: MAPPER_VERSION,

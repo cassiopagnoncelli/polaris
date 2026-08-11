@@ -16,6 +16,10 @@
  *
  *   2. **Per message:**
  *      - extract the replay context from headers; suppress if not allowed,
+ *      - resolve the fan-out targets: every ACTIVE destination instance
+ *        of this vendor in the envelope's environment, or the single
+ *        instance pinned by a `polaris-destination-id` header (replay),
+ *      - then, for each target:
  *      - read the destination instance from the cache (PostgreSQL on miss),
  *      - drop if the instance status is not `active`,
  *      - drop if the mode is `test` (no network delivery),
@@ -52,7 +56,8 @@ import {
   type NormalizedEvent,
   normalizeForDestination,
 } from "@polaris/shared-destination-normalize";
-
+import type { Logger } from "@polaris/shared-logger";
+import type { SecretResolver } from "@polaris/shared-secrets";
 import {
   consumerFamiliesFor,
   decodeEvent,
@@ -64,8 +69,6 @@ import {
   type TransportMessageHandler,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import type { Logger } from "@polaris/shared-logger";
-import type { SecretResolver } from "@polaris/shared-secrets";
 
 import {
   type DeliveryRecord,
@@ -182,6 +185,19 @@ export interface DestinationConsumerOptions<Payload> {
    * `getBuildMetadata()`. When omitted, the column is written as NULL.
    */
   readonly consumerBuildVersion?: string;
+  /**
+   * How long the per-environment list of active destination instances is
+   * held before it is re-read from PostgreSQL. Defaults to 10_000 ms.
+   *
+   * The list drives the fan-out in the transport handler (see
+   * `resolveFanoutTargets`), so it is consulted once per message and has
+   * to be cached — but a long TTL is the wrong trade-off here. Unlike
+   * `findById`, which the `DestinationInstanceCache` caches for 60s, this
+   * list decides whether a brand-new destination receives traffic at all;
+   * a shorter window keeps `polaris destinations create` feeling live
+   * without adding a query per event.
+   */
+  readonly activeInstanceTtlMs?: number;
 }
 
 /** Runtime handle. The host's `app.ts` calls `start()` / `stop()`. */
@@ -244,6 +260,39 @@ export function createDestinationConsumer<Payload>(
   const dedupe = options.dedupe ?? new InMemoryDestinationDedupe();
   const metrics = options.metrics ?? new DestinationMetrics();
   const allowReplay = options.allowReplay ?? false;
+  const activeInstanceTtlMs = options.activeInstanceTtlMs ?? DEFAULT_ACTIVE_INSTANCE_TTL_MS;
+
+  /**
+   * Per-environment cache of active destination ids for this vendor.
+   *
+   * `DestinationInstanceReader.findActiveByVendor` is a table scan on
+   * `(vendor, environment, status)`; the fan-out consults it once per
+   * message, so it is cached behind a short TTL. Keyed by environment
+   * because one consumer process serves whatever environments appear on
+   * the stream, and each has its own destination rows.
+   */
+  const activeTargets = new Map<string, { ids: readonly string[]; expiresAt: number }>();
+
+  async function resolveFanoutTargets(
+    payload: TransportMessagePayload,
+    envelope: NormalizableEnvelope,
+  ): Promise<readonly string[]> {
+    const pinned = readDestinationIdHeader(payload);
+    if (pinned !== undefined) return [pinned];
+
+    const environment = envelope.environment;
+    const nowMs = now().getTime();
+    const cached = activeTargets.get(environment);
+    if (cached !== undefined && cached.expiresAt > nowMs) return cached.ids;
+
+    const rows = await options.instances.findActiveByVendor(
+      options.descriptor.identity.vendor,
+      environment,
+    );
+    const ids = rows.map((row) => row.destination_id);
+    activeTargets.set(environment, { ids, expiresAt: nowMs + activeInstanceTtlMs });
+    return ids;
+  }
 
   const handleEvent: HandleEventFn = async (input) => {
     return processOne({
@@ -331,70 +380,86 @@ export function createDestinationConsumer<Payload>(
     const envelope = decoded as NormalizableEnvelope;
     const replay = readReplayContext(payload.message.headers);
 
-    // The runtime fans out one envelope to every active destination
-    // instance for this vendor. The host's `app.ts` typically wraps
-    // `createDestinationConsumer` ONCE per (vendor, version, instance) so
-    // each runtime processes its own instance; multi-instance fanout is
-    // handled by spinning up multiple runtimes in the same process. This
-    // keeps each runtime's rate-limit / dedupe state cleanly scoped to one
-    // destination.
+    // Which destination instances does this envelope go to?
     //
-    // The instance id is supplied through the descriptor's hosting layer
-    // — usually a `polaris-destination-id` header stamped by the replay
-    // tooling, or the boot-time config of the host. For this v1 runtime
-    // we read it from a header; production wiring lands in
-    // `consumers/<vendor>/v<N>/app.ts`.
-    const destinationId = readDestinationIdHeader(payload);
-    if (destinationId === undefined) {
-      options.logger.error(
-        {
-          component: "destination.runtime",
-          vendor: options.descriptor.identity.vendor,
-          consumer_version: options.descriptor.identity.consumerVersion,
-          topic: payload.stream,
-          partition: payload.partition,
-          offset: payload.message.offset,
-        },
-        "analytics.events payload missing polaris-destination-id header — DLQ-routing",
-      );
-      await publishToDestinationDlq({
-        producer: options.producer,
-        identity: options.descriptor.identity,
-        instance: PLACEHOLDER_INSTANCE,
-        payload,
-        reason: "missing_destination_id",
-        error: new Error("missing polaris-destination-id header"),
-      });
-      metrics.incrementDlq({
+    // `analytics.events` is the shared canonical stream. Its producer
+    // (analytics-projector) knows nothing about destinations — one
+    // envelope is fanned out here, at the consumer, to every ACTIVE
+    // instance of this consumer's vendor in the envelope's environment.
+    //
+    // A `polaris-destination-id` header overrides the fan-out and pins
+    // the envelope to exactly one instance. That is the replay path:
+    // `polaris replay` re-sends historical traffic to one named
+    // destination, and must not splash it across every instance that
+    // happens to be active now.
+    const targets = await resolveFanoutTargets(payload, envelope);
+    if (targets.length === 0) {
+      // Not an error: a vendor with no destination rows for this
+      // environment is the normal state of a consumer nobody has
+      // enabled yet. Counted so "why is nothing arriving?" has an
+      // answer on the /metrics endpoint.
+      metrics.incrementSkipped({
         vendor: options.descriptor.identity.vendor,
         consumer_version: options.descriptor.identity.consumerVersion,
-        reason: "missing_destination_id",
+        project_id: envelope.project_id,
+        environment: envelope.environment,
+        reason: "no_active_destinations",
       });
       return;
     }
 
-    await processOne({
-      envelope,
-      destination_id: destinationId,
-      payload,
-      attempt: readAttemptHeader(payload),
-      is_replay: replay.is_replay,
-      descriptor: options.descriptor,
-      instances: options.instances,
-      records: options.records,
-      ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
-      secrets: options.secrets,
-      producer: options.producer,
-      logger: options.logger,
-      now,
-      rateLimiter,
-      dedupe,
-      metrics,
-      allowReplay,
-      ...(options.consumerBuildVersion !== undefined
-        ? { consumerBuildVersion: options.consumerBuildVersion }
-        : {}),
-    });
+    // Fan out sequentially. A `failed_retryable` outcome re-throws out of
+    // `processOne` so the transport redelivers the message — which
+    // redelivers it for EVERY target, not just the one that failed. The
+    // destination-side dedupe window (keyed by destination_id + delivery
+    // key) is what keeps that from double-delivering to the targets that
+    // already succeeded, so the first error is held back until every
+    // target has had its turn rather than short-circuiting the loop.
+    let retryable: unknown;
+    let retryableSeen = false;
+    for (const destination_id of targets) {
+      try {
+        await processOne({
+          envelope,
+          destination_id,
+          payload,
+          attempt: readAttemptHeader(payload),
+          is_replay: replay.is_replay,
+          descriptor: options.descriptor,
+          instances: options.instances,
+          records: options.records,
+          ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
+          secrets: options.secrets,
+          producer: options.producer,
+          logger: options.logger,
+          now,
+          rateLimiter,
+          dedupe,
+          metrics,
+          allowReplay,
+          ...(options.consumerBuildVersion !== undefined
+            ? { consumerBuildVersion: options.consumerBuildVersion }
+            : {}),
+        });
+      } catch (err) {
+        if (!retryableSeen) {
+          retryable = err;
+          retryableSeen = true;
+        }
+        options.logger.warn(
+          {
+            component: "destination.runtime",
+            vendor: options.descriptor.identity.vendor,
+            consumer_version: options.descriptor.identity.consumerVersion,
+            destination_id,
+            event_id: envelope.event_id,
+            err: errSummary(err),
+          },
+          "destination delivery failed for one fan-out target — continuing with the rest",
+        );
+      }
+    }
+    if (retryableSeen) throw retryable;
   };
 
   let started = false;
@@ -1247,10 +1312,17 @@ function errSummaryString(err: unknown): string {
 }
 
 /**
+ * Default TTL for the per-environment active-destination list. Short
+ * relative to the 60s `findById` cache because this list gates whether a
+ * newly-created destination receives traffic at all.
+ */
+const DEFAULT_ACTIVE_INSTANCE_TTL_MS = 10_000;
+
+/**
  * Placeholder destination instance used only for header stamping on DLQ
  * messages that we publish BEFORE resolving the real instance (decode
- * failures, missing destination-id header). The runtime never queries
- * this object; it only feeds headers that operators see during triage.
+ * failures). The runtime never queries this object; it only feeds
+ * headers that operators see during triage.
  */
 const PLACEHOLDER_INSTANCE: DestinationInstance = {
   destination_id: "polaris_dst_unknown",

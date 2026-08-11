@@ -22,8 +22,12 @@ instance via your operator channel.
 What your team gives the operator:
 
 - the **project** + **environment** the destination is scoped to
-- the **vendor adapter** to use (e.g. `meta-capi`, `tiktok-events`, `ga4`,
-  `braze`)
+- the **vendor adapter** to use: `braze`, `ga4`, `meta-capi`, `tiktok`, or
+  `webhook`. These are the `vendor` literals from each
+  `consumers/<name>/v1/consumer.manifest.yaml`, and a consumer only picks
+  up destination rows whose `vendor` matches its own — so `webhook-sink`
+  wants `--vendor webhook`, and a near-miss like `tiktok-events` produces
+  a row no consumer ever reads.
 - an **instance label** that is unique inside `(project, environment,
   vendor)` — typically the campaign or business unit (e.g.
   `storefront-acquisition`, `subscription-renewal`)

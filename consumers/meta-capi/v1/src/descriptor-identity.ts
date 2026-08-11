@@ -11,6 +11,13 @@
 import type { ConsumerIdentity } from "@polaris/shared-destinations";
 
 export const CONSUMER_VENDOR = "meta-capi" as const;
+/**
+ * Queue-topology name for this consumer. Must match the
+ * `POLARIS_COMPONENTS` entry that `pnpm rabbitmq:provision` declares —
+ * it is what names `meta-capi.retry.*`, `meta-capi.redeliver`, and
+ * `meta-capi.dlq`.
+ */
+export const CONSUMER_COMPONENT = "meta-capi" as const;
 export const CONSUMER_VERSION = "v1" as const;
 export const NORMALIZE_VERSION = "v1" as const;
 export const MAPPER_VERSION = "v1" as const;
@@ -21,6 +28,7 @@ export const META_GRAPH_API_VERSION = "v22.0" as const;
 
 export const CONSUMER_IDENTITY: ConsumerIdentity = {
   vendor: CONSUMER_VENDOR,
+  component: CONSUMER_COMPONENT,
   consumerVersion: CONSUMER_VERSION,
   normalizeVersion: NORMALIZE_VERSION,
   mapperVersion: MAPPER_VERSION,

@@ -7,10 +7,10 @@
  * `ga4.dlq`); the topic-resolver in `@polaris/shared-transport`'s
  * `dlqTopicName` builds the literal.
  *
- * For destination consumers, the "component" identifier in the DLQ topic
- * name is `<vendor>.<consumerVersion>` so a v2 migration does not collide
- * with v1 traffic on the same DLQ. Example: `meta-capi.v1.dlq` vs
- * `meta-capi.v2.dlq`.
+ * For destination consumers the "component" identifier is the consumer's
+ * name from `POLARIS_COMPONENTS` (`meta-capi`, `webhook-sink`, ...) —
+ * the same literal the host passes as the consumer's poison-message
+ * component, and the same set `pnpm rabbitmq:provision` declares.
  *
  * This helper wraps `@polaris/shared-transport`'s `republishToDlq` with the
  * defaults a destination consumer always wants:
@@ -130,10 +130,15 @@ export async function publishToDestinationDlq(input: PublishToDestinationDlqInpu
         ? input.error
         : undefined;
 
-  // The DLQ component name carries the version so two consumer versions
-  // can run side-by-side without colliding on the DLQ topic. Example:
-  // `meta-capi.v1.dlq`.
-  const component = `${input.identity.vendor}.${input.identity.consumerVersion}`;
+  // The DLQ queue is the one `pnpm rabbitmq:provision` declared for this
+  // component — `webhook-sink.dlq`, `meta-capi.dlq`. It is NOT derived
+  // from the vendor and NOT suffixed with the consumer version: a
+  // publish to an undeclared queue goes to the default exchange with an
+  // unroutable routing key, which RabbitMQ discards silently, and the
+  // failure disappears rather than landing in triage. The consumer
+  // version travels as a header instead (see `extraHeaders` below), so a
+  // v1/v2 migration is still separable at triage time.
+  const component = input.identity.component;
 
   // Stamp stage-version + destination headers onto the existing platform
   // headers. `mergeHeaders` in `@polaris/shared-transport` would also do this

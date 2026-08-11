@@ -103,6 +103,37 @@ shows the message reaching `raw.events`. If you also run the processors and
 `clickhouse-sink`, `pnpm clickhouse:query event-daily-counts` closes the
 loop.
 
+### Watching it reach a destination
+
+Destination consumers deliver to `destinations` rows, and a fresh checkout
+has none — so `make dev-all` runs every vendor consumer and none of them
+sends anything. That is the intended default (destinations are opt-in), and
+each consumer says so on its `/metrics`:
+
+```bash
+curl -s http://localhost:5000/metrics | grep no_active_destinations
+```
+
+To see a real delivery, point a webhook destination at anything that
+answers on localhost — the deliverer allows plain `http://` only there:
+
+```bash
+node -e 'require("http").createServer((q,s)=>{let b="";q.on("data",c=>b+=c);q.on("end",()=>{console.log(b);s.end("{}")})}).listen(4321)'
+```
+
+Add `POLARIS_WEBHOOK_TEST_URL=http://localhost:4321/hook` to `.env.local`,
+restart `make dev-all` so the consumers pick it up, then:
+
+```bash
+node apps/polaris-cli/dist/bin/polaris.js destinations create --project storefront --env development --vendor webhook --instance-label local-test-sink --secret-ref env:POLARIS_WEBHOOK_TEST_URL
+```
+
+The next event through the sample arrives on 4321 within a few seconds, and
+`select * from delivery_records` in PostgreSQL records the attempt. Note
+`--vendor webhook`, not `webhook-sink`: the vendor literal is the one in
+`consumers/webhook-sink/v1/consumer.manifest.yaml`, and it is what the
+consumer matches its destination rows on.
+
 ## How the samples depend on the SDKs
 
 Both SDKs are workspace packages that are not published yet, so each sample

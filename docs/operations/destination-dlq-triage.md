@@ -30,8 +30,12 @@ mutable lives on `dlq_records`.
 
 **`dlq_records`** is the active triage queue. The destination runtime
 writes one row per DLQ publish, alongside the canonical broker
-republish to the `<vendor>.<consumer_version>.dlq` topic family. Each
-row carries:
+republish to the consumer's `<component>.dlq` queue — `webhook-sink.dlq`,
+`meta-capi.dlq`, the same names `pnpm rabbitmq:provision` declares. The
+consumer version is a header on the message, not part of the queue name:
+a name the provisioner does not declare is an unroutable publish, which
+RabbitMQ discards without an error, and the failure would vanish instead
+of reaching this table. Each row carries:
 
 - the original message bytes (`payload`) so a retry can republish the
   byte-identical envelope back onto `analytics.events`;

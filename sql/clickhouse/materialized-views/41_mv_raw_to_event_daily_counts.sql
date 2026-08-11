@@ -26,9 +26,27 @@
 -- this projection by reading analytics_raw with the argMax pattern
 -- in a single pass — not by adding FINAL here.
 
+-- SQL SECURITY NONE: the MV's SELECT is not privilege-checked.
+--
+-- A materialized view without this clause runs its SELECT as the user
+-- performing the INSERT. That user is `polaris_sink`, which holds INSERT
+-- on the ingestion interface table and — deliberately, per
+-- sql/clickhouse/roles/01_grants.sql — SELECT on nothing at all. So every
+-- INSERT the sink made failed with ACCESS_DENIED "while pushing to view",
+-- and because the sink rolls its checkpoint back on a failed batch,
+-- nothing ever reached ClickHouse.
+--
+-- `NONE` rather than a `DEFINER` user because the definer would have to be
+-- a principal that exists before this file runs, and MVs are applied in
+-- phase 2 while users are provisioned in phase 3 (local) or by the secret
+-- provider (production). `NONE` grants no new read path to anyone: the
+-- statement below is fixed, version-controlled DDL that can only move
+-- queue rows into their target table, and `polaris_sink` still cannot
+-- SELECT a single row itself.
 CREATE MATERIALIZED VIEW IF NOT EXISTS polaris.mv_raw_to_event_daily_counts
 ON CLUSTER '{cluster}'
 TO polaris.event_daily_counts
+SQL SECURITY NONE
 AS
 SELECT
     project_id,

@@ -72,6 +72,7 @@ describe("@polaris/shared-destinations public surface", () => {
       event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
       identity: {
         vendor: "test",
+        component: "test",
         consumerVersion: "v1",
         normalizeVersion: "v1",
         mapperVersion: "v1",
