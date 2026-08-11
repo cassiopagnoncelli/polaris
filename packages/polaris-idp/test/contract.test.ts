@@ -26,10 +26,10 @@ import { describe, expect, it } from "vitest";
 import {
   ExpiredTokenError,
   type IdpConfig,
-  idpConfig,
   InvalidAudienceError,
   InvalidIssuerError,
   InvalidSignatureError,
+  idpConfig,
   JwksClient,
   LEGACY_PLATFORM_ROLE_CLAIM,
   NotAUserTokenError,
@@ -78,7 +78,11 @@ interface Harness {
 async function harness(overrides: Partial<IdpConfig> = {}): Promise<Harness> {
   const { publicKey, privateKey } = await jose.generateKeyPair("ES256", { extractable: true });
   const other = await jose.generateKeyPair("ES256", { extractable: true });
-  const config = idpConfig({ jwksUrl: `${ISSUER}/.well-known/jwks.json`, issuer: ISSUER, ...overrides });
+  const config = idpConfig({
+    jwksUrl: `${ISSUER}/.well-known/jwks.json`,
+    issuer: ISSUER,
+    ...overrides,
+  });
   const verifier = new Verifier({
     config,
     jwksClient: new StubJwksClient(config, publicKey, KID),
@@ -187,9 +191,9 @@ describe("Idp token contract", () => {
 
   it("refuses a token signed by another key, and one whose kid is unknown", async () => {
     const h = await harness();
-    await expect(
-      h.verify(await h.sign(userClaims(), { key: h.otherPrivateKey })),
-    ).rejects.toThrow(InvalidSignatureError);
+    await expect(h.verify(await h.sign(userClaims(), { key: h.otherPrivateKey }))).rejects.toThrow(
+      InvalidSignatureError,
+    );
     await expect(h.verify(await h.sign(userClaims(), { kid: "rotated-away" }))).rejects.toThrow(
       InvalidSignatureError,
     );
@@ -199,9 +203,9 @@ describe("Idp token contract", () => {
     const h = await harness();
     const now = Math.floor(Date.now() / 1000);
     // Inside the 30s default skew.
-    await expect(
-      h.verify(await h.sign(userClaims({ exp: now - 10 }))),
-    ).resolves.toBeInstanceOf(Passport);
+    await expect(h.verify(await h.sign(userClaims({ exp: now - 10 })))).resolves.toBeInstanceOf(
+      Passport,
+    );
     // Well outside it.
     await expect(h.verify(await h.sign(userClaims({ exp: now - 3600 })))).rejects.toThrow(
       ExpiredTokenError,

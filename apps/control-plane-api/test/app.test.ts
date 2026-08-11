@@ -56,6 +56,9 @@ function makeConfig(
       connectTimeoutMs: 10_000,
       idleTimeoutMs: 30_000,
     },
+    // Admin UI off, which is the deployed default. These cases are about the
+    // JSON API shell; the admin plugin has its own suites.
+    admin: null,
   };
 }
 

@@ -41,9 +41,13 @@ import {
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 import type { Kysely } from "kysely";
-
+import type { IdpAuth } from "./admin/idp-auth.js";
+import type { IdpOAuthClient } from "./admin/idp-proxy.js";
+import { registerAdminUi } from "./admin/index.js";
+import type { AdminQueries } from "./admin/queries.js";
 import { createBearerAuthPreHandler } from "./auth/bearer.js";
 import type { ControlPlaneConfig } from "./config.js";
+import { createPostgresReadinessProbe } from "./health/postgres-probe.js";
 // In-process counter registry. Reuses the Polaris convention from the
 // ingester (`IngestMetrics`); the control-plane v1 has no business
 // counters yet, so the registry is empty. The bootstrap still serves
@@ -80,6 +84,22 @@ export interface BuildControlPlaneAppOptions {
   readonly verifyHash?: (plaintext: string, hash: string, algorithm: string) => Promise<boolean>;
   /** Override `() => new Date()` for deterministic tests. */
   readonly now?: () => Date;
+  /**
+   * Pre-built admin read queries. Tests inject fixtures so admin pages are
+   * exercisable without a Postgres; production builds the Kysely-backed
+   * implementation from `db`.
+   */
+  readonly adminQueries?: AdminQueries;
+  /**
+   * Pre-built Idp verification. Tests inject a stub so the suite needs
+   * neither a live Idp nor a signing key.
+   */
+  readonly idpAuth?: IdpAuth;
+  /**
+   * Pre-built Idp OAuth client. Tests drive the authorization-code flow
+   * without a live Idp.
+   */
+  readonly idpClient?: IdpOAuthClient;
 }
 
 export async function buildControlPlaneApp(
@@ -113,6 +133,13 @@ export async function buildControlPlaneApp(
   // ---- metrics ---------------------------------------------------------
   const metrics = new ControlPlaneMetrics();
 
+  // ---- readiness -------------------------------------------------------
+  // Probe Postgres whenever we have a pool. Without this `/ready` returns 200
+  // with a dead database — see health/postgres-probe.ts.
+  const readinessProbes: ReadinessProbe[] = [];
+  if (db !== undefined) readinessProbes.push(createPostgresReadinessProbe(db));
+  if (options.readinessProbes !== undefined) readinessProbes.push(...options.readinessProbes);
+
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
   if (ownedDb && db !== undefined) {
@@ -145,7 +172,7 @@ export async function buildControlPlaneApp(
       bodyLimit: config.http.bodyLimitBytes,
       disableRequestLogging: true,
     },
-    ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
+    ...(readinessProbes.length > 0 ? { readinessProbes } : {}),
     openapi: {
       setup: options.openApiSetup ?? controlPlaneOpenApiSetup,
       metadata: {
@@ -175,6 +202,25 @@ export async function buildControlPlaneApp(
 
   // ---- routes ----------------------------------------------------------
   registerWhoamiRoute(bootstrap.app);
+
+  // ---- admin UI (opt-in) -----------------------------------------------
+  // Registered last, and only when configured. It mounts as an encapsulated
+  // plugin under /admin, so its cookie parser, form parser, HTML error
+  // handlers, and session guard never reach /v1/* — the JSON API stays
+  // bearer-only and cookie-blind. When `admin` is null the routes are not
+  // registered at all, so /admin/* 404s through the standard Problem handler.
+  // Truthiness rather than `!== null`: a hand-built config fixture that omits
+  // the block entirely should also mean "off", not "on with no settings".
+  if (config.admin) {
+    await registerAdminUi(bootstrap.app, {
+      config: config.admin,
+      environment: config.service.environment,
+      ...(db !== undefined ? { db } : {}),
+      ...(options.adminQueries !== undefined ? { queries: options.adminQueries } : {}),
+      ...(options.idpAuth !== undefined ? { idpAuth: options.idpAuth } : {}),
+      ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
+    });
+  }
 
   return bootstrap;
 }

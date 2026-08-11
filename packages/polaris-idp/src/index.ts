@@ -25,6 +25,11 @@ export {
   RevokedTokenError,
   VerificationError,
 } from "./errors.js";
+export {
+  type IdTokenClaims,
+  IdTokenVerifier,
+  type IdTokenVerifierOptions,
+} from "./id-token.js";
 export { JwksClient } from "./jwks-client.js";
 export {
   LEGACY_PLATFORM_ROLE_CLAIM,

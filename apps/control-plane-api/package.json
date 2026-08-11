@@ -27,6 +27,8 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@polaris/idp": "workspace:*",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-control-plane": "workspace:*",
     "@polaris/shared-db": "workspace:*",
