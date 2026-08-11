@@ -449,18 +449,6 @@ importers:
         specifier: ^14.0.0
         version: 14.0.0
 
-  packages/shared-kafka:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../shared-config
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../shared-logger
-      kafkajs:
-        specifier: ^2.2.4
-        version: 2.2.4
-
   packages/shared-logger:
     dependencies:
       pino:
@@ -1547,10 +1535,6 @@ packages:
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
-
-  kafkajs@2.2.4:
-    resolution: {integrity: sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==}
-    engines: {node: '>=14.0.0'}
 
   kysely@0.29.0:
     resolution: {integrity: sha512-LrQfPUeTW7MXbMvT62moEMnpMTuj9TO3lqjCeLKjM975PJ4Alrl/43f2tlDX7xOsNptKgH4LSNGwIbXwEkLg4g==}
@@ -2684,8 +2668,6 @@ snapshots:
       dequal: 2.0.3
 
   json-schema-traverse@1.0.0: {}
-
-  kafkajs@2.2.4: {}
 
   kysely@0.29.0: {}
 

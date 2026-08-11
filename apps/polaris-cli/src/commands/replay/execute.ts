@@ -4,11 +4,10 @@
  *
  * Picks up a replay-job row, derives its plan via `@polaris/shared-replay`,
  * and runs the executor against an injected source/producer/store. The
- * default executor is wired against a stub source (P7-003 ships the
- * lifecycle scaffolding; the real Kafka source-side adapter lands once
- * `@polaris/shared-transport` exposes the offset-range read helper). Tests
- * inject in-memory adapters so the lifecycle assertions land in this
- * task.
+ * default executor is wired against the real transport: a stream
+ * range-reader per partition and a confirmed producer for the
+ * republish. Tests inject in-memory adapters so the lifecycle assertions
+ * do not need a broker.
  *
  * Architectural rules baked into this command:
  *
@@ -41,12 +40,15 @@
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
  */
 
-import { randomUUID } from "node:crypto";
-import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
-  createKafkaClient,
-  createKafkaJsConsumerDriver,
+  loadConfigWithDefaults,
+  partitionsForFamily,
+  rabbitmqEnvSchema,
+} from "@polaris/shared-config";
+import {
+  createAmqpStreamRangeDriver,
   createPolarisProducer,
+  createTransportConnection,
   type PolarisProducer,
   STREAM_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-transport";
@@ -76,11 +78,7 @@ import {
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
-import {
-  buildKafkaReplayProducer,
-  buildKafkaReplaySource,
-  type FetchOffsetsForWindow,
-} from "./kafka-adapters.js";
+import { buildStreamReplayProducer, buildStreamReplaySource } from "./stream-adapters.js";
 import { rejectReplayPlanArguments } from "./validation.js";
 
 interface ReplayExecuteArgs {
@@ -100,7 +98,7 @@ export interface ReplayExecuteStore extends ReplayExecutorStore {
 }
 
 /**
- * Hooks the runner accepts so tests bypass the default Kafka / DB
+ * Hooks the runner accepts so tests bypass the default transport / DB
  * wiring. Production omits everything except `now`, which the
  * dispatcher's clock hook supplies.
  */
@@ -151,10 +149,10 @@ export const replayExecuteCommand: CommandDefinition = {
 
 export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
   const nowFn = hooks.now ?? (() => new Date());
-  // The kafka I/O default is lazy: tests that inject both `hooks.source`
+  // The transport I/O default is lazy: tests that inject both `hooks.source`
   // and `hooks.producer` never trigger a real RabbitMQ connection.
   const buildDefaultIo =
-    hooks.source === undefined || hooks.producer === undefined ? buildDefaultKafkaIo : null;
+    hooks.source === undefined || hooks.producer === undefined ? buildDefaultTransportIo : null;
 
   return async function runner(args: ReplayExecuteArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
@@ -170,22 +168,22 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
     }
 
     const store = openStore();
-    const kafkaIo = buildDefaultIo ? buildDefaultIo() : null;
+    const transportIo = buildDefaultIo ? buildDefaultIo() : null;
     const sourceFactory =
       hooks.source ??
       (() => {
-        if (kafkaIo === null) {
-          throw new Error("replay execute runner: kafka I/O unavailable");
+        if (transportIo === null) {
+          throw new Error("replay execute runner: transport I/O unavailable");
         }
-        return kafkaIo.source;
+        return transportIo.source;
       });
     const producerFactory =
       hooks.producer ??
       (() => {
-        if (kafkaIo === null) {
-          throw new Error("replay execute runner: kafka I/O unavailable");
+        if (transportIo === null) {
+          throw new Error("replay execute runner: transport I/O unavailable");
         }
-        return kafkaIo.producer;
+        return transportIo.producer;
       });
     try {
       const row = await store.findById(id);
@@ -259,8 +257,8 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
       emit(ctx, outcome);
     } finally {
       await store.close();
-      if (kafkaIo) {
-        await kafkaIo.close();
+      if (transportIo) {
+        await transportIo.close();
       }
     }
     return undefined;
@@ -336,16 +334,23 @@ function defaultStore(env: NodeJS.ProcessEnv): ReplayExecuteStore {
 }
 
 /**
- * Default kafka I/O resources for the CLI replay-execute path. Wires
- * the source/producer adapters in `./kafka-adapters` to a real
- * RabbitMQ connection: a dedicated `Consumer` (used per partition-read
- * via the offset-range driver), an `Admin` client (for the
- * time → offset lookup), and a `PolarisProducer` (for republishing).
+ * Default transport I/O for the CLI replay-execute path. Wires the
+ * source/producer adapters in `./stream-adapters` to a real RabbitMQ
+ * connection: a channel per partition read (via the range-reader driver)
+ * and a `PolarisProducer` for republishing.
  *
- * The returned `close()` disconnects everything, idempotently. The
- * runner is responsible for calling it in its `finally` block.
+ * The Kafka version of this function also built an `Admin` client to
+ * translate each chunk's time window into per-partition offsets. Streams
+ * attach by timestamp, so that client — and the whole class of
+ * off-by-one bugs around it — is gone.
+ *
+ * Replay reads write no checkpoint and join no group, so they cannot
+ * disturb a live consumer's position no matter how many run at once.
+ *
+ * The returned `close()` tears everything down idempotently. The runner
+ * calls it in its `finally` block.
  */
-function buildDefaultKafkaIo(): {
+function buildDefaultTransportIo(): {
   readonly source: ReplayExecutorSource;
   readonly producer: ReplayExecutorProducer;
   readonly close: () => Promise<void>;
@@ -354,113 +359,50 @@ function buildDefaultKafkaIo(): {
     serviceName: "polaris-cli",
     schema: rabbitmqEnvSchema,
   });
-  const kafka = createKafkaClient({ redpanda: config });
-  const admin = kafka.admin();
+  const connection = createTransportConnection({ rabbitmq: config });
   const polarisProducer: PolarisProducer = createPolarisProducer({
-    kafka,
+    connection,
     producerName: "polaris-cli.replay-execute",
   });
 
-  let adminConnected = false;
   let producerConnected = false;
-
-  async function ensureAdminConnected(): Promise<void> {
-    if (adminConnected) return;
-    await admin.connect();
-    adminConnected = true;
-  }
-
   async function ensureProducerConnected(): Promise<void> {
     if (producerConnected) return;
     await polarisProducer.connect();
     producerConnected = true;
   }
 
-  // Time → offset translation via KafkaJS admin. KafkaJS's
-  // `fetchTopicOffsetsByTimestamp` returns the FIRST offset at or
-  // after each partition's timestamp; we use it twice (chunk.from and
-  // chunk.to + 1ms) and bound the high side at `endOffset - 1` so the
-  // offset-range reader's inclusive semantics line up with the chunk's
-  // inclusive end.
-  const fetchOffsetsForWindow: FetchOffsetsForWindow = async ({ topic, from, to }) => {
-    await ensureAdminConnected();
-    const startRows = await admin.fetchTopicOffsetsByTimestamp(topic, from);
-    const endRows = await admin.fetchTopicOffsetsByTimestamp(topic, to + 1);
-    const endByPartition = new Map<number, string>();
-    for (const row of endRows) {
-      endByPartition.set(row.partition, row.offset);
-    }
-    const ranges: Array<{ partition: number; startOffset: string; endOffset: string }> = [];
-    for (const row of startRows) {
-      const endExclusive = endByPartition.get(row.partition);
-      if (endExclusive === undefined) continue;
-      const endInclusive = (BigInt(endExclusive) - 1n).toString();
-      // Empty windows (start > end) are filtered downstream by the
-      // adapter; emit them so the caller has a stable per-partition row.
-      ranges.push({
-        partition: row.partition,
-        startOffset: row.offset,
-        endOffset: endInclusive,
-      });
-    }
-    return ranges;
-  };
-
-  // The source builds a fresh consumer + driver per chunk so the
-  // offset-range reader's `release()` (which calls `consumer.stop()` +
-  // `consumer.disconnect()`) does not tear down a long-lived consumer.
-  // The trade-off is a connection per partition-read; replay throughput
-  // is bounded by the broker anyway and the alternative (a single
-  // consumer fanning out across rebalances) is fragile against
-  // partition reassignment mid-read.
-  const source = buildKafkaReplaySource({
+  const source = buildStreamReplaySource({
     // v1 always reads from raw.events; the planner asserts this in
     // `plan.source_topic_family` so callers see the same name here.
-    topic: STREAM_FAMILY_RAW_EVENTS,
-    driverFactory: () => {
-      const consumer = kafka.consumer({
-        // Replay reads do not participate in any consumer group's
-        // offset bookkeeping; use a per-call group id so KafkaJS does
-        // not reuse a group's committed offsets across replays.
-        groupId: `polaris-cli.replay.${randomUUID()}`,
-        // Disable auto-commit; the offset-range reader seeks manually.
-        readUncommitted: false,
-      });
-      return createKafkaJsConsumerDriver({ consumer });
-    },
-    fetchOffsetsForWindow,
+    family: STREAM_FAMILY_RAW_EVENTS,
+    partitions: partitionsForFamily(config, STREAM_FAMILY_RAW_EVENTS),
+    driverFactory: () => createAmqpStreamRangeDriver(connection),
   });
 
-  const producer = buildKafkaReplayProducer({
+  const producer = buildStreamReplayProducer({
     producer: {
       ...polarisProducer,
-      // Wrap `send` so the producer connects on first use without
-      // forcing the runner to know about kafkajs's lifecycle.
-      send: async (record) => {
+      // Connect on first use so the runner does not have to know about
+      // the producer's lifecycle.
+      publish: async (input) => {
         await ensureProducerConnected();
-        return polarisProducer.send(record);
+        return polarisProducer.publish(input);
       },
     },
   });
 
   async function close(): Promise<void> {
-    if (adminConnected) {
-      try {
-        await admin.disconnect();
-      } catch {
-        // KafkaJS throws when disconnect runs against a half-connected
-        // client; the runner swallows it because shutdown is best-effort.
-      }
-      adminConnected = false;
-    }
     if (producerConnected) {
       try {
         await polarisProducer.disconnect();
       } catch {
-        // Same idempotency dance as admin.
+        // Disconnecting a half-open producer throws; shutdown is
+        // best-effort.
       }
       producerConnected = false;
     }
+    await connection.close();
   }
 
   return { source, producer, close };

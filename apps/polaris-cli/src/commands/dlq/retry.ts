@@ -38,8 +38,9 @@ import {
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
 import {
-  createKafkaClient,
+  createTransportConnection,
   createPolarisProducer,
+  redeliverQueueName,
   type PolarisProducer,
 } from "@polaris/shared-transport";
 import type { Command } from "commander";
@@ -79,9 +80,15 @@ export interface DlqRetryAuditPayload {
  * so test stubs don't have to satisfy the full interface.
  */
 export interface RetryProducer {
-  send(record: {
-    topic: string;
-    messages: Array<{ value: Buffer; headers?: Record<string, string> }>;
+  /**
+   * Republish one message onto a queue. The target is the failing
+   * component's redelivery queue, never the source stream — see the note
+   * at the call site.
+   */
+  publishToQueue(record: {
+    queue: string;
+    value: Buffer;
+    headers?: Record<string, string>;
   }): Promise<unknown>;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -172,14 +179,22 @@ export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
         );
       }
 
-      // 1. Republish to Kafka. Failures here leave the DLQ row unresolved
-      //    so the operator can retry.
+      // 1. Republish. Failures here leave the DLQ row unresolved so the
+      //    operator can retry.
+      //
+      //    The target is `<vendor>.redeliver`, NOT the source stream.
+      //    Publishing back into `analytics.events` would re-deliver the
+      //    event to every consumer of that family — the ClickHouse sink
+      //    and four sibling destinations included — turning one
+      //    operator's retry into platform-wide double-processing. The
+      //    Kafka topology had no queue to aim at; this one does.
       const producer = await openProducer();
       try {
         await producer.connect();
-        await producer.send({
-          topic: existing.source_topic,
-          messages: [{ value: existing.payload, headers: { ...existing.headers } }],
+        await producer.publishToQueue({
+          queue: redeliverQueueName(existing.vendor),
+          value: existing.payload,
+          headers: { ...existing.headers },
         });
       } finally {
         try {
@@ -282,7 +297,7 @@ function defaultStore(env: NodeJS.ProcessEnv): DlqRetryStore {
 }
 
 async function defaultProducer(env: NodeJS.ProcessEnv): Promise<RetryProducer> {
-  // Build a redpanda config block from env using the shared schema; no
+  // Build a rabbitmq config block from env using the shared schema; no
   // other Polaris services in the CLI need the broker, so we keep this
   // local rather than hoist into shared connect-helpers.
   const config = loadConfigWithDefaults({
@@ -290,21 +305,22 @@ async function defaultProducer(env: NodeJS.ProcessEnv): Promise<RetryProducer> {
     schema: rabbitmqEnvSchema,
     processEnv: env,
   });
-  const kafka = createKafkaClient({ redpanda: config });
+  const connection = createTransportConnection({ rabbitmq: config });
   const producer: PolarisProducer = createPolarisProducer({
-    kafka,
+    connection,
     producerName: "polaris-cli.dlq-retry",
   });
   return {
     connect: () => producer.connect(),
-    disconnect: () => producer.disconnect(),
-    send: (record) =>
-      producer.send({
-        topic: record.topic,
-        messages: record.messages.map((m) => ({
-          value: m.value,
-          ...(m.headers !== undefined ? { headers: m.headers } : {}),
-        })),
+    disconnect: async () => {
+      await producer.disconnect();
+      await connection.close();
+    },
+    publishToQueue: (record) =>
+      producer.publishToQueue({
+        queue: record.queue,
+        value: record.value,
+        ...(record.headers !== undefined ? { headers: record.headers } : {}),
       }),
   };
 }

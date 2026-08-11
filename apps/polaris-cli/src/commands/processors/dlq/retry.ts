@@ -13,8 +13,9 @@
 
 import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
-  createKafkaClient,
+  createTransportConnection,
   createPolarisProducer,
+  redeliverQueueName,
   type PolarisProducer,
 } from "@polaris/shared-transport";
 import {
@@ -48,12 +49,15 @@ export interface ProcessorDlqRetryStore {
 export interface ProcessorDlqRetryProducer {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  send(record: {
-    topic: string;
-    messages: Array<{
-      value: Buffer | null;
-      headers?: Record<string, string>;
-    }>;
+  /**
+   * Republish one message onto a queue. The target is the failing
+   * processor's redelivery queue, never the source stream — see the note
+   * at the call site.
+   */
+  publishToQueue(record: {
+    queue: string;
+    value: Buffer;
+    headers?: Record<string, string>;
   }): Promise<unknown>;
 }
 
@@ -121,14 +125,14 @@ export function buildProcessorsDlqRetryRunner(hooks: ProcessorDlqRetryHooks = {}
 
       const producer = await openProducer();
       try {
-        await producer.send({
-          topic: row.source_topic,
-          messages: [
-            {
-              value: row.payload,
-              headers: { ...row.headers, "polaris-dlq-retry": id },
-            },
-          ],
+        // Target the processor's redelivery queue, NOT the source stream:
+        // republishing into `raw.events` would re-run the event through
+        // every processor reading that family, not just the one that
+        // failed.
+        await producer.publishToQueue({
+          queue: redeliverQueueName(row.processor_name),
+          value: row.payload,
+          headers: { ...row.headers, "polaris-dlq-retry": id },
         });
       } finally {
         try {
@@ -173,22 +177,23 @@ async function defaultProducer(env: NodeJS.ProcessEnv): Promise<ProcessorDlqRetr
     schema: rabbitmqEnvSchema,
     processEnv: env,
   });
-  const kafka = createKafkaClient({ redpanda: config });
+  const connection = createTransportConnection({ rabbitmq: config });
   const producer: PolarisProducer = createPolarisProducer({
-    kafka,
+    connection,
     producerName: "polaris-cli.processors-dlq-retry",
   });
   await producer.connect();
   return {
     connect: () => producer.connect(),
-    disconnect: () => producer.disconnect(),
-    send: (record) =>
-      producer.send({
-        topic: record.topic,
-        messages: record.messages.map((m) => ({
-          value: m.value,
-          ...(m.headers !== undefined ? { headers: m.headers } : {}),
-        })),
+    disconnect: async () => {
+      await producer.disconnect();
+      await connection.close();
+    },
+    publishToQueue: (record) =>
+      producer.publishToQueue({
+        queue: record.queue,
+        value: record.value,
+        ...(record.headers !== undefined ? { headers: record.headers } : {}),
       }),
   };
 }
