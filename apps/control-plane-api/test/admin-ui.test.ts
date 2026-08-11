@@ -24,6 +24,7 @@ import type { IdpAuth } from "../src/admin/idp-auth.js";
 import { IdpAuthError } from "../src/admin/idp-auth.js";
 import type { IdpOAuthClient, IdpTokenResponse } from "../src/admin/idp-proxy.js";
 import type { AdminQueries } from "../src/admin/queries.js";
+import type { SessionRefresher } from "../src/admin/refresh.js";
 import { buildControlPlaneApp } from "../src/app.js";
 import type { ControlPlaneConfig } from "../src/config.js";
 
@@ -259,6 +260,7 @@ interface BuildOptions {
   readonly queries?: Partial<AdminQueries>;
   readonly idpAuth?: Partial<IdpAuth>;
   readonly idpClient?: Partial<IdpOAuthClient>;
+  readonly refresher?: SessionRefresher;
 }
 
 async function buildApp(options: BuildOptions = {}) {
@@ -269,6 +271,7 @@ async function buildApp(options: BuildOptions = {}) {
     adminQueries: makeQueries(options.queries),
     idpAuth: makeIdpAuth(options.idpAuth),
     idpClient: makeIdpClient(options.idpClient),
+    ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
     installShutdown: false,
   });
 }
@@ -783,6 +786,134 @@ describe("admin UI — pages", () => {
     expect(listDlq).toHaveBeenCalledWith(
       expect.objectContaining({ includeResolved: false, limit: 50 }),
     );
+    await app.app.close();
+  });
+});
+
+describe("admin UI — session refresh in the guard", () => {
+  /** Fails the first verification (expired), then accepts the refreshed token. */
+  function expiringThenValid(): Partial<IdpAuth> {
+    let calls = 0;
+    return {
+      verifyAccessToken: async (token: string) => {
+        calls += 1;
+        if (calls === 1) throw new IdpAuthError("expired", "token_expired");
+        const passport = TOKENS[token];
+        if (passport === undefined) throw new IdpAuthError("invalid", "invalid_token");
+        return passport;
+      },
+    };
+  }
+
+  it("refreshes an expired session in place and serves the page", async () => {
+    const app = await buildApp({
+      idpAuth: expiringThenValid(),
+      refresher: {
+        refresh: async () => ({
+          ok: true,
+          tokens: {
+            accessToken: "owner-token",
+            refreshToken: "refresh-rotated",
+            expiresIn: 900,
+            tokenType: "Bearer",
+          },
+        }),
+      },
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
+    });
+
+    // The operator's request completes rather than bouncing through Idp.
+    expect(res.statusCode).toBe(200);
+
+    const cookies = setCookies(res.headers);
+    expect(cookies.some((c) => c.startsWith("polaris_admin_session=owner-token"))).toBe(true);
+    // The rotated refresh token MUST replace the old one — Idp retired it on
+    // redemption, so leaving the old cookie would replay a dead grant.
+    expect(cookies.some((c) => c.startsWith("polaris_admin_refresh=refresh-rotated"))).toBe(true);
+    await app.app.close();
+  });
+
+  it("sends the operator to login when the grant is dead", async () => {
+    const app = await buildApp({
+      idpAuth: expiringThenValid(),
+      refresher: { refresh: async () => ({ ok: false, reason: "invalid_grant" }) },
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toContain("reason=token_expired");
+    await app.app.close();
+  });
+
+  it("does not attempt a refresh with no refresh cookie", async () => {
+    const refresh = vi.fn();
+    const app = await buildApp({
+      idpAuth: expiringThenValid(),
+      refresher: { refresh },
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: sessionCookie("owner-token") },
+    });
+    expect(res.statusCode).toBe(303);
+    expect(refresh).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("does not try to refresh a revoked session — Idp already decided", async () => {
+    const refresh = vi.fn();
+    const app = await buildApp({
+      idpAuth: {
+        verifyAccessToken: async () => {
+          throw new IdpAuthError("revoked", "token_revoked");
+        },
+      },
+      refresher: { refresh },
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toContain("reason=token_revoked");
+    expect(refresh).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("refuses a refreshed token it cannot verify rather than trusting its source", async () => {
+    const app = await buildApp({
+      idpAuth: {
+        verifyAccessToken: async () => {
+          throw new IdpAuthError("expired", "token_expired");
+        },
+      },
+      refresher: {
+        refresh: async () => ({
+          ok: true,
+          tokens: {
+            accessToken: "unverifiable",
+            refreshToken: "refresh-rotated",
+            expiresIn: 900,
+            tokenType: "Bearer",
+          },
+        }),
+      },
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
+    });
+    expect(res.statusCode).toBe(303);
     await app.app.close();
   });
 });

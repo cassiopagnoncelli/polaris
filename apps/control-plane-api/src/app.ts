@@ -45,6 +45,7 @@ import type { IdpAuth } from "./admin/idp-auth.js";
 import type { IdpOAuthClient } from "./admin/idp-proxy.js";
 import { registerAdminUi } from "./admin/index.js";
 import type { AdminQueries } from "./admin/queries.js";
+import type { SessionRefresher } from "./admin/refresh.js";
 import { createBearerAuthPreHandler } from "./auth/bearer.js";
 import type { ControlPlaneConfig } from "./config.js";
 import { createPostgresReadinessProbe } from "./health/postgres-probe.js";
@@ -100,6 +101,11 @@ export interface BuildControlPlaneAppOptions {
    * without a live Idp.
    */
   readonly idpClient?: IdpOAuthClient;
+  /**
+   * Pre-built refresh-token redeemer. Tests exercise silent session refresh
+   * without a live Idp.
+   */
+  readonly refresher?: SessionRefresher;
 }
 
 export async function buildControlPlaneApp(
@@ -219,6 +225,7 @@ export async function buildControlPlaneApp(
       ...(options.adminQueries !== undefined ? { queries: options.adminQueries } : {}),
       ...(options.idpAuth !== undefined ? { idpAuth: options.idpAuth } : {}),
       ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
+      ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
     });
   }
 

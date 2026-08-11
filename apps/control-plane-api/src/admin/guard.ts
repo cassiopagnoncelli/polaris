@@ -42,7 +42,15 @@ import {
   platformRoleAtLeast,
   resolvePlatformRole,
 } from "./platform-role.js";
-import { AUTH_PREFIX, readIdentityCookie, readSessionToken } from "./session.js";
+import type { SessionRefresher } from "./refresh.js";
+import {
+  AUTH_PREFIX,
+  type CookieOptions,
+  readIdentityCookie,
+  readRefreshToken,
+  readSessionToken,
+  setSessionCookies,
+} from "./session.js";
 
 export interface AdminContext {
   readonly passport: Passport;
@@ -57,6 +65,10 @@ export interface AdminGuardDeps {
   readonly identityCodec: AdminIdentityCodec;
   /** Renders the 403 page. Injected to avoid a cycle with `pages/`. */
   readonly renderForbidden: (role: PlatformRoleName) => string;
+  /** Redeems an expired session's refresh token. Omit to disable refresh. */
+  readonly refresher?: SessionRefresher | undefined;
+  /** Cookie attributes, for writing the rotated session back. */
+  readonly cookieOptions: CookieOptions;
 }
 
 /** Signals the plugin should send the operator back to the IdP. */
@@ -81,9 +93,18 @@ export function createAdminGuard(deps: AdminGuardDeps): preHandlerAsyncHookHandl
       passport = await deps.idpAuth.verifyAccessToken(token);
     } catch (error) {
       const reason = error instanceof IdpAuthError ? error.reason : "invalid_token";
-      request.log.debug({ reason }, "admin session rejected");
-      redirectToLogin(request, reply, reason);
-      return;
+
+      // Expiry is the one failure worth trying to recover from. A revoked or
+      // malformed token is a decision Idp already made; re-presenting a
+      // refresh token would not change it.
+      const refreshed =
+        reason === "token_expired" ? await tryRefresh(request, reply, deps) : undefined;
+      if (refreshed === undefined) {
+        request.log.debug({ reason }, "admin session rejected");
+        redirectToLogin(request, reply, reason);
+        return;
+      }
+      passport = refreshed;
     }
 
     const role = resolvePlatformRole(passport);
@@ -122,6 +143,56 @@ export function createAdminGuard(deps: AdminGuardDeps): preHandlerAsyncHookHandl
       label: identity?.email ?? passport.subject,
     };
   };
+}
+
+/**
+ * Redeem the refresh token and write the rotated session back.
+ *
+ * Returns the passport from the fresh access token, or `undefined` if the
+ * session cannot be recovered — in which case the caller redirects to login.
+ *
+ * The rotated cookies are set on this same reply, so the operator's current
+ * request completes normally instead of bouncing through Idp mid-form.
+ */
+async function tryRefresh(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  deps: AdminGuardDeps,
+): Promise<Passport | undefined> {
+  if (deps.refresher === undefined) return undefined;
+
+  const refreshToken = readRefreshToken(request);
+  if (refreshToken === undefined) return undefined;
+
+  const result = await deps.refresher.refresh(refreshToken);
+  if (!result.ok) {
+    request.log.info({ reason: result.reason }, "admin session refresh failed");
+    return undefined;
+  }
+
+  let passport: Passport;
+  try {
+    passport = await deps.idpAuth.verifyAccessToken(result.tokens.accessToken);
+  } catch (error) {
+    // Idp handed back something we cannot verify. Treat it as a dead session
+    // rather than trusting an unverified token on the strength of its source.
+    request.log.warn({ err: error }, "refreshed access token failed verification");
+    return undefined;
+  }
+
+  setSessionCookies(
+    reply,
+    {
+      accessToken: result.tokens.accessToken,
+      expiresIn: result.tokens.expiresIn,
+      // Rotated: the old refresh token is dead at Idp, so the cookie must be
+      // replaced or the next refresh replays a retired grant.
+      refreshToken: result.tokens.refreshToken,
+    },
+    deps.cookieOptions,
+  );
+  request.log.debug({ subject: passport.subject }, "admin session refreshed");
+  return passport;
 }
 
 function redirectToLogin(request: FastifyRequest, reply: FastifyReply, reason: string): void {

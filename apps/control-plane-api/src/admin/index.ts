@@ -19,6 +19,7 @@ import { createIdpAuth, type IdpAuth } from "./idp-auth.js";
 import type { IdpOAuthClient } from "./idp-proxy.js";
 import { createAdminPlugin } from "./plugin.js";
 import { type AdminQueries, createKyselyAdminQueries } from "./queries.js";
+import type { SessionRefresher } from "./refresh.js";
 import { ADMIN_PREFIX } from "./session.js";
 
 export interface RegisterAdminUiOptions {
@@ -33,6 +34,8 @@ export interface RegisterAdminUiOptions {
   readonly idpAuth?: IdpAuth | undefined;
   /** Test seam: stubbed OAuth flow, no live Idp. */
   readonly idpClient?: IdpOAuthClient | undefined;
+  /** Test seam: stubbed refresh-token redemption, no live Idp. */
+  readonly refresher?: SessionRefresher | undefined;
 }
 
 export async function registerAdminUi(
@@ -49,6 +52,7 @@ export async function registerAdminUi(
       idpAuth,
       environment: options.environment,
       ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
+      ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
     }),
     { prefix: ADMIN_PREFIX },
   );
@@ -83,3 +87,4 @@ export type {
   ProjectRow,
   SourceRow,
 } from "./queries.js";
+export { createSessionRefresher, type SessionRefresher, wrapSingleFlight } from "./refresh.js";

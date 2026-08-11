@@ -56,6 +56,7 @@ import {
   resolvePlatformRole,
 } from "./platform-role.js";
 import type { AdminQueries } from "./queries.js";
+import { createSessionRefresher, type SessionRefresher } from "./refresh.js";
 import {
   ADMIN_PREFIX,
   AUTH_PREFIX,
@@ -75,6 +76,8 @@ export interface AdminPluginDeps {
   readonly environment: string;
   /** Test seam: drives the OAuth flow without a live Idp. */
   readonly idpClient?: IdpOAuthClient | undefined;
+  /** Test seam: redeems refresh tokens without a live Idp. */
+  readonly refresher?: SessionRefresher | undefined;
 }
 
 export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
@@ -82,6 +85,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
   const cookieOptions = { secure: config.cookieSecure };
   const identityCodec = new AdminIdentityCodec(config.sessionSecret);
   const idp: IdpOAuthClient = deps.idpClient ?? new IdpProxy(config.idp);
+  const refresher: SessionRefresher = deps.refresher ?? createSessionRefresher(config.idp);
 
   return async function adminPlugin(app: FastifyInstance): Promise<void> {
     await app.register(fastifyCookie);
@@ -324,6 +328,8 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           idpAuth: deps.idpAuth,
           identityCodec,
           renderForbidden: renderForbiddenPage,
+          refresher,
+          cookieOptions,
         }),
       );
 
