@@ -24,13 +24,34 @@ include .env.local
 export
 endif
 
-.PHONY: help setup install lint style format check typecheck \
+.PHONY: help setup seed install lint style format check typecheck \
         dev dev-all dev-ingester dev-control-plane \
-        build build-packages test tests ci stats \
+        build build-packages build-cli test tests ci stats \
         docker-up docker-down docker-ps docker-logs docker-nuke \
-        cli clean \
+        cli api_key clean \
         db-bootstrap db-migrate db-rollback db-status \
         clickhouse-bootstrap clickhouse-migrate
+
+# Defaults for `make api_key`, overridable per invocation:
+#
+#   make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
+#
+# They match catalog/sources/storefront/* — the sources `make seed`
+# materializes — so the no-argument form issues the key `samples/01-web-events`
+# expects.
+#
+# The `KEY_` prefix is not decoration. Make seeds its variables from the
+# environment, and `?=` does not override something already set — so a bare
+# `ENV` would let a stray `ENV=production` in someone's shell silently
+# redirect key issuance at production. `POLARIS_ENV` is worse: `.env.local`
+# sets it to `local`, which `keys create` rejects outright. Prefixed names
+# collide with neither.
+KEY_PROJECT ?= storefront
+KEY_ENV     ?= development
+KEY_SOURCE  ?= storefront-web
+KEY_TYPE    ?= web
+
+POLARIS_CLI = apps/polaris-cli/dist/bin/polaris.js
 
 # Code surfaces tracked by `make stats`. Mirrors the architecture docs:
 # apps/, packages/, processors/, consumers/ hold runtime code; catalog/ holds
@@ -57,7 +78,13 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-provision ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq topology). Assumes infra is running at default endpoints.
+setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-provision seed ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq topology + dev seeds). Assumes infra is running at default endpoints.
+
+# Runs last in `setup`: seeding writes rows, so it needs the schema migrated
+# and the CLI built. Split out as its own target because re-seeding after a
+# catalog change is a normal thing to do on its own.
+seed: build-cli ## Seed dev data — catalog projects/sources + the browser origin allow-list
+	./bin/setup
 
 install: ## Install pnpm workspace dependencies
 	pnpm install
@@ -97,6 +124,12 @@ build: ## Build all workspace packages
 # makes the no-op case fast (~3-5s) so this is cheap to keep as a dev dep.
 build-packages: ## Build shared packages so workspace imports resolve at runtime
 	pnpm -r --filter './packages/*' run build
+
+# `build-packages` covers packages/* only, and the CLI lives in apps/ — so
+# `make seed` and `make api_key`, which shell out to the built CLI, name this
+# explicitly rather than assuming a prior `make build`.
+build-cli: build-packages ## Build the polaris CLI (apps/polaris-cli) so `make seed` / `make api_key` can run it
+	pnpm --filter @polaris/polaris-cli run build
 
 test: ## Run the Vitest suite
 	pnpm test
@@ -138,6 +171,16 @@ docker-nuke: ## Stop docker compose and wipe named volumes (destructive)
 
 cli: ## Open the polaris CLI console (apps/polaris-cli)
 	pnpm --filter @polaris/polaris-cli run start
+
+# The token prints exactly once — only its argon2id hash is stored, so a lost
+# token is reissued, never recovered. Not part of `make setup` for that
+# reason: a step that re-runs would leave a trail of live keys behind.
+#
+#   make api_key                                          # web key for storefront-web
+#   make api_key KEY_SOURCE=payments-api KEY_TYPE=backend # backend key
+api_key: build-cli ## Issue an API key for local apps (override with KEY_PROJECT/KEY_ENV/KEY_SOURCE/KEY_TYPE)
+	@node $(POLARIS_CLI) keys create \
+		--project $(KEY_PROJECT) --env $(KEY_ENV) --source $(KEY_SOURCE) --type $(KEY_TYPE)
 
 db-bootstrap: ## Create the polaris role + database on the local PostgreSQL (idempotent; bare-metal only)
 	pnpm db:bootstrap-local
