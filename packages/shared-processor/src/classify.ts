@@ -1,7 +1,7 @@
 /**
  * Retry classification for processor errors.
  *
- * Per `docs/architecture/03-redpanda-topics.md` "Retry and DLQ Topics" and
+ * Per `docs/architecture/03-rabbitmq-streams.md` "Retry and DLQ Topics" and
  * `09-engineering-standards.md` "HTTP Error Contract", Polaris distinguishes
  * retryable from permanent failures. Processors and consumers branch on
  * this classification to decide whether the next attempt goes to the retry
@@ -22,7 +22,7 @@
  * without forking the classifier.
  *
  * @see packages/shared-schemas/src/reason-codes.ts
- * @see packages/shared-kafka/src/dlq.ts
+ * @see packages/shared-transport/src/dlq.ts
  */
 
 import {

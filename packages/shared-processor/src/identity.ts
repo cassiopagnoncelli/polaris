@@ -39,7 +39,7 @@ export interface ProcessorIdentity {
 /**
  * Optional runtime context attached to a processor's log scope. The fields
  * are the small set every log line should be able to pivot on: which input
- * topic the processor is currently reading, which Redpanda partition, and
+ * topic the processor is currently reading, which RabbitMQ partition, and
  * the per-run UUIDv7 once a run has been registered.
  *
  * `run_id` is intentionally optional — processors may emit log lines before
@@ -53,7 +53,7 @@ export interface ProcessorLogContextInput {
   readonly run_id?: string | undefined;
   /** Input topic the processor is currently reading. */
   readonly topic?: string | undefined;
-  /** Redpanda partition the processor is consuming. */
+  /** RabbitMQ partition the processor is consuming. */
   readonly partition?: number | undefined;
 }
 

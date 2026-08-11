@@ -182,8 +182,8 @@ export interface ReplaySourceEvent {
  * source topic family. Implementations either:
  *
  *   - in tests: return a pre-loaded array,
- *   - in production: read the chunk's offset range from Redpanda via
- *     `@polaris/shared-kafka`.
+ *   - in production: read the chunk's offset range from RabbitMQ via
+ *     `@polaris/shared-transport`.
  *
  * The adapter is expected to honor the chunk bounds — events whose
  * `occurred_at` falls outside `[from, to]` MUST be filtered out by the
@@ -214,7 +214,7 @@ export interface ReplayFetchChunkInput {
 /**
  * Republished event the executor hands to the producer adapter. Carries
  * the original payload plus the platform replay headers; the producer
- * adapter is responsible for forwarding it to Redpanda.
+ * adapter is responsible for forwarding it to RabbitMQ.
  */
 export interface ReplayProduceRecord {
   /** Topic the executor wants the event written to. */

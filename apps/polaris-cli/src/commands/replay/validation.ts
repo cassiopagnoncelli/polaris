@@ -158,7 +158,7 @@ export function rejectReplayPlanArguments(args: Readonly<Record<string, unknown>
 
 /**
  * Operational retention window in days. Polaris does not promise replay
- * beyond the operational retention of the source topic (Redpanda
+ * beyond the operational retention of the source topic (RabbitMQ
  * `raw.events` ships with 90 days by default per
  * docs/architecture/05-processors-and-replay.md "Replay Window"). The
  * value is hard-coded here so the CLI's reject-message tells the operator

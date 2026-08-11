@@ -26,8 +26,12 @@
  * need to handle the new shape.
  */
 
-export type { CreateDbOptions, Database } from "./client.js";
-export { closeDb, createDb } from "./client.js";
+export type {
+  CreateDbOptions,
+  Database,
+  PostgresConnectionConfig,
+} from "./client.js";
+export { closeDb, createDb, postgresConnectionString } from "./client.js";
 export type {
   DestinationMode,
   DestinationRetryPolicy,

@@ -11,7 +11,7 @@
  * **Window-bound rule:** the CLI MUST reject `--from` values older than 90
  * days from the runner's clock. The error code is `replay_window_exceeded`.
  * The migration does NOT encode the bound (it would couple PostgreSQL to
- * the Redpanda retention config); the CLI is the gate.
+ * the RabbitMQ retention config); the CLI is the gate.
  *
  * **Planner rule:** the CLI MUST NOT accept flags that resemble PLAN
  * semantics (partitioning, chunking, transform overrides, topic routing).

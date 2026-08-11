@@ -24,14 +24,14 @@
  * pre- and post-update; the bytes payload is not echoed into the audit
  * row.
  *
- * Kafka producer wiring: built from `POLARIS_REDPANDA_*` env vars on
+ * Kafka producer wiring: built from `POLARIS_RABBITMQ_*` env vars on
  * demand and disconnected after the single publish. The CLI does not
  * keep a long-lived broker connection.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 
-import { loadConfigWithDefaults, redpandaEnvSchema } from "@polaris/shared-config";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
   createKyselyDlqRecordRepository,
   type DlqRecord,
@@ -41,7 +41,7 @@ import {
   createKafkaClient,
   createPolarisProducer,
   type PolarisProducer,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 
@@ -287,7 +287,7 @@ async function defaultProducer(env: NodeJS.ProcessEnv): Promise<RetryProducer> {
   // local rather than hoist into shared connect-helpers.
   const config = loadConfigWithDefaults({
     serviceName: "polaris-cli",
-    schema: redpandaEnvSchema,
+    schema: rabbitmqEnvSchema,
     processEnv: env,
   });
   const kafka = createKafkaClient({ redpanda: config });

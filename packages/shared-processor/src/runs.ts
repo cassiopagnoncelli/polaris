@@ -58,7 +58,7 @@ export interface ProcessorRunCounters {
   readonly events_emitted?: number | undefined;
   readonly events_failed?: number | undefined;
   /**
-   * Last Redpanda offset observed by the run. Persisted for diagnostics.
+   * Last RabbitMQ offset observed by the run. Persisted for diagnostics.
    * The Kafka consumer group offset is the authoritative checkpoint; this
    * column is operator-facing.
    */

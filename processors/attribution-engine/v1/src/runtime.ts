@@ -37,7 +37,7 @@
  * Redis variant; a future v2 will swap implementations.
  *
  * Topic strategy: `attribution.events` is already a canonical topic
- * family in `@polaris/shared-kafka`, so the runtime publishes via the
+ * family in `@polaris/shared-transport`, so the runtime publishes via the
  * producer's `publishEvent` helper (mirrors the identity-resolver
  * pattern).
  *
@@ -48,17 +48,17 @@
 
 import {
   buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
+  type TransportMessageHandler,
+  type TransportMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_ATTRIBUTION_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_ATTRIBUTION_EVENTS,
+} from "@polaris/shared-transport";
 
 import type { Logger } from "@polaris/shared-logger";
 import {
@@ -118,8 +118,6 @@ export interface AttributionEngineRuntimeDeps {
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Override for `() => new Date()` so tests can pin emission timestamps. */
   readonly now?: () => Date;
-  /** KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`. */
-  readonly partitionsConsumedConcurrently?: number;
   /**
    * `ProcessorMetrics` registry. The runtime increments consume / emit /
    * failure counters here. Defaults to a fresh registry so tests still
@@ -149,7 +147,7 @@ export interface AttributionEngineRuntime {
    * Expose the message handler for direct testing without a running
    * KafkaJS cluster.
    */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /** Metrics registry the runtime is wired to. */
   readonly metrics: ProcessorMetrics;
   /** In-memory store the runtime is wired to. Mostly for tests. */
@@ -166,7 +164,7 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const newEventId = deps.newEventId ?? ((): string => uuidv7());
 
-  const handler: PolarisEachMessageHandler = async (payload, context) => {
+  const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
       payload,
       context,
@@ -185,21 +183,17 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_ANALYTICS_EVENTS, isolatedProjects);
-    await deps.consumer.subscribe({ topics: [...topics], fromBeginning: false });
+    const families = consumerFamiliesFor(STREAM_FAMILY_ANALYTICS_EVENTS, isolatedProjects);
+    await deps.consumer.subscribe({ families: [...families] });
     deps.logger.info(
       {
         component: "attribution-engine.runtime",
-        topics,
+        families,
         isolated_projects: isolatedProjects,
       },
       "attribution-engine subscribed to analytics.events",
     );
-    await deps.consumer.runEach(handler, {
-      ...(deps.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: deps.partitionsConsumedConcurrently }
-        : {}),
-    });
+    await deps.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -216,8 +210,8 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
 // ---------------------------------------------------------------------------
 
 interface HandleMessageInput {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly producer: PolarisProducer;
   readonly store: TouchpointStore;
   readonly logger: Logger;
@@ -237,7 +231,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.warn(
       {
         component: "attribution-engine.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
@@ -354,7 +348,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
           environment: raw.environment,
           event_id: raw.event_id,
           touchpoint_id: decision.touchpoint_id,
-          source_topic: payload.topic,
+          source_topic: payload.stream,
         },
         "touchpoint captured (same tuple as prior)",
       );
@@ -431,7 +425,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
           event_id: raw.event_id,
           touchpoint_id: decision.touchpoint_id,
           first_touch: true,
-          source_topic: payload.topic,
+          source_topic: payload.stream,
         },
         "first touchpoint assigned",
       );
@@ -485,7 +479,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         event_id: raw.event_id,
         touchpoint_id: decision.touchpoint_id,
         previous_touchpoint_id: decision.previous_touchpoint_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
       },
       "last-touch reassigned (campaign tuple delta)",
     );
@@ -498,7 +492,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: raw.project_id,
         environment: raw.environment,
         event_id: raw.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -533,7 +527,7 @@ async function publishAttributionEnvelope(input: {
     identity: input.envelope.identity,
   });
   await input.producer.publishEvent({
-    family: TOPIC_FAMILY_ATTRIBUTION_EVENTS,
+    family: STREAM_FAMILY_ATTRIBUTION_EVENTS,
     // Same dual-shape stamp as analytics-projector / identity-resolver /
     // sessionizer outputs. The producer wrapper's `PublishableEvent` carries
     // an index signature; the attribution envelope is a closed shape so we
@@ -572,8 +566,8 @@ function getPrior(
 }
 
 interface ClassifiedErrorContext {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly metrics: ProcessorMetrics;
   readonly logger: Logger;
   readonly message: string;
@@ -593,7 +587,7 @@ function handleClassifiedError(err: unknown, context: ClassifiedErrorContext): v
   context.logger.error(
     {
       component: "attribution-engine.handler",
-      topic: context.payload.topic,
+      topic: context.payload.stream,
       partition: context.payload.partition,
       offset: context.payload.message.offset,
       retry_reason: classification.reason,

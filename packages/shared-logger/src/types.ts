@@ -19,11 +19,11 @@ export interface StandardLogFields {
   environment?: string;
   /** Source identifier stamped by the ingester (e.g. `payments-api`). */
   source_id?: string;
-  /** Redpanda topic name (e.g. `raw.events`, `analytics.events`). */
+  /** RabbitMQ topic name (e.g. `raw.events`, `analytics.events`). */
   topic?: string;
-  /** Redpanda partition number. */
+  /** RabbitMQ partition number. */
   partition?: number;
-  /** Redpanda message offset. */
+  /** RabbitMQ message offset. */
   offset?: string | number;
   /** Processor name from the immutable version directory. */
   processor_name?: string;

@@ -392,7 +392,7 @@ export interface ProcessorRunsTable {
   /** Count of events the run failed on (after classification). Monotonic. */
   events_failed: ColumnType<number, number | undefined, number>;
   /**
-   * Latest Redpanda offset observed by the run. INFORMATIONAL — the Kafka
+   * Latest RabbitMQ offset observed by the run. INFORMATIONAL — the Kafka
    * committed offset is the authoritative resume point. `bigint` because
    * KafkaJS surfaces offsets as strings of arbitrary integer width; we
    * cast in the application layer.
@@ -502,12 +502,12 @@ export interface IdentityLinksTable {
 /**
  * `topic_isolations` table.
  *
- * Per `docs/architecture/03-redpanda-topics.md` "Topic Isolation Triggers"
+ * Per `docs/architecture/03-rabbitmq-streams.md` "Topic Isolation Triggers"
  * and "Topic Families", a project may graduate from a shared canonical
  * topic to a dedicated topic when one of the documented isolation
  * triggers fires. The move is operational, not structural: producer and
  * consumer code continues to reference the logical topic family and
- * consults the resolver in `@polaris/shared-kafka` for the concrete
+ * consults the resolver in `@polaris/shared-transport` for the concrete
  * topic. This table is the persistent backing store the resolver reads.
  *
  * One row per activation event. `deactivated_at` is NULL while the
@@ -517,8 +517,8 @@ export interface IdentityLinksTable {
  * without consulting the audit log.
  *
  * **PostgreSQL does NOT store the canonical topic family list.** The
- * source of truth for canonical families is the `CANONICAL_TOPIC_FAMILIES`
- * constant in `packages/shared-kafka/src/topics.ts`; the migration's
+ * source of truth for canonical families is the `CANONICAL_STREAM_FAMILIES`
+ * constant in `packages/shared-transport/src/streams.ts`; the migration's
  * CHECK constraint mirrors that constant. Widening the set is a
  * coordinated change to the constant AND the migration.
  *
@@ -534,7 +534,7 @@ export interface TopicIsolationsTable {
   environment: string;
   /**
    * Canonical topic family this isolation moves off the shared default.
-   * Must be one of the families in `CANONICAL_TOPIC_FAMILIES`.
+   * Must be one of the families in `CANONICAL_STREAM_FAMILIES`.
    */
   topic_family: string;
   /**

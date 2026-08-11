@@ -5,13 +5,13 @@
  * `/metrics` through the shared Fastify bootstrap (same shape as
  * `apps/ingester-api`). These tests confirm:
  *
- *   - the app builds without bringing up Redpanda (injected stubs work),
+ *   - the app builds without bringing up RabbitMQ (injected stubs work),
  *   - `/health` returns the processor service identity,
  *   - `/ready` reflects probe state,
  *   - shutdown tasks tear the runtime down deterministically.
  */
 
-import type { PolarisConsumer, PolarisProducer, PublishEventInput } from "@polaris/shared-kafka";
+import type { PolarisConsumer, PolarisProducer, PublishEventInput } from "@polaris/shared-transport";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildAnalyticsProjectorApp } from "../src/app.js";

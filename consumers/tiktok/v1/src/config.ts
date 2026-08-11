@@ -32,8 +32,8 @@ import {
   type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -89,7 +89,7 @@ export const tiktokEnvKeys = [
 export interface TikTokRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  readonly redpanda: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly tiktok: TikTokConfig;
 }
@@ -98,7 +98,7 @@ export function tiktokConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    redpanda: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     tiktok: tiktokEnvSchema,
   });

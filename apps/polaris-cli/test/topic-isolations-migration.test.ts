@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CANONICAL_TOPIC_FAMILIES } from "@polaris/shared-kafka";
+import { CANONICAL_STREAM_FAMILIES } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -60,11 +60,11 @@ describe("topic_isolations migration: schema invariants", () => {
     );
   });
 
-  it("constrains topic_family to exactly CANONICAL_TOPIC_FAMILIES", () => {
+  it("constrains topic_family to exactly CANONICAL_STREAM_FAMILIES", () => {
     // Verify each canonical family appears in the CHECK. This is the
     // coordinated-change rule: widening the family set requires
     // widening both the constant and the CHECK.
-    for (const family of CANONICAL_TOPIC_FAMILIES) {
+    for (const family of CANONICAL_STREAM_FAMILIES) {
       expect(sql).toContain(`'${family}'`);
     }
   });

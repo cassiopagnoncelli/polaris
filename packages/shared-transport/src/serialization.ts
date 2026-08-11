@@ -1,7 +1,7 @@
 /**
  * Event serialization helpers.
  *
- * Polaris canonical events are transported on Redpanda as JSON-encoded
+ * Polaris canonical events are transported on RabbitMQ as JSON-encoded
  * canonical envelopes. The package keeps the serialization layer thin:
  * encode/decode plus a typed error so callers can decide whether to retry,
  * DLQ, or drop. We do not silently coerce missing fields here — schema

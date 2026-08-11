@@ -4,9 +4,10 @@ import {
   httpEnvSchema,
   loadConfigWithDefaults,
   nonEmptyStringSchema,
-  positiveIntSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type PostgresConfig,
+  postgresEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -31,41 +32,31 @@ export const PROCESSOR_SERVICE_NAME = "analytics-projector" as const;
  * Env vars:
  *
  *   POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP         ("polaris-analytics-projector-v1")
- *   POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY            (1)
  */
 export const analyticsProjectorEnvSchema = z
   .object({
     POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP: nonEmptyStringSchema.default(
       "polaris-analytics-projector-v1",
     ),
-    POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY: positiveIntSchema.default(1),
   })
   .transform(
     (parsed): AnalyticsProjectorConfig => ({
       consumerGroup: parsed["POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY"],
     }),
   );
 
-export interface AnalyticsProjectorConfig {
-  /**
-   * KafkaJS consumer group identifier. The default matches the processor
-   * directory name + version so multiple replicas of the same processor
-   * version cooperate, and a v2 deployment running in parallel uses a
-   * different group (no offset bleed between versions).
+export interface AnalyticsProjectorConfig {  /**
+   * Polaris consumer-group identifier: the namespace this processor's
+   * stream checkpoints live under in `transport_checkpoints`. The default
+   * matches the processor directory name + version so a v2 deployment
+   * running in parallel keeps its own resume point (no offset bleed
+   * between versions). Changing it rewinds the processor.
    */
   readonly consumerGroup: string;
-  /**
-   * Max partitions a single KafkaJS consumer instance reads in parallel.
-   * Defaults to 1 — the skeleton is single-threaded per process. P8
-   * processors with heavier transforms may tune this up.
-   */
-  readonly partitionsConsumedConcurrently: number;
 }
 
 export const analyticsProjectorEnvKeys = [
   "POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP",
-  "POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY",
 ] as const;
 
 /**
@@ -83,7 +74,13 @@ export const analyticsProjectorEnvKeys = [
 export interface AnalyticsProjectorRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  /**
+   * PostgreSQL connection. Required since the RabbitMQ migration: stream
+   * consumers own their resume point (`transport_checkpoints`) because
+   * AMQP has no server-side offset store.
+   */
+  readonly postgres: PostgresConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly projector: AnalyticsProjectorConfig;
 }
 
@@ -96,7 +93,8 @@ export function analyticsProjectorConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    postgres: postgresEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     projector: analyticsProjectorEnvSchema,
   });
 }

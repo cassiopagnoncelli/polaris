@@ -57,7 +57,7 @@ import type { IHeaders } from "kafkajs";
 /**
  * Header name the replay tooling stamps when redelivering an event for
  * replay purposes. Matches the platform header convention from
- * `@polaris/shared-kafka/src/headers.ts`.
+ * `@polaris/shared-transport/src/headers.ts`.
  */
 export const POLARIS_HEADER_REPLAY = "polaris-replay";
 

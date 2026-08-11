@@ -3,7 +3,7 @@
  *
  * Drives `createDestinationConsumer({...}).handleEvent({...})` with the
  * tiktok descriptor and in-memory adapters so the full pipeline runs
- * end-to-end without a Redpanda broker or PostgreSQL:
+ * end-to-end without a RabbitMQ broker or PostgreSQL:
  *
  *   envelope → normalize → map (per-event) → deliver (fake fetch)
  *           → RECORD (in-memory delivery_records [+ dlq_records on

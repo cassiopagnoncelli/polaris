@@ -59,7 +59,7 @@ import {
   POLARIS_HEADER_EVENT_NAME,
   POLARIS_HEADER_OCCURRED_AT,
   POLARIS_HEADER_PROJECT_ID,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import {
   REPLAY_HEADER_FLAG,
   REPLAY_HEADER_JOB_ID,

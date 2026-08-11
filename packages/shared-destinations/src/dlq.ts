@@ -4,7 +4,7 @@
  * Per `docs/architecture/06-destinations.md` "Retry and DLQ Policy", each
  * consumer owns retry and DLQ topics named `<vendor>.retry` and
  * `<vendor>.dlq`. The architecture doc lists examples (`meta-capi.dlq`,
- * `ga4.dlq`); the topic-resolver in `@polaris/shared-kafka`'s
+ * `ga4.dlq`); the topic-resolver in `@polaris/shared-transport`'s
  * `dlqTopicName` builds the literal.
  *
  * For destination consumers, the "component" identifier in the DLQ topic
@@ -12,7 +12,7 @@
  * with v1 traffic on the same DLQ. Example: `meta-capi.v1.dlq` vs
  * `meta-capi.v2.dlq`.
  *
- * This helper wraps `@polaris/shared-kafka`'s `republishToDlq` with the
+ * This helper wraps `@polaris/shared-transport`'s `republishToDlq` with the
  * defaults a destination consumer always wants:
  *
  *   - the `component` is `<vendor>.<consumerVersion>` (so DLQ topic names
@@ -27,11 +27,11 @@
  * a resolved secret value; it only echoes the headers / value bytes from
  * the original message.
  *
- * @see packages/shared-kafka/src/dlq.ts
+ * @see packages/shared-transport/src/dlq.ts
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 
-import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-kafka";
+import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-transport";
 import type { EachMessagePayload, RecordMetadata } from "kafkajs";
 
 import {
@@ -44,7 +44,7 @@ import type { ConsumerIdentity, NormalizableEnvelope } from "./types.js";
 
 /**
  * Polaris-defined extra headers stamped on destination DLQ messages.
- * Mirrors the `polaris-*` convention from `@polaris/shared-kafka`.
+ * Mirrors the `polaris-*` convention from `@polaris/shared-transport`.
  */
 export const POLARIS_HEADER_DESTINATION_ID = "polaris-destination-id";
 export const POLARIS_HEADER_DESTINATION_VENDOR = "polaris-destination-vendor";
@@ -134,7 +134,7 @@ export async function publishToDestinationDlq(
   const component = `${input.identity.vendor}.${input.identity.consumerVersion}`;
 
   // Stamp stage-version + destination headers onto the existing platform
-  // headers. `mergeHeaders` in `@polaris/shared-kafka` would also do this
+  // headers. `mergeHeaders` in `@polaris/shared-transport` would also do this
   // but the producer's `republishToDlq` already merges retry headers; we
   // pass our extra headers in alongside the original headers so the
   // combined header bag survives.

@@ -38,17 +38,17 @@
 
 import {
   buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
+  type TransportMessageHandler,
+  type TransportMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_IDENTITY_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -97,8 +97,6 @@ export interface IdentityResolverRuntimeDeps {
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Override for `Date.now()` so tests can pin emission timestamps. */
   readonly now?: () => Date;
-  /** KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`. */
-  readonly partitionsConsumedConcurrently?: number;
   /**
    * `ProcessorMetrics` registry. The runtime increments consume / emit /
    * failure counters here. Defaults to a fresh registry so tests still
@@ -128,7 +126,7 @@ export interface IdentityResolverRuntime {
    * Expose the message handler for direct testing without a running
    * KafkaJS cluster.
    */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /** Metrics registry the runtime is wired to. */
   readonly metrics: ProcessorMetrics;
 }
@@ -143,7 +141,7 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const newEventId = deps.newEventId ?? ((): string => uuidv7());
 
-  const handler: PolarisEachMessageHandler = async (payload, context) => {
+  const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
       payload,
       context,
@@ -162,21 +160,17 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_RAW_EVENTS, isolatedProjects);
-    await deps.consumer.subscribe({ topics: [...topics], fromBeginning: false });
+    const families = consumerFamiliesFor(STREAM_FAMILY_RAW_EVENTS, isolatedProjects);
+    await deps.consumer.subscribe({ families: [...families] });
     deps.logger.info(
       {
         component: "identity-resolver.runtime",
-        topics,
+        families,
         isolated_projects: isolatedProjects,
       },
       "identity-resolver subscribed to raw.events",
     );
-    await deps.consumer.runEach(handler, {
-      ...(deps.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: deps.partitionsConsumedConcurrently }
-        : {}),
-    });
+    await deps.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -193,8 +187,8 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
 // ---------------------------------------------------------------------------
 
 interface HandleMessageInput {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly producer: PolarisProducer;
   readonly repository: IdentityLinkRepository;
   readonly logger: Logger;
@@ -215,7 +209,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.warn(
       {
         component: "identity-resolver.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
@@ -290,7 +284,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: raw.project_id,
         environment: raw.environment,
         event_id: raw.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -322,7 +316,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   try {
     await producer.publishEvent({
-      family: TOPIC_FAMILY_IDENTITY_EVENTS,
+      family: STREAM_FAMILY_IDENTITY_EVENTS,
       // The identity event envelope is a closed shape on purpose; widen at
       // the producer boundary so `PublishableEvent`'s index signature
       // doesn't pollute the local type.
@@ -339,7 +333,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: envelope.project_id,
         environment: envelope.environment,
         event_id: envelope.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -363,7 +357,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       event_id: envelope.event_id,
       link_id: emission.link.link_id,
       source_event_id: raw.event_id,
-      source_topic: payload.topic,
+      source_topic: payload.stream,
       source_partition: payload.partition,
       source_offset: payload.message.offset,
       partition_key: partitionKey,
@@ -534,8 +528,8 @@ export const IDENTITY_EVENT_NAMES: ReadonlyArray<IdentityEventName> = [
 // ---------------------------------------------------------------------------
 
 interface ClassifiedErrorContext {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly metrics: ProcessorMetrics;
   readonly logger: Logger;
   readonly message: string;
@@ -555,7 +549,7 @@ function handleClassifiedError(err: unknown, context: ClassifiedErrorContext): v
   context.logger.error(
     {
       component: "identity-resolver.handler",
-      topic: context.payload.topic,
+      topic: context.payload.stream,
       partition: context.payload.partition,
       offset: context.payload.message.offset,
       retry_reason: classification.reason,

@@ -1,9 +1,9 @@
 /**
  * Replay execute adapters that wire the executor's source/producer
- * contracts to the real `@polaris/shared-kafka` reader / producer.
+ * contracts to the real `@polaris/shared-transport` reader / producer.
  *
  * The CLI's `replay execute` command holds the no-op stubs that P7-003
- * shipped while `@polaris/shared-kafka` did not yet expose an
+ * shipped while `@polaris/shared-transport` did not yet expose an
  * offset-range reader. With Q0EGTY5V's reader in place, the source can
  * translate the executor's chunk (a time window) into per-partition
  * offset reads, and the producer can hand each republished record to
@@ -29,7 +29,7 @@
  *     trusts what it receives. Any event whose `occurred_at` falls
  *     outside the chunk's inclusive bounds is dropped.
  *
- * @see packages/shared-kafka/src/offset-range-reader.ts
+ * @see packages/shared-transport/src/stream-range-reader.ts
  * @see packages/shared-replay/src/executor.ts
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  */
@@ -39,7 +39,7 @@ import {
   type OffsetRangeEvent,
   type PolarisProducer,
   readOffsetRange,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import type {
   ReplayExecutorProducer,
   ReplayExecutorSource,

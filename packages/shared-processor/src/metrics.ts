@@ -89,16 +89,16 @@ export const PROCESSOR_HANDLER_DURATION_BUCKETS_SECONDS: readonly number[] = Obj
  * geoip-enricher) operate cross-project.
  *
  * **Topic-family labels (P11-008).** All metrics emitted by a runtime
- * that touches Redpanda MUST carry the topic-family triple
+ * that touches RabbitMQ MUST carry the topic-family triple
  * (`topic_family`, `concrete_topic`, `partition`) in addition to
  * `(project_id, environment)`. These labels make the per-project
  * isolation dashboards work without a code change: a single Prometheus
  * query like `sum by (project_id) (rate(...{topic_family="raw.events"}))`
  * returns the per-project share of shared-topic throughput. The
  * fields are optional on the type because some processors (control-plane
- * jobs, manifest validators) do not touch Redpanda at all; the
- * architecture rule from `docs/architecture/03-redpanda-topics.md`
- * "Per-Project Observability" is: every Redpanda-touching emission
+ * jobs, manifest validators) do not touch RabbitMQ at all; the
+ * architecture rule from `docs/architecture/03-rabbitmq-streams.md`
+ * "Per-Project Observability" is: every RabbitMQ-touching emission
  * carries all five.
  */
 export interface ProcessorMetricLabels {
@@ -107,22 +107,22 @@ export interface ProcessorMetricLabels {
   readonly project_id?: string | undefined;
   readonly environment?: string | undefined;
   /**
-   * Logical Redpanda topic family this metric scopes to (e.g.
-   * `raw.events`, `enriched.events`). See `CANONICAL_TOPIC_FAMILIES` in
-   * `@polaris/shared-kafka`.
+   * Logical RabbitMQ topic family this metric scopes to (e.g.
+   * `raw.events`, `enriched.events`). See `CANONICAL_STREAM_FAMILIES` in
+   * `@polaris/shared-transport`.
    */
   readonly topic_family?: string | undefined;
   /**
-   * Concrete Redpanda topic name resolved at emission time (the shared
+   * Concrete RabbitMQ topic name resolved at emission time (the shared
    * family topic when the project is not isolated, or the dedicated
    * topic when it is). Required alongside `topic_family` so isolation
    * dashboards can compare shared vs dedicated share.
    */
   readonly concrete_topic?: string | undefined;
   /**
-   * Redpanda partition the metric is scoped to. Required for the
+   * RabbitMQ partition the metric is scoped to. Required for the
    * per-partition skew dashboard from
-   * `docs/architecture/03-redpanda-topics.md` "Per-Project
+   * `docs/architecture/03-rabbitmq-streams.md` "Per-Project
    * Observability".
    */
   readonly partition?: number | string | undefined;

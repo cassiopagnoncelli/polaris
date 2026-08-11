@@ -32,8 +32,8 @@ import {
   type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -92,7 +92,7 @@ export const ga4EnvKeys = [
 export interface Ga4RuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  readonly redpanda: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly ga4: Ga4Config;
 }
@@ -101,7 +101,7 @@ export function ga4ConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    redpanda: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     ga4: ga4EnvSchema,
   });

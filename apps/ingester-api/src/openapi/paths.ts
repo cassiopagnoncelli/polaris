@@ -248,7 +248,7 @@ const EVENTS_POST: PathItem = {
     operationId: "ingestEvents",
     summary: "Ingest a batch of events",
     description:
-      "Authenticates the API key, validates each event independently against the canonical envelope and registered `schema_version`, applies the forbidden-field policy (reject vs redact), performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`. Partial acceptance is non-negotiable: one invalid event does not block the rest of the batch — see the `partialAccept` example below.\n\nSee [Ingestion and SDKs](https://github.com/polaris/polaris/blob/main/docs/architecture/04-ingestion-and-sdks.md) for the architectural contract and [SDK handbook](https://github.com/polaris/polaris/blob/main/docs/sdk/README.md) for the client-side perspective.",
+      "Authenticates the API key, validates each event independently against the canonical envelope and registered `schema_version`, applies the forbidden-field policy (reject vs redact), performs short-window dedupe, and publishes accepted events to RabbitMQ `raw.events`. Partial acceptance is non-negotiable: one invalid event does not block the rest of the batch — see the `partialAccept` example below.\n\nSee [Ingestion and SDKs](https://github.com/polaris/polaris/blob/main/docs/architecture/04-ingestion-and-sdks.md) for the architectural contract and [SDK handbook](https://github.com/polaris/polaris/blob/main/docs/sdk/README.md) for the client-side perspective.",
     tags: ["ingest"],
     security: [{ apiKey: [] }],
     requestBody: {
@@ -394,7 +394,7 @@ const READY_GET: PathItem = {
     operationId: "getReady",
     summary: "Readiness probe",
     description:
-      "Aggregates registered readiness probes (PostgreSQL, Redis, Redpanda, ...). Returns 200 when every probe reports `up`; returns 503 when any probe is `down` (or `degraded`, by default). Use for container readiness / Kubernetes readiness checks.",
+      "Aggregates registered readiness probes (PostgreSQL, Redis, RabbitMQ, ...). Returns 200 when every probe reports `up`; returns 503 when any probe is `down` (or `degraded`, by default). Use for container readiness / Kubernetes readiness checks.",
     tags: ["operations"],
     responses: {
       "200": {

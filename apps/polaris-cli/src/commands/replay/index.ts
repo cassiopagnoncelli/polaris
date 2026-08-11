@@ -24,7 +24,7 @@
  *
  *   `polaris replay plan` is the dry-run renderer. It reads the
  *   operator-issued declaration from `replay_jobs` and hands it to the
- *   planner; it performs no DB writes and never touches Redpanda. The
+ *   planner; it performs no DB writes and never touches RabbitMQ. The
  *   plan is the contract the future executor (P7-003) will consume —
  *   operators run `plan` to pre-flight their replay before promoting
  *   `mode` from `dry_run` to `live`.
@@ -32,7 +32,7 @@
  * Bounded replay: replay is bounded to the operational retention window
  * (90 days for `raw.events` in v1). `replay create` enforces the bound on
  * `--from` with `replay_window_exceeded`. The migration deliberately does
- * NOT encode the bound (it would couple PostgreSQL to the Redpanda
+ * NOT encode the bound (it would couple PostgreSQL to the RabbitMQ
  * retention config); the CLI is the gate. The planner re-enforces the
  * same retention window so a stale row that became out-of-window between
  * create and plan time also rejects with `outside_retention_window`.

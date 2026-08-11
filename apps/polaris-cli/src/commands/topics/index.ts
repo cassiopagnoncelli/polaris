@@ -21,14 +21,14 @@
  *
  *   `polaris topics isolate` does NOT auto-cut producers and consumers
  *   over to the dedicated topic. The runtime resolver in
- *   `@polaris/shared-kafka` reads the active row through a TTL-bounded
+ *   `@polaris/shared-transport` reads the active row through a TTL-bounded
  *   cache, so the cutover becomes live within one TTL window across
  *   all services that wired the cache in. The
  *   `docs/operations/topic-isolation-cutover.md` runbook walks
  *   operators through the producer-first / consumer-second sequence.
  *
- * @see docs/architecture/03-redpanda-topics.md "Topic Isolation Triggers"
- * @see docs/architecture/03-redpanda-topics.md "Topic Families"
+ * @see docs/architecture/03-rabbitmq-streams.md "Topic Isolation Triggers"
+ * @see docs/architecture/03-rabbitmq-streams.md "Topic Families"
  * @see docs/operations/topic-isolation-cutover.md
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
@@ -53,7 +53,7 @@ export const topicsCommand: CommandDefinition = {
     const group = parent
       .command("topics")
       .description(
-        "Manage Redpanda topic isolation. PostgreSQL stores runtime state only; canonical topic families live in @polaris/shared-kafka.",
+        "Manage RabbitMQ topic isolation. PostgreSQL stores runtime state only; canonical topic families live in @polaris/shared-transport.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

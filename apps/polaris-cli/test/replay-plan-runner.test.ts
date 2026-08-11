@@ -4,7 +4,7 @@
  * The plan command is the dry-run renderer for a replay job. It reads
  * the operator-issued declaration out of `replay_jobs`, hands it to the
  * planner in `@polaris/shared-replay`, and prints the result. No DB
- * writes; no Redpanda reads.
+ * writes; no RabbitMQ reads.
  *
  * Coverage matrix:
  *

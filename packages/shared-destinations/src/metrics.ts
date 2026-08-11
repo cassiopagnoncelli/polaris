@@ -95,13 +95,13 @@ export const DESTINATION_RATE_LIMIT_WAIT_BUCKETS_SECONDS: readonly number[] = Ob
  *
  * **Topic-family labels (P11-008).** Every destination consumer reads
  * from `analytics.events` (or its dedicated variant when a project is
- * isolated). Per `docs/architecture/03-redpanda-topics.md`
+ * isolated). Per `docs/architecture/03-rabbitmq-streams.md`
  * "Per-Project Observability", emissions MUST carry the topic-family
  * triple (`topic_family`, `concrete_topic`, `partition`) so the
  * per-project share / lag / skew dashboards work without a code
  * change. The fields are optional on the type because some metrics
  * (rate-limit wait, replay suppression) are not partition-scoped; the
- * architecture rule applies to per-Redpanda-message emissions.
+ * architecture rule applies to per-RabbitMQ-message emissions.
  */
 export interface DestinationMetricLabels {
   readonly vendor: string;
@@ -110,21 +110,21 @@ export interface DestinationMetricLabels {
   readonly project_id?: string | undefined;
   readonly environment?: string | undefined;
   /**
-   * Logical Redpanda topic family this metric scopes to. See
-   * `CANONICAL_TOPIC_FAMILIES` in `@polaris/shared-kafka`. Required on
+   * Logical RabbitMQ topic family this metric scopes to. See
+   * `CANONICAL_STREAM_FAMILIES` in `@polaris/shared-transport`. Required on
    * per-message emissions; optional on aggregate metrics (rate-limit
    * wait, replay suppression) that are not partition-scoped.
    */
   readonly topic_family?: string | undefined;
   /**
-   * Concrete Redpanda topic name resolved at consume time (the shared
+   * Concrete RabbitMQ topic name resolved at consume time (the shared
    * family topic, or the dedicated topic when the project is
    * isolated). Required alongside `topic_family` so isolation
    * dashboards can compare shared vs dedicated share.
    */
   readonly concrete_topic?: string | undefined;
   /**
-   * Redpanda partition the metric is scoped to. Required for the
+   * RabbitMQ partition the metric is scoped to. Required for the
    * per-partition skew dashboard.
    */
   readonly partition?: number | string | undefined;

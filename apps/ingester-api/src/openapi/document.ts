@@ -91,7 +91,7 @@ export function buildOpenApiDocument(options: BuildOpenApiDocumentOptions): Open
     tags: [
       {
         name: "ingest",
-        description: "Event ingestion endpoints. The only path that publishes to Redpanda.",
+        description: "Event ingestion endpoints. The only path that publishes to RabbitMQ.",
       },
       {
         name: "operations",
@@ -114,7 +114,7 @@ export const PUBLISHED_OPENAPI_INFO = {
   title: "Polaris Ingester API",
   version: "0.0.1",
   description:
-    "Polaris event ingestion API. Authenticates API keys, validates events against the canonical envelope and event catalog, applies the forbidden-field policy, performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`.\n\nThis document is *generated* from Zod sources in the Polaris monorepo. Do not edit by hand — run `pnpm openapi` after changing a Zod schema or a Fastify route.",
+    "Polaris event ingestion API. Authenticates API keys, validates events against the canonical envelope and event catalog, applies the forbidden-field policy, performs short-window dedupe, and publishes accepted events to RabbitMQ `raw.events`.\n\nThis document is *generated* from Zod sources in the Polaris monorepo. Do not edit by hand — run `pnpm openapi` after changing a Zod schema or a Fastify route.",
 } as const;
 
 /**

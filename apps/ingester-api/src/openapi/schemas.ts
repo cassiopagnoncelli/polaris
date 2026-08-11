@@ -250,7 +250,7 @@ export function buildComponentSchemas(): Record<string, OpenApiSchemaObject> {
   return {
     Envelope: annotate(fromZod(envelopeSchema), {
       description:
-        "Canonical event envelope. The ingester stamps `project_id`, `environment`, `ingested_at`, and trusted `source.id` from the API key; this is the *post-stamp* shape downstream consumers see in Redpanda `raw.events`.",
+        "Canonical event envelope. The ingester stamps `project_id`, `environment`, `ingested_at`, and trusted `source.id` from the API key; this is the *post-stamp* shape downstream consumers see in RabbitMQ `raw.events`.",
       example: EXAMPLE_CANONICAL_ENVELOPE,
     }),
     ProducerEnvelope: annotate(fromZod(producerEnvelopeSchema), {

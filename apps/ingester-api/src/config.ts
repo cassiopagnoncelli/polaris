@@ -8,9 +8,9 @@ import {
   positiveIntSchema,
   postgresEnvSchema,
   type RedisConfig,
-  type RedpandaConfig,
+  type RabbitmqConfig,
   redisEnvSchema,
-  redpandaEnvSchema,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -294,7 +294,7 @@ export interface IngesterConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
   readonly postgres: PostgresConfig;
-  readonly redpanda: RedpandaConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly redis: RedisConfig;
   readonly authCache: AuthCacheConfig;
   readonly ingest: IngestConfig;
@@ -322,7 +322,7 @@ export function ingesterConfigSchema() {
     service: serviceEnvSchema,
     http: httpEnvSchema,
     postgres: postgresEnvSchema,
-    redpanda: redpandaEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     redis: redisEnvSchema,
     authCache: authCacheEnvSchema,
     ingest: ingestEnvSchema,

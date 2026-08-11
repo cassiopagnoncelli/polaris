@@ -41,17 +41,17 @@
 
 import {
   buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
+  type TransportMessageHandler,
+  type TransportMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_ENRICHED_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -103,8 +103,6 @@ export interface GeoipEnricherRuntimeDeps {
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Override for `Date.now()` so tests can pin emission timestamps. */
   readonly now?: () => Date;
-  /** KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`. */
-  readonly partitionsConsumedConcurrently?: number;
   /**
    * `ProcessorMetrics` registry. The runtime increments consume / emit /
    * failure counters here. Defaults to a fresh registry so tests still
@@ -134,7 +132,7 @@ export interface GeoipEnricherRuntime {
    * Expose the message handler for direct testing without a running
    * KafkaJS cluster.
    */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /** Metrics registry the runtime is wired to. */
   readonly metrics: ProcessorMetrics;
   /** Lookup adapter the runtime is wired to. */
@@ -154,7 +152,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   const newEventId = deps.newEventId ?? ((): string => uuidv7());
   const synthRunId = deps.run_id ?? `synthetic:${uuidv7()}`;
 
-  const handler: PolarisEachMessageHandler = async (payload, context) => {
+  const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
       payload,
       context,
@@ -173,22 +171,18 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_RAW_EVENTS, isolatedProjects);
-    await deps.consumer.subscribe({ topics: [...topics], fromBeginning: false });
+    const families = consumerFamiliesFor(STREAM_FAMILY_RAW_EVENTS, isolatedProjects);
+    await deps.consumer.subscribe({ families: [...families] });
     deps.logger.info(
       {
         component: "geoip-enricher.runtime",
-        topics,
+        families,
         isolated_projects: isolatedProjects,
         ip_lookup: lookup.id,
       },
       "geoip-enricher subscribed to raw.events",
     );
-    await deps.consumer.runEach(handler, {
-      ...(deps.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: deps.partitionsConsumedConcurrently }
-        : {}),
-    });
+    await deps.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -205,8 +199,8 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
 // ---------------------------------------------------------------------------
 
 interface HandleMessageInput {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly producer: PolarisProducer;
   readonly lookup: IPLookup;
   readonly logger: Logger;
@@ -237,7 +231,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.warn(
       {
         component: "geoip-enricher.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
@@ -310,7 +304,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   try {
     await producer.publishEvent({
-      family: TOPIC_FAMILY_ENRICHED_EVENTS,
+      family: STREAM_FAMILY_ENRICHED_EVENTS,
       // The enriched envelope is a closed shape on purpose; widen at
       // the producer boundary so `PublishableEvent`'s index signature
       // does not pollute the local type.
@@ -328,7 +322,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         environment: envelope.environment,
         event_id: envelope.event_id,
         source_event_id: raw.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -355,7 +349,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       event: envelope.event,
       event_id: envelope.event_id,
       source_event_id: raw.event_id,
-      source_topic: payload.topic,
+      source_topic: payload.stream,
       source_partition: payload.partition,
       source_offset: payload.message.offset,
       partition_key: partitionKey,
@@ -375,8 +369,8 @@ export { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION };
 // ---------------------------------------------------------------------------
 
 interface ClassifiedErrorContext {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly metrics: ProcessorMetrics;
   readonly logger: Logger;
   readonly message: string;
@@ -396,7 +390,7 @@ function handleClassifiedError(err: unknown, context: ClassifiedErrorContext): v
   context.logger.error(
     {
       component: "geoip-enricher.handler",
-      topic: context.payload.topic,
+      topic: context.payload.stream,
       partition: context.payload.partition,
       offset: context.payload.message.offset,
       retry_reason: classification.reason,

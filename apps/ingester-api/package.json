@@ -29,7 +29,7 @@
   "dependencies": {
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-policy": "workspace:*",

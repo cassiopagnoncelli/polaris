@@ -65,7 +65,7 @@ export const BATCH_REASON_FORBIDDEN_FIELD_REJECTED = "forbidden_field_rejected";
 export const BATCH_REASON_DUPLICATE = "duplicate";
 
 /**
- * Reason returned when an accepted event cannot be published to Redpanda
+ * Reason returned when an accepted event cannot be published to RabbitMQ
  * (transient broker failure, serializer error). SDKs retry these with
  * backoff; the event is **not** counted as accepted by the ingester.
  */

@@ -25,7 +25,7 @@
  *
  * Tests inject pre-built consumer + producer + instance reader + records
  * repo + secrets through the `BuildAppOptions` slots so they can drive
- * the runtime without a real Redpanda broker or PostgreSQL.
+ * the runtime without a real RabbitMQ broker or PostgreSQL.
  */
 
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
@@ -47,7 +47,7 @@ import {
   createPolarisProducer,
   type PolarisConsumer,
   type PolarisProducer,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
@@ -362,7 +362,7 @@ function buildProducer(
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
+  const kafka = createKafkaClient({ redpanda: config.rabbitmq });
   const producer = createPolarisProducer({
     kafka,
     logger,
@@ -380,7 +380,7 @@ function buildConsumer(
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
+  const kafka = createKafkaClient({ redpanda: config.rabbitmq });
   const consumer = createPolarisConsumer({
     kafka,
     logger,

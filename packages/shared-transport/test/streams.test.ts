@@ -33,7 +33,7 @@ describe("canonical stream constants", () => {
 
   it("lists every canonical family, including session.events", () => {
     // `session.events` became canonical with the RabbitMQ migration: the
-    // sessionizer always emitted it, but Redpanda's topic auto-creation
+    // sessionizer always emitted it, but RabbitMQ's topic auto-creation
     // hid the fact that it was never declared anywhere.
     expect(CANONICAL_STREAM_FAMILIES).toEqual([
       "raw.events",

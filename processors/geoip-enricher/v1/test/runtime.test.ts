@@ -2,7 +2,7 @@
  * Streaming runtime tests for geoip-enricher v1.
  *
  * The runtime is exercised through its `handler` slot — the same
- * `PolarisEachMessageHandler` registered with the KafkaJS consumer. We
+ * `TransportMessageHandler` registered with the KafkaJS consumer. We
  * synthesise a minimal `EachMessagePayload` and assert:
  *
  *   - happy path with InMemoryIPLookup → enriched.geoip envelope is
@@ -18,7 +18,7 @@
  *   - empty/tombstone, bad JSON, missing envelope fields produce the
  *     same fail-fast behaviour as analytics-projector + identity-resolver.
  *
- * The producer is a recording stub — no Redpanda required.
+ * The producer is a recording stub — no RabbitMQ required.
  */
 
 import { readFileSync } from "node:fs";
@@ -28,14 +28,14 @@ import { fileURLToPath } from "node:url";
 import {
   buildRawEventsPartitionKey,
   type PolarisConsumer,
-  type PolarisMessageContext,
+  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_ENRICHED_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import type { EachMessagePayload } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
@@ -164,7 +164,7 @@ class CapturingStream extends Writable {
 
 function buildPayload(value: Buffer | null): EachMessagePayload {
   return {
-    topic: TOPIC_FAMILY_RAW_EVENTS,
+    topic: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
       key: Buffer.from("partition-key"),
@@ -180,7 +180,7 @@ function buildPayload(value: Buffer | null): EachMessagePayload {
   } as EachMessagePayload;
 }
 
-const EMPTY_CONTEXT: PolarisMessageContext = {};
+const EMPTY_CONTEXT: TransportMessageContext = {};
 
 interface BuildRuntimeOptions {
   readonly lookup?: ConstructorParameters<typeof InMemoryIPLookup>[0];
@@ -229,7 +229,7 @@ describe("createRuntime (geoip-enricher v1)", () => {
     expect(producer.publishes.length).toBe(1);
     const sent = producer.publishes[0];
     if (sent === undefined) throw new Error("expected one publish");
-    expect(sent.family).toBe(TOPIC_FAMILY_ENRICHED_EVENTS);
+    expect(sent.family).toBe(STREAM_FAMILY_ENRICHED_EVENTS);
 
     // Partition key is the SAME canonical key as the source raw.events
     // record, so per-identity ordering is preserved end to end.

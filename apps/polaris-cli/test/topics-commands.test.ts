@@ -25,11 +25,11 @@
  *   - The output format honors `--output human` and `--output json`.
  */
 import {
-  CANONICAL_TOPIC_FAMILIES,
-  type CanonicalTopicFamily,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  CANONICAL_STREAM_FAMILIES,
+  type CanonicalStreamFamily,
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -112,7 +112,7 @@ class InMemoryTopicStore {
   }
 
   private activeRowFor(
-    family: CanonicalTopicFamily,
+    family: CanonicalStreamFamily,
     projectId: string,
     environment: string,
   ): TopicIsolationRow | undefined {
@@ -130,7 +130,7 @@ class InMemoryTopicStore {
   }
 
   private latestRowFor(
-    family: CanonicalTopicFamily,
+    family: CanonicalStreamFamily,
     projectId: string,
     environment: string,
   ): TopicIsolationRow | undefined {
@@ -153,7 +153,7 @@ class InMemoryTopicStore {
       insertWithAudit: async (input, audit): Promise<IsolateInsertOutcome> => {
         if (
           this.activeRowFor(
-            input.topic_family as CanonicalTopicFamily,
+            input.topic_family as CanonicalStreamFamily,
             input.project_id,
             input.environment,
           ) !== undefined
@@ -291,7 +291,7 @@ function jsonContext(streams: OutputStreams): CommandContext {
 const ISOLATE_BASE_ARGS = {
   project: "storefront",
   env: "production",
-  family: TOPIC_FAMILY_RAW_EVENTS,
+  family: STREAM_FAMILY_RAW_EVENTS,
   reason: "volume share above 25% for two review cycles",
 } as const;
 
@@ -447,7 +447,7 @@ describe("topics isolate runner", () => {
   });
 
   it("supports every canonical family", async () => {
-    for (const family of CANONICAL_TOPIC_FAMILIES) {
+    for (const family of CANONICAL_STREAM_FAMILIES) {
       const store = new InMemoryTopicStore();
       const capture = captureOutput();
       const runner = buildTopicsIsolateRunner({
@@ -745,7 +745,7 @@ describe("topics analytics-events family", () => {
       {
         project: "storefront",
         env: "production",
-        family: TOPIC_FAMILY_ANALYTICS_EVENTS,
+        family: STREAM_FAMILY_ANALYTICS_EVENTS,
         reason: "destination consumer lag against shared offsets",
       },
       makeContext(capture.streams),

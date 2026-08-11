@@ -2,7 +2,7 @@
  * Behavioral tests for the replay executor (P7-003).
  *
  * The executor is the bridge between a planner-issued {@link ReplayPlan}
- * and Redpanda: it walks the plan's chunks, reads source events via an
+ * and RabbitMQ: it walks the plan's chunks, reads source events via an
  * injected adapter, stamps the platform replay headers
  * (`polaris-replay`, `polaris-replay-job-id`), republishes via an
  * injected producer, and persists lifecycle state through an injected

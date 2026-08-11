@@ -14,18 +14,20 @@
  *
  * Tests inject pre-built consumer / producer / repository through the
  * `BuildAppOptions` slots so they can drive the runtime without a real
- * Redpanda or PostgreSQL.
+ * RabbitMQ or PostgreSQL.
  */
 
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
-  createKafkaClient,
+  createTransportConnection,
+  type TransportConnection,
   createPolarisConsumer,
+  PostgresCheckpointStore,
   createPolarisProducer,
   type PolarisConsumer,
   type PolarisProducer,
   type SyncIsolationLookup,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
@@ -97,8 +99,26 @@ export async function buildIdentityResolverApp(
   const repository = options.repository ?? createKyselyIdentityLinkRepository({ db });
 
   // ---- consumer + producer --------------------------------------------
-  const { producer, ownsProducer } = buildProducer(config, options.producer, processorLogger);
-  const { consumer, ownsConsumer } = buildConsumer(config, options.consumer, processorLogger);
+  // One AMQP connection per process, shared by the producer and the
+  // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
+  // over AMQP have no server-side offset store, so the resume point is
+  // Polaris-owned (see db/migrations/*_create_transport_checkpoints.sql).
+  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: processorLogger });
+  const checkpointDb = createDb({ postgres: config.postgres });
+  const checkpoints = new PostgresCheckpointStore(checkpointDb);
+  const { producer, ownsProducer } = buildProducer(
+    config,
+    options.producer,
+    processorLogger,
+    connection,
+  );
+  const { consumer, ownsConsumer } = buildConsumer(
+    config,
+    options.consumer,
+    processorLogger,
+    connection,
+    checkpoints,
+  );
 
   if (ownsProducer) {
     try {
@@ -107,16 +127,6 @@ export async function buildIdentityResolverApp(
       processorLogger.error(
         { component: "identity-resolver.producer", err: errSummary(err) },
         "identity.events producer failed to connect",
-      );
-    }
-  }
-  if (ownsConsumer) {
-    try {
-      await consumer.connect();
-    } catch (err) {
-      processorLogger.error(
-        { component: "identity-resolver.consumer", err: errSummary(err) },
-        "raw.events consumer failed to connect",
       );
     }
   }
@@ -133,7 +143,6 @@ export async function buildIdentityResolverApp(
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
-    partitionsConsumedConcurrently: config.resolver.partitionsConsumedConcurrently,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -172,6 +181,19 @@ export async function buildIdentityResolverApp(
       }
     });
   }
+  shutdownTasks.push(async () => {
+    // checkpoint transport shutdown: the consumer has already flushed its
+    // offsets, so the connection and the checkpoint pool go last.
+    try {
+      await connection.close();
+    } catch (err) {
+      processorLogger.warn(
+        { component: "transport", err: errSummary(err) },
+        "transport connection close error during shutdown",
+      );
+    }
+    await closeDb(checkpointDb);
+  });
   if (ownsDb) {
     shutdownTasks.push(async () => {
       try {
@@ -253,11 +275,7 @@ function buildDb(
   if (override !== undefined) {
     return { db: override, ownsDb: false };
   }
-  const pg = config.postgres;
-  const params = new URLSearchParams();
-  params.set("sslmode", pg.ssl ? "require" : "disable");
-  const connectionString = `postgres://${encodeURIComponent(pg.user)}:${encodeURIComponent(pg.password)}@${pg.host}:${pg.port}/${pg.database}?${params.toString()}`;
-  const db = createDb({ connectionString, maxConnections: pg.poolMax });
+  const db = createDb({ postgres: config.postgres });
   return { db, ownsDb: true };
 }
 
@@ -265,13 +283,13 @@ function buildProducer(
   config: IdentityResolverRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const producer = createPolarisProducer({
-    kafka,
+    connection,
     logger,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
@@ -283,19 +301,19 @@ function buildConsumer(
   config: IdentityResolverRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  connection: TransportConnection,
+  checkpoints: PostgresCheckpointStore,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const consumer = createPolarisConsumer({
-    kafka,
+    connection,
     logger,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
-    consumerConfig: {
-      groupId: config.resolver.consumerGroup,
-    },
+    groupName: config.resolver.consumerGroup,
+    checkpoints,
   });
   return { consumer, ownsConsumer: true };
 }

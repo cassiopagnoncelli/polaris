@@ -29,13 +29,13 @@
   },
   "dependencies": {
     "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-schemas": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
-    "kafkajs": "^2.2.4",
+    "@polaris/shared-transport": "workspace:*",
     "uuid": "^14.0.0",
     "zod": "^4.4.3"
   }

@@ -1,9 +1,10 @@
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
-  createKafkaClient,
   createPolarisProducer,
+  createTransportConnection,
   type PolarisProducer,
-} from "@polaris/shared-kafka";
+  type TransportConnection,
+} from "@polaris/shared-transport";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import type { ProjectPolicyOverride } from "@polaris/shared-policy";
@@ -59,7 +60,7 @@ import { registerEventsRoutes } from "./routes/events.js";
  *
  * Most slots are optional and default to production wiring. Tests override
  * `apiKeyRepository`, `producer`, `dedupe`, and `catalog` to avoid bringing
- * up PostgreSQL, Redis, Redpanda, and the YAML catalog tree.
+ * up PostgreSQL, Redis, RabbitMQ, and the YAML catalog tree.
  */
 export interface BuildIngesterAppOptions {
   /** Pre-loaded ingester runtime configuration. */
@@ -160,7 +161,7 @@ export interface BuildIngesterAppOptions {
  *   - Event catalog (loaded from `catalog/events/**` once at startup).
  *   - Forbidden-field policy resolver (platform defaults plus optional
  *     per-project overrides).
- *   - Redpanda producer through `@polaris/shared-kafka`.
+ *   - RabbitMQ producer through `@polaris/shared-transport`.
  *   - Redis dedupe store (with documented fall-back behaviour).
  *   - The real `POST /v1/events` handler (replaces the 501 stub).
  *
@@ -233,7 +234,11 @@ export async function buildIngesterApp(
   const metrics = options.metrics ?? new IngestMetrics();
 
   // ---- producer --------------------------------------------------------
-  const { producer, ownedProducer } = buildProducer(config, options.producer, logger);
+  const { producer, ownedProducer, connection: transportConnection } = buildProducer(
+    config,
+    options.producer,
+    logger,
+  );
   if (ownedProducer) {
     try {
       await producer.connect();
@@ -314,6 +319,7 @@ export async function buildIngesterApp(
     shutdownTasks.push(async () => {
       try {
         await producer.disconnect();
+        await transportConnection?.close();
       } catch (err) {
         logger.warn(
           { component: "ingest.producer", err: errSummary(err) },
@@ -360,7 +366,7 @@ export async function buildIngesterApp(
         title: "Polaris Ingester API",
         version: config.service.serviceVersion,
         description:
-          "Event ingestion API for Polaris SDKs and trusted producers. Authenticates API keys, validates events against the catalog, applies the forbidden-field policy, and publishes accepted events to Redpanda.",
+          "Event ingestion API for Polaris SDKs and trusted producers. Authenticates API keys, validates events against the catalog, applies the forbidden-field policy, and publishes accepted events to RabbitMQ.",
       },
     },
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
@@ -434,18 +440,24 @@ function buildProducer(
   config: IngesterConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
-): { producer: PolarisProducer; ownedProducer: boolean } {
+): {
+  producer: PolarisProducer;
+  ownedProducer: boolean;
+  connection: TransportConnection | undefined;
+} {
   if (override !== undefined) {
-    return { producer: override, ownedProducer: false };
+    return { producer: override, ownedProducer: false, connection: undefined };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
+  // The ingester holds one AMQP connection and one confirm channel. It
+  // never consumes, so there is no checkpoint store to wire here.
+  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger });
   const producer = createPolarisProducer({
-    kafka,
+    connection,
     logger,
     producerName: config.service.serviceName,
     producerVersion: config.service.serviceVersion,
   });
-  return { producer, ownedProducer: true };
+  return { producer, ownedProducer: true, connection };
 }
 
 async function buildDedupeStore(

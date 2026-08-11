@@ -17,12 +17,12 @@
 import {
   decodeEvent,
   type PolarisConsumer,
-  type PolarisMessageContext,
+  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_ATTRIBUTION_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_ATTRIBUTION_EVENTS,
+} from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
@@ -34,7 +34,7 @@ const NOW_ISO = "2026-05-14T12:30:00.000Z";
 
 function buildPayload(value: Buffer | null): EachMessagePayload {
   return {
-    topic: TOPIC_FAMILY_ANALYTICS_EVENTS,
+    topic: STREAM_FAMILY_ANALYTICS_EVENTS,
     partition: 0,
     message: {
       key: Buffer.from("partition-key"),
@@ -50,11 +50,11 @@ function buildPayload(value: Buffer | null): EachMessagePayload {
   } as EachMessagePayload;
 }
 
-function buildContext(overrides: Partial<PolarisMessageContext> = {}): PolarisMessageContext {
+function buildContext(overrides: Partial<TransportMessageContext> = {}): TransportMessageContext {
   return {
     receivedAt: new Date(NOW_ISO),
     ...overrides,
-  } as PolarisMessageContext;
+  } as TransportMessageContext;
 }
 
 class RecordingProducer {
@@ -217,7 +217,7 @@ describe("attribution-engine runtime — golden first observation", () => {
     ]);
     // Every publish targets the attribution.events topic family.
     for (const pub of producer.publishes) {
-      expect(pub.family).toBe(TOPIC_FAMILY_ATTRIBUTION_EVENTS);
+      expect(pub.family).toBe(STREAM_FAMILY_ATTRIBUTION_EVENTS);
     }
   });
 

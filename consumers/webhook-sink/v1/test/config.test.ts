@@ -22,9 +22,9 @@ const BASE_ENV: Record<string, string> = {
   POLARIS_HTTP_HOST: "0.0.0.0",
   POLARIS_HTTP_PORT: "4002",
   POLARIS_HTTP_BODY_LIMIT_BYTES: "1048576",
-  POLARIS_REDPANDA_BROKERS: "localhost:9092",
-  POLARIS_REDPANDA_CLIENT_ID: "webhook-sink",
-  POLARIS_REDPANDA_SSL: "false",
+  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_CLIENT_ID: "webhook-sink",
+  POLARIS_RABBITMQ_TLS: "false",
   POLARIS_POSTGRES_HOST: "localhost",
   POLARIS_POSTGRES_DATABASE: "polaris",
   POLARIS_POSTGRES_USER: "polaris",
@@ -68,7 +68,7 @@ describe("webhookSinkConfigSchema", () => {
     expect(config.service.serviceName).toBe(CONSUMER_SERVICE_NAME);
     expect(config.http.host).toBe("0.0.0.0");
     expect(config.http.port).toBe(4002);
-    expect(config.redpanda.brokers).toEqual(["localhost:9092"]);
+    expect(config.rabbitmq.brokers).toEqual(["localhost:9092"]);
     expect(config.postgres.host).toBe("localhost");
     expect(config.postgres.database).toBe("polaris");
     expect(config.sink.consumerGroup).toBe("polaris-webhook-sink-v1");

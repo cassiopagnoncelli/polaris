@@ -37,11 +37,11 @@
  * `session.events`, but `session.events` is NOT in the canonical topic
  * family list yet (only `raw.events`, `identity.events`,
  * `enriched.events`, `attribution.events`, `analytics.events` per
- * `docs/architecture/03-redpanda-topics.md`). To stay inside the task's
+ * `docs/architecture/03-rabbitmq-streams.md`). To stay inside the task's
  * declared write scope, the runtime publishes via the producer's
  * lower-level `send` method with an explicit topic name and manually-
- * built headers and partition key. Adding `TOPIC_FAMILY_SESSION_EVENTS`
- * to `@polaris/shared-kafka` is a follow-up cross-cut.
+ * built headers and partition key. Adding `STREAM_FAMILY_SESSION_EVENTS`
+ * to `@polaris/shared-transport` is a follow-up cross-cut.
  *
  * Caller-owned DLQ orchestration: the runtime does not auto-route to
  * DLQ. Hosts that want DLQ routing wrap the handler with `publishToDlq`
@@ -49,19 +49,20 @@
  */
 
 import {
-  buildEventHeaders,
   buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
-  encodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
+  type TransportMessageHandler,
+  type TransportMessageContext,
   type PolarisProducer,
+  type PublishableEvent,
+  type PublishResult,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_RAW_EVENTS,
+  STREAM_FAMILY_SESSION_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -69,7 +70,6 @@ import {
   ProcessorMetrics,
   type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
-import type { ProducerRecord, RecordMetadata } from "kafkajs";
 import { v7 as uuidv7 } from "uuid";
 
 import {
@@ -94,10 +94,10 @@ import type { RawEventEnvelope } from "./types.js";
 /**
  * Output topic name. Per the manifest, the sessionizer publishes on
  * `session.events`. The constant lives in the runtime (rather than in
- * `@polaris/shared-kafka`) so v1 stays inside the task's write scope —
+ * `@polaris/shared-transport`) so v1 stays inside the task's write scope —
  * see the file header comment.
  */
-export const OUTPUT_TOPIC_FAMILY = "session.events" as const;
+export const OUTPUT_STREAM_FAMILY = STREAM_FAMILY_SESSION_EVENTS;
 
 /**
  * Dependencies for the runtime. The factory accepts already-built
@@ -123,8 +123,6 @@ export interface SessionizerRuntimeDeps {
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Override for `() => new Date()` so tests can pin emission timestamps. */
   readonly now?: () => Date;
-  /** KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`. */
-  readonly partitionsConsumedConcurrently?: number;
   /**
    * `ProcessorMetrics` registry. The runtime increments consume / emit /
    * failure counters here. Defaults to a fresh registry so tests still
@@ -169,7 +167,7 @@ export interface SessionizerRuntime {
    * Expose the message handler for direct testing without a running
    * KafkaJS cluster.
    */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /** Metrics registry the runtime is wired to. */
   readonly metrics: ProcessorMetrics;
   /** In-memory store the runtime is wired to. Mostly for tests. */
@@ -188,7 +186,7 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
   const inactivitySeconds = deps.inactivity_seconds ?? DEFAULT_INACTIVITY_SECONDS;
   const producerName = deps.producer_name ?? `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`;
 
-  const handler: PolarisEachMessageHandler = async (payload, context) => {
+  const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
       payload,
       context,
@@ -199,6 +197,7 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
       newEventId,
       inactivitySeconds,
       producerName,
+      isolation,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
       ...(deps.run_id !== undefined ? { run_id: deps.run_id } : {}),
       ...(deps.producer_version !== undefined ? { producerVersion: deps.producer_version } : {}),
@@ -209,26 +208,18 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_RAW_EVENTS, isolatedProjects);
-    await deps.consumer.subscribe({ topics: [...topics], fromBeginning: false });
+    const families = consumerFamiliesFor(STREAM_FAMILY_RAW_EVENTS, isolatedProjects);
+    await deps.consumer.subscribe({ families: [...families] });
     deps.logger.info(
       {
         component: "sessionizer.runtime",
-        topics,
+        families,
         isolated_projects: isolatedProjects,
         inactivity_seconds: inactivitySeconds,
       },
       "sessionizer subscribed to raw.events",
     );
-    await deps.consumer.runEach(handler, {
-      ...(deps.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: deps.partitionsConsumedConcurrently }
-        : {}),
-    });
-    // The isolation lookup is reserved for future per-project isolation;
-    // referencing it here keeps the dependency visible without
-    // re-exporting.
-    void isolation;
+    await deps.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -245,8 +236,8 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
 // ---------------------------------------------------------------------------
 
 interface HandleMessageInput {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly producer: PolarisProducer;
   readonly store: SessionStore;
   readonly logger: Logger;
@@ -255,6 +246,7 @@ interface HandleMessageInput {
   readonly inactivitySeconds: number;
   readonly producerName: string;
   readonly producerVersion?: string;
+  readonly isolation: SyncIsolationLookup;
   readonly now?: () => Date;
   readonly run_id?: string | undefined;
 }
@@ -267,7 +259,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.warn(
       {
         component: "sessionizer.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
@@ -324,7 +316,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: raw.project_id,
         environment: raw.environment,
         event_id: raw.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
       },
       "dropping event: no usable primary identifier",
     );
@@ -385,7 +377,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
           event_id: raw.event_id,
           session_id: next.session_id,
           event_count: next.event_count,
-          source_topic: payload.topic,
+          source_topic: payload.stream,
         },
         "session continued (no emission)",
       );
@@ -411,6 +403,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       await publishSessionEnvelope({
         producer: input.producer,
         envelope,
+        isolation: input.isolation,
         producerName: input.producerName,
         ...(input.producerVersion !== undefined ? { producerVersion: input.producerVersion } : {}),
       });
@@ -436,7 +429,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
           event_id: envelope.event_id,
           session_id: actualDecision.session_id,
           source_event_id: raw.event_id,
-          source_topic: payload.topic,
+          source_topic: payload.stream,
         },
         "session started",
       );
@@ -466,6 +459,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     await publishSessionEnvelope({
       producer: input.producer,
       envelope: endedEnvelope,
+      isolation: input.isolation,
       producerName: input.producerName,
       ...(input.producerVersion !== undefined ? { producerVersion: input.producerVersion } : {}),
     });
@@ -489,6 +483,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     await publishSessionEnvelope({
       producer: input.producer,
       envelope: startedEnvelope,
+      isolation: input.isolation,
       producerName: input.producerName,
       ...(input.producerVersion !== undefined ? { producerVersion: input.producerVersion } : {}),
     });
@@ -513,7 +508,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         event_id: raw.event_id,
         ended_session_id: actualDecision.ended.session_id,
         started_session_id: actualDecision.started.session_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
       },
       "session expired and restarted",
     );
@@ -526,7 +521,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: raw.project_id,
         environment: raw.environment,
         event_id: raw.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -544,24 +539,26 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Publish a session envelope to the `session.events` topic.
+ * Publish a session envelope to the `session.events` super stream.
  *
- * We use `producer.send` directly rather than `producer.publishEvent`
- * because `session.events` is not yet a `CanonicalTopicFamily` constant
- * in `@polaris/shared-kafka` — adding it would be a cross-cut outside
- * this task's write scope. The helper still goes through the producer
- * wrapper so KafkaJS hooks (metrics, logs) fire normally.
+ * This used to reach for the producer's low-level `send` with a
+ * hand-built header bag, because `session.events` was not a canonical
+ * family — it only existed because Redpanda auto-created topics on first
+ * publish. RabbitMQ creates nothing, so the family is now declared like
+ * every other one and this goes through `publishEvent`, which owns the
+ * headers, the isolation lookup, and the partition routing.
  *
- * Partition key uses the same canonical
- * `buildRawEventsPartitionKey` shape so per-identity ordering is
- * preserved across the raw → session topology.
+ * The partition key keeps the canonical `buildRawEventsPartitionKey`
+ * shape so per-identity ordering is preserved across the raw → session
+ * topology.
  */
 async function publishSessionEnvelope(input: {
   readonly producer: PolarisProducer;
   readonly envelope: SessionEventEnvelope;
   readonly producerName: string;
   readonly producerVersion?: string;
-}): Promise<RecordMetadata[]> {
+  readonly isolation: SyncIsolationLookup;
+}): Promise<PublishResult> {
   const { producer, envelope } = input;
   const partitionKey = buildRawEventsPartitionKey({
     project_id: envelope.project_id,
@@ -569,30 +566,12 @@ async function publishSessionEnvelope(input: {
     event_id: envelope.event_id,
     identity: envelope.identity,
   });
-  const headers = buildEventHeaders({
-    event_id: envelope.event_id,
-    event_name: envelope.event,
-    schema_version: envelope.schema_version,
-    project_id: envelope.project_id,
-    environment: envelope.environment,
-    occurred_at: envelope.occurred_at,
-    ingested_at: envelope.ingested_at,
-    source_id: envelope.source.id,
-    producer: input.producerName,
-    ...(input.producerVersion !== undefined ? { producer_version: input.producerVersion } : {}),
-    topic_family: OUTPUT_TOPIC_FAMILY,
+  return producer.publishEvent({
+    family: STREAM_FAMILY_SESSION_EVENTS,
+    event: envelope as unknown as PublishableEvent,
+    isolation: input.isolation,
+    partitionKey,
   });
-  const record: ProducerRecord = {
-    topic: OUTPUT_TOPIC_FAMILY,
-    messages: [
-      {
-        key: partitionKey,
-        value: encodeEvent(envelope),
-        headers,
-      },
-    ],
-  };
-  return producer.send(record);
 }
 
 // ---------------------------------------------------------------------------
@@ -606,8 +585,8 @@ export type { SessionEventEnvelope, SessionEventName };
 // ---------------------------------------------------------------------------
 
 interface ClassifiedErrorContext {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly metrics: ProcessorMetrics;
   readonly logger: Logger;
   readonly message: string;
@@ -627,7 +606,7 @@ function handleClassifiedError(err: unknown, context: ClassifiedErrorContext): v
   context.logger.error(
     {
       component: "sessionizer.handler",
-      topic: context.payload.topic,
+      topic: context.payload.stream,
       partition: context.payload.partition,
       offset: context.payload.message.offset,
       retry_reason: classification.reason,

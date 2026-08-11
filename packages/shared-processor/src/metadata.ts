@@ -19,7 +19,7 @@
  * caller via the `now()` option.
  *
  * @see docs/architecture/05-processors-and-replay.md "Processor Metadata"
- * @see docs/architecture/03-redpanda-topics.md "Retry and DLQ Topics"
+ * @see docs/architecture/03-rabbitmq-streams.md "Retry and DLQ Topics"
  */
 
 import type { ProcessorIdentity } from "./identity.js";

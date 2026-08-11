@@ -1,12 +1,12 @@
 /**
  * Repository helpers for the `topic_isolations` table.
  *
- * Per `docs/architecture/03-redpanda-topics.md` "Topic Isolation Triggers"
+ * Per `docs/architecture/03-rabbitmq-streams.md` "Topic Isolation Triggers"
  * and "Topic Families", a project graduates from a shared canonical
  * topic (`raw.events`) to a dedicated topic (`raw.events.<project_id>`)
  * when an isolation trigger fires. The move is operational, not
  * structural — producer and consumer code references the family and
- * consults the resolver in `@polaris/shared-kafka` for the concrete
+ * consults the resolver in `@polaris/shared-transport` for the concrete
  * topic.
  *
  * This module owns the typed Kysely SELECT / INSERT / UPDATE surface
@@ -17,7 +17,7 @@
  *
  *   - **The resolver hot path goes through the adapter at the bottom
  *     of this file.** Production wires `createKyselyScopedIsolationLookup`
- *     and stacks a `TopicIsolationCache` on top so the per-publish
+ *     and stacks a `StreamIsolationCache` on top so the per-publish
  *     PostgreSQL round trip is amortized to one query per TTL window.
  *
  *   - **One active isolation per (family, project_id, environment).**
@@ -33,10 +33,10 @@
  *
  * @see db/migrations/20260514000003_create_topic_isolations.sql
  * @see packages/shared-db/src/database.ts TopicIsolationsTable
- * @see packages/shared-kafka/src/topic-isolation-cache.ts
+ * @see packages/shared-transport/src/isolation-cache.ts
  */
 import type { Database } from "@polaris/shared-db";
-import type { ScopedIsolationLookup } from "@polaris/shared-kafka";
+import type { ScopedIsolationLookup } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
 /**
@@ -61,7 +61,7 @@ export interface TopicIsolationRow {
  * Insert input for the `polaris topics isolate` command. The caller has
  * already validated the closed-set fields (family, environment) and
  * generated the `id`. The `concrete_topic` value is derived from the
- * `dedicatedTopicName` helper in `@polaris/shared-kafka`.
+ * `dedicatedStreamFamily` helper in `@polaris/shared-transport`.
  */
 export interface InsertTopicIsolationInput {
   readonly id: string;
@@ -214,7 +214,7 @@ export async function deactivateIsolation(
  * Build a Kysely-backed {@link ScopedIsolationLookup} adapter. The
  * adapter answers "is `(family, project_id, environment)` currently
  * isolated?" against the `topic_isolations` table; production callers
- * stack a `TopicIsolationCache` (from `@polaris/shared-kafka`) on top
+ * stack a `StreamIsolationCache` (from `@polaris/shared-transport`) on top
  * so the per-publish PostgreSQL round trip is amortized to one query
  * per TTL window.
  *

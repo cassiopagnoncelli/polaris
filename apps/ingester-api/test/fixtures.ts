@@ -145,7 +145,7 @@ export class RecordingDedupeStore implements DedupeStore {
 /**
  * Recording producer: stand-in for `PolarisProducer`. Records every
  * `publishEvent` call so tests can assert on the canonical envelope shape
- * passed to Redpanda. The `send` method is intentionally a stub — the
+ * passed to RabbitMQ. The `send` method is intentionally a stub — the
  * handler only calls `publishEvent`.
  */
 export class RecordingProducer {

@@ -15,10 +15,9 @@ import {
   loadConfigWithDefaults,
   nonEmptyStringSchema,
   type PostgresConfig,
-  positiveIntSchema,
   postgresEnvSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -31,30 +30,25 @@ export const PROCESSOR_SERVICE_NAME = "identity-resolver" as const;
  * Processor-specific tuning knobs. Env vars:
  *
  *   POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP   ("polaris-identity-resolver-v1")
- *   POLARIS_IDENTITY_RESOLVER_CONCURRENCY      (1)
  */
 export const identityResolverEnvSchema = z
   .object({
     POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP: nonEmptyStringSchema.default(
       "polaris-identity-resolver-v1",
     ),
-    POLARIS_IDENTITY_RESOLVER_CONCURRENCY: positiveIntSchema.default(1),
   })
   .transform(
     (parsed): IdentityResolverConfig => ({
       consumerGroup: parsed["POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_IDENTITY_RESOLVER_CONCURRENCY"],
     }),
   );
 
 export interface IdentityResolverConfig {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
 }
 
 export const identityResolverEnvKeys = [
   "POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP",
-  "POLARIS_IDENTITY_RESOLVER_CONCURRENCY",
 ] as const;
 
 /**
@@ -63,7 +57,7 @@ export const identityResolverEnvKeys = [
 export interface IdentityResolverRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly resolver: IdentityResolverConfig;
 }
@@ -72,7 +66,7 @@ export function identityResolverConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     resolver: identityResolverEnvSchema,
   });

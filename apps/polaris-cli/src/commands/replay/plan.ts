@@ -4,7 +4,7 @@
  * Renders the deterministic dry-run plan for a replay job. The CLI reads
  * the operator-issued declaration out of `replay_jobs`, hands it to the
  * planner in `@polaris/shared-replay`, and prints the resulting
- * {@link ReplayPlan}. No DB writes; no Redpanda reads.
+ * {@link ReplayPlan}. No DB writes; no RabbitMQ reads.
  *
  * The plan output is the contract the future replay executor (P7-003)
  * will consume — running `replay plan` is the operator's pre-flight
@@ -73,7 +73,7 @@ export const replayPlanCommand: CommandDefinition = {
         [
           "Dry-run plan for a replay job. Reads the job declaration, runs the",
           "planner, and prints the deterministic plan. Performs no DB writes",
-          "and never touches Redpanda. Use --output json to capture the full",
+          "and never touches RabbitMQ. Use --output json to capture the full",
           "machine-readable plan; the human form is a digest.",
         ].join("\n"),
       );

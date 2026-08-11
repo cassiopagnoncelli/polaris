@@ -25,7 +25,7 @@
  *   code, not in the migration.
  *
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
- * @see docs/architecture/03-redpanda-topics.md "Default Canonical Topics"
+ * @see docs/architecture/03-rabbitmq-streams.md "Default Canonical Topics"
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
 
@@ -201,7 +201,7 @@ export interface PlanReplayOptions {
   /**
    * Operational retention window in days. Polaris does not promise
    * replay beyond the operational retention of the source topic
-   * (Redpanda `raw.events` ships with 90 days by default — see
+   * (RabbitMQ `raw.events` ships with 90 days by default — see
    * docs/architecture/05-processors-and-replay.md "Replay Window").
    * Defaults to 90.
    */
@@ -250,7 +250,7 @@ export interface ReplayPlanRisk {
  *   - planned consumer group
  *
  * `events_estimated` is intentionally `null` in v1 — the planner does
- * not connect to Redpanda to count offsets. The dry-run output prints
+ * not connect to RabbitMQ to count offsets. The dry-run output prints
  * `events_estimated: unknown` rather than fabricating a number; an
  * incremental future task can wire in a real estimator without changing
  * any downstream consumer.
@@ -271,7 +271,7 @@ export interface ReplayPlan {
   /** Effective event-id scope, or `null` if unrestricted. */
   readonly event_id: string | null;
   /**
-   * Canonical Redpanda topic family the planner reads from. Always
+   * Canonical RabbitMQ topic family the planner reads from. Always
    * `raw.events` in v1 (derived families are replayed via processor
    * targets, which re-read raw.events anyway).
    */
@@ -302,7 +302,7 @@ export interface ReplayPlan {
   readonly destination_opt_in_note: string | null;
   /**
    * Consumer group the executor will join. The shape is stable so
-   * operators can grep for it in Redpanda. v1 format:
+   * operators can grep for it in RabbitMQ. v1 format:
    *
    *   polaris-replay.<project_id>.<environment>.<target>.<replay_job_id>
    *
@@ -312,7 +312,7 @@ export interface ReplayPlan {
   readonly consumer_group: string;
   /**
    * Estimated event count for the window. `null` in v1 because the
-   * planner does not consult Redpanda. The CLI renders `unknown` for
+   * planner does not consult RabbitMQ. The CLI renders `unknown` for
    * `null`; the JSON renderer surfaces `null` verbatim.
    */
   readonly events_estimated: number | null;

@@ -60,7 +60,7 @@ export interface RegisterEventsRoutesOptions {
  *        and the declared `schema_version`
  *      - applies the forbidden-field policy (reject vs redact)
  *      - performs the short-window dedupe claim
- *      - publishes accepted events to Redpanda `raw.events`
+ *      - publishes accepted events to RabbitMQ `raw.events`
  *      - returns per-event accepted/rejected results
  *
  * Partial acceptance is non-negotiable: one invalid event does not block

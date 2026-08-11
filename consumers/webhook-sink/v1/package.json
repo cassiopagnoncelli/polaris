@@ -33,7 +33,7 @@
     "@polaris/shared-destination-normalize": "workspace:*",
     "@polaris/shared-destinations": "workspace:*",
     "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",

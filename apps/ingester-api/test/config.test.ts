@@ -15,9 +15,9 @@ const basePostgresEnv: Record<string, string> = {
   POLARIS_POSTGRES_PASSWORD: "polaris",
 };
 
-const baseRedpandaEnv: Record<string, string> = {
-  POLARIS_REDPANDA_BROKERS: "localhost:9092",
-  POLARIS_REDPANDA_CLIENT_ID: INGESTER_SERVICE_NAME,
+const baseRabbitmqEnv: Record<string, string> = {
+  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_CLIENT_ID: INGESTER_SERVICE_NAME,
 };
 
 const baseRedisEnv: Record<string, string> = {
@@ -29,7 +29,7 @@ const baseEnv: Record<string, string> = {
   POLARIS_SERVICE_VERSION: "1.2.3",
   POLARIS_ENV: "local",
   ...basePostgresEnv,
-  ...baseRedpandaEnv,
+  ...baseRabbitmqEnv,
   ...baseRedisEnv,
 };
 
@@ -154,7 +154,7 @@ describe("loadIngesterConfig", () => {
       for (const [k, v] of Object.entries(basePostgresEnv)) {
         process.env[k] = v;
       }
-      for (const [k, v] of Object.entries(baseRedpandaEnv)) {
+      for (const [k, v] of Object.entries(baseRabbitmqEnv)) {
         process.env[k] = v;
       }
       for (const [k, v] of Object.entries(baseRedisEnv)) {
@@ -165,7 +165,7 @@ describe("loadIngesterConfig", () => {
       expect(config.service.serviceVersion).toBe("9.9.9");
       expect(config.service.environment).toBe("local");
       expect(config.postgres.host).toBe("localhost");
-      expect(config.redpanda.clientId).toBe(INGESTER_SERVICE_NAME);
+      expect(config.rabbitmq.clientId).toBe(INGESTER_SERVICE_NAME);
       expect(config.redis.host).toBe("localhost");
       expect(config.ingest.defaultDedupeWindowSec).toBe(900);
       expect(config.ingest.maxDedupeWindowSec).toBe(86_400);

@@ -54,13 +54,13 @@ import {
 } from "@polaris/shared-destination-normalize";
 
 import {
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
+  type TransportMessageHandler,
   type PolarisProducer,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import type { SecretResolver } from "@polaris/shared-secrets";
 import type { EachMessagePayload } from "kafkajs";
@@ -190,7 +190,7 @@ export interface DestinationConsumer {
   /** Stop the underlying consumer. Idempotent. */
   stop(): Promise<void>;
   /** The per-message handler. Exposed for direct testing. */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /** Process one envelope directly, bypassing KafkaJS. */
   readonly handleEvent: HandleEventFn;
   /** Metrics registry the runtime is wired to. */
@@ -269,7 +269,7 @@ export function createDestinationConsumer<Payload>(
     });
   };
 
-  const handler: PolarisEachMessageHandler = async (payload) => {
+  const handler: TransportMessageHandler = async (payload) => {
     // Skip empty/tombstone payloads. The runtime never produces an empty
     // delivery for them.
     const value = payload.message.value;
@@ -400,7 +400,7 @@ export function createDestinationConsumer<Payload>(
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_ANALYTICS_EVENTS, []);
+    const topics = consumerFamiliesFor(STREAM_FAMILY_ANALYTICS_EVENTS, []);
     await options.consumer.subscribe({
       topics: [...topics],
       fromBeginning: options.subscribeFromBeginning ?? false,

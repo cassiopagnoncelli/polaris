@@ -18,11 +18,11 @@
 
 import {
   type PolarisConsumer,
-  type PolarisMessageContext,
+  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
-  TOPIC_FAMILY_IDENTITY_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_IDENTITY_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import type { EachMessagePayload } from "kafkajs";
 import { describe, expect, it } from "vitest";
@@ -89,7 +89,7 @@ function makePayload(envelope: unknown): EachMessagePayload {
   } as unknown as EachMessagePayload;
 }
 
-const CONTEXT: PolarisMessageContext = {
+const CONTEXT: TransportMessageContext = {
   event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
   project_id: "storefront",
   environment: "production",
@@ -171,7 +171,7 @@ describe("identity-resolver runtime — happy paths", () => {
 
     expect(producer.publishes).toHaveLength(1);
     const pub = producer.publishes[0];
-    expect(pub?.family).toBe(TOPIC_FAMILY_IDENTITY_EVENTS);
+    expect(pub?.family).toBe(STREAM_FAMILY_IDENTITY_EVENTS);
     const event = pub?.event as Record<string, unknown>;
     expect(event["event"]).toBe("identity.linked");
     expect(event["processor_name"]).toBe(PROCESSOR_NAME);

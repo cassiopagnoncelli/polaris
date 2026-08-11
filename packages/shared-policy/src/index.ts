@@ -12,7 +12,7 @@
  *   - the closed-set reason codes (`pii_card`, `pii_account`, `pii_secret`,
  *     `policy`, `length`, `pattern_match`)
  *   - the deterministic, side-effect-free evaluator the ingester uses
- *     before publishing to Redpanda
+ *     before publishing to RabbitMQ
  *   - the metric helper that emits
  *     `polaris_ingest_redacted_pattern_total{project_id, environment, reason, pattern}`
  *

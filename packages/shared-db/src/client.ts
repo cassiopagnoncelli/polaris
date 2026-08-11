@@ -50,7 +50,45 @@ export type CreateDbOptions = {
    * `pool` is supplied.
    */
   maxConnections?: number;
+  /**
+   * Typed PostgreSQL config, as produced by `@polaris/shared-config`'s
+   * `postgresEnvSchema`. Declared structurally so this package keeps no
+   * dependency on `shared-config`.
+   *
+   * This exists because every service that talks to PostgreSQL was
+   * hand-assembling the same connection string from the same config
+   * object — and one of them getting `sslmode` wrong is a production
+   * incident, not a typo. Ignored when `pool` or `connectionString` is
+   * supplied.
+   */
+  postgres?: PostgresConnectionConfig;
 };
+
+/**
+ * Structural mirror of `@polaris/shared-config`'s `PostgresConfig`.
+ */
+export interface PostgresConnectionConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly database: string;
+  readonly user: string;
+  readonly password: string;
+  readonly ssl: boolean;
+  readonly poolMax?: number;
+}
+
+/**
+ * Build a `postgres://` URL from typed config. Credentials are
+ * percent-encoded: a password containing `@` or `/` would otherwise
+ * produce a URL that parses to a different host.
+ */
+export function postgresConnectionString(config: PostgresConnectionConfig): string {
+  const params = new URLSearchParams();
+  params.set("sslmode", config.ssl ? "require" : "disable");
+  const user = encodeURIComponent(config.user);
+  const password = encodeURIComponent(config.password);
+  return `postgres://${user}:${password}@${config.host}:${config.port}/${config.database}?${params.toString()}`;
+}
 
 /**
  * Build a typed Kysely client over a PostgreSQL connection.
@@ -82,14 +120,18 @@ function resolvePool(options: CreateDbOptions): pg.Pool {
   if (options.pool) {
     return options.pool;
   }
-  if (!options.connectionString) {
-    throw new Error("@polaris/shared-db: createDb requires either `pool` or `connectionString`.");
+  const connectionString =
+    options.connectionString ??
+    (options.postgres !== undefined ? postgresConnectionString(options.postgres) : undefined);
+  if (!connectionString) {
+    throw new Error(
+      "@polaris/shared-db: createDb requires one of `pool`, `connectionString`, or `postgres`.",
+    );
   }
-  const config: pg.PoolConfig = {
-    connectionString: options.connectionString,
-  };
-  if (options.maxConnections !== undefined) {
-    config.max = options.maxConnections;
+  const config: pg.PoolConfig = { connectionString };
+  const max = options.maxConnections ?? options.postgres?.poolMax;
+  if (max !== undefined) {
+    config.max = max;
   }
   return new pg.Pool(config);
 }

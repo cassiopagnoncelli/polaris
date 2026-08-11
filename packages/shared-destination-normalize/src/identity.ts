@@ -13,7 +13,7 @@
  * from another vendor's hashing.
  *
  * "Best-available identity" mirrors the partition-key picker rule from
- * `@polaris/shared-kafka/buildRawEventsPartitionKey`:
+ * `@polaris/shared-transport/buildRawEventsPartitionKey`:
  *
  *   user_id > email_sha256 > phone_sha256 > anonymous_id
  *

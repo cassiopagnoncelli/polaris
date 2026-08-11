@@ -64,7 +64,7 @@ export const processorNameSchema = z
 
 /**
  * Topic family + accepted schema versions an input/output declares. The
- * runtime resolver in `@polaris/shared-kafka` turns the family into
+ * runtime resolver in `@polaris/shared-transport` turns the family into
  * concrete topic names per project isolation state.
  */
 export const processorTopicSpecSchema = z

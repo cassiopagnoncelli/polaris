@@ -32,7 +32,7 @@ export {
 } from "./emit.js";
 export {
   createRuntime,
-  OUTPUT_TOPIC_FAMILY,
+  OUTPUT_STREAM_FAMILY,
   type SessionEventEnvelope,
   type SessionEventName,
   type SessionizerRuntime,

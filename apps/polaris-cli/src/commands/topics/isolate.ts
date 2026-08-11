@@ -10,7 +10,7 @@
  *
  * **What this command does NOT do.** It does NOT cut producers or
  * consumers over to the dedicated topic. The runtime resolver in
- * `@polaris/shared-kafka` reads the active row through a TTL-bounded
+ * `@polaris/shared-transport` reads the active row through a TTL-bounded
  * cache, so the cutover becomes live within one TTL window across all
  * services that wired the cache in. The
  * `docs/operations/topic-isolation-cutover.md` runbook walks operators
@@ -27,16 +27,16 @@
  * `'declared'`; the operator must run with a valid
  * `POLARIS_OPERATOR_TOKEN`.
  *
- * @see docs/architecture/03-redpanda-topics.md "Topic Isolation Triggers"
+ * @see docs/architecture/03-rabbitmq-streams.md "Topic Isolation Triggers"
  * @see docs/operations/topic-isolation-cutover.md
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
 import {
-  CANONICAL_TOPIC_FAMILIES,
-  type CanonicalTopicFamily,
-  dedicatedTopicName,
-  isCanonicalTopicFamily,
-} from "@polaris/shared-kafka";
+  CANONICAL_STREAM_FAMILIES,
+  type CanonicalStreamFamily,
+  dedicatedStreamFamily,
+  isCanonicalStreamFamily,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
@@ -142,7 +142,7 @@ export const topicsIsolateCommand: CommandDefinition = {
       .requiredOption("--env <environment>", "Environment: development | staging | production.")
       .requiredOption(
         "--family <family>",
-        `Canonical topic family: ${CANONICAL_TOPIC_FAMILIES.join(" | ")}.`,
+        `Canonical topic family: ${CANONICAL_STREAM_FAMILIES.join(" | ")}.`,
       )
       .requiredOption(
         "--reason <reason>",
@@ -163,7 +163,7 @@ export function buildTopicsIsolateRunner(hooks: TopicsIsolateHooks = {}) {
     const validated = validate(args);
     const now = nowFn();
     const id = issueId();
-    const concreteTopic = dedicatedTopicName(validated.family, validated.project);
+    const concreteTopic = dedicatedStreamFamily(validated.family, validated.project);
     const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
     const auditId = generateAuditId();
 
@@ -290,7 +290,7 @@ function isUniqueViolation(error: unknown): boolean {
 interface ValidatedArgs {
   readonly project: string;
   readonly env: SupportedEnvironment;
-  readonly family: CanonicalTopicFamily;
+  readonly family: CanonicalStreamFamily;
   readonly reason: string;
 }
 
@@ -311,9 +311,9 @@ function validate(args: TopicsIsolateArgs): ValidatedArgs {
       `--env must be one of: ${SUPPORTED_ENVIRONMENTS.join(", ")} (got "${env}")`,
     );
   }
-  if (!isCanonicalTopicFamily(family)) {
+  if (!isCanonicalStreamFamily(family)) {
     throw new UsageError(
-      `--family must be one of: ${CANONICAL_TOPIC_FAMILIES.join(", ")} (got "${family}")`,
+      `--family must be one of: ${CANONICAL_STREAM_FAMILIES.join(", ")} (got "${family}")`,
     );
   }
   if (reason.length > 1024) {
@@ -387,7 +387,7 @@ function renderHuman(input: EmitInput): string {
  */
 function cutoverInstructions(input: EmitInput): readonly string[] {
   return [
-    `1. Create the topic "${input.concreteTopic}" on Redpanda (e.g. via the same Terraform / pulumi module that owns "${input.family}"; partition count and retention should match or exceed the shared topic's settings).`,
+    `1. Create the topic "${input.concreteTopic}" on RabbitMQ (e.g. via the same Terraform / pulumi module that owns "${input.family}"; partition count and retention should match or exceed the shared topic's settings).`,
     `2. Producers will start writing to "${input.concreteTopic}" within one resolver-cache TTL window (default 60s).`,
     `3. Wait for the shared topic "${input.family}" to drain for project "${input.project}" before stopping consumers from reading the shared partitions.`,
     `4. Once drained, restart consumers so they re-subscribe; the resolver picks up the dedicated topic on consumer-group reconnect.`,

@@ -2,7 +2,7 @@
  * Streaming runtime tests for analytics-projector v1.
  *
  * The runtime is exercised through its `handler` slot — the same
- * `PolarisEachMessageHandler` registered with the KafkaJS consumer. We
+ * `TransportMessageHandler` registered with the KafkaJS consumer. We
  * synthesise a minimal `EachMessagePayload` and assert:
  *
  *   - happy path: producer.publishEvent is called with `family =
@@ -12,22 +12,22 @@
  *   - bad JSON: handler throws so KafkaJS surfaces the failure.
  *   - missing envelope fields: handler throws.
  *
- * The producer slot is a recording stub — no Redpanda required. We do
+ * The producer slot is a recording stub — no RabbitMQ required. We do
  * not exercise `consumer.runEach` itself because that just forwards to
- * KafkaJS and is covered by `@polaris/shared-kafka` tests.
+ * KafkaJS and is covered by `@polaris/shared-transport` tests.
  */
 
 import {
   buildRawEventsPartitionKey,
   type PolarisConsumer,
-  type PolarisMessageContext,
+  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import type { EachMessagePayload } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
@@ -115,7 +115,7 @@ function stubConsumer(): PolarisConsumer {
 
 function buildPayload(value: Buffer | null): EachMessagePayload {
   return {
-    topic: TOPIC_FAMILY_RAW_EVENTS,
+    topic: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
       key: Buffer.from("partition-key"),
@@ -131,7 +131,7 @@ function buildPayload(value: Buffer | null): EachMessagePayload {
   } as EachMessagePayload;
 }
 
-const EMPTY_CONTEXT: PolarisMessageContext = {};
+const EMPTY_CONTEXT: TransportMessageContext = {};
 
 function buildRuntime(producer: PolarisProducer) {
   const logger = createLogger({ service: "test", version: "0.0.0", env: "local" });
@@ -155,7 +155,7 @@ describe("createRuntime (analytics-projector v1)", () => {
     expect(producer.publishes.length).toBe(1);
     const sent = producer.publishes[0];
     if (sent === undefined) throw new Error("expected one publish");
-    expect(sent.family).toBe(TOPIC_FAMILY_ANALYTICS_EVENTS);
+    expect(sent.family).toBe(STREAM_FAMILY_ANALYTICS_EVENTS);
 
     const expectedKey = buildRawEventsPartitionKey({
       project_id: SAMPLE_ENVELOPE.project_id,

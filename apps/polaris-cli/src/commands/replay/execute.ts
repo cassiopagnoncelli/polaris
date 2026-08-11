@@ -6,7 +6,7 @@
  * and runs the executor against an injected source/producer/store. The
  * default executor is wired against a stub source (P7-003 ships the
  * lifecycle scaffolding; the real Kafka source-side adapter lands once
- * `@polaris/shared-kafka` exposes the offset-range read helper). Tests
+ * `@polaris/shared-transport` exposes the offset-range read helper). Tests
  * inject in-memory adapters so the lifecycle assertions land in this
  * task.
  *
@@ -42,14 +42,14 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { loadConfigWithDefaults, redpandaEnvSchema } from "@polaris/shared-config";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
   createKafkaClient,
   createKafkaJsConsumerDriver,
   createPolarisProducer,
   type PolarisProducer,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import {
   type ExecuteReplayOutcome,
   executeReplay,
@@ -152,7 +152,7 @@ export const replayExecuteCommand: CommandDefinition = {
 export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
   const nowFn = hooks.now ?? (() => new Date());
   // The kafka I/O default is lazy: tests that inject both `hooks.source`
-  // and `hooks.producer` never trigger a real Redpanda connection.
+  // and `hooks.producer` never trigger a real RabbitMQ connection.
   const buildDefaultIo =
     hooks.source === undefined || hooks.producer === undefined ? buildDefaultKafkaIo : null;
 
@@ -338,7 +338,7 @@ function defaultStore(env: NodeJS.ProcessEnv): ReplayExecuteStore {
 /**
  * Default kafka I/O resources for the CLI replay-execute path. Wires
  * the source/producer adapters in `./kafka-adapters` to a real
- * Redpanda connection: a dedicated `Consumer` (used per partition-read
+ * RabbitMQ connection: a dedicated `Consumer` (used per partition-read
  * via the offset-range driver), an `Admin` client (for the
  * time → offset lookup), and a `PolarisProducer` (for republishing).
  *
@@ -352,7 +352,7 @@ function buildDefaultKafkaIo(): {
 } {
   const config = loadConfigWithDefaults({
     serviceName: "polaris-cli",
-    schema: redpandaEnvSchema,
+    schema: rabbitmqEnvSchema,
   });
   const kafka = createKafkaClient({ redpanda: config });
   const admin = kafka.admin();
@@ -416,7 +416,7 @@ function buildDefaultKafkaIo(): {
   const source = buildKafkaReplaySource({
     // v1 always reads from raw.events; the planner asserts this in
     // `plan.source_topic_family` so callers see the same name here.
-    topic: TOPIC_FAMILY_RAW_EVENTS,
+    topic: STREAM_FAMILY_RAW_EVENTS,
     driverFactory: () => {
       const consumer = kafka.consumer({
         // Replay reads do not participate in any consumer group's

@@ -22,14 +22,14 @@ import {
   buildRawEventsPartitionKey,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisMessageContext,
+  type TransportMessageContext,
   type PolarisProducer,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
-import { createRuntime, OUTPUT_TOPIC_FAMILY } from "../src/runtime.js";
+import { createRuntime, OUTPUT_STREAM_FAMILY } from "../src/runtime.js";
 import { InMemorySessionStore } from "../src/store.js";
 import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 
@@ -37,7 +37,7 @@ const RAN_AT_ISO = "2026-05-12T12:30:00.000Z";
 
 function buildPayload(value: Buffer | null): EachMessagePayload {
   return {
-    topic: TOPIC_FAMILY_RAW_EVENTS,
+    topic: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
       key: Buffer.from("partition-key"),
@@ -190,7 +190,7 @@ function buildRawEnvelopeJson(overrides: {
   return Buffer.from(JSON.stringify(envelope), "utf8");
 }
 
-const EMPTY_CONTEXT: PolarisMessageContext = {};
+const EMPTY_CONTEXT: TransportMessageContext = {};
 
 describe("sessionizer runtime", () => {
   it("emits session.started on the first event and continues without emitting on subsequent in-window events", async () => {
@@ -209,7 +209,7 @@ describe("sessionizer runtime", () => {
       EMPTY_CONTEXT,
     );
     expect(producer.publishes).toHaveLength(1);
-    expect(producer.publishes[0]?.topic).toBe(OUTPUT_TOPIC_FAMILY);
+    expect(producer.publishes[0]?.topic).toBe(OUTPUT_STREAM_FAMILY);
     const started = producer.decoded(0);
     expect(started["event"]).toBe("session.started");
     expect(started["schema_version"]).toBe(1);

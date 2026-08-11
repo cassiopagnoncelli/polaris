@@ -1,11 +1,11 @@
 /**
  * Processor DLQ publish helper.
  *
- * Thin wrapper around `@polaris/shared-kafka`'s `republishToDlq`. Adds the
+ * Thin wrapper around `@polaris/shared-transport`'s `republishToDlq`. Adds the
  * defaults that every processor needs:
  *
  *   - the `component` field is derived from the processor identity
- *     (`<processor_name>` — the DLQ topic resolver in `shared-kafka`
+ *     (`<processor_name>` — the DLQ queue resolver in `shared-transport`
  *     suffixes `.dlq` automatically),
  *   - `failedAt` defaults to `now()` when the caller does not pin a
  *     timestamp,
@@ -15,15 +15,19 @@
  * The wrapper does NOT decide retry vs DLQ. Processors call this helper
  * only when they have already decided the message is going to the DLQ —
  * the helper is the LAST step. Retry routing uses `republishToRetry` from
- * `@polaris/shared-kafka` directly; the classifier in `./classify.ts`
+ * `@polaris/shared-transport` directly; the classifier in `./classify.ts`
  * names that decision.
  *
- * @see packages/shared-kafka/src/dlq.ts
- * @see docs/architecture/03-redpanda-topics.md "Retry and DLQ Topics"
+ * @see packages/shared-transport/src/dlq.ts
+ * @see docs/architecture/03-rabbitmq-streams.md "Retry and DLQ Topics"
  */
 
-import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-kafka";
-import type { EachMessagePayload, RecordMetadata } from "kafkajs";
+import {
+  type MessageHeaders,
+  type PolarisProducer,
+  republishToDlq,
+  type TransportMessagePayload,
+} from "@polaris/shared-transport";
 import { classifyError, type ProcessorRetryClassification } from "./classify.js";
 import type { ProcessorDlqRecordRepository } from "./db/processor-dlq-records.js";
 import type { ProcessorIdentity } from "./identity.js";
@@ -37,10 +41,10 @@ import type { ProcessorIdentity } from "./identity.js";
 export interface PublishToDlqInput {
   /** Connected PolarisProducer. The helper does not own the lifecycle. */
   readonly producer: PolarisProducer;
-  /** Processor identity. The DLQ topic name is `<name>.dlq`. */
+  /** Processor identity. The DLQ queue name is `<name>.dlq`. */
   readonly identity: ProcessorIdentity;
-  /** Original KafkaJS payload — used to copy bytes, headers, key, offset. */
-  readonly payload: EachMessagePayload;
+  /** Original delivery — used to copy bytes, headers, key, offset. */
+  readonly payload: TransportMessagePayload;
   /** The error that triggered the DLQ. */
   readonly error: unknown;
   /**
@@ -52,19 +56,19 @@ export interface PublishToDlqInput {
   /** ISO-8601 UTC failure timestamp. Defaults to `now()`. */
   readonly failedAt?: string | undefined;
   /**
-   * Explicit `polaris-retry-attempts` override. The shared-kafka helper
+   * Explicit `polaris-retry-attempts` override. The shared-transport helper
    * defaults to reading the existing header and incrementing by 1.
    */
   readonly attempts?: number | undefined;
   /**
    * Optional `processor_dlq_records` repository (3L2HKMND). When
-   * supplied, the helper writes a Postgres row alongside the Kafka
+   * supplied, the helper writes a Postgres row alongside the DLQ
    * publish so the `polaris processors dlq` commands can triage from a
-   * single PostgreSQL connection. The Kafka publish ALWAYS happens
+   * single PostgreSQL connection. The broker publish ALWAYS happens
    * (dual-write); a row-write failure logs a warning via the optional
-   * `onRowFailure` hook but never blocks the Kafka publish.
+   * `onRowFailure` hook but never blocks it.
    *
-   * When omitted, the helper preserves the v1 Kafka-only behavior
+   * When omitted, the helper preserves the v1 broker-only behavior
    * (back-compat for callers that have not been wired to the new
    * surface yet).
    */
@@ -101,10 +105,10 @@ export interface ProcessorDlqEnvelopeMetadata {
 /**
  * Publish the offending message to the processor's DLQ topic.
  *
- * Returns the `RecordMetadata` array from the underlying KafkaJS send —
+ * Returns once the broker has confirmed the DLQ publish —
  * callers usually ignore it but tests may assert delivery.
  */
-export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMetadata[]> {
+export async function publishToDlq(input: PublishToDlqInput): Promise<void> {
   const classification = input.classification ?? classifyError(input.error);
   const failedAt = input.failedAt ?? new Date().toISOString();
 
@@ -116,7 +120,7 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMeta
         ? input.error
         : undefined;
 
-  const result = await republishToDlq(input.producer, {
+  await republishToDlq(input.producer, {
     component: input.identity.name,
     value: input.payload.message.value,
     ...(input.payload.message.key !== null && input.payload.message.key !== undefined
@@ -125,7 +129,7 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMeta
     ...(input.payload.message.headers !== undefined
       ? { headers: input.payload.message.headers as MessageHeaders }
       : {}),
-    sourceTopic: input.payload.topic,
+    sourceTopic: input.payload.stream,
     sourcePartition: input.payload.partition,
     sourceOffset: input.payload.message.offset,
     reason: classification.reason,
@@ -135,11 +139,11 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMeta
     ...(input.attempts !== undefined ? { attempts: input.attempts } : {}),
   });
 
-  // 3L2HKMND: Postgres dual-write. The Kafka publish above is the
+  // 3L2HKMND: Postgres dual-write. The broker publish above is the
   // source of truth for backward compatibility (existing dashboards
-  // and runbooks consume the topic); the row makes the queue
-  // queryable from `polaris processors dlq`. A row-write failure
-  // does NOT block: the Kafka publish has already succeeded.
+  // and runbooks consume the DLQ queue); the row makes it queryable
+  // from `polaris processors dlq`. A row-write failure does NOT
+  // block: the broker publish has already been confirmed.
   if (input.dlqRecords !== undefined && input.envelope !== undefined) {
     try {
       await input.dlqRecords.recordDlq({
@@ -153,7 +157,7 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMeta
         reason: classification.reason,
         ...(errorClass !== undefined ? { error_class: errorClass } : {}),
         ...(errorMessage !== undefined ? { error_message: errorMessage } : {}),
-        source_topic: input.payload.topic,
+        source_topic: input.payload.stream,
         source_partition: input.payload.partition,
         source_offset: input.payload.message.offset,
         ...(input.payload.message.headers !== undefined
@@ -170,7 +174,6 @@ export async function publishToDlq(input: PublishToDlqInput): Promise<RecordMeta
     }
   }
 
-  return result;
 }
 
 /**

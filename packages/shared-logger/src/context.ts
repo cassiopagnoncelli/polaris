@@ -87,7 +87,7 @@ export interface ProcessorContext {
   processor_version: string;
   /** Input topic the processor is currently reading. */
   topic?: string;
-  /** Redpanda partition the processor is owning. */
+  /** RabbitMQ partition the processor is owning. */
   partition?: number;
   /** Processor run identifier (UUIDv7), when running inside a scheduled run. */
   processor_run_id?: string;
@@ -107,7 +107,7 @@ export interface ConsumerContext {
   destination_id?: string;
   /** Input topic the consumer is currently reading. */
   topic?: string;
-  /** Redpanda partition the consumer is owning. */
+  /** RabbitMQ partition the consumer is owning. */
   partition?: number;
 }
 
@@ -200,7 +200,7 @@ export function withReplay(ctx: ReplayContext): StandardLogFields {
 }
 
 /**
- * Build child-logger bindings for a Redpanda topic + partition + offset
+ * Build child-logger bindings for a RabbitMQ topic + partition + offset
  * triple. Useful for retry / DLQ log lines where a single message is being
  * traced through a delivery attempt.
  */

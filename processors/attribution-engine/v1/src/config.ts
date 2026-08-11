@@ -4,9 +4,10 @@ import {
   httpEnvSchema,
   loadConfigWithDefaults,
   nonEmptyStringSchema,
-  positiveIntSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type PostgresConfig,
+  postgresEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -26,7 +27,6 @@ export const PROCESSOR_SERVICE_NAME = "attribution-engine" as const;
  * Env vars:
  *
  *   POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP   ("polaris-attribution-engine-v1")
- *   POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY      (1)
  *
  * These are NON-SEMANTIC operational settings per the architecture rule
  * (consumer group, concurrency). Semantic attribution rules (first-touch,
@@ -38,23 +38,19 @@ export const attributionEngineEnvSchema = z
     POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP: nonEmptyStringSchema.default(
       "polaris-attribution-engine-v1",
     ),
-    POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY: positiveIntSchema.default(1),
   })
   .transform(
     (parsed): AttributionEngineConfig => ({
       consumerGroup: parsed["POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY"],
     }),
   );
 
 export interface AttributionEngineConfig {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
 }
 
 export const attributionEngineEnvKeys = [
   "POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP",
-  "POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY",
 ] as const;
 
 /**
@@ -63,7 +59,13 @@ export const attributionEngineEnvKeys = [
 export interface AttributionEngineRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  /**
+   * PostgreSQL connection. Required since the RabbitMQ migration: stream
+   * consumers own their resume point (`transport_checkpoints`) because
+   * AMQP has no server-side offset store.
+   */
+  readonly postgres: PostgresConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly attributionEngine: AttributionEngineConfig;
 }
 
@@ -71,7 +73,8 @@ export function attributionEngineConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    postgres: postgresEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     attributionEngine: attributionEngineEnvSchema,
   });
 }

@@ -8,7 +8,7 @@
  * processor needs:
  *
  *   1. Subscribe a `PolarisConsumer` to the `raw.events` topic family
- *      (with whatever isolated per-project topics the shared-kafka
+ *      (with whatever isolated per-project topics the shared-transport
  *      resolver knows about — empty list in the skeleton).
  *   2. For each message:
  *        - decode the canonical envelope,
@@ -33,17 +33,17 @@
 
 import {
   buildRawEventsPartitionKey,
-  consumerTopicsForFamily,
+  consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type PolarisEachMessageHandler,
-  type PolarisMessageContext,
+  type TransportMessageHandler,
+  type TransportMessageContext,
   type PolarisProducer,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_ANALYTICS_EVENTS,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -69,35 +69,31 @@ export interface AnalyticsProjectorRuntimeDeps {
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   /**
-   * Sync isolation lookup. Defaults to `sharedOnlyIsolationLookup`, which
-   * means every event flows through the shared topics. P11-008 wires the
-   * PostgreSQL-backed adapter; until then the default is correct because
-   * no project is isolated.
-   */
-  readonly isolation?: SyncIsolationLookup;
-  /**
-   * Projects currently isolated for `raw.events`. The consumer must
-   * subscribe to their dedicated topics in addition to the shared one
-   * (see `consumerTopicsForFamily`). Empty by default; the runtime
-   * picks up new isolation records on restart, which matches how the
-   * shared-kafka resolver is designed.
-   */
-  readonly isolatedProjects?: ReadonlyArray<string>;
-  /**
-   * Override for `Date.now()` so tests can pin the `ran_at` stamp.
-   */
-  readonly now?: () => Date;
-  /**
-   * KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`.
-   */
-  readonly partitionsConsumedConcurrently?: number;
-  /**
    * `ProcessorMetrics` registry. The runtime increments consume / emit /
    * failure counters here. Defaults to a fresh in-process registry so the
    * processor still observes its own metrics in tests; production wires
    * the registry through `app.ts` so the `/metrics` endpoint can expose
    * the samples.
    */
+  /**
+   * Sync isolation lookup. Defaults to `sharedOnlyIsolationLookup`, which
+   * means every event flows through the shared streams. P11-008 wires the
+   * PostgreSQL-backed adapter; until then the default is correct because
+   * no project is isolated.
+   */
+  readonly isolation?: SyncIsolationLookup;
+  /**
+   * Projects currently isolated for `raw.events`. The consumer must read
+   * their dedicated super streams in addition to the shared one (see
+   * `consumerFamiliesFor`). Empty by default; the runtime picks up new
+   * isolation records on restart, which matches how the shared-transport
+   * resolver is designed.
+   */
+  readonly isolatedProjects?: ReadonlyArray<string>;
+  /**
+   * Override for `Date.now()` so tests can pin the `ran_at` stamp.
+   */
+  readonly now?: () => Date;
   readonly metrics?: ProcessorMetrics;
   /**
    * Per-run identifier (UUIDv7). Forwarded into the processor stamp on
@@ -123,7 +119,7 @@ export interface AnalyticsProjectorRuntime {
    * with `consumer.runEach`, so unit tests can call it with synthetic
    * `EachMessagePayload`-shaped objects.
    */
-  readonly handler: PolarisEachMessageHandler;
+  readonly handler: TransportMessageHandler;
   /**
    * The `ProcessorMetrics` registry the runtime is wired to. Callers
    * (`app.ts`, tests) can read counters and gauges from it.
@@ -142,7 +138,7 @@ export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsPro
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
 
-  const handler: PolarisEachMessageHandler = async (payload, context) => {
+  const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
       payload,
       context,
@@ -159,21 +155,17 @@ export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsPro
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerTopicsForFamily(TOPIC_FAMILY_RAW_EVENTS, isolatedProjects);
-    await deps.consumer.subscribe({ topics: [...topics], fromBeginning: false });
+    const families = consumerFamiliesFor(STREAM_FAMILY_RAW_EVENTS, isolatedProjects);
+    await deps.consumer.subscribe({ families: [...families] });
     deps.logger.info(
       {
         component: "analytics-projector.runtime",
-        topics,
+        families,
         isolated_projects: isolatedProjects,
       },
       "analytics-projector subscribed to raw.events",
     );
-    await deps.consumer.runEach(handler, {
-      ...(deps.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: deps.partitionsConsumedConcurrently }
-        : {}),
-    });
+    await deps.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -190,8 +182,8 @@ export function createRuntime(deps: AnalyticsProjectorRuntimeDeps): AnalyticsPro
 // ---------------------------------------------------------------------------
 
 interface HandleMessageInput {
-  readonly payload: Parameters<PolarisEachMessageHandler>[0];
-  readonly context: PolarisMessageContext;
+  readonly payload: Parameters<TransportMessageHandler>[0];
+  readonly context: TransportMessageContext;
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   readonly isolation: SyncIsolationLookup;
@@ -211,7 +203,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.warn(
       {
         component: "analytics-projector.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         ...(context.event_id !== undefined ? { event_id: context.event_id } : {}),
@@ -225,7 +217,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   try {
     decoded = decodeEvent(value);
   } catch (err) {
-    // Per shared-kafka, decode errors are JSON-parse failures, not
+    // Per shared-transport, decode errors are JSON-parse failures, not
     // schema-level errors. The classifier names the reason
     // (`decode_failed`); we record the metric, log the structured line,
     // and re-throw so KafkaJS surfaces the failure through its own retry
@@ -242,7 +234,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.error(
       {
         component: "analytics-projector.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -270,7 +262,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     logger.error(
       {
         component: "analytics-projector.handler",
-        topic: payload.topic,
+        topic: payload.stream,
         partition: payload.partition,
         offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -314,7 +306,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   const startedAt = Date.now();
   try {
     await producer.publishEvent({
-      family: TOPIC_FAMILY_ANALYTICS_EVENTS,
+      family: STREAM_FAMILY_ANALYTICS_EVENTS,
       // `PublishableEvent` carries a `[extra: string]: unknown` index
       // signature so producers may attach additional headers/fields. The
       // analytics envelope is a CLOSED shape on purpose (every field is
@@ -333,7 +325,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         project_id: out.project_id,
         environment: out.environment,
         event_id: out.event_id,
-        source_topic: payload.topic,
+        source_topic: payload.stream,
         source_partition: payload.partition,
         source_offset: payload.message.offset,
         retry_reason: classification.reason,
@@ -359,7 +351,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       processor_name: out.processor_name,
       processor_version: out.processor_version,
       ...(run_id !== undefined ? { processor_run_id: run_id } : {}),
-      source_topic: payload.topic,
+      source_topic: payload.stream,
       source_partition: payload.partition,
       source_offset: payload.message.offset,
       partition_key: partitionKey,

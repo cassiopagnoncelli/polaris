@@ -2,7 +2,7 @@
  * Control-plane API runtime config.
  *
  * Composes shared schema fragments (service / http / postgres) plus a
- * tiny per-service block. The service has no Redpanda or Redis
+ * tiny per-service block. The service has no RabbitMQ or Redis
  * dependency in v1 (P6-000 ships the shell + auth/gate/whoami; business
  * endpoints land later).
  */

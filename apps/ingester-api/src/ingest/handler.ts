@@ -3,8 +3,8 @@ import {
   type PolarisProducer,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-  TOPIC_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-kafka";
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   applyRedactions,
@@ -306,7 +306,7 @@ async function processOneEvent(
       identity: envelope.identity,
     });
     await deps.producer.publishEvent({
-      family: TOPIC_FAMILY_RAW_EVENTS,
+      family: STREAM_FAMILY_RAW_EVENTS,
       event: envelope,
       isolation,
       partitionKey,
@@ -314,7 +314,7 @@ async function processOneEvent(
     deps.metrics.incrementPublishSuccess({
       project_id: envelope.project_id,
       environment: envelope.environment,
-      topic: TOPIC_FAMILY_RAW_EVENTS,
+      topic: STREAM_FAMILY_RAW_EVENTS,
     });
     deps.metrics.incrementAccepted({
       project_id: envelope.project_id,
@@ -354,7 +354,7 @@ async function processOneEvent(
     deps.metrics.incrementPublishFailed({
       project_id: envelope.project_id,
       environment: envelope.environment,
-      topic: TOPIC_FAMILY_RAW_EVENTS,
+      topic: STREAM_FAMILY_RAW_EVENTS,
       reason: error.name || "UnknownError",
     });
     deps.metrics.incrementRejected({

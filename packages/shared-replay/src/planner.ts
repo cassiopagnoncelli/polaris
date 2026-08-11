@@ -8,7 +8,7 @@
  * target processor / consumer / version, destination policy, planned
  * consumer group, and risk flags.
  *
- * **The planner does no I/O.** It does not connect to Redpanda, it does
+ * **The planner does no I/O.** It does not connect to RabbitMQ, it does
  * not read PostgreSQL, and it does not consult `process.env`. Everything
  * that affects the output is in the declaration plus the `now` /
  * `retentionDays` options. This makes the dry-run output reproducible
@@ -387,7 +387,7 @@ function nextUtcMidnight(epochMs: number): number {
  * cancel cannot affect another in-flight replay.
  *
  * `project_id` and `environment` are included so an operator grepping
- * Redpanda for "polaris-replay.<project>.<env>" finds every active
+ * RabbitMQ for "polaris-replay.<project>.<env>" finds every active
  * replay for that scope.
  */
 export function buildConsumerGroup(input: {

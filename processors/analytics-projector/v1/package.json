@@ -30,11 +30,12 @@
   "dependencies": {
     "@polaris/shared-clickhouse": "workspace:*",
     "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-kafka": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
     "zod": "^4.4.3"
   }
 }

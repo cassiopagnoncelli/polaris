@@ -6,7 +6,7 @@
  * standardises the small set of glue every processor needs without
  * hiding the underlying KafkaJS / PolarisConsumer / PolarisProducer
  * surface — that's a hard architectural rule from
- * `docs/architecture/09-engineering-standards.md` "Redpanda Client Usage":
+ * `docs/architecture/09-engineering-standards.md` "RabbitMQ Client Usage":
  *
  *   > Do not build a full stream-processing framework in v1. Keep wrappers
  *   > thin and preserve escape hatches for advanced KafkaJS behavior.
@@ -17,7 +17,7 @@
  *   - dual-shape metadata stamping (`./metadata`)
  *   - PostgreSQL processor-run registration (`./runs`)
  *   - retry/DLQ error classification (`./classify`)
- *   - DLQ publish helper on top of `@polaris/shared-kafka` (`./dlq`)
+ *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
  *   - in-memory metrics counters (`./metrics`)
  *   - manifest loader (`./manifest`)
  *

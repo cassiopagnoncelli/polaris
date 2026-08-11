@@ -5,8 +5,10 @@ import {
   loadConfigWithDefaults,
   nonEmptyStringSchema,
   positiveIntSchema,
-  type RedpandaConfig,
-  redpandaEnvSchema,
+  type PostgresConfig,
+  postgresEnvSchema,
+  type RabbitmqConfig,
+  rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -28,7 +30,6 @@ export const PROCESSOR_SERVICE_NAME = "sessionizer" as const;
  * Env vars:
  *
  *   POLARIS_SESSIONIZER_CONSUMER_GROUP        ("polaris-sessionizer-v1")
- *   POLARIS_SESSIONIZER_CONCURRENCY           (1)
  *   POLARIS_SESSIONIZER_INACTIVITY_SECONDS    (1800)
  *
  * NOTE on `POLARIS_SESSIONIZER_INACTIVITY_SECONDS`: the inactivity window
@@ -42,26 +43,22 @@ export const PROCESSOR_SERVICE_NAME = "sessionizer" as const;
 export const sessionizerEnvSchema = z
   .object({
     POLARIS_SESSIONIZER_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-sessionizer-v1"),
-    POLARIS_SESSIONIZER_CONCURRENCY: positiveIntSchema.default(1),
     POLARIS_SESSIONIZER_INACTIVITY_SECONDS: positiveIntSchema.default(DEFAULT_INACTIVITY_SECONDS),
   })
   .transform(
     (parsed): SessionizerConfig => ({
       consumerGroup: parsed["POLARIS_SESSIONIZER_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_SESSIONIZER_CONCURRENCY"],
       inactivitySeconds: parsed["POLARIS_SESSIONIZER_INACTIVITY_SECONDS"],
     }),
   );
 
 export interface SessionizerConfig {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
   readonly inactivitySeconds: number;
 }
 
 export const sessionizerEnvKeys = [
   "POLARIS_SESSIONIZER_CONSUMER_GROUP",
-  "POLARIS_SESSIONIZER_CONCURRENCY",
   "POLARIS_SESSIONIZER_INACTIVITY_SECONDS",
 ] as const;
 
@@ -71,7 +68,13 @@ export const sessionizerEnvKeys = [
 export interface SessionizerRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RedpandaConfig;
+  /**
+   * PostgreSQL connection. Required since the RabbitMQ migration: stream
+   * consumers own their resume point (`transport_checkpoints`) because
+   * AMQP has no server-side offset store.
+   */
+  readonly postgres: PostgresConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly sessionizer: SessionizerConfig;
 }
 
@@ -79,7 +82,8 @@ export function sessionizerConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: redpandaEnvSchema,
+    postgres: postgresEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     sessionizer: sessionizerEnvSchema,
   });
 }

@@ -9,7 +9,7 @@
  *
  * Wiring summary:
  *
- *   1. Build the logger and KafkaJS client through `@polaris/shared-kafka`.
+ *   1. Build the logger and KafkaJS client through `@polaris/shared-transport`.
  *   2. Build the `PolarisProducer` and `PolarisConsumer`.
  *   3. Build the streaming runtime (the consumer + producer + transform
  *      + `IPLookup` adapter).
@@ -20,17 +20,20 @@
  *
  * Tests inject a pre-built consumer + producer + lookup through the
  * `BuildAppOptions` slots so they can drive the runtime without a real
- * Redpanda broker.
+ * RabbitMQ broker.
  */
 
 import {
-  createKafkaClient,
+  createTransportConnection,
+  type TransportConnection,
   createPolarisConsumer,
+  PostgresCheckpointStore,
   createPolarisProducer,
   type PolarisConsumer,
   type PolarisProducer,
   type SyncIsolationLookup,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
+import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
@@ -53,7 +56,7 @@ import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transfo
  *
  * Most slots are optional and default to production wiring. Tests
  * override `consumer`, `producer`, `lookup`, and `isolation` to avoid
- * bringing up Redpanda.
+ * bringing up RabbitMQ.
  */
 export interface BuildAppOptions {
   readonly config: GeoipEnricherRuntimeConfig;
@@ -162,8 +165,26 @@ export async function buildGeoipEnricherApp(
   const lookup = options.lookup ?? new NoOpIPLookup();
 
   // ---- consumer + producer --------------------------------------------
-  const { producer, ownsProducer } = buildProducer(config, options.producer, processorLogger);
-  const { consumer, ownsConsumer } = buildConsumer(config, options.consumer, processorLogger);
+  // One AMQP connection per process, shared by the producer and the
+  // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
+  // over AMQP have no server-side offset store, so the resume point is
+  // Polaris-owned (see db/migrations/*_create_transport_checkpoints.sql).
+  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: processorLogger });
+  const checkpointDb = createDb({ postgres: config.postgres });
+  const checkpoints = new PostgresCheckpointStore(checkpointDb);
+  const { producer, ownsProducer } = buildProducer(
+    config,
+    options.producer,
+    processorLogger,
+    connection,
+  );
+  const { consumer, ownsConsumer } = buildConsumer(
+    config,
+    options.consumer,
+    processorLogger,
+    connection,
+    checkpoints,
+  );
 
   if (ownsProducer) {
     try {
@@ -176,16 +197,6 @@ export async function buildGeoipEnricherApp(
       // Same posture as the ingester and analytics-projector: do not
       // crash. `/ready` surfaces the broker outage; the runtime
       // surfaces per-message publish failures.
-    }
-  }
-  if (ownsConsumer) {
-    try {
-      await consumer.connect();
-    } catch (err) {
-      processorLogger.error(
-        { component: "geoip-enricher.consumer", err: errSummary(err) },
-        "raw.events consumer failed to connect",
-      );
     }
   }
 
@@ -202,7 +213,6 @@ export async function buildGeoipEnricherApp(
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
     ...(options.run_id !== undefined ? { run_id: options.run_id } : {}),
-    partitionsConsumedConcurrently: config.enricher.partitionsConsumedConcurrently,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -241,6 +251,19 @@ export async function buildGeoipEnricherApp(
       }
     });
   }
+  shutdownTasks.push(async () => {
+    // checkpoint transport shutdown: the consumer has already flushed its
+    // offsets, so the connection and the checkpoint pool go last.
+    try {
+      await connection.close();
+    } catch (err) {
+      processorLogger.warn(
+        { component: "transport", err: errSummary(err) },
+        "transport connection close error during shutdown",
+      );
+    }
+    await closeDb(checkpointDb);
+  });
   if (options.shutdownTasks !== undefined) {
     shutdownTasks.push(...options.shutdownTasks);
   }
@@ -311,13 +334,13 @@ function buildProducer(
   config: GeoipEnricherRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const producer = createPolarisProducer({
-    kafka,
+    connection,
     logger,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
@@ -329,19 +352,19 @@ function buildConsumer(
   config: GeoipEnricherRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  connection: TransportConnection,
+  checkpoints: PostgresCheckpointStore,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const consumer = createPolarisConsumer({
-    kafka,
+    connection,
     logger,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
-    consumerConfig: {
-      groupId: config.enricher.consumerGroup,
-    },
+    groupName: config.enricher.consumerGroup,
+    checkpoints,
   });
   return { consumer, ownsConsumer: true };
 }

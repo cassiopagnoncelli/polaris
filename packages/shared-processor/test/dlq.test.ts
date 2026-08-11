@@ -1,14 +1,14 @@
 /**
  * Tests for `publishToDlq`.
  *
- * The helper wraps `@polaris/shared-kafka`'s `republishToDlq` with
+ * The helper wraps `@polaris/shared-transport`'s `republishToDlq` with
  * processor-specific defaults (component name, failedAt timestamp,
  * classifier-derived reason). The tests use a stub `PolarisProducer` that
  * records `send` calls so we can assert the resulting DLQ topic name,
  * headers, and message payload.
  */
 
-import type { PolarisProducer } from "@polaris/shared-kafka";
+import type { PolarisProducer } from "@polaris/shared-transport";
 import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it } from "vitest";
 

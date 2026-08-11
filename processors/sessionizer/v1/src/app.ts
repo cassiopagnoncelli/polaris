@@ -3,7 +3,7 @@
  *
  * Same shape as the analytics-projector and identity-resolver bootstraps:
  *
- *   1. Build the logger and KafkaJS client through `@polaris/shared-kafka`.
+ *   1. Build the logger and KafkaJS client through `@polaris/shared-transport`.
  *   2. Build the `PolarisProducer` and `PolarisConsumer`.
  *   3. Build the in-memory session store (v1 has no Redis variant).
  *   4. Build the streaming runtime (consumer + producer + store + transform).
@@ -14,17 +14,20 @@
  *
  * Tests inject a pre-built consumer + producer through the
  * `BuildAppOptions` slots so they can drive the runtime without a real
- * Redpanda broker.
+ * RabbitMQ broker.
  */
 
 import {
-  createKafkaClient,
+  createTransportConnection,
+  type TransportConnection,
   createPolarisConsumer,
+  PostgresCheckpointStore,
   createPolarisProducer,
   type PolarisConsumer,
   type PolarisProducer,
   type SyncIsolationLookup,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
+import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
@@ -88,8 +91,26 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
   const store = options.store ?? new InMemorySessionStore();
 
   // ---- consumer + producer --------------------------------------------
-  const { producer, ownsProducer } = buildProducer(config, options.producer, processorLogger);
-  const { consumer, ownsConsumer } = buildConsumer(config, options.consumer, processorLogger);
+  // One AMQP connection per process, shared by the producer and the
+  // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
+  // over AMQP have no server-side offset store, so the resume point is
+  // Polaris-owned (see db/migrations/*_create_transport_checkpoints.sql).
+  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: processorLogger });
+  const checkpointDb = createDb({ postgres: config.postgres });
+  const checkpoints = new PostgresCheckpointStore(checkpointDb);
+  const { producer, ownsProducer } = buildProducer(
+    config,
+    options.producer,
+    processorLogger,
+    connection,
+  );
+  const { consumer, ownsConsumer } = buildConsumer(
+    config,
+    options.consumer,
+    processorLogger,
+    connection,
+    checkpoints,
+  );
 
   if (ownsProducer) {
     try {
@@ -98,16 +119,6 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
       processorLogger.error(
         { component: "sessionizer.producer", err: errSummary(err) },
         "session.events producer failed to connect",
-      );
-    }
-  }
-  if (ownsConsumer) {
-    try {
-      await consumer.connect();
-    } catch (err) {
-      processorLogger.error(
-        { component: "sessionizer.consumer", err: errSummary(err) },
-        "raw.events consumer failed to connect",
       );
     }
   }
@@ -124,7 +135,6 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
-    partitionsConsumedConcurrently: config.sessionizer.partitionsConsumedConcurrently,
     inactivity_seconds: config.sessionizer.inactivitySeconds,
     producer_name: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producer_version: config.service.serviceVersion,
@@ -166,6 +176,19 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
       }
     });
   }
+  shutdownTasks.push(async () => {
+    // checkpoint transport shutdown: the consumer has already flushed its
+    // offsets, so the connection and the checkpoint pool go last.
+    try {
+      await connection.close();
+    } catch (err) {
+      processorLogger.warn(
+        { component: "transport", err: errSummary(err) },
+        "transport connection close error during shutdown",
+      );
+    }
+    await closeDb(checkpointDb);
+  });
   if (options.shutdownTasks !== undefined) {
     shutdownTasks.push(...options.shutdownTasks);
   }
@@ -231,13 +254,13 @@ function buildProducer(
   config: SessionizerRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const producer = createPolarisProducer({
-    kafka,
+    connection,
     logger,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
@@ -249,19 +272,19 @@ function buildConsumer(
   config: SessionizerRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  connection: TransportConnection,
+  checkpoints: PostgresCheckpointStore,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.redpanda });
   const consumer = createPolarisConsumer({
-    kafka,
+    connection,
     logger,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
-    consumerConfig: {
-      groupId: config.sessionizer.consumerGroup,
-    },
+    groupName: config.sessionizer.consumerGroup,
+    checkpoints,
   });
   return { consumer, ownsConsumer: true };
 }

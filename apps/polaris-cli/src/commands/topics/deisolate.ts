@@ -24,15 +24,15 @@
  * `'declared'`; the operator must run with a valid
  * `POLARIS_OPERATOR_TOKEN`.
  *
- * @see docs/architecture/03-redpanda-topics.md "Topic Isolation Triggers"
+ * @see docs/architecture/03-rabbitmq-streams.md "Topic Isolation Triggers"
  * @see docs/operations/topic-isolation-cutover.md
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
 import {
-  CANONICAL_TOPIC_FAMILIES,
-  type CanonicalTopicFamily,
-  isCanonicalTopicFamily,
-} from "@polaris/shared-kafka";
+  CANONICAL_STREAM_FAMILIES,
+  type CanonicalStreamFamily,
+  isCanonicalStreamFamily,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
@@ -80,12 +80,12 @@ export interface TopicsDeisolateAuditPayload {
 
 export interface TopicsDeisolateStore {
   findActive(
-    family: CanonicalTopicFamily,
+    family: CanonicalStreamFamily,
     projectId: string,
     environment: string,
   ): Promise<TopicIsolationRow | null>;
   findLatest(
-    family: CanonicalTopicFamily,
+    family: CanonicalStreamFamily,
     projectId: string,
     environment: string,
   ): Promise<TopicIsolationRow | null>;
@@ -133,7 +133,7 @@ export const topicsDeisolateCommand: CommandDefinition = {
       .requiredOption("--env <environment>", "Environment: development | staging | production.")
       .requiredOption(
         "--family <family>",
-        `Canonical topic family: ${CANONICAL_TOPIC_FAMILIES.join(" | ")}.`,
+        `Canonical topic family: ${CANONICAL_STREAM_FAMILIES.join(" | ")}.`,
       )
       .option(
         "--reason <reason>",
@@ -291,7 +291,7 @@ function defaultStore(env: NodeJS.ProcessEnv): TopicsDeisolateStore {
 interface ValidatedArgs {
   readonly project: string;
   readonly env: SupportedEnvironment;
-  readonly family: CanonicalTopicFamily;
+  readonly family: CanonicalStreamFamily;
   readonly reason: string | undefined;
 }
 
@@ -311,9 +311,9 @@ function validate(args: TopicsDeisolateArgs): ValidatedArgs {
       `--env must be one of: ${SUPPORTED_ENVIRONMENTS.join(", ")} (got "${env}")`,
     );
   }
-  if (!isCanonicalTopicFamily(family)) {
+  if (!isCanonicalStreamFamily(family)) {
     throw new UsageError(
-      `--family must be one of: ${CANONICAL_TOPIC_FAMILIES.join(", ")} (got "${family}")`,
+      `--family must be one of: ${CANONICAL_STREAM_FAMILIES.join(", ")} (got "${family}")`,
     );
   }
 

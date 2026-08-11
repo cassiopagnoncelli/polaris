@@ -11,12 +11,12 @@
  * `mutates: true`: routes through the P6-007 production gate.
  */
 
-import { loadConfigWithDefaults, redpandaEnvSchema } from "@polaris/shared-config";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
   createKafkaClient,
   createPolarisProducer,
   type PolarisProducer,
-} from "@polaris/shared-kafka";
+} from "@polaris/shared-transport";
 import {
   createKyselyProcessorDlqRecordRepository,
   type MarkResolvedOutcome,
@@ -170,7 +170,7 @@ function defaultStore(env: NodeJS.ProcessEnv): ProcessorDlqRetryStore {
 async function defaultProducer(env: NodeJS.ProcessEnv): Promise<ProcessorDlqRetryProducer> {
   const config = loadConfigWithDefaults({
     serviceName: "polaris-cli",
-    schema: redpandaEnvSchema,
+    schema: rabbitmqEnvSchema,
     processEnv: env,
   });
   const kafka = createKafkaClient({ redpanda: config });
