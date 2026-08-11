@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -12,7 +15,7 @@
       }
     ]
   },
-  "description": "Polaris ClickHouse v1: Kafka-engine ingestion lag and materialized-view state from the analytics-projector's probe poller (PI2CRFZC); analytics insert health, proxied via the analytics-projector processor metrics; operator-escape-hatch usage. Native query-rate / query-p99 / parts-count panels are still gaps — see About panel.",
+  "description": "Polaris ClickHouse v1: Kafka-engine ingestion lag and materialized-view state from the analytics-projector's probe poller (PI2CRFZC); analytics insert health, proxied via the analytics-projector processor metrics; operator-escape-hatch usage. Native query-rate / query-p99 / parts-count panels are still gaps \u2014 see About panel.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -21,11 +24,19 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
-        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The dashboard's signals come from two places: the **analytics-projector** processor (Polaris's canonical ClickHouse inserter) and the projector's **probe poller** (PI2CRFZC), which periodically queries ClickHouse `system.*` views and re-publishes the rows as Polaris gauges.\n\n**Available metrics**:\n\n- `polaris_clickhouse_kafka_ingestion_lag_seconds{database, table}` — Kafka-engine consumer lag, from `system.kafka_consumers` (PI2CRFZC).\n- `polaris_clickhouse_mv_state{view, state}` — materialized-view state, from `system.materialized_views` (PI2CRFZC). `state=\"failed\"` powers the page alert.\n- `polaris_processor_lag_ms_last{processor_name=\"analytics-projector\"}` — proxy for the Kafka→analytics insert lag at the inserter.\n- `polaris_processor_events_consumed_total{processor_name=\"analytics-projector\"}` — rate of rows landing in `analytics.events`.\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` — inserter-side failure class.\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` — events DLQ'd after retry exhaustion.\n- `polaris_clickhouse_operator_raw_query_total{caller}` — operator escape-hatch raw queries (audit signal).\n\n**Known gaps**:\n\n- **No native query-rate / query-p99 / parts-count metrics.** These come from `ClickHouseProfileEvents_Query` / `ClickHouseProfileEvents_QueryTimeMicroseconds` and would require either a `clickhouse-exporter` sidecar or extending the probe poller to read `system.metrics`. Not in v1.\n- **No projection-freshness metric.** No v1 emitter for projections like `event-daily-counts`.",
+        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The dashboard's signals come from two places: **clickhouse-sink**, the only process that writes to ClickHouse, and the **analytics-projector**'s probe poller (PI2CRFZC), which periodically queries ClickHouse `system.*` views and re-publishes the rows as Polaris gauges.\n\n**Two ingestion paths.** The sink routes by stream family into two interface tables, and every sink series carries a `table` label so they are read separately:\n\n- `analytics_events_queue` \u2014 source events from `analytics.events`, landing in `analytics_ingest_log` + `analytics_raw`.\n- `analytics_processed_queue` \u2014 derived events from `enriched` / `session` / `identity` / `attribution`.events, landing in `analytics_processed`.\n\n**Available metrics**:\n\n- `polaris_clickhouse_sink_lag_seconds{table}` \u2014 ingestion lag: now \u2212 the envelope's `ingested_at` for the last row written. Powers the warn and page alerts.\n- `polaris_clickhouse_sink_rows_consumed_total{project_id, environment, table}` \u2014 rows inserted.\n- `polaris_clickhouse_sink_rows_skipped_total` \u2014 messages the sink could not project onto a row. The only path where an event leaves the pipeline without reaching ClickHouse, a DLQ, or an ingester rejection; alerted above 1/min.\n- `polaris_clickhouse_sink_batches_total{table}` and `polaris_clickhouse_sink_insert_duration_ms_last{table}` \u2014 batch shape and INSERT latency.\n- `polaris_clickhouse_mv_state{view, state}` \u2014 materialized-view state, from `system.materialized_views` (PI2CRFZC). `state=\"failed\"` powers the page alert.\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` \u2014 projector-side failure class.\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` \u2014 events DLQ'd after retry exhaustion.\n- `polaris_clickhouse_operator_raw_query_total{caller}` \u2014 operator escape-hatch raw queries (audit signal).\n\n`polaris_clickhouse_kafka_ingestion_lag_seconds` is **gone**: ClickHouse stopped consuming for itself at the RabbitMQ migration, so `system.kafka_consumers` is empty. Panels that used it now read the sink's own lag.\n",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -33,98 +44,178 @@
       "type": "text"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30000 },
-              { "color": "red", "value": 120000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30000
+              },
+              {
+                "color": "red",
+                "value": 120000
+              }
             ]
           },
           "unit": "ms"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "id": 2,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["max"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto",
         "wideLayout": true
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "max by (partition) (polaris_processor_lag_ms_last{processor_name=\"analytics-projector\", environment=\"$environment\"})",
-          "legendFormat": "partition {{partition}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (table) (polaris_clickhouse_sink_insert_duration_ms_last)",
+          "legendFormat": "{{table}}",
           "refId": "A"
         }
       ],
-      "title": "Kafka-engine → analytics insert lag (ms, proxy via analytics-projector)",
+      "title": "Sink INSERT duration, last batch (ms, per interface table)",
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "id": 3,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(rate(polaris_processor_events_emitted_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "rows inserted into analytics.events",
-          "refId": "A"
-        }
-      ],
-      "title": "Analytics insert rate (5m, ops; proxy)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 10,
-            "stacking": { "mode": "normal" }
+            "fillOpacity": 10
           },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 3,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (table) (rate(polaris_clickhouse_sink_rows_consumed_total{environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Sink rows inserted (5m, rows/s, per interface table)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (reason) (rate(polaris_processor_events_failed_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[5m]))",
           "legendFormat": "{{reason}}",
           "refId": "A"
@@ -134,25 +225,52 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
       "id": 5,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (caller) (rate(polaris_clickhouse_operator_raw_query_total[5m]))",
           "legendFormat": "{{caller}}",
           "refId": "A"
@@ -162,37 +280,65 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 10 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
             ]
           },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 24 },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
       "id": 6,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto",
         "wideLayout": true
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum(rate(polaris_processor_events_dlq_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[15m]))",
           "legendFormat": "analytics-projector DLQ rate",
           "refId": "A"
@@ -202,66 +348,135 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 30 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
       "id": 7,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (table) (polaris_clickhouse_sink_lag_seconds)",
           "legendFormat": "{{table}}",
           "refId": "A"
         }
       ],
-      "title": "Kafka-engine ingestion lag (seconds, per table)",
+      "title": "Sink ingestion lag (seconds, per interface table)",
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "mappings": [
-            { "options": { "0": { "color": "green", "text": "OK" } }, "type": "value" },
-            { "options": { "1": { "color": "red", "text": "FAILED" } }, "type": "value" }
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "OK"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "color": "red",
+                  "text": "FAILED"
+                }
+              },
+              "type": "value"
+            }
           ],
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }]
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 30 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
       "id": 8,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "max by (view) (polaris_clickhouse_mv_state{state=\"failed\"})",
           "legendFormat": "{{view}}",
           "refId": "A"
@@ -269,15 +484,131 @@
       ],
       "title": "Materialized views in failed state",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(polaris_clickhouse_sink_rows_skipped_total[5m]))",
+          "legendFormat": "skipped",
+          "refId": "A"
+        }
+      ],
+      "title": "Sink rows SKIPPED (5m, rows/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (table) (rate(polaris_clickhouse_sink_batches_total[5m]))",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Sink batches flushed (5m, batches/s, per interface table)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["polaris", "clickhouse"],
+  "tags": [
+    "polaris",
+    "clickhouse"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "text": "Prometheus", "value": "polaris-prometheus" },
+        "current": {
+          "text": "Prometheus",
+          "value": "polaris-prometheus"
+        },
         "name": "DS_PROMETHEUS",
         "label": "Datasource",
         "type": "datasource",
@@ -287,11 +618,24 @@
         "refresh": 1
       },
       {
-        "current": { "text": "production", "value": "production" },
+        "current": {
+          "text": "production",
+          "value": "production"
+        },
         "options": [
-          { "text": "development", "value": "development" },
-          { "text": "staging", "value": "staging" },
-          { "text": "production", "value": "production", "selected": true }
+          {
+            "text": "development",
+            "value": "development"
+          },
+          {
+            "text": "staging",
+            "value": "staging"
+          },
+          {
+            "text": "production",
+            "value": "production",
+            "selected": true
+          }
         ],
         "label": "Environment",
         "name": "environment",
@@ -300,10 +644,13 @@
       }
     ]
   },
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "utc",
-  "title": "Polaris — ClickHouse",
+  "title": "Polaris \u2014 ClickHouse",
   "uid": "polaris-clickhouse",
   "version": 1,
   "weekStart": ""

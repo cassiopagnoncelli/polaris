@@ -24,7 +24,21 @@ The Prometheus rules that trigger this runbook live at
 |---|---|---|
 | `PolarisClickHouseIngestionLagWarn` | warn | ClickHouse ingestion lag >2 min |
 | `PolarisClickHouseIngestionLagPage` | page | ClickHouse ingestion lag >10 min |
+| `PolarisClickHouseSinkRowsSkipped` | warn | sink skipping >1 message/min for 10 min |
 | `PolarisClickHouseMVFailure` | page | any materialized view in `failed` state |
+
+**Read the `table` label first.** The sink feeds two ingestion interface
+tables and every one of its series is labelled by which:
+
+| `table` | Source | Lands in |
+|---|---|---|
+| `analytics_events_queue` | `analytics.events` | `analytics_ingest_log` + `analytics_raw` |
+| `analytics_processed_queue` | `enriched` / `session` / `identity` / `attribution` `.events` | `analytics_processed` |
+
+Lag on one and not the other narrows the cause immediately: a shared
+process, connection and batch timer means an isolated lag is upstream —
+that family's processor — not the sink. Lag on both is the sink, the
+connection, or ClickHouse itself.
 
 **Where the lag signal comes from.** `consumers/clickhouse-sink`
 emits `polaris_clickhouse_sink_lag_seconds{table}` — now minus the
@@ -98,6 +112,47 @@ means the sink is stuck rather than idle. Its logs carry the reason:
 
 A repeating ClickHouse error with a flat checkpoint is the smoking gun
 for cause #2 / #4 — an MV failure or a schema mismatch.
+
+The checkpoint query returns one row per partition stream across all
+five families, so it also shows which side is stuck. Streams named
+`analytics.events-*` are the source path; `enriched.events-*`,
+`session.events-*`, `identity.events-*` and `attribution.events-*` are
+the derived path.
+
+### 1b. Triage `PolarisClickHouseSinkRowsSkipped`
+
+This alert is not about lag. A skipped message is one the sink could not
+project onto an ingestion row — an undecodable body, or an envelope
+missing one of `event_id`, `event`, `project_id`, `environment`,
+`occurred_at`, `ingested_at`. The sink logs it, counts it, and advances
+past it.
+
+Advancing is deliberate: throwing would rewind the partition and
+redeliver the same broken message forever, stalling every healthy event
+behind it. But it does mean this is the **only** path where an event
+leaves the pipeline without landing in ClickHouse, a DLQ, or an ingester
+rejection — which is why a sustained rate is worth a page-adjacent look.
+
+Find the offending messages:
+
+```logql
+{polaris_service="clickhouse-sink"} | json | component="clickhouse-sink.decode"
+```
+
+Each line carries `stream` and `offset`. Two causes, in likelihood
+order:
+
+1. **A processor started emitting a malformed envelope.** Check which
+   family the `stream` belongs to and look at that processor's recent
+   deploy. This is the common case and it is a code bug, not an
+   operational one.
+2. **Something is publishing to a canonical stream that should not be.**
+   The families the sink reads are written only by Polaris processors;
+   anything else on them is a misconfigured producer or a stray replay.
+
+A steady non-zero rate with no recent deploy is worth escalating —
+per the sink's contract the projector emits canonical envelopes, so a
+non-zero rate means an assumption upstream has broken.
 
 ### 2. Check materialized-view state
 
