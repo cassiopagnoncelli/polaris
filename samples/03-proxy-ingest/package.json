@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Polaris sample: browser events relayed through a first-party Next.js route so the API key never leaves the server.",
   "scripts": {
-    "dev": "next dev --port 3002",
+    "dev": "next dev --port 3643",
     "build": "next build",
-    "start": "next start --port 3002",
+    "start": "next start --port 3643",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

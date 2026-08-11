@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Polaris sample: backend events from Next.js route handlers and server actions with @polaris/node-sdk.",
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "next dev --port 3642",
     "build": "next build",
-    "start": "next start --port 3001",
+    "start": "next start --port 3642",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
