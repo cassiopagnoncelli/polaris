@@ -138,6 +138,43 @@ export interface AnalyticsRawRow {
 }
 
 /**
+ * Row shape returned from a deduped `analytics_processed` read. Columns
+ * mirror `sql/clickhouse/32_analytics_processed.sql`.
+ *
+ * Deliberately not `AnalyticsRawRow`: the derived table carries transport
+ * lineage (`_topic`, `_partition`, `_offset`) because it has no ingest
+ * log behind it, and it omits `sdk` / `sdk_version` / `ip` / `user_agent`
+ * / `locale`, which are structurally absent on processor-emitted
+ * envelopes. Sharing one type would hand callers columns that are always
+ * empty and hide the ones that are not.
+ */
+export interface AnalyticsProcessedRow {
+  event_id: string;
+  event: string;
+  schema_version: number;
+  project_id: string;
+  environment: string;
+  occurred_at: string;
+  ingested_at: string;
+  source_id: string;
+  source_type: string;
+  anonymous_id: string;
+  session_id: string;
+  customer_id: string;
+  device_id: string;
+  properties_json: string;
+  context_json: string;
+  consent_json: string;
+  privacy_json: string;
+  processor_name: string;
+  processor_version: string;
+  _version: number | string;
+  _topic: string;
+  _partition: number;
+  _offset: number | string;
+}
+
+/**
  * Row shape returned from `analytics_ingest_log` reads.
  */
 export interface AnalyticsIngestLogRow {

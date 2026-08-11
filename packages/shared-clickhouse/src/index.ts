@@ -87,6 +87,7 @@ export {
 } from "./sink.js";
 export type {
   AnalyticsIngestLogRow,
+  AnalyticsProcessedRow,
   AnalyticsRawRow,
   ArgMaxByEventKeyFilter,
   ClickHouseCredential,

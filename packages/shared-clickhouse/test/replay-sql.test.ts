@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildArgMaxByEventKeySql, buildCountDistinctEventsSql } from "../src/replay.js";
+import {
+  buildArgMaxByEventKeySql,
+  buildArgMaxProcessedByEventKeySql,
+  buildCountDistinctEventsSql,
+  buildCountDistinctProcessedEventsSql,
+} from "../src/replay.js";
 
 describe("buildArgMaxByEventKeySql", () => {
   const baseFilter = {
@@ -81,5 +86,69 @@ describe("buildCountDistinctEventsSql", () => {
       event: "checkout.completed",
     });
     expect(sql).toMatch(/event = \{event:String\}/);
+  });
+});
+
+describe("analytics_processed readers", () => {
+  const argMaxFilter = {
+    projectId: "storefront",
+    environment: "production",
+    event: "session.started",
+    eventIds: ["a", "b"],
+  };
+  const countFilter = {
+    projectId: "storefront",
+    environment: "production",
+    occurredFrom: "2026-05-01T00:00:00Z",
+    occurredTo: "2026-05-02T00:00:00Z",
+  };
+
+  it("reads from polaris.analytics_processed, not analytics_raw", () => {
+    expect(buildArgMaxProcessedByEventKeySql(argMaxFilter)).toMatch(
+      /FROM\s+polaris\.analytics_processed/,
+    );
+    expect(buildCountDistinctProcessedEventsSql(countFilter)).toMatch(
+      /FROM\s+polaris\.analytics_processed/,
+    );
+    expect(buildArgMaxProcessedByEventKeySql(argMaxFilter)).not.toMatch(/analytics_raw/);
+  });
+
+  it("applies the same dedupe pattern and never uses FINAL", () => {
+    const sql = buildArgMaxProcessedByEventKeySql(argMaxFilter);
+    expect(sql).toMatch(/GROUP BY \(project_id,\s*environment,\s*event,\s*event_id\)/);
+    expect(sql).toMatch(/argMax\(properties_json,\s*_version\)\s+AS\s+properties_json/);
+    expect(sql).not.toMatch(/\bFINAL\b/i);
+  });
+
+  it("projects the transport lineage columns", () => {
+    // The derived path has no ingest log, so the lineage on the surviving
+    // row is the only record of which offset produced it.
+    const sql = buildArgMaxProcessedByEventKeySql(argMaxFilter);
+    expect(sql).toMatch(/argMax\(_topic,\s*_version\)\s+AS\s+_topic/);
+    expect(sql).toMatch(/argMax\(_offset,\s*_version\)\s+AS\s+_offset/);
+  });
+
+  it("omits columns that are structurally absent on derived envelopes", () => {
+    // Processors strip the source IP and never emit through an SDK.
+    const sql = buildArgMaxProcessedByEventKeySql(argMaxFilter);
+    for (const column of ["ip", "user_agent", "locale", "sdk", "sdk_version"]) {
+      expect(sql).not.toMatch(new RegExp(`argMax\\(${column},`));
+    }
+  });
+
+  it("keeps the same bounds on the event-id list", () => {
+    expect(() => buildArgMaxProcessedByEventKeySql({ ...argMaxFilter, eventIds: [] })).toThrow(
+      /non-empty/i,
+    );
+    const big = Array.from({ length: 5001 }, (_, i) => String(i));
+    expect(() => buildArgMaxProcessedByEventKeySql({ ...argMaxFilter, eventIds: big })).toThrow(
+      /5000/,
+    );
+  });
+
+  it("names the calling method in its errors", () => {
+    expect(() => buildArgMaxProcessedByEventKeySql({ ...argMaxFilter, eventIds: [] })).toThrow(
+      /argMaxProcessedByEventKey/,
+    );
   });
 });
