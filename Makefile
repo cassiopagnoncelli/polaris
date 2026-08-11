@@ -25,7 +25,7 @@ export
 endif
 
 .PHONY: help setup seed install lint style format check typecheck \
-        dev dev-all dev-ingester dev-control-plane \
+        dev dev-all dev-ingester dev-control-plane dev-guard dev-stop \
         build build-packages build-cli test tests ci stats \
         docker-up docker-down docker-ps docker-logs docker-nuke \
         cli api_key clean \
@@ -104,10 +104,33 @@ check: ## Run Biome lint + format checks
 typecheck: ## Run tsc --noEmit across the workspace
 	pnpm typecheck
 
-dev: build-packages ## Run the two HTTP APIs bare-metal with tsx watch (ingester + control-plane)
+# A service that loses the port race exits 1 (see each `src/main.ts`), but the
+# `tsx watch` supervising it does not — it stays up waiting for a file change
+# that will never come. So a second bare-metal stack leaves behind a full set
+# of supervisors that run nothing and hold ~1k descriptors and their kqueue
+# watches each. Enough of those and the machine runs out of watch capacity,
+# which shows up somewhere else entirely: `next dev` in `samples/` fails with
+# EMFILE, Watchpack reports the failed watcher as a deleted directory, and the
+# sample restarts forever. Refuse the second stack rather than debug that.
+#
+# The bracketed characters below keep `pgrep -f` from matching the very recipe
+# that runs it.
+dev-guard:
+	@if pgrep -f "tsx/dist/cli.mjs watc[h]" >/dev/null 2>&1; then \
+	  echo "A bare-metal dev stack is already running ($$(pgrep -f 'tsx/dist/cli.mjs watc[h]' | wc -l | tr -d ' ') tsx watch processes)."; \
+	  echo "Stop it with 'make dev-stop', then try again."; \
+	  exit 1; \
+	fi
+
+dev-stop: ## Stop any bare-metal dev stack left running by dev / dev-all
+	@pkill -f "pnpm -r --parallel --if-present run de[v]" 2>/dev/null || true
+	@pkill -f "tsx/dist/cli.mjs watc[h]" 2>/dev/null || true
+	@echo "Bare-metal dev stack stopped."
+
+dev: dev-guard build-packages ## Run the two HTTP APIs bare-metal with tsx watch (ingester + control-plane)
 	pnpm --parallel --filter @polaris/ingester-api --filter @polaris/control-plane-api run dev
 
-dev-all: build-packages ## Run every service bare-metal in parallel (apps + processors + consumers)
+dev-all: dev-guard build-packages ## Run every service bare-metal in parallel (apps + processors + consumers)
 	pnpm -r --parallel --if-present run dev
 
 dev-ingester: build-packages ## Run only the ingester API bare-metal
