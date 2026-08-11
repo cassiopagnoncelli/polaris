@@ -8,10 +8,63 @@
  * No business logic lives here — every helper is a single query. The sync
  * planner in `../catalog/sync.ts` decides what to call.
  */
-import type { Database, Environment } from "@polaris/shared-db";
+import type {
+  Database,
+  Environment,
+  ProjectStatus,
+  SourceRuntime,
+  SourceStatus,
+  SourceType,
+} from "@polaris/shared-db";
 import type { Kysely } from "kysely";
-import type { ProjectRow, SourceRow } from "../catalog/sync.js";
-import type { ProjectFile, SourceFile } from "../catalog/types.js";
+/**
+ * Row and input shapes.
+ *
+ * Declared here rather than imported from the CLI's catalog layer: this
+ * package holds the database contract, and it should not know that the rows
+ * happen to be Zod-inferred from YAML on one of its callers. The catalog's
+ * `ProjectFile` / `SourceFile` are structurally compatible, so the CLI passes
+ * them straight in.
+ */
+export interface ProjectRow {
+  readonly project_id: string;
+  readonly display_name: string;
+  readonly owner: string;
+  readonly description: string;
+  readonly status: string;
+}
+
+export interface SourceRow {
+  readonly project_id: string;
+  readonly source_id: string;
+  readonly source_type: string;
+  readonly owner: string;
+  readonly description: string;
+  readonly runtime: string;
+  readonly allowed_environments: readonly string[];
+  readonly status: string;
+}
+
+/** Catalog-declared project, as the sync path writes it. */
+export interface ProjectFile {
+  readonly project_id: string;
+  readonly display_name: string;
+  readonly owner: string;
+  readonly description: string;
+  readonly status: ProjectStatus;
+}
+
+/** Catalog-declared source, as the sync path writes it. */
+export interface SourceFile {
+  readonly project_id: string;
+  readonly source_id: string;
+  readonly source_type: SourceType;
+  readonly owner: string;
+  readonly description: string;
+  readonly runtime: SourceRuntime;
+  readonly allowed_environments: readonly Environment[];
+  readonly status: SourceStatus;
+}
 
 export async function fetchAllProjects(db: Kysely<Database>): Promise<ProjectRow[]> {
   const rows = await db

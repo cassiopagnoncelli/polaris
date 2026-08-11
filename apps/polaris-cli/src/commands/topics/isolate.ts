@@ -43,9 +43,10 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  type InsertTopicIsolationInput,
   insertAuditRecord,
+  insertTopicIsolation,
 } from "../../db/index.js";
-import { type InsertTopicIsolationInput, insertTopicIsolation } from "../../db/topic-isolations.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 

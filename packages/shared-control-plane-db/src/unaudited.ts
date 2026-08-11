@@ -22,6 +22,13 @@
 export { insertApiKey, revokeApiKey } from "./queries/api-keys.js";
 export { type InsertAuditRecordInput, insertAuditRecord } from "./queries/audit-records.js";
 export {
+  abortClickhouseRebuildJob,
+  insertClickhouseRebuildJob,
+  markClickhouseRebuildJobCompleted,
+  markClickhouseRebuildJobFailed,
+  markClickhouseRebuildJobRunning,
+} from "./queries/clickhouse-rebuild-jobs.js";
+export {
   disableDestination,
   disableDestinationReplay,
   enableDestination,
@@ -40,3 +47,15 @@ export {
   type EnableProcessorActivationInput,
   enableProcessorActivation,
 } from "./queries/processor-activations.js";
+export { insertProject, insertSource, updateProject, updateSource } from "./queries/projects.js";
+export {
+  cancelReplayJob,
+  completeReplayJob,
+  failReplayJob,
+  insertReplayJob,
+  markReplayJobRunning,
+  pauseReplayJob,
+  recordReplayChunkProgress,
+  resumeReplayJob,
+} from "./queries/replay-jobs.js";
+export { deactivateIsolation, insertTopicIsolation } from "./queries/topic-isolations.js";

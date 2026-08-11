@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CLICKHOUSE_REBUILD_JOB_STATUSES } from "../src/db/clickhouse-rebuild-jobs.js";
+import { CLICKHOUSE_REBUILD_JOB_STATUSES } from "../src/queries/clickhouse-rebuild-jobs.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

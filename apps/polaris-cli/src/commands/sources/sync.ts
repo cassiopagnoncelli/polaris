@@ -10,6 +10,7 @@
  */
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
+import { v7 as uuidv7 } from "uuid";
 import {
   loadCatalog,
   planSourcesSync,
@@ -18,7 +19,7 @@ import {
   type SourcesSyncPlan,
 } from "../../catalog/index.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { connectDb, fetchAllSources, insertSource, updateSource } from "../../db/index.js";
+import { connectDb, fetchAllSources, syncSourcesWithAudit } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 
 interface SourcesSyncArgs {
@@ -56,7 +57,7 @@ async function runSourcesSync(args: SourcesSyncArgs, ctx: CommandContext): Promi
       return undefined;
     }
 
-    await applyPlan(handle.db, plan);
+    await applyPlan(handle.db, plan, ctx, current.length);
     emit(ctx, plan, { applied: true });
   } finally {
     await handle.close();
@@ -64,16 +65,34 @@ async function runSourcesSync(args: SourcesSyncArgs, ctx: CommandContext): Promi
   return undefined;
 }
 
-async function applyPlan(db: Kysely<Database>, plan: SourcesSyncPlan): Promise<void> {
-  if (plan.to_create.length === 0 && plan.to_update.length === 0) return;
-  await db.transaction().execute(async (trx) => {
-    for (const row of plan.to_create) {
-      await insertSource(trx, row.desired);
-    }
-    for (const row of plan.to_update) {
-      await updateSource(trx, row.desired);
-    }
-  });
+async function applyPlan(
+  db: Kysely<Database>,
+  plan: SourcesSyncPlan,
+  ctx: CommandContext,
+  existingTotal: number,
+): Promise<void> {
+  // One audit row for the whole run, not one per row changed. A sync that
+  // touches forty sources is a single operator action taken against a single
+  // catalog revision; forty rows would bury that and make the log unreadable
+  // at exactly the moment someone is trying to work out what changed. The
+  // counts and affected ids go in the snapshot.
+  //
+  // The write and the audit row share one transaction: a half-applied sync
+  // leaves the mirror describing a state no catalog revision ever had.
+  await syncSourcesWithAudit(
+    db,
+    {
+      to_create: plan.to_create.map((row) => row.desired),
+      to_update: plan.to_update.map((row) => row.desired),
+    },
+    { total: existingTotal },
+    {
+      auditId: `polaris_aud_${uuidv7()}`,
+      actorSource: ctx.actor.source,
+      actorLabel: ctx.actor.label,
+      occurredAt: new Date(),
+    },
+  );
 }
 
 function emit(

@@ -39,8 +39,8 @@ import type {
   ReplaySourceEvent,
 } from "@polaris/shared-replay";
 import {
-  partitionStreamNames,
   type PolarisProducer,
+  partitionStreamNames,
   readStreamRange,
   type StreamRangeDriver,
   type StreamRangeEvent,

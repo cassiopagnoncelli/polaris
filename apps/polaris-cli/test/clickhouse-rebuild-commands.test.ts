@@ -42,7 +42,7 @@ import {
   isAbortableClickhouseRebuildStatus,
   isTerminalClickhouseRebuildStatus,
   TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
-} from "../src/db/clickhouse-rebuild-jobs.js";
+} from "../src/db/index.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");

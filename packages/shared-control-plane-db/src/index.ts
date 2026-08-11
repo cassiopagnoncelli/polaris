@@ -50,6 +50,20 @@ export {
   listAuditRecords,
 } from "./queries/audit-records.js";
 export {
+  ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
+  CLICKHOUSE_REBUILD_JOB_STATUSES,
+  type ClickhouseRebuildJobRow,
+  type ClickhouseRebuildJobStatus,
+  type ClickhouseRebuildJobsTable,
+  findClickhouseRebuildJobById,
+  type InsertClickhouseRebuildJobInput,
+  isAbortableClickhouseRebuildStatus,
+  isTerminalClickhouseRebuildStatus,
+  type ListClickhouseRebuildJobsFilter,
+  listClickhouseRebuildJobs,
+  TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
+} from "./queries/clickhouse-rebuild-jobs.js";
+export {
   type DestinationRow,
   findDestinationById,
   type InsertDestinationInput,
@@ -74,6 +88,44 @@ export {
   listAllActivations,
   type ProcessorActivationRow,
 } from "./queries/processor-activations.js";
+export {
+  fetchAllProjects,
+  fetchAllSources,
+  fetchSourcesById,
+  fetchSourcesByProject,
+  type ProjectFile,
+  type ProjectRow,
+  type SourceFile,
+  type SourceRow,
+} from "./queries/projects.js";
+export {
+  type CompleteReplayJobInput,
+  type FailReplayJobInput,
+  findReplayJobById,
+  type InsertReplayJobInput,
+  isTerminalReplayStatus,
+  type ListReplayJobsFilter,
+  listReplayJobs,
+  type MarkReplayJobRunningInput,
+  REPLAY_JOB_MODES,
+  REPLAY_JOB_STATUSES,
+  REPLAY_JOB_TARGETS,
+  type RecordReplayChunkProgressInput,
+  type ReplayJobMode,
+  type ReplayJobRow,
+  type ReplayJobStatus,
+  type ReplayJobsTable,
+  type ReplayJobTarget,
+  TERMINAL_REPLAY_JOB_STATUSES,
+} from "./queries/replay-jobs.js";
+export {
+  findActiveIsolation,
+  findLatestIsolationByTriple,
+  findTopicIsolationById,
+  type InsertTopicIsolationInput,
+  listActiveIsolations,
+  type TopicIsolationRow,
+} from "./queries/topic-isolations.js";
 
 // ---- audited mutations --------------------------------------------------
 
@@ -83,6 +135,12 @@ export {
   toApiKeySnapshot,
 } from "./mutations/api-keys.js";
 export type { AuditContext, AuditTarget, MutationOutcome } from "./mutations/audited.js";
+export {
+  type CatalogSyncOutcome,
+  type CatalogSyncPlan,
+  syncProjectsWithAudit,
+  syncSourcesWithAudit,
+} from "./mutations/catalog-sync.js";
 export {
   type DestinationAuditSnapshot,
   disableDestinationWithAudit,
@@ -97,6 +155,14 @@ export {
   processorTargetId,
   toProcessorSnapshot,
 } from "./mutations/processor-activations.js";
+export {
+  cancelReplayJobWithAudit,
+  pauseReplayJobWithAudit,
+  type ReplayAuditSnapshot,
+  resumeReplayJobWithAudit,
+  startReplayExecutionWithAudit,
+  toReplaySnapshot,
+} from "./mutations/replay-jobs.js";
 
 // ---- deliberately internal ----------------------------------------------
 //

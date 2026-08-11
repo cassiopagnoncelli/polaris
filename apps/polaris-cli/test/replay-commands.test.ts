@@ -37,11 +37,7 @@ import {
   FORBIDDEN_REPLAY_PLAN_FLAG_TOKENS,
   rejectReplayPlanArguments,
 } from "../src/commands/replay/validation.js";
-import {
-  REPLAY_JOB_MODES,
-  REPLAY_JOB_STATUSES,
-  REPLAY_JOB_TARGETS,
-} from "../src/db/replay-jobs.js";
+import { REPLAY_JOB_MODES, REPLAY_JOB_STATUSES, REPLAY_JOB_TARGETS } from "../src/db/index.js";
 import { UsageError } from "../src/errors.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

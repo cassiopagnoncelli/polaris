@@ -38,10 +38,10 @@ import {
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
 import {
-  createTransportConnection,
   createPolarisProducer,
-  redeliverQueueName,
+  createTransportConnection,
   type PolarisProducer,
+  redeliverQueueName,
 } from "@polaris/shared-transport";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";

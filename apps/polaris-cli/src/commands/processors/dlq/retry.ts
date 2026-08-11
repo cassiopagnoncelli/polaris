@@ -13,16 +13,16 @@
 
 import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
 import {
-  createTransportConnection,
-  createPolarisProducer,
-  redeliverQueueName,
-  type PolarisProducer,
-} from "@polaris/shared-transport";
-import {
   createKyselyProcessorDlqRecordRepository,
   type MarkResolvedOutcome,
   type ProcessorDlqRecord,
 } from "@polaris/shared-processor";
+import {
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisProducer,
+  redeliverQueueName,
+} from "@polaris/shared-transport";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../../command.js";

@@ -39,14 +39,12 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
-  insertAuditRecord,
-} from "../../db/index.js";
-import {
   deactivateIsolation,
   findActiveIsolation,
   findLatestIsolationByTriple,
+  insertAuditRecord,
   type TopicIsolationRow,
-} from "../../db/topic-isolations.js";
+} from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import type { TopicIsolationAuditSnapshot } from "./isolate.js";

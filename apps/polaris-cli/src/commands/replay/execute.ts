@@ -46,13 +46,6 @@ import {
   rabbitmqEnvSchema,
 } from "@polaris/shared-config";
 import {
-  createAmqpStreamRangeDriver,
-  createPolarisProducer,
-  createTransportConnection,
-  type PolarisProducer,
-  STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
-import {
   type ExecuteReplayOutcome,
   executeReplay,
   planReplay,
@@ -64,17 +57,27 @@ import {
   type ReplayJobDeclaration,
   type ReplayPlan,
   ReplayPlanError,
+  topicFamilyReachesDestinations,
 } from "@polaris/shared-replay";
+import {
+  createAmqpStreamRangeDriver,
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisProducer,
+  STREAM_FAMILY_RAW_EVENTS,
+} from "@polaris/shared-transport";
 import type { Command } from "commander";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
+import type { AuditActorSource } from "../../db/index.js";
 import {
   completeReplayJob,
   connectDb,
   failReplayJob,
   findReplayJobById,
-  markReplayJobRunning,
   type ReplayJobRow,
   recordReplayChunkProgress,
+  startReplayExecutionWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
@@ -94,7 +97,33 @@ interface ReplayExecuteArgs {
  */
 export interface ReplayExecuteStore extends ReplayExecutorStore {
   findById(replayJobId: string): Promise<ReplayJobRow | null>;
+  /**
+   * Arm the audit row the subsequent `markRunning` will write in its own
+   * transaction.
+   *
+   * Two-step because of ordering: the store has to exist before the row can
+   * be fetched, and the row has to exist before the plan can be derived — but
+   * the audit row wants the plan's facts. Writing it from the runner instead
+   * would put it outside the status transition's transaction, which is the
+   * one property that matters here.
+   *
+   * Implementations that do not audit (test doubles) may no-op.
+   */
+  armAudit(context: ReplayExecuteAuditContext): void;
   close(): Promise<void>;
+}
+
+/** What the `replay.execute` audit row records. */
+export interface ReplayExecuteAuditContext {
+  readonly row: ReplayJobRow;
+  readonly actorSource: AuditActorSource;
+  readonly actorLabel: string;
+  readonly auditId: string;
+  readonly occurredAt: Date;
+  /** Topic the executor will publish to, after any --target-topic override. */
+  readonly targetTopic: string;
+  readonly reachesDestinations: boolean;
+  readonly destinationsAcknowledged: boolean;
 }
 
 /**
@@ -209,6 +238,20 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
         throw err;
       }
 
+      // The executor resolves the same default; recompute it here so the
+      // audit row names the topic that will actually be written to.
+      const targetTopic = args.targetTopic ?? derived.target_topic_family;
+      store.armAudit({
+        row,
+        actorSource: ctx.actor.source,
+        actorLabel: ctx.actor.label,
+        auditId: `polaris_aud_${uuidv7()}`,
+        occurredAt: nowFn(),
+        targetTopic,
+        reachesDestinations: topicFamilyReachesDestinations(targetTopic),
+        destinationsAcknowledged: derived.destinations_enabled,
+      });
+
       const source = sourceFactory();
       const producer = producerFactory();
       const logger = hooks.logger?.(ctx) ?? buildLoggerAdapter(ctx);
@@ -273,14 +316,39 @@ const runReplayExecute = buildReplayExecuteRunner();
 
 function defaultStore(env: NodeJS.ProcessEnv): ReplayExecuteStore {
   const handle = connectDb({ env });
+  let armed: ReplayExecuteAuditContext | null = null;
   return {
     findById: (id) => findReplayJobById(handle.db, id),
+    armAudit: (context) => {
+      armed = context;
+    },
     markRunning: async (input) => {
-      const row = await markReplayJobRunning(handle.db, {
-        replay_job_id: input.replay_job_id,
-        events_planned: input.events_planned,
-        started_at: input.now,
-      });
+      if (armed === null) {
+        // Unreachable through the runner, which always arms before executing.
+        // Refusing beats silently starting a replay with no attribution.
+        throw new Error("replay execute: markRunning called before armAudit");
+      }
+      // One transaction: the pending -> running transition and the audit row
+      // that says who started it. `replay_jobs.created_by` records who
+      // created the job, which is not necessarily who ran it.
+      await startReplayExecutionWithAudit(
+        handle.db,
+        {
+          row: armed.row,
+          eventsPlanned: input.events_planned,
+          targetTopic: armed.targetTopic,
+          reachesDestinations: armed.reachesDestinations,
+          destinationsAcknowledged: armed.destinationsAcknowledged,
+        },
+        {
+          auditId: armed.auditId,
+          actorSource: armed.actorSource,
+          actorLabel: armed.actorLabel,
+          requestId: armed.auditId,
+          occurredAt: input.now,
+        },
+      );
+      const row = await findReplayJobById(handle.db, input.replay_job_id);
       if (row === null) return null;
       return {
         status: row.status,

@@ -52,16 +52,6 @@
  */
 
 import {
-  POLARIS_HEADER_ENVIRONMENT,
-  POLARIS_HEADER_EVENT_ID,
-  POLARIS_HEADER_EVENT_NAME,
-  POLARIS_HEADER_INGESTED_AT,
-  POLARIS_HEADER_OCCURRED_AT,
-  POLARIS_HEADER_PROJECT_ID,
-  type StreamRangeDelivery,
-  type StreamRangeDriver,
-} from "@polaris/shared-transport";
-import {
   REPLAY_HEADER_FLAG,
   REPLAY_HEADER_JOB_ID,
   type ReplayChunkProgress,
@@ -73,6 +63,16 @@ import {
   type ReplayProduceRecord,
   type ReplaySourceEvent,
 } from "@polaris/shared-replay";
+import {
+  POLARIS_HEADER_ENVIRONMENT,
+  POLARIS_HEADER_EVENT_ID,
+  POLARIS_HEADER_EVENT_NAME,
+  POLARIS_HEADER_INGESTED_AT,
+  POLARIS_HEADER_OCCURRED_AT,
+  POLARIS_HEADER_PROJECT_ID,
+  type StreamRangeDelivery,
+  type StreamRangeDriver,
+} from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { buildStreamReplaySource } from "../src/commands/replay/stream-adapters.js";
@@ -200,9 +200,17 @@ class InMemoryExecuteStore {
     this.rows.set(row.replay_job_id, { ...row });
   }
 
+  armedAudit: ReplayExecuteAuditContext | null = null;
+
   asStore(): ReplayExecuteStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
+      // The in-memory double writes no audit row; the audited transition is
+      // covered by shared-control-plane-db's own suite. What matters here is
+      // that the runner arms it before executing — asserted below.
+      armAudit: (context) => {
+        this.armedAudit = context;
+      },
       markRunning: async (input) => {
         this.runningCalls.push(input);
         const row = this.rows.get(input.replay_job_id);
@@ -790,5 +798,46 @@ describe("replay execute runner — invariants", () => {
       UsageError,
     );
     expect(store.closeCalls).toBe(1);
+  });
+
+  it("arms the execute audit row with the resolved topic before running", async () => {
+    // The audit row is what records WHO started a replay: replay_jobs
+    // .created_by only says who created the job, and those differ whenever
+    // one operator plans and another executes.
+    const store = new InMemoryExecuteStore();
+    store.seed(seedRow());
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => makeSource([]),
+      producer: () => makeRecordingProducer().producer,
+      now: () => NOW,
+    });
+    await runner({ replayJobId: "polaris_rpj_exec" }, makeContext(captureOutput().streams));
+
+    expect(store.armedAudit).not.toBeNull();
+    expect(store.armedAudit?.actorLabel).toBe("operator-1");
+    // raw.events feeds the destination consumers, so the row says so —
+    // delivery still depends on each destination's replay_opt_in.
+    expect(store.armedAudit?.targetTopic).toBe("raw.events");
+    expect(store.armedAudit?.reachesDestinations).toBe(true);
+  });
+
+  it("records the --target-topic override in the audit row, not the default", async () => {
+    const store = new InMemoryExecuteStore();
+    store.seed(seedRow());
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => makeSource([]),
+      producer: () => makeRecordingProducer().producer,
+      now: () => NOW,
+    });
+    await runner(
+      { replayJobId: "polaris_rpj_exec", targetTopic: "session.events" },
+      makeContext(captureOutput().streams),
+    );
+
+    expect(store.armedAudit?.targetTopic).toBe("session.events");
+    // session.events has no destination consumer.
+    expect(store.armedAudit?.reachesDestinations).toBe(false);
   });
 });

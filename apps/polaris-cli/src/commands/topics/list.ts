@@ -15,8 +15,7 @@
  * `mutates: false`. The P6-007 gate is a no-op for read-only commands.
  */
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { connectDb } from "../../db/index.js";
-import { listActiveIsolations, type TopicIsolationRow } from "../../db/topic-isolations.js";
+import { connectDb, listActiveIsolations, type TopicIsolationRow } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 
