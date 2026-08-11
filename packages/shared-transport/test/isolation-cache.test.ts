@@ -14,13 +14,12 @@
  * `IsolationLookup` contract.
  */
 import { describe, expect, it } from "vitest";
-
-import { resolveStreamFamilyScoped } from "../src/stream-family.js";
 import {
   InMemoryScopedIsolationLookup,
   type ScopedIsolationLookup,
   StreamIsolationCache,
 } from "../src/isolation-cache.js";
+import { resolveStreamFamilyScoped } from "../src/stream-family.js";
 import {
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_ENRICHED_EVENTS,

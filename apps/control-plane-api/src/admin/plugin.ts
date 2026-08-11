@@ -69,7 +69,13 @@ import {
   platformRoleAtLeast,
   resolvePlatformRole,
 } from "./platform-role.js";
-import type { AdminQueries, ApiKeyRow, DestinationRow, ProcessorActivationRow } from "./queries.js";
+import type {
+  AdminQueries,
+  ApiKeyRow,
+  DestinationRow,
+  DlqRow,
+  ProcessorActivationRow,
+} from "./queries.js";
 import { createSessionRefresher, type SessionRefresher } from "./refresh.js";
 import {
   ADMIN_PREFIX,
@@ -542,6 +548,42 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           })}`;
       };
 
+      /** Mark-resolved form for a DLQ row, or why the viewer cannot use it. */
+      const dlqActions = (
+        request: FastifyRequest,
+        row: DlqRow,
+        options: {
+          refusal?: MutationRefusal;
+          previous?: { confirmation: string; reason: string };
+        } = {},
+      ): Html | undefined => {
+        if (deps.mutations === undefined) return undefined;
+        if (row.resolved_at !== null) {
+          return html`<h2>Actions</h2>
+            <p class="notice">This row is already resolved.</p>`;
+        }
+
+        const role = request.adminContext?.role ?? "none";
+        const required = requiredRoleFor(config, row.environment);
+        if (!platformRoleAtLeast(role, required)) {
+          return html`<h2>Actions</h2>
+            ${actionsUnavailable({ required, actual: role, environment: row.environment })}`;
+        }
+
+        return html`<h2>Mark resolved</h2>
+          ${actionForm({
+            action: `${ADMIN_PREFIX}/dlq/${encodeURIComponent(row.dlq_id)}/resolve`,
+            submitLabel: "Mark resolved",
+            expectedConfirmation: row.vendor,
+            description:
+              "Closes this row for triage. It does NOT redeliver anything — the event stays undelivered. Use this once you have decided the failure needs no retry, or have replayed it another way.",
+            environment: row.environment,
+            danger: false,
+            ...(options.refusal !== undefined ? { refusal: options.refusal } : {}),
+            ...(options.previous !== undefined ? { previous: options.previous } : {}),
+          })}`;
+      };
+
       guarded.get("/", async (request, reply) => {
         const [counts, recentAudit] = await Promise.all([
           deps.queries.counts(),
@@ -720,6 +762,98 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                   noopText: "Already revoked — nothing changed, and no audit record was written.",
                   auditId: outcome.auditId,
                 })}${keyActions(request, fresh)}`,
+              }),
+            );
+          },
+        );
+
+        guarded.post<{ Params: { dlqId: string }; Body: Record<string, unknown> }>(
+          "/dlq/:dlqId/resolve",
+          async (request, reply) => {
+            const origin = verifySameOrigin(request);
+            if (!origin.ok) {
+              request.log.warn({ reason: origin.reason }, "admin mutation refused: cross-origin");
+              return sendHtml(reply, 403, renderOriginRefusedPage());
+            }
+
+            const record = await deps.queries.findDlq(request.params.dlqId);
+            if (record === null) {
+              return notFound(reply, `No DLQ record "${request.params.dlqId}".`);
+            }
+
+            const confirmation = formField(request, "confirm");
+            const rawReason = formField(request, "reason");
+            const check = checkMutation(config, {
+              rowEnvironment: record.environment,
+              role: request.adminContext?.role ?? "none",
+              confirmation,
+              expectedConfirmation: record.vendor,
+              reason: rawReason,
+            });
+
+            if (!check.ok) {
+              request.log.warn(
+                {
+                  event: "admin.mutation_refused",
+                  action: "dlq.mark_resolved",
+                  target: record.dlq_id,
+                  refusal: check.refusal.kind,
+                },
+                describeRefusal(check.refusal),
+              );
+              return sendHtml(
+                reply,
+                check.refusal.kind === "role" ? 403 : 400,
+                renderDlqDetailPage({
+                  ctx: context(request),
+                  record,
+                  actions: dlqActions(request, record, {
+                    refusal: check.refusal,
+                    previous: { confirmation, reason: rawReason },
+                  }),
+                }),
+              );
+            }
+
+            const actor = adminActor(request);
+            const outcome = await mutations.markDlqResolved(
+              {
+                dlqId: record.dlq_id,
+                projectId: record.project_id,
+                environment: record.environment,
+                vendor: record.vendor,
+                reason: record.reason,
+              },
+              check.reason,
+              actor,
+            );
+
+            request.log.info(
+              {
+                event: "admin.mutation",
+                action: "dlq.mark_resolved",
+                target: record.dlq_id,
+                environment: record.environment,
+                applied: outcome.applied,
+                audit_id: outcome.auditId,
+                actor: actor.actorLabel,
+              },
+              "admin mutation applied",
+            );
+
+            const fresh = (await deps.queries.findDlq(record.dlq_id)) ?? record;
+            return sendHtml(
+              reply,
+              200,
+              renderDlqDetailPage({
+                ctx: context(request),
+                record: fresh,
+                actions: html`${mutationResultNotice({
+                  applied: outcome.applied,
+                  appliedText: "DLQ row marked resolved. Nothing was redelivered.",
+                  noopText: "Already resolved — nothing changed, and no audit record was written.",
+                  auditId: outcome.auditId,
+                })}${dlqActions(request, fresh)}`,
               }),
             );
           },
@@ -1023,7 +1157,15 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       guarded.get<{ Params: { dlqId: string } }>("/dlq/:dlqId", async (request, reply) => {
         const record = await deps.queries.findDlq(request.params.dlqId);
         if (record === null) return notFound(reply, `No DLQ record "${request.params.dlqId}".`);
-        return sendHtml(reply, 200, renderDlqDetailPage({ ctx: context(request), record }));
+        return sendHtml(
+          reply,
+          200,
+          renderDlqDetailPage({
+            ctx: context(request),
+            record,
+            actions: dlqActions(request, record),
+          }),
+        );
       });
 
       guarded.get("/audit", async (request, reply) => {

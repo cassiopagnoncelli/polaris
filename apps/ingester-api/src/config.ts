@@ -7,10 +7,10 @@ import {
   type PostgresConfig,
   positiveIntSchema,
   postgresEnvSchema,
-  type RedisConfig,
   type RabbitmqConfig,
-  redisEnvSchema,
+  type RedisConfig,
   rabbitmqEnvSchema,
+  redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";

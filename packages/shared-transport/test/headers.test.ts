@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildEventHeaders,
-  fromAmqpHeaders,
   buildRetryHeaders,
+  fromAmqpHeaders,
   mergeHeaders,
   POLARIS_CONTENT_TYPE_JSON,
   POLARIS_HEADER_CONTENT_TYPE,

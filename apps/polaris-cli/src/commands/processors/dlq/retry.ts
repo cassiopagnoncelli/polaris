@@ -24,9 +24,9 @@ import {
   redeliverQueueName,
 } from "@polaris/shared-transport";
 import type { Command } from "commander";
-
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../../command.js";
-import { connectDb } from "../../../db/index.js";
+import { connectDb, markProcessorDlqRetriedWithAudit } from "../../../db/index.js";
 import { UsageError } from "../../../errors.js";
 import { renderAccordingTo } from "../../../output.js";
 
@@ -166,7 +166,36 @@ function defaultStore(env: NodeJS.ProcessEnv): ProcessorDlqRetryStore {
   const repo = createKyselyProcessorDlqRecordRepository({ db: handle.db });
   return {
     findById: (id) => repo.findRecord(id),
-    markResolved: (id, by, note) => repo.markResolved(id, by, note),
+    // Audited, and deliberately AFTER the republish: a broker publish and a
+    // Postgres commit cannot be made atomic, so the order decides which way a
+    // crash fails. Publish-then-resolve leaves the row unresolved and the
+    // message redelivered, which an operator can see. The reverse loses it.
+    markResolved: async (id, by, note) => {
+      const existing = await repo.findRecord(id);
+      if (existing === null) {
+        throw new Error(`processor_dlq_records: id "${id}" not found`);
+      }
+      const outcome = await markProcessorDlqRetriedWithAudit(
+        handle.db,
+        {
+          dlqId: existing.dlq_id,
+          projectId: existing.project_id,
+          environment: existing.environment,
+          owner: existing.processor_name,
+          reason: existing.reason,
+        },
+        { resolvedBy: by, note, redeliverQueue: redeliverQueueName(existing.processor_name) },
+        {
+          auditId: `polaris_aud_${uuidv7()}`,
+          actorSource: "cli",
+          actorLabel: by,
+          reason: note,
+          occurredAt: new Date(),
+        },
+      );
+      const after = (await repo.findRecord(id)) ?? existing;
+      return { applied: outcome.applied, record: after };
+    },
     close: () => handle.close(),
   };
 }

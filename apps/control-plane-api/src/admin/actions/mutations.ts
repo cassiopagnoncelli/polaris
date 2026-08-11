@@ -20,12 +20,13 @@
  * Those stay on the CLI, where an operator has already typed a deliberate
  * command with flags rather than clicked something.
  *
- * `dlq mark-resolved` is absent for a different, duller reason: `dlq_records`
- * is owned by `@polaris/shared-destinations`, and depending on that package
- * here would pull the whole destination-delivery stack — RabbitMQ transport
- * included — into a service that has neither. Duplicating the write instead
- * would recreate exactly the divergence this package exists to prevent. It
- * stays CLI-only until the DLQ repository is worth hoisting on its own.
+ * `dlq mark-resolved` IS here. The triage half of `dlq_records` now lives in
+ * `@polaris/shared-control-plane-db` alongside every other control-plane
+ * write, so resolving a row no longer means depending on
+ * `@polaris/shared-destinations` and dragging the whole delivery stack —
+ * RabbitMQ transport included — into a service that speaks to no broker.
+ * `dlq retry` still does not: republishing needs a broker, and that is the
+ * dependency the split was drawn to avoid.
  */
 
 import {
@@ -38,6 +39,7 @@ import {
   findApiKeyById,
   findDestinationById,
   type MutationOutcome,
+  markDlqResolvedWithAudit,
   type ProcessorActivationKey,
   revokeApiKeyWithAudit,
 } from "@polaris/shared-control-plane-db";
@@ -76,6 +78,17 @@ export interface AdminMutations {
   enableProcessor(
     key: ProcessorActivationKey,
     reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  markDlqResolved(
+    target: {
+      dlqId: string;
+      projectId: string;
+      environment: string;
+      vendor: string;
+      reason: string;
+    },
+    note: string,
     actor: AdminActor,
   ): Promise<MutationOutcome>;
   disableProcessor(
@@ -125,6 +138,21 @@ export function createKyselyAdminMutations(db: Kysely<Database>): AdminMutations
       const row = await findApiKeyById(db, apiKeyId);
       if (row === null) throw new MutationTargetMissing("api key");
       return revokeApiKeyWithAudit(db, { row }, context(actor, reason));
+    },
+
+    async markDlqResolved(target, note, actor) {
+      return markDlqResolvedWithAudit(
+        db,
+        {
+          dlqId: target.dlqId,
+          projectId: target.projectId,
+          environment: target.environment,
+          owner: target.vendor,
+          reason: target.reason,
+        },
+        { resolvedBy: actor.actorLabel, note },
+        context(actor, note),
+      );
     },
 
     async enableProcessor(key, reason, actor) {

@@ -5,11 +5,11 @@ import {
   csvListSchema,
   environmentSchema,
   httpEnvSchema,
+  partitionsForFamily,
   portSchema,
   postgresEnvSchema,
-  redisEnvSchema,
-  partitionsForFamily,
   rabbitmqEnvSchema,
+  redisEnvSchema,
   secretProviderEnvSchema,
   serviceEnvSchema,
 } from "../src/index.js";

@@ -16,7 +16,7 @@
  * permits by design. Operators who need the bytes have `polaris dlq show`.
  */
 
-import { html } from "../html.js";
+import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { DlqRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
@@ -95,7 +95,11 @@ export function renderDlqPage(input: {
   });
 }
 
-export function renderDlqDetailPage(input: { ctx: AdminPageContext; record: DlqRow }): string {
+export function renderDlqDetailPage(input: {
+  ctx: AdminPageContext;
+  record: DlqRow;
+  actions?: Html | undefined;
+}): string {
   const row = input.record;
 
   return page({
@@ -152,6 +156,8 @@ export function renderDlqDetailPage(input: { ctx: AdminPageContext; record: DlqR
         That belongs on a terminal too:
       </p>
       <code class="cli">polaris dlq retry ${row.dlq_id} --note "&lt;why&gt;"</code>
+
+      ${input.actions ?? null}
     `,
   });
 }

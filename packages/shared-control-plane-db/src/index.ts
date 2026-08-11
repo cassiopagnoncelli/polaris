@@ -148,6 +148,13 @@ export {
   toDestinationSnapshot,
 } from "./mutations/destinations.js";
 export {
+  DLQ_RESOLUTION_NOTE_MAX_LENGTH,
+  type DlqResolutionTarget,
+  markDlqResolvedWithAudit,
+  markProcessorDlqResolvedWithAudit,
+  markProcessorDlqRetriedWithAudit,
+} from "./mutations/dlq.js";
+export {
   disableProcessorActivationWithAudit,
   enableProcessorActivationWithAudit,
   type ProcessorActivationKey,

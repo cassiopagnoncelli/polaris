@@ -52,13 +52,13 @@ import type { Channel } from "amqplib";
 import type { TransportConnection } from "./connection.js";
 import {
   fromAmqpHeaders,
+  type MessageHeaders,
   POLARIS_HEADER_ENVIRONMENT,
   POLARIS_HEADER_EVENT_ID,
   POLARIS_HEADER_EVENT_NAME,
   POLARIS_HEADER_INGESTED_AT,
   POLARIS_HEADER_OCCURRED_AT,
   POLARIS_HEADER_PROJECT_ID,
-  type MessageHeaders,
   readHeaderString,
 } from "./headers.js";
 import { parsePartitionStreamName } from "./streams.js";

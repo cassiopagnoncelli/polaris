@@ -1,10 +1,3 @@
-import {
-  buildRawEventsPartitionKey,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
-  STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   applyRedactions,
@@ -27,6 +20,13 @@ import {
   type EventCatalog,
   validateCatalogEvent,
 } from "@polaris/shared-schemas";
+import {
+  buildRawEventsPartitionKey,
+  type PolarisProducer,
+  STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+} from "@polaris/shared-transport";
 import type { IngestConfig } from "../config.js";
 import type { DedupeStore } from "../dedupe/index.js";
 import type { IngestMetrics } from "../metrics/registry.js";

@@ -24,8 +24,8 @@
  */
 
 import {
-  type ClickHouseClient as UnderlyingClickHouseClient,
   createClient,
+  type ClickHouseClient as UnderlyingClickHouseClient,
 } from "@clickhouse/client";
 import type { Logger } from "@polaris/shared-logger";
 import { ClickHouseConnectionError, ClickHouseQueryError } from "./errors.js";

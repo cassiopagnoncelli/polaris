@@ -1,10 +1,4 @@
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import {
-  createPolarisProducer,
-  createTransportConnection,
-  type PolarisProducer,
-  type TransportConnection,
-} from "@polaris/shared-transport";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import type { ProjectPolicyOverride } from "@polaris/shared-policy";
@@ -16,6 +10,12 @@ import {
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
+import {
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisProducer,
+  type TransportConnection,
+} from "@polaris/shared-transport";
 import type { preHandlerAsyncHookHandler } from "fastify";
 import type { Kysely } from "kysely";
 import {

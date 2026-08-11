@@ -19,19 +19,19 @@
  * @see docs/architecture/03-rabbitmq-streams.md
  */
 
-import { type RabbitmqConfig, partitionsForFamily } from "@polaris/shared-config";
+import { partitionsForFamily, type RabbitmqConfig } from "@polaris/shared-config";
 import type { Logger } from "@polaris/shared-logger";
 import type { Channel } from "amqplib";
 import type { TransportConnection } from "./connection.js";
 import {
   CANONICAL_STREAM_FAMILIES,
-  RETRY_BACKOFF_TIERS_MS,
-  STREAM_DIAGNOSTICS_EVENTS,
   dlqQueueName,
   partitionStreamName,
+  RETRY_BACKOFF_TIERS_MS,
   redeliverQueueName,
   retryExchangeName,
   retryQueueName,
+  STREAM_DIAGNOSTICS_EVENTS,
   streamExchangeName,
 } from "./streams.js";
 

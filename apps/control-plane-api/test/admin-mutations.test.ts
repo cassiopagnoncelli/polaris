@@ -70,6 +70,21 @@ const API_KEY = {
   hash: "$argon2id$v=19$m=65536$NEVER$RENDER-THIS",
 } as const;
 
+const DLQ_ROW = {
+  dlq_id: "polaris_dlq_1",
+  destination_id: "polaris_dst_1",
+  project_id: "storefront",
+  environment: "development",
+  vendor: "ga4",
+  event_id: "evt_1",
+  reason: "mapper_failed",
+  error_class: "mapping",
+  attempts: 3,
+  created_at: new Date("2026-01-01T00:00:00Z"),
+  resolved_at: null,
+  resolved_by: null,
+} as const;
+
 const ACTIVATION = {
   processor_name: "analytics-projector",
   processor_version: "v1",
@@ -175,6 +190,7 @@ function stubMutations(spy: ReturnType<typeof vi.fn>): AdminMutations {
     disableDestination: spy as never,
     enableDestination: spy as never,
     revokeApiKey: spy as never,
+    markDlqResolved: spy as never,
     enableProcessor: spy as never,
     disableProcessor: spy as never,
   };
@@ -211,8 +227,8 @@ async function buildApp(harness: Harness) {
     listProcessorActivations: async () => [ACTIVATION],
     listAudit: async () => [],
     findAudit: async () => null,
-    listDlq: async () => [],
-    findDlq: async () => null,
+    listDlq: async () => [DLQ_ROW],
+    findDlq: async (id: string) => (id === DLQ_ROW.dlq_id ? DLQ_ROW : null),
   } satisfies AdminQueries;
 
   return buildControlPlaneApp({
@@ -640,6 +656,67 @@ describe("admin mutations — processor activations", () => {
     expect(res.body).toContain('name="version" value="v1"');
     // Exactly one <form> in the actions block.
     expect(res.body.match(/<form method="post" action="\/admin\/processors/g)).toHaveLength(1);
+    await app.app.close();
+  });
+});
+
+describe("admin mutations — DLQ triage", () => {
+  it("marks a row resolved, confirmed by the vendor", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/dlq/polaris_dlq_1/resolve",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ confirm: "ga4", reason: "replayed via the CLI instead" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ dlqId: "polaris_dlq_1", vendor: "ga4" }),
+      "replayed via the CLI instead",
+      expect.objectContaining({ actorLabel: EMAIL }),
+    );
+    await app.app.close();
+  });
+
+  it("says plainly that resolving redelivers nothing", async () => {
+    // The whole risk of this control is an operator thinking it retried.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/dlq/polaris_dlq_1",
+      headers: { cookie: sessionCookie("admin") },
+    });
+    expect(res.body).toContain("does NOT redeliver");
+    await app.app.close();
+  });
+
+  it("still keeps retry on the CLI, because republishing needs a broker", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/dlq/polaris_dlq_1/retry",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({ confirm: "ga4", reason: "retrying this one now" }),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("refuses a wrong confirmation", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/dlq/polaris_dlq_1/resolve",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ confirm: "braze", reason: "replayed via the CLI instead" }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(spy).not.toHaveBeenCalled();
     await app.app.close();
   });
 });

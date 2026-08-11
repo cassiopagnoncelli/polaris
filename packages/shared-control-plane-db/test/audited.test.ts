@@ -14,6 +14,7 @@
  * integration suite; this proves the logic that decides whether to write.
  */
 
+import { readFile } from "node:fs/promises";
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
@@ -184,5 +185,22 @@ describe("withAudit", () => {
       after: null,
       reason: null,
     });
+  });
+});
+
+describe("DLQ resolution guard", () => {
+  it("uses the same resolved_at IS NULL guard as the runtime repository", async () => {
+    // Two implementations write this column: the runtime repository in
+    // shared-destinations (read-modify-write, returns the record) and the
+    // audited mutation here (guarded UPDATE, returns applied). Both are
+    // guarded identically, which is what makes having both safe — a second
+    // resolve matches nothing either way. This pins the guard text so a
+    // future edit that drops it is visible.
+    const source = await readFile(new URL("../src/mutations/dlq.ts", import.meta.url), "utf8");
+    const guards = source.match(/AND resolved_at IS NULL/g) ?? [];
+    // Two, not three: the destination and processor resolves share one
+    // helper, and the retry carries its own because its snapshot records the
+    // redelivery queue as well.
+    expect(guards).toHaveLength(2);
   });
 });
