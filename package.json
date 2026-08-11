@@ -39,7 +39,7 @@
     "openapi:check": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs --check",
     "smoke:vertical-slice": "node scripts/smoke/vertical-slice.mjs",
     "test:smoke": "POLARIS_SMOKE_DOCKER=1 vitest run --root . tests/smoke",
-    "test:integration": "POLARIS_PG_INTEGRATION=1 vitest run --root . tests/integration",
+    "test:integration": "POLARIS_INTEGRATION=1 vitest run --root . tests/integration",
     "test:acceptance": "node scripts/run-acceptance.mjs",
     "docker:build": "node scripts/docker-build.mjs",
     "docker:build:list": "node scripts/docker-build.mjs --list"

@@ -195,10 +195,13 @@ jobs:
           exit 1
 
 
-      # PostgresCheckpointStore is the resume point for every stream
-      # consumer; a store that silently rewinds or advances is an incident
-      # either way. The unit suite can only cover the in-memory store.
-      - name: Run PostgreSQL integration tests
+      # Driver behaviour the unit fakes cannot express: prefetch pushing
+      # messages ahead of the handler, basic.return arriving out of band
+      # from a confirm, a quorum queue's TTL actually firing, a stream
+      # attaching at a timestamp, and the Postgres checkpoint store's SQL.
+      # Every defect this covers was found live AFTER the unit suite was
+      # green.
+      - name: Run broker + database integration tests
         run: pnpm test:integration
         env:
           POLARIS_POSTGRES_HOST: localhost

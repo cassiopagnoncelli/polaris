@@ -9,7 +9,7 @@
  * one that silently advances is data loss. Neither is something to leave
  * to a hand-run script.
  *
- * The whole file SKIPS unless `POLARIS_PG_INTEGRATION=1` is set, matching
+ * The whole file SKIPS unless `POLARIS_INTEGRATION=1` is set, matching
  * the `POLARIS_SMOKE_DOCKER` convention in `tests/smoke/` — the default
  * `pnpm test` on every PR stays hermetic; the integration workflow flips
  * the env var on after bringing up the compose stack.
@@ -23,7 +23,7 @@ import { PostgresCheckpointStore } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const ENABLED = process.env["POLARIS_PG_INTEGRATION"] === "1";
+const ENABLED = process.env["POLARIS_INTEGRATION"] === "1";
 
 const POSTGRES = {
   host: process.env["POLARIS_POSTGRES_HOST"] ?? "localhost",

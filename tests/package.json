@@ -6,7 +6,9 @@
   "description": "Repo-root integration and acceptance scenarios. Imports published workspace entry points by name (`@polaris/node-sdk`, etc.) to exercise the same surface an internal team would consume.",
   "dependencies": {
     "@polaris/node-sdk": "workspace:*",
+    "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "kysely": "^0.29.0"
   }

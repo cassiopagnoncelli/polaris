@@ -772,9 +772,15 @@ importers:
       '@polaris/node-sdk':
         specifier: workspace:*
         version: link:../packages/node-sdk
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../packages/shared-config
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../packages/shared-logger
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../packages/shared-transport

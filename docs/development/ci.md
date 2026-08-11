@@ -16,6 +16,33 @@ and still stabilising. Once the vertical-slice smoke test is reliable
 (see [P5-001](../../agents/pm/kanban/done/P5-001-vertical-slice-smoke-test.md)),
 the per-service jobs may graduate to required gates.
 
+
+## Integration tests (broker + database)
+
+```bash
+pnpm test:integration
+```
+
+Runs `tests/integration/` against a live RabbitMQ and PostgreSQL. Skipped
+unless `POLARIS_INTEGRATION=1`, so the default `pnpm test` on every PR
+stays hermetic and Docker-free; the integration workflow sets it after
+`docker compose up`.
+
+These cover the transport properties that fakes cannot express — prefetch
+pushing messages ahead of the handler, a quorum queue's TTL firing, a
+stream attaching at a timestamp, the checkpoint store's SQL. They exist
+because four defects survived a green unit suite during the RabbitMQ
+migration, one of which could only be reproduced against a real broker.
+
+Locally:
+
+```bash
+docker compose up -d --wait postgres rabbitmq && pnpm db:migrate && pnpm test:integration
+```
+
+The suite declares its own test-scoped topology and deletes it afterwards,
+so it is safe against a shared dev broker.
+
 ## Required PR gates
 
 Every PR must pass these jobs in `ci.yml`:
