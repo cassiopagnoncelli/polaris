@@ -6,20 +6,20 @@
  * in-process.
  */
 
-export { buildClickhouseSinkApp, type BuildAppOptions, type ClickhouseSinkApp } from "./app.js";
+export { type BuildAppOptions, buildClickhouseSinkApp, type ClickhouseSinkApp } from "./app.js";
 export {
   type ClickhouseSinkConfig,
+  type ClickhouseSinkRuntimeConfig,
   clickhouseSinkConfigSchema,
   clickhouseSinkEnvKeys,
   clickhouseSinkEnvSchema,
-  type ClickhouseSinkRuntimeConfig,
   loadClickhouseSinkConfig,
   SINK_COMPONENT,
   SINK_SERVICE_NAME,
 } from "./config.js";
 export {
-  METRIC_SINK_BATCHES_TOTAL,
   METRIC_SINK_BATCH_ROWS_LAST,
+  METRIC_SINK_BATCHES_TOTAL,
   METRIC_SINK_INSERT_DURATION_MS_LAST,
   METRIC_SINK_LAG_SECONDS,
   METRIC_SINK_ROWS_CONSUMED_TOTAL,

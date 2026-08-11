@@ -65,8 +65,8 @@ import type { AnalyticsQueueRow, AnalyticsSinkWriter } from "@polaris/shared-cli
 import type { Logger } from "@polaris/shared-logger";
 import {
   consumerFamiliesFor,
-  decodeEvent,
   type DeferredCheckpointStore,
+  decodeEvent,
   type PolarisConsumer,
   redeliverQueueName,
   STREAM_FAMILY_ANALYTICS_EVENTS,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Polaris RabbitMQ topology provisioning.
 //
 // Kafka created topics on first publish. RabbitMQ creates nothing: an
@@ -34,8 +35,6 @@
 //   POLARIS_RABBITMQ_PARTITION_OVERRIDES  default "raw.events=6"
 //   POLARIS_RABBITMQ_STREAM_RETENTION_DAYS default 90
 
-import { connect } from "amqplib";
-
 import {
   CANONICAL_STREAM_FAMILIES,
   DEFAULT_STREAM_MAX_BYTES,
@@ -44,6 +43,7 @@ import {
   POLARIS_COMPONENTS,
   RETRY_BACKOFF_TIERS_MS,
 } from "@polaris/shared-transport";
+import { connect } from "amqplib";
 
 const DEFAULT_URL = "amqp://polaris:polaris@localhost:5672";
 // raw.events carries every project's full firehose; the derived families

@@ -41,15 +41,6 @@ import {
   DestinationMetrics,
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
-import {
-  createTransportConnection,
-  type TransportConnection,
-  createPolarisConsumer,
-  PostgresCheckpointStore,
-  createPolarisProducer,
-  type PolarisConsumer,
-  type PolarisProducer,
-} from "@polaris/shared-transport";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
@@ -60,6 +51,15 @@ import {
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
+import {
+  createPolarisConsumer,
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisConsumer,
+  type PolarisProducer,
+  PostgresCheckpointStore,
+  type TransportConnection,
+} from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
 import type { WebhookSinkRuntimeConfig } from "./config.js";

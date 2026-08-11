@@ -34,15 +34,16 @@
 
 import type { RabbitmqConfig } from "@polaris/shared-config";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import type { Logger } from "@polaris/shared-logger";
 import {
   buildEventHeaders,
   createAmqpStreamRangeDriver,
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  DeferredCheckpointStore,
   declareComponentQueues,
   declareSuperStream,
-  DeferredCheckpointStore,
   dlqQueueName,
   InMemoryCheckpointStore,
   type PolarisProducer,
@@ -53,7 +54,6 @@ import {
   retryQueueName,
   type TransportConnection,
 } from "@polaris/shared-transport";
-import type { Logger } from "@polaris/shared-logger";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

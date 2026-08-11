@@ -15,15 +15,15 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
+import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import {
   createDestinationConsumer,
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationInstanceReader,
 } from "@polaris/shared-destinations";
-import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
-import type { PolarisProducer } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import { SecretResolver } from "@polaris/shared-secrets";
+import type { PolarisProducer } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { createWebhookSinkDescriptor } from "../src/descriptor.js";
