@@ -52,13 +52,14 @@
  * @see docs/implementation/tasks/P7-004-destination-replay-guardrails.md
  */
 
-import type { IHeaders } from "kafkajs";
 
 /**
  * Header name the replay tooling stamps when redelivering an event for
  * replay purposes. Matches the platform header convention from
  * `@polaris/shared-transport/src/headers.ts`.
  */
+import type { MessageHeaders } from "@polaris/shared-transport";
+
 export const POLARIS_HEADER_REPLAY = "polaris-replay";
 
 /**
@@ -79,7 +80,7 @@ export interface ReplayContext {
  * Inspect KafkaJS headers for replay markers. Returns `{ is_replay: false }`
  * when neither header is present.
  */
-export function readReplayContext(headers: IHeaders | undefined): ReplayContext {
+export function readReplayContext(headers: MessageHeaders | undefined): ReplayContext {
   if (headers === undefined) return { is_replay: false };
   const flag = readHeader(headers, POLARIS_HEADER_REPLAY);
   const jobId = readHeader(headers, POLARIS_HEADER_REPLAY_JOB_ID);
@@ -183,7 +184,7 @@ export function applyReplayPolicy(input: ApplyReplayPolicyInput): ReplayPolicyDe
   return { kind: "deliver" };
 }
 
-function readHeader(headers: IHeaders, name: string): string | undefined {
+function readHeader(headers: MessageHeaders, name: string): string | undefined {
   const raw = headers[name];
   if (raw === undefined) return undefined;
   if (typeof raw === "string") return raw;

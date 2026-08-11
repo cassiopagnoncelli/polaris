@@ -2,7 +2,7 @@
  * Runtime configuration for the meta-capi v1 destination consumer.
  *
  * Mirrors the webhook-sink v1 shape (`consumers/webhook-sink/v1/src/
- * config.ts`): service + http + redpanda + postgres + a small
+ * config.ts`): service + http + rabbitmq + postgres + a small
  * consumer-specific block. Per-destination instance knobs (status,
  * mode, max_rps, retry_policy, dead_letter_threshold) live in the
  * PostgreSQL `destinations` row and are read at delivery time by the
@@ -12,7 +12,6 @@
  *
  *   POLARIS_META_CAPI_CONSUMER_GROUP        KafkaJS consumer group identifier
  *                                           default: "polaris-meta-capi-v1"
- *   POLARIS_META_CAPI_CONCURRENCY           `partitionsConsumedConcurrently`
  *                                           default: 4
  *   POLARIS_META_CAPI_REQUEST_TIMEOUT_MS    HTTP fetch timeout per attempt
  *                                           default: 5000 (per manifest)
@@ -55,7 +54,6 @@ export const DEFAULT_GRAPH_HOST = "graph.facebook.com" as const;
 export const metaCapiEnvSchema = z
   .object({
     POLARIS_META_CAPI_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-meta-capi-v1"),
-    POLARIS_META_CAPI_CONCURRENCY: positiveIntSchema.default(4),
     POLARIS_META_CAPI_REQUEST_TIMEOUT_MS: positiveIntSchema.default(5000),
     POLARIS_META_CAPI_ALLOW_REPLAY: booleanFromStringSchema.default(false),
     POLARIS_META_CAPI_GRAPH_HOST: nonEmptyStringSchema.default(DEFAULT_GRAPH_HOST),
@@ -63,7 +61,6 @@ export const metaCapiEnvSchema = z
   .transform(
     (parsed): MetaCapiConfig => ({
       consumerGroup: parsed["POLARIS_META_CAPI_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_META_CAPI_CONCURRENCY"],
       requestTimeoutMs: parsed["POLARIS_META_CAPI_REQUEST_TIMEOUT_MS"],
       allowReplay: parsed["POLARIS_META_CAPI_ALLOW_REPLAY"],
       graphHost: parsed["POLARIS_META_CAPI_GRAPH_HOST"],
@@ -72,7 +69,6 @@ export const metaCapiEnvSchema = z
 
 export interface MetaCapiConfig {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
   readonly requestTimeoutMs: number;
   readonly allowReplay: boolean;
   readonly graphHost: string;
@@ -80,7 +76,6 @@ export interface MetaCapiConfig {
 
 export const metaCapiEnvKeys = [
   "POLARIS_META_CAPI_CONSUMER_GROUP",
-  "POLARIS_META_CAPI_CONCURRENCY",
   "POLARIS_META_CAPI_REQUEST_TIMEOUT_MS",
   "POLARIS_META_CAPI_ALLOW_REPLAY",
   "POLARIS_META_CAPI_GRAPH_HOST",
@@ -89,7 +84,7 @@ export const metaCapiEnvKeys = [
 export interface MetaCapiRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RabbitmqConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly meta: MetaCapiConfig;
 }
@@ -98,7 +93,7 @@ export function metaCapiConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: rabbitmqEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     meta: metaCapiEnvSchema,
   });

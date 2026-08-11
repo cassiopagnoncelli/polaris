@@ -57,13 +57,15 @@ import {
   consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
-  type TransportMessageHandler,
   type PolarisProducer,
+  redeliverQueueName,
   STREAM_FAMILY_ANALYTICS_EVENTS,
+  type StreamStartPosition,
+  type TransportMessageHandler,
+  type TransportMessagePayload,
 } from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import type { SecretResolver } from "@polaris/shared-secrets";
-import type { EachMessagePayload } from "kafkajs";
 
 import {
   type DeliveryRecord,
@@ -163,16 +165,15 @@ export interface DestinationConsumerOptions<Payload> {
    */
   readonly metrics?: DestinationMetrics;
   /**
-   * KafkaJS `partitionsConsumedConcurrently`. Forwarded into `runEach`.
-   * Defaults to the descriptor's `max_concurrency`-bounded throughput.
+   * Where to start when the consumer group has no checkpoint for a
+   * stream. Defaults to `next` (only new traffic). Replay tooling sets
+   * `first` and pairs it with the explicit `allowReplay` opt-in.
+   *
+   * Note this only applies on a cold start: once a checkpoint exists it
+   * always wins, which is what stops a restart from replaying the whole
+   * retention window into a live vendor account.
    */
-  readonly partitionsConsumedConcurrently?: number;
-  /**
-   * KafkaJS `fromBeginning` flag for the topic subscription. Defaults to
-   * `false` (only new traffic). Replay tooling sets `true` and pairs it
-   * with the explicit `allowReplay` opt-in.
-   */
-  readonly subscribeFromBeginning?: boolean;
+  readonly startPosition?: StreamStartPosition;
   /**
    * Operational build version stamped on every `delivery_records` row
    * (M0DROHV3). Distinct from the descriptor's `consumerVersion`, which
@@ -221,7 +222,7 @@ export interface HandleEventInput {
    * to a DLQ on permanent failure pass one in; tests that only assert the
    * `delivery_records` row leave it undefined.
    */
-  readonly payload?: EachMessagePayload;
+  readonly payload?: TransportMessagePayload;
   /** Optional attempt counter override (default: 1). */
   readonly attempt?: number;
   /** Optional flag: treat this envelope as a replay. */
@@ -279,7 +280,7 @@ export function createDestinationConsumer<Payload>(
           component: "destination.runtime",
           vendor: options.descriptor.identity.vendor,
           consumer_version: options.descriptor.identity.consumerVersion,
-          topic: payload.topic,
+          topic: payload.stream,
           partition: payload.partition,
           offset: payload.message.offset,
         },
@@ -299,7 +300,7 @@ export function createDestinationConsumer<Payload>(
           component: "destination.runtime",
           vendor: options.descriptor.identity.vendor,
           consumer_version: options.descriptor.identity.consumerVersion,
-          topic: payload.topic,
+          topic: payload.stream,
           partition: payload.partition,
           offset: payload.message.offset,
           err: errSummary(err),
@@ -350,7 +351,7 @@ export function createDestinationConsumer<Payload>(
           component: "destination.runtime",
           vendor: options.descriptor.identity.vendor,
           consumer_version: options.descriptor.identity.consumerVersion,
-          topic: payload.topic,
+          topic: payload.stream,
           partition: payload.partition,
           offset: payload.message.offset,
         },
@@ -400,25 +401,25 @@ export function createDestinationConsumer<Payload>(
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const topics = consumerFamiliesFor(STREAM_FAMILY_ANALYTICS_EVENTS, []);
-    await options.consumer.subscribe({
-      topics: [...topics],
-      fromBeginning: options.subscribeFromBeginning ?? false,
-    });
+    const families = consumerFamiliesFor(STREAM_FAMILY_ANALYTICS_EVENTS, []);
+    // The redelivery queue carries messages the broker parked in a retry
+    // tier and released when the tier's TTL expired. Consuming it here is
+    // what makes the retry path close: under Kafka the consumer had to
+    // sleep the backoff itself, which burned a consumer slot and made the
+    // delay invisible to operators.
+    const redeliver = redeliverQueueName(options.descriptor.identity.vendor);
+    await options.consumer.subscribe({ families: [...families], queues: [redeliver] });
     options.logger.info(
       {
         component: "destination.runtime",
         vendor: options.descriptor.identity.vendor,
         consumer_version: options.descriptor.identity.consumerVersion,
-        topics,
+        families,
+        redeliver_queue: redeliver,
       },
       "destination consumer subscribed to analytics.events",
     );
-    await options.consumer.runEach(handler, {
-      ...(options.partitionsConsumedConcurrently !== undefined
-        ? { partitionsConsumedConcurrently: options.partitionsConsumedConcurrently }
-        : {}),
-    });
+    await options.consumer.runEach(handler);
   }
 
   async function stop(): Promise<void> {
@@ -437,7 +438,7 @@ export function createDestinationConsumer<Payload>(
 interface ProcessOneInput<Payload> {
   readonly envelope: NormalizableEnvelope;
   readonly destination_id: string;
-  readonly payload?: EachMessagePayload;
+  readonly payload?: TransportMessagePayload;
   readonly attempt: number;
   readonly is_replay: boolean;
   readonly descriptor: DestinationDescriptor<Payload>;
@@ -972,7 +973,7 @@ interface RecordOutcomeInput {
   /** Operational build version (M0DROHV3) stamped on the row. Forwarded by the runtime from `DestinationConsumerOptions.consumerBuildVersion`. */
   readonly consumerBuildVersion?: string;
   /** When set, the runtime publishes the original payload to the DLQ. */
-  readonly payloadForDlq?: EachMessagePayload;
+  readonly payloadForDlq?: TransportMessagePayload;
   /** PolarisProducer required when `payloadForDlq` is set. */
   readonly producer?: PolarisProducer;
   /**
@@ -1186,7 +1187,7 @@ async function invokeDeliverer<Payload>(
   return input.deliverer(input.context);
 }
 
-function readDestinationIdHeader(payload: EachMessagePayload): string | undefined {
+function readDestinationIdHeader(payload: TransportMessagePayload): string | undefined {
   const headers = payload.message.headers;
   if (headers === undefined) return undefined;
   const value = headers["polaris-destination-id"];
@@ -1208,7 +1209,7 @@ function readDestinationIdHeader(payload: EachMessagePayload): string | undefine
   return undefined;
 }
 
-function readAttemptHeader(payload: EachMessagePayload): number {
+function readAttemptHeader(payload: TransportMessagePayload): number {
   const headers = payload.message.headers;
   if (headers === undefined) return 1;
   const value = headers["polaris-retry-attempts"];

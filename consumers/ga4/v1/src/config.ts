@@ -2,7 +2,7 @@
  * Runtime configuration for the ga4 v1 destination consumer.
  *
  * Mirrors the tiktok v1 shape (`consumers/tiktok/v1/src/config.ts`):
- * service + http + redpanda + postgres + a small consumer-specific
+ * service + http + rabbitmq + postgres + a small consumer-specific
  * block. Per-destination instance knobs (status, mode, max_rps,
  * retry_policy, dead_letter_threshold) live in the PostgreSQL
  * `destinations` row and are read at delivery time by the runtime;
@@ -12,7 +12,6 @@
  *
  *   POLARIS_GA4_CONSUMER_GROUP              KafkaJS consumer group identifier
  *                                           default: "polaris-ga4-v1"
- *   POLARIS_GA4_CONCURRENCY                 `partitionsConsumedConcurrently`
  *                                           default: 4
  *   POLARIS_GA4_REQUEST_TIMEOUT_MS          HTTP fetch timeout per attempt
  *                                           default: 5000 (per manifest)
@@ -58,7 +57,6 @@ export const DEFAULT_GA4_API_HOST = "www.google-analytics.com" as const;
 export const ga4EnvSchema = z
   .object({
     POLARIS_GA4_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-ga4-v1"),
-    POLARIS_GA4_CONCURRENCY: positiveIntSchema.default(4),
     POLARIS_GA4_REQUEST_TIMEOUT_MS: positiveIntSchema.default(5000),
     POLARIS_GA4_ALLOW_REPLAY: booleanFromStringSchema.default(false),
     POLARIS_GA4_API_HOST: nonEmptyStringSchema.default(DEFAULT_GA4_API_HOST),
@@ -66,7 +64,6 @@ export const ga4EnvSchema = z
   .transform(
     (parsed): Ga4Config => ({
       consumerGroup: parsed["POLARIS_GA4_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_GA4_CONCURRENCY"],
       requestTimeoutMs: parsed["POLARIS_GA4_REQUEST_TIMEOUT_MS"],
       allowReplay: parsed["POLARIS_GA4_ALLOW_REPLAY"],
       apiHost: parsed["POLARIS_GA4_API_HOST"],
@@ -75,7 +72,6 @@ export const ga4EnvSchema = z
 
 export interface Ga4Config {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
   readonly requestTimeoutMs: number;
   readonly allowReplay: boolean;
   readonly apiHost: string;
@@ -83,7 +79,6 @@ export interface Ga4Config {
 
 export const ga4EnvKeys = [
   "POLARIS_GA4_CONSUMER_GROUP",
-  "POLARIS_GA4_CONCURRENCY",
   "POLARIS_GA4_REQUEST_TIMEOUT_MS",
   "POLARIS_GA4_ALLOW_REPLAY",
   "POLARIS_GA4_API_HOST",
@@ -92,7 +87,7 @@ export const ga4EnvKeys = [
 export interface Ga4RuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RabbitmqConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly ga4: Ga4Config;
 }
@@ -101,7 +96,7 @@ export function ga4ConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: rabbitmqEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     ga4: ga4EnvSchema,
   });

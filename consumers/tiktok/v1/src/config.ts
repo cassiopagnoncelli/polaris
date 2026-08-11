@@ -2,7 +2,7 @@
  * Runtime configuration for the tiktok v1 destination consumer.
  *
  * Mirrors the meta-capi v1 shape (`consumers/meta-capi/v1/src/config.ts`):
- * service + http + redpanda + postgres + a small consumer-specific
+ * service + http + rabbitmq + postgres + a small consumer-specific
  * block. Per-destination instance knobs (status, mode, max_rps,
  * retry_policy, dead_letter_threshold) live in the PostgreSQL
  * `destinations` row and are read at delivery time by the runtime;
@@ -12,7 +12,6 @@
  *
  *   POLARIS_TIKTOK_CONSUMER_GROUP           KafkaJS consumer group identifier
  *                                           default: "polaris-tiktok-v1"
- *   POLARIS_TIKTOK_CONCURRENCY              `partitionsConsumedConcurrently`
  *                                           default: 4
  *   POLARIS_TIKTOK_REQUEST_TIMEOUT_MS       HTTP fetch timeout per attempt
  *                                           default: 5000 (per manifest)
@@ -55,7 +54,6 @@ export const DEFAULT_TIKTOK_API_HOST = "business-api.tiktok.com" as const;
 export const tiktokEnvSchema = z
   .object({
     POLARIS_TIKTOK_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-tiktok-v1"),
-    POLARIS_TIKTOK_CONCURRENCY: positiveIntSchema.default(4),
     POLARIS_TIKTOK_REQUEST_TIMEOUT_MS: positiveIntSchema.default(5000),
     POLARIS_TIKTOK_ALLOW_REPLAY: booleanFromStringSchema.default(false),
     POLARIS_TIKTOK_API_HOST: nonEmptyStringSchema.default(DEFAULT_TIKTOK_API_HOST),
@@ -63,7 +61,6 @@ export const tiktokEnvSchema = z
   .transform(
     (parsed): TikTokConfig => ({
       consumerGroup: parsed["POLARIS_TIKTOK_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_TIKTOK_CONCURRENCY"],
       requestTimeoutMs: parsed["POLARIS_TIKTOK_REQUEST_TIMEOUT_MS"],
       allowReplay: parsed["POLARIS_TIKTOK_ALLOW_REPLAY"],
       apiHost: parsed["POLARIS_TIKTOK_API_HOST"],
@@ -72,7 +69,6 @@ export const tiktokEnvSchema = z
 
 export interface TikTokConfig {
   readonly consumerGroup: string;
-  readonly partitionsConsumedConcurrently: number;
   readonly requestTimeoutMs: number;
   readonly allowReplay: boolean;
   readonly apiHost: string;
@@ -80,7 +76,6 @@ export interface TikTokConfig {
 
 export const tiktokEnvKeys = [
   "POLARIS_TIKTOK_CONSUMER_GROUP",
-  "POLARIS_TIKTOK_CONCURRENCY",
   "POLARIS_TIKTOK_REQUEST_TIMEOUT_MS",
   "POLARIS_TIKTOK_ALLOW_REPLAY",
   "POLARIS_TIKTOK_API_HOST",
@@ -89,7 +84,7 @@ export const tiktokEnvKeys = [
 export interface TikTokRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RabbitmqConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly tiktok: TikTokConfig;
 }
@@ -98,7 +93,7 @@ export function tiktokConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: rabbitmqEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     tiktok: tiktokEnvSchema,
   });

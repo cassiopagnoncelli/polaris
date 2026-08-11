@@ -12,7 +12,6 @@
  *
  *   POLARIS_WEBHOOK_SINK_CONSUMER_GROUP    KafkaJS consumer group identifier
  *                                          default: "polaris-webhook-sink-v1"
- *   POLARIS_WEBHOOK_SINK_CONCURRENCY       `partitionsConsumedConcurrently`
  *                                          default: 4
  *   POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS  HTTP fetch timeout per attempt
  *                                            default: 5000 (per manifest)
@@ -53,14 +52,12 @@ export const CONSUMER_SERVICE_NAME = "webhook-sink" as const;
 export const webhookSinkEnvSchema = z
   .object({
     POLARIS_WEBHOOK_SINK_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-webhook-sink-v1"),
-    POLARIS_WEBHOOK_SINK_CONCURRENCY: positiveIntSchema.default(4),
     POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS: positiveIntSchema.default(5000),
     POLARIS_WEBHOOK_SINK_ALLOW_REPLAY: booleanFromStringSchema.default(false),
   })
   .transform(
     (parsed): WebhookSinkConfig => ({
       consumerGroup: parsed["POLARIS_WEBHOOK_SINK_CONSUMER_GROUP"],
-      partitionsConsumedConcurrently: parsed["POLARIS_WEBHOOK_SINK_CONCURRENCY"],
       requestTimeoutMs: parsed["POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS"],
       allowReplay: parsed["POLARIS_WEBHOOK_SINK_ALLOW_REPLAY"],
     }),
@@ -68,17 +65,11 @@ export const webhookSinkEnvSchema = z
 
 export interface WebhookSinkConfig {
   /**
-   * KafkaJS consumer group identifier. The default pins the directory name
-   * + version so multiple replicas of webhook-sink v1 cooperate and a v2
-   * deployment running in parallel uses a different group.
+   * Polaris consumer-group identifier: the namespace this consumer's
+   * stream checkpoints live under in `transport_checkpoints`. Changing it
+   * rewinds the consumer, so it is part of the deployment's contract.
    */
   readonly consumerGroup: string;
-  /**
-   * Max partitions a single KafkaJS consumer instance reads in parallel.
-   * Defaults to 4 — webhook delivery is I/O-bound so higher than the
-   * processors' default of 1.
-   */
-  readonly partitionsConsumedConcurrently: number;
   /**
    * Per-attempt HTTP fetch timeout in milliseconds. Aligns with the
    * manifest `defaults.request_timeout_ms`.
@@ -96,7 +87,6 @@ export interface WebhookSinkConfig {
 
 export const webhookSinkEnvKeys = [
   "POLARIS_WEBHOOK_SINK_CONSUMER_GROUP",
-  "POLARIS_WEBHOOK_SINK_CONCURRENCY",
   "POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS",
   "POLARIS_WEBHOOK_SINK_ALLOW_REPLAY",
 ] as const;
@@ -115,7 +105,7 @@ export const webhookSinkEnvKeys = [
 export interface WebhookSinkRuntimeConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
-  readonly redpanda: RabbitmqConfig;
+  readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
   readonly sink: WebhookSinkConfig;
 }
@@ -129,7 +119,7 @@ export function webhookSinkConfigSchema() {
   return composeConfigSchema({
     service: serviceEnvSchema,
     http: httpEnvSchema,
-    redpanda: rabbitmqEnvSchema,
+    rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
     sink: webhookSinkEnvSchema,
   });

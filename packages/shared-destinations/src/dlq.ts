@@ -31,8 +31,12 @@
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 
-import { type MessageHeaders, type PolarisProducer, republishToDlq } from "@polaris/shared-transport";
-import type { EachMessagePayload, RecordMetadata } from "kafkajs";
+import {
+  type MessageHeaders,
+  type PolarisProducer,
+  republishToDlq,
+  type TransportMessagePayload,
+} from "@polaris/shared-transport";
 
 import {
   type DeliveryRecordErrorClass,
@@ -70,7 +74,7 @@ export interface PublishToDestinationDlqInput {
   /** Destination instance read at attempt time. */
   readonly instance: DestinationInstance;
   /** Original KafkaJS payload — used to copy bytes, headers, key, offset. */
-  readonly payload: EachMessagePayload;
+  readonly payload: TransportMessagePayload;
   /**
    * Classification reason. Mirrors the
    * `@polaris/shared-processor`'s classify-error reason set but allows
@@ -112,12 +116,12 @@ export interface PublishToDestinationDlqInput {
  * Publish the offending message to the consumer's DLQ topic
  * (`<vendor>.<consumerVersion>.dlq`).
  *
- * Returns the `RecordMetadata` array from the underlying KafkaJS send —
+ * Returns once the broker has confirmed the DLQ publish —
  * callers usually ignore it but tests assert delivery.
  */
 export async function publishToDestinationDlq(
   input: PublishToDestinationDlqInput,
-): Promise<RecordMetadata[]> {
+): Promise<void> {
   const failedAt = input.failedAt ?? new Date().toISOString();
 
   const errorClass = input.error instanceof Error ? input.error.name : undefined;
@@ -161,7 +165,7 @@ export async function publishToDestinationDlq(
       ? { key: input.payload.message.key }
       : {}),
     headers,
-    sourceTopic: input.payload.topic,
+    sourceTopic: input.payload.stream,
     sourcePartition: input.payload.partition,
     sourceOffset: input.payload.message.offset,
     reason: input.reason,
@@ -199,7 +203,7 @@ export async function publishToDestinationDlq(
         ? { vendor_response_summary: input.vendor_response_summary }
         : {}),
       ...(input.delivery_key !== undefined ? { delivery_key: input.delivery_key } : {}),
-      source_topic: input.payload.topic,
+      source_topic: input.payload.stream,
       source_partition: input.payload.partition,
       source_offset: input.payload.message.offset,
       headers: headersToStringMap(headers),

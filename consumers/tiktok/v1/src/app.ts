@@ -37,8 +37,10 @@ import {
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
 import {
-  createKafkaClient,
+  createTransportConnection,
+  type TransportConnection,
   createPolarisConsumer,
+  PostgresCheckpointStore,
   createPolarisProducer,
   type PolarisConsumer,
   type PolarisProducer,
@@ -122,20 +124,29 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     });
 
   // ---- consumer + producer ------------------------------------------
-  const { producer, ownsProducer } = buildProducer(config, options.producer, consumerLogger);
-  const { consumer, ownsConsumer } = buildConsumer(config, options.consumer, consumerLogger);
+  // One AMQP connection per process, shared by the DLQ producer and the
+  // analytics.events consumer. Checkpoints live in PostgreSQL because
+  // RabbitMQ streams consumed over AMQP have no server-side offset store.
+  const connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: consumerLogger });
+  const checkpoints = new PostgresCheckpointStore(db);
+  const { producer, ownsProducer } = buildProducer(
+    config,
+    options.producer,
+    consumerLogger,
+    connection,
+  );
+  const { consumer, ownsConsumer } = buildConsumer(
+    config,
+    options.consumer,
+    consumerLogger,
+    connection,
+    checkpoints,
+  );
   if (ownsProducer) {
     try {
       await producer.connect();
     } catch (err) {
       consumerLogger.error({ err: errSummary(err) }, "destination DLQ producer failed to connect");
-    }
-  }
-  if (ownsConsumer) {
-    try {
-      await consumer.connect();
-    } catch (err) {
-      consumerLogger.error({ err: errSummary(err) }, "analytics.events consumer failed to connect");
     }
   }
 
@@ -168,7 +179,6 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     logger: consumerLogger,
     allowReplay: config.tiktok.allowReplay,
     metrics,
-    partitionsConsumedConcurrently: config.tiktok.partitionsConsumedConcurrently,
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
 
@@ -286,11 +296,7 @@ function buildDb(
   if (override !== undefined) {
     return { db: override, ownsDb: false };
   }
-  const pg = config.postgres;
-  const params = new URLSearchParams();
-  params.set("sslmode", pg.ssl ? "require" : "disable");
-  const connectionString = `postgres://${encodeURIComponent(pg.user)}:${encodeURIComponent(pg.password)}@${pg.host}:${pg.port}/${pg.database}?${params.toString()}`;
-  const db = createDb({ connectionString, maxConnections: pg.poolMax });
+  const db = createDb({ postgres: config.postgres });
   return { db, ownsDb: true };
 }
 
@@ -298,13 +304,13 @@ function buildProducer(
   config: TikTokRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.rabbitmq });
   const producer = createPolarisProducer({
-    kafka,
+    connection,
     logger,
     producerName: `${CONSUMER_VENDOR}-${CONSUMER_VERSION}`,
     producerVersion: config.service.serviceVersion,
@@ -316,19 +322,19 @@ function buildConsumer(
   config: TikTokRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  connection: TransportConnection,
+  checkpoints: PostgresCheckpointStore,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
   }
-  const kafka = createKafkaClient({ redpanda: config.rabbitmq });
   const consumer = createPolarisConsumer({
-    kafka,
+    connection,
     logger,
     consumerName: CONSUMER_VENDOR,
     consumerVersion: CONSUMER_VERSION,
-    consumerConfig: {
-      groupId: config.tiktok.consumerGroup,
-    },
+    groupName: config.tiktok.consumerGroup,
+    checkpoints,
   });
   return { consumer, ownsConsumer: true };
 }

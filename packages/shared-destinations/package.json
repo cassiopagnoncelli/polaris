@@ -75,7 +75,6 @@
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",
-    "kafkajs": "^2.2.4",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0"
   }
