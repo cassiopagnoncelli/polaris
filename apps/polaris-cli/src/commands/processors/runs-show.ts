@@ -137,7 +137,8 @@ function renderHuman(detail: ProcessorRunDetail): string {
     `host               ${detail.host ?? "(unknown)"}`,
     `started_at         ${detail.started_at}`,
     `finished_at        ${detail.finished_at ?? "(running)"}`,
-    // Written once, when the run ends — a running row reads zero.
+    // Running totals, flushed every 15s by the run's heartbeat, so a running
+    // row can trail the process by about that long.
     `events_consumed    ${detail.events_consumed}`,
     `events_emitted     ${detail.events_emitted}`,
     `events_failed      ${detail.events_failed}`,
