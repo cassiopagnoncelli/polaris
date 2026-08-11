@@ -72,8 +72,9 @@ const NOOP_PRODUCER = {
   connect: async () => undefined,
   disconnect: async () => undefined,
   isConnected: () => true,
-  send: async () => undefined,
-  sendBatch: async () => undefined,
+  publish: async () => ({ stream: "analytics.events-0", partition: 0 }),
+  publishEvent: async () => ({ stream: "analytics.events-0", partition: 0 }),
+  publishToQueue: async () => undefined,
 } as unknown as PolarisProducer;
 
 function makeSecretResolver(map: Record<string, string>): SecretResolver {

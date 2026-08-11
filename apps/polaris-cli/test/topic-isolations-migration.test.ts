@@ -26,6 +26,21 @@ function readMigration(): string {
   return readFileSync(path, "utf8");
 }
 
+/**
+ * The CHECK on `topic_family` was widened by a later migration when
+ * `session.events` became a canonical family (it was only ever an
+ * auto-created Redpanda topic before). The invariant under test is
+ * "every canonical family is allowed by the live schema", so the
+ * assertion reads both files.
+ */
+function readFamilyCheckSql(): string {
+  const widen = resolve(
+    HERE,
+    "../../../db/migrations/20260810000002_add_session_events_topic_family.sql",
+  );
+  return `${readMigration()}\n${readFileSync(widen, "utf8")}`;
+}
+
 describe("topic_isolations migration: schema invariants", () => {
   const sql = readMigration();
 
@@ -64,8 +79,9 @@ describe("topic_isolations migration: schema invariants", () => {
     // Verify each canonical family appears in the CHECK. This is the
     // coordinated-change rule: widening the family set requires
     // widening both the constant and the CHECK.
+    const familySql = readFamilyCheckSql();
     for (const family of CANONICAL_STREAM_FAMILIES) {
-      expect(sql).toContain(`'${family}'`);
+      expect(familySql).toContain(`'${family}'`);
     }
   });
 

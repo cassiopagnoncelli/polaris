@@ -52,13 +52,14 @@
  */
 
 import {
-  type OffsetRangeBatch,
-  type OffsetRangeConsumerDriver,
   POLARIS_HEADER_ENVIRONMENT,
   POLARIS_HEADER_EVENT_ID,
   POLARIS_HEADER_EVENT_NAME,
+  POLARIS_HEADER_INGESTED_AT,
   POLARIS_HEADER_OCCURRED_AT,
   POLARIS_HEADER_PROJECT_ID,
+  type StreamRangeDelivery,
+  type StreamRangeDriver,
 } from "@polaris/shared-transport";
 import {
   REPLAY_HEADER_FLAG,
@@ -74,7 +75,7 @@ import {
 } from "@polaris/shared-replay";
 import { describe, expect, it } from "vitest";
 
-import { buildKafkaReplaySource } from "../src/commands/replay/kafka-adapters.js";
+import { buildStreamReplaySource } from "../src/commands/replay/stream-adapters.js";
 import {
   buildReplayExecuteRunner,
   type CommandContext,
@@ -623,67 +624,59 @@ describe("replay execute runner — cooperative cancel", () => {
   });
 });
 
-describe("replay execute runner — offset-range reader wire-up (Q0EGTY5V)", () => {
-  it("threads the offset-range reader's events through the executor and into the producer", async () => {
-    // Synthesise a single-partition batch carrying Polaris-shaped
-    // headers. The kafka-adapter resolves chunk.from/to via the
-    // injected fetchOffsetsForWindow, then drives the reader against
-    // this in-memory driver. The reader projects the headers; the
+describe("replay execute runner — stream range reader wire-up", () => {
+  it("threads the range reader's events through the executor and into the producer", async () => {
+    // Synthesise deliveries carrying Polaris-shaped headers. The
+    // adapter hands the chunk's time window straight to the reader —
+    // streams attach by timestamp, so there is no time-to-offset
+    // translation step any more. The reader projects the headers; the
     // adapter filters by plan scope; the executor stamps the replay
     // headers; the recording producer captures the outcome.
-    const batch: OffsetRangeBatch = {
-      topic: "raw.events",
-      partition: 0,
-      highWatermark: "5",
-      messages: [
-        {
-          offset: "100",
-          key: "storefront.development.user.42",
-          value: Buffer.from("payload-a"),
-          headers: {
-            [POLARIS_HEADER_EVENT_ID]: "ev_a",
-            [POLARIS_HEADER_EVENT_NAME]: "purchase",
-            [POLARIS_HEADER_PROJECT_ID]: "storefront",
-            [POLARIS_HEADER_ENVIRONMENT]: "development",
-            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
-          },
+    const deliveries: StreamRangeDelivery[] = [
+      {
+        offset: "100",
+        timestampMs: Date.parse("2026-05-10T03:00:00.000Z"),
+        key: "storefront.development.user.42",
+        value: new Uint8Array(Buffer.from("payload-a")),
+        headers: {
+          [POLARIS_HEADER_EVENT_ID]: "ev_a",
+          [POLARIS_HEADER_EVENT_NAME]: "purchase",
+          [POLARIS_HEADER_PROJECT_ID]: "storefront",
+          [POLARIS_HEADER_ENVIRONMENT]: "development",
+          [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
+          [POLARIS_HEADER_INGESTED_AT]: "2026-05-10T03:00:00.000Z",
         },
-        {
-          offset: "101",
-          key: "storefront.development.user.43",
-          value: Buffer.from("payload-b"),
-          headers: {
-            [POLARIS_HEADER_EVENT_ID]: "ev_b",
-            [POLARIS_HEADER_EVENT_NAME]: "purchase",
-            [POLARIS_HEADER_PROJECT_ID]: "storefront",
-            [POLARIS_HEADER_ENVIRONMENT]: "development",
-            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
-          },
+      },
+      {
+        offset: "101",
+        timestampMs: Date.parse("2026-05-10T03:00:01.000Z"),
+        key: "storefront.development.user.43",
+        value: new Uint8Array(Buffer.from("payload-b")),
+        headers: {
+          [POLARIS_HEADER_EVENT_ID]: "ev_b",
+          [POLARIS_HEADER_EVENT_NAME]: "purchase",
+          [POLARIS_HEADER_PROJECT_ID]: "storefront",
+          [POLARIS_HEADER_ENVIRONMENT]: "development",
+          [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
+          [POLARIS_HEADER_INGESTED_AT]: "2026-05-10T03:00:01.000Z",
         },
-      ],
-    };
+      },
+    ];
 
-    function makeDriver(): OffsetRangeConsumerDriver {
-      let served = false;
+    function makeDriver(): StreamRangeDriver {
       return {
-        async assign() {},
-        async seek() {},
-        async pullNextBatch() {
-          if (served) return null;
-          served = true;
-          return batch;
+        async start({ onMessage }) {
+          for (const delivery of deliveries) onMessage(delivery);
         },
         async release() {},
       };
     }
 
-    const source = buildKafkaReplaySource({
-      topic: "raw.events",
+    const source = buildStreamReplaySource({
+      family: "raw.events",
+      partitions: 1,
       driverFactory: makeDriver,
-      async fetchOffsetsForWindow() {
-        // Single-partition window covering offsets 100..101 inclusive.
-        return [{ partition: 0, startOffset: "100", endOffset: "101" }];
-      },
+      idleTimeoutMs: 20,
     });
 
     const store = new InMemoryExecuteStore();
@@ -714,58 +707,51 @@ describe("replay execute runner — offset-range reader wire-up (Q0EGTY5V)", () 
 
   it("filters reader events by plan scope (project_id, environment, event_name)", async () => {
     // Reader returns two events: one matches the plan, one doesn't.
-    const batch: OffsetRangeBatch = {
-      topic: "raw.events",
-      partition: 0,
-      highWatermark: "3",
-      messages: [
-        {
-          offset: "10",
-          key: "storefront.development.user.1",
-          value: Buffer.from("p1"),
-          headers: {
-            [POLARIS_HEADER_EVENT_ID]: "ev_keep",
-            [POLARIS_HEADER_EVENT_NAME]: "purchase",
-            [POLARIS_HEADER_PROJECT_ID]: "storefront",
-            [POLARIS_HEADER_ENVIRONMENT]: "development",
-            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
-          },
+    const deliveries: StreamRangeDelivery[] = [
+      {
+        offset: "10",
+        timestampMs: Date.parse("2026-05-10T03:00:00.000Z"),
+        key: "storefront.development.user.1",
+        value: new Uint8Array(Buffer.from("p1")),
+        headers: {
+          [POLARIS_HEADER_EVENT_ID]: "ev_keep",
+          [POLARIS_HEADER_EVENT_NAME]: "purchase",
+          [POLARIS_HEADER_PROJECT_ID]: "storefront",
+          [POLARIS_HEADER_ENVIRONMENT]: "development",
+          [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:00.000Z",
+          [POLARIS_HEADER_INGESTED_AT]: "2026-05-10T03:00:00.000Z",
         },
-        {
-          offset: "11",
-          key: "other-project.development.user.2",
-          value: Buffer.from("p2"),
-          headers: {
-            [POLARIS_HEADER_EVENT_ID]: "ev_drop",
-            [POLARIS_HEADER_EVENT_NAME]: "purchase",
-            [POLARIS_HEADER_PROJECT_ID]: "other-project",
-            [POLARIS_HEADER_ENVIRONMENT]: "development",
-            [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
-          },
+      },
+      {
+        offset: "11",
+        timestampMs: Date.parse("2026-05-10T03:00:01.000Z"),
+        key: "other-project.development.user.2",
+        value: new Uint8Array(Buffer.from("p2")),
+        headers: {
+          [POLARIS_HEADER_EVENT_ID]: "ev_drop",
+          [POLARIS_HEADER_EVENT_NAME]: "purchase",
+          [POLARIS_HEADER_PROJECT_ID]: "other-project",
+          [POLARIS_HEADER_ENVIRONMENT]: "development",
+          [POLARIS_HEADER_OCCURRED_AT]: "2026-05-10T03:00:01.000Z",
+          [POLARIS_HEADER_INGESTED_AT]: "2026-05-10T03:00:01.000Z",
         },
-      ],
-    };
+      },
+    ];
 
-    function makeDriver(): OffsetRangeConsumerDriver {
-      let served = false;
+    function makeDriver(): StreamRangeDriver {
       return {
-        async assign() {},
-        async seek() {},
-        async pullNextBatch() {
-          if (served) return null;
-          served = true;
-          return batch;
+        async start({ onMessage }) {
+          for (const delivery of deliveries) onMessage(delivery);
         },
         async release() {},
       };
     }
 
-    const source = buildKafkaReplaySource({
-      topic: "raw.events",
+    const source = buildStreamReplaySource({
+      family: "raw.events",
+      partitions: 1,
       driverFactory: makeDriver,
-      async fetchOffsetsForWindow() {
-        return [{ partition: 0, startOffset: "10", endOffset: "11" }];
-      },
+      idleTimeoutMs: 20,
     });
 
     const store = new InMemoryExecuteStore();

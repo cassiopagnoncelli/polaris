@@ -22,7 +22,7 @@ const BASE_ENV: Record<string, string> = {
   POLARIS_HTTP_HOST: "0.0.0.0",
   POLARIS_HTTP_PORT: "4002",
   POLARIS_HTTP_BODY_LIMIT_BYTES: "1048576",
-  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@localhost:5672",
   POLARIS_RABBITMQ_CLIENT_ID: "webhook-sink",
   POLARIS_RABBITMQ_TLS: "false",
   POLARIS_POSTGRES_HOST: "localhost",
@@ -35,7 +35,6 @@ describe("webhookSinkConfigSchema", () => {
   it("loads defaults for the consumer-scoped knobs", () => {
     const config = webhookSinkConfigSchema().parse(BASE_ENV);
     expect(config.sink.consumerGroup).toBe("polaris-webhook-sink-v1");
-    expect(config.sink.partitionsConsumedConcurrently).toBe(4);
     expect(config.sink.requestTimeoutMs).toBe(5000);
     expect(config.sink.allowReplay).toBe(false);
   });
@@ -44,31 +43,27 @@ describe("webhookSinkConfigSchema", () => {
     const config = webhookSinkConfigSchema().parse({
       ...BASE_ENV,
       POLARIS_WEBHOOK_SINK_CONSUMER_GROUP: "polaris-webhook-sink-canary",
-      POLARIS_WEBHOOK_SINK_CONCURRENCY: "8",
       POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS: "12000",
       POLARIS_WEBHOOK_SINK_ALLOW_REPLAY: "true",
     });
     expect(config.sink.consumerGroup).toBe("polaris-webhook-sink-canary");
-    expect(config.sink.partitionsConsumedConcurrently).toBe(8);
     expect(config.sink.requestTimeoutMs).toBe(12000);
     expect(config.sink.allowReplay).toBe(true);
   });
 
-  it("rejects non-positive concurrency and timeout values", () => {
+  it("rejects non-positive timeout values", () => {
     const schema = webhookSinkConfigSchema();
-    expect(() => schema.parse({ ...BASE_ENV, POLARIS_WEBHOOK_SINK_CONCURRENCY: "0" })).toThrow();
     expect(() =>
       schema.parse({ ...BASE_ENV, POLARIS_WEBHOOK_SINK_REQUEST_TIMEOUT_MS: "0" }),
     ).toThrow();
-    expect(() => schema.parse({ ...BASE_ENV, POLARIS_WEBHOOK_SINK_CONCURRENCY: "-3" })).toThrow();
   });
 
-  it("composes service + http + redpanda + postgres + sink blocks", () => {
+  it("composes service + http + rabbitmq + postgres + sink blocks", () => {
     const config = webhookSinkConfigSchema().parse(BASE_ENV);
     expect(config.service.serviceName).toBe(CONSUMER_SERVICE_NAME);
     expect(config.http.host).toBe("0.0.0.0");
     expect(config.http.port).toBe(4002);
-    expect(config.rabbitmq.brokers).toEqual(["localhost:9092"]);
+    expect(config.rabbitmq.url).toBe("amqp://polaris:polaris@localhost:5672");
     expect(config.postgres.host).toBe("localhost");
     expect(config.postgres.database).toBe("polaris");
     expect(config.sink.consumerGroup).toBe("polaris-webhook-sink-v1");

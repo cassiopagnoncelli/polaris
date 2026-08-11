@@ -4,22 +4,26 @@
  * The helper wraps `@polaris/shared-transport`'s `republishToDlq` with
  * processor-specific defaults (component name, failedAt timestamp,
  * classifier-derived reason). The tests use a stub `PolarisProducer` that
- * records `send` calls so we can assert the resulting DLQ topic name,
- * headers, and message payload.
+ * records `publishToQueue` calls so we can assert the resulting DLQ queue
+ * name, headers, and message payload.
  */
 
-import type { PolarisProducer } from "@polaris/shared-transport";
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
+import type {
+  PolarisProducer,
+  PublishToQueueInput,
+  TransportMessagePayload,
+} from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { publishToDlq } from "../src/dlq.js";
 
-function buildPayload(): EachMessagePayload {
+function buildPayload(): TransportMessagePayload {
   return {
-    topic: "raw.events",
+    stream: "raw.events-7",
+    family: "raw.events",
     partition: 7,
     message: {
-      key: Buffer.from("partition-key"),
+      key: "partition-key",
       value: Buffer.from(JSON.stringify({ event_id: "abc" }), "utf8"),
       offset: "42",
       headers: {
@@ -27,26 +31,24 @@ function buildPayload(): EachMessagePayload {
         "polaris-project-id": "checkout",
       },
       timestamp: "0",
-      attributes: 0,
-      size: 0,
-    } as EachMessagePayload["message"],
-    heartbeat: async () => {},
-    pause: () => () => {},
-  } as EachMessagePayload;
+      redelivered: false,
+    },
+  };
 }
 
 class RecordingProducer {
-  public sends: Array<ProducerRecord> = [];
-  public readonly raw: unknown = null;
+  public sends: PublishToQueueInput[] = [];
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
-  async publishEvent(): Promise<RecordMetadata[]> {
-    return [];
+  async publishEvent(): Promise<{ stream: string; partition: number }> {
+    return { stream: "raw.events-0", partition: 0 };
   }
-  async send(record: ProducerRecord): Promise<RecordMetadata[]> {
-    this.sends.push(record);
-    return [];
+  async publish(): Promise<{ stream: string; partition: number }> {
+    return { stream: "raw.events-0", partition: 0 };
+  }
+  async publishToQueue(input: PublishToQueueInput): Promise<void> {
+    this.sends.push(input);
   }
 }
 
@@ -63,11 +65,8 @@ describe("publishToDlq", () => {
     expect(producer.sends.length).toBe(1);
     const sent = producer.sends[0];
     if (sent === undefined) throw new Error("expected one send");
-    expect(sent.topic).toBe("analytics-projector.dlq");
-    expect(sent.messages.length).toBe(1);
-    const msg = sent.messages[0];
-    if (msg === undefined) throw new Error("expected one message");
-    expect(msg.value).toEqual(Buffer.from(JSON.stringify({ event_id: "abc" }), "utf8"));
+    expect(sent.queue).toBe("analytics-projector.dlq");
+    expect(sent.value).toEqual(Buffer.from(JSON.stringify({ event_id: "abc" }), "utf8"));
   });
 
   it("preserves the original key for partition ordering", async () => {
@@ -80,9 +79,7 @@ describe("publishToDlq", () => {
     });
     const sent = producer.sends[0];
     if (sent === undefined) throw new Error("expected one send");
-    const msg = sent.messages[0];
-    if (msg === undefined) throw new Error("expected one message");
-    expect(msg.key).toEqual(Buffer.from("partition-key"));
+    expect(sent.partitionKey).toBe("partition-key");
   });
 
   it("stamps retry/DLQ headers with the classified reason and the error class/message", async () => {
@@ -96,12 +93,12 @@ describe("publishToDlq", () => {
     });
     const sent = producer.sends[0];
     if (sent === undefined) throw new Error("expected one send");
-    const headers = (sent.messages[0]?.headers ?? {}) as Record<string, unknown>;
+    const headers = (sent.headers ?? {}) as Record<string, unknown>;
     expect(headers["polaris-retry-reason"]).toBe("unknown_error");
     expect(headers["polaris-error-class"]).toBe("TypeError");
     expect(headers["polaris-error-message"]).toBe("invalid input");
     expect(headers["polaris-failed-at"]).toBe("2026-05-12T12:00:05.000Z");
-    expect(headers["polaris-source-topic"]).toBe("raw.events");
+    expect(headers["polaris-source-topic"]).toBe("raw.events-7");
     expect(headers["polaris-source-partition"]).toBe("7");
     expect(headers["polaris-source-offset"]).toBe("42");
     // Original platform headers preserved.
@@ -121,7 +118,7 @@ describe("publishToDlq", () => {
     });
     const sent = producer.sends[0];
     if (sent === undefined) throw new Error("expected one send");
-    const headers = (sent.messages[0]?.headers ?? {}) as Record<string, unknown>;
+    const headers = (sent.headers ?? {}) as Record<string, unknown>;
     expect(headers["polaris-retry-attempts"]).toBe("5");
   });
 
@@ -137,7 +134,7 @@ describe("publishToDlq", () => {
     });
     const sent = producer.sends[0];
     if (sent === undefined) throw new Error("expected one send");
-    const headers = (sent.messages[0]?.headers ?? {}) as Record<string, unknown>;
+    const headers = (sent.headers ?? {}) as Record<string, unknown>;
     expect(headers["polaris-retry-reason"]).toBe("decode_failed");
   });
 });

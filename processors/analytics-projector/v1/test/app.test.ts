@@ -34,28 +34,46 @@ const TEST_CONFIG: AnalyticsProjectorRuntimeConfig = {
     requestTimeoutMs: 15_000,
     keepAliveTimeoutMs: 5_000,
   },
-  redpanda: {
-    brokers: ["localhost:9092"],
+  rabbitmq: {
+    url: "amqp://polaris:polaris@localhost:5672",
+    managementUrl: undefined,
     clientId: "analytics-projector-test",
-    ssl: false,
-    sasl: undefined,
+    tls: false,
+    heartbeatSeconds: 30,
     connectionTimeoutMs: 10_000,
-    requestTimeoutMs: 30_000,
+    partitions: 3,
+    partitionOverrides: {},
+    assignedPartitions: [],
+    prefetch: 100,
+    checkpointIntervalMs: 5_000,
+    checkpointEvery: 500,
+    streamRetentionDays: 90,
+  },
+  // Checkpoints only — the projector writes no control-plane state, but a
+  // stream consumer owns its own resume point now.
+  postgres: {
+    host: "localhost",
+    port: 5432,
+    database: "polaris",
+    user: "polaris",
+    password: "polaris",
+    ssl: false,
+    poolMax: 10,
+    connectTimeoutMs: 10_000,
+    idleTimeoutMs: 30_000,
   },
   projector: {
     consumerGroup: "polaris-analytics-projector-v1-test",
-    partitionsConsumedConcurrently: 1,
   },
 };
 
 function stubConsumer(): PolarisConsumer {
   return {
-    connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     subscribe: vi.fn(async () => {}),
     runEach: vi.fn(async () => {}),
-    run: vi.fn(async () => {}),
-    raw: {} as PolarisConsumer["raw"],
+    streams: [],
+    queues: [],
   };
 }
 
@@ -63,9 +81,12 @@ function stubProducer(): PolarisProducer {
   return {
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
-    publishEvent: vi.fn(async (_input: PublishEventInput) => []),
-    send: vi.fn(async () => []),
-    raw: {} as PolarisProducer["raw"],
+    publishEvent: vi.fn(async (_input: PublishEventInput) => ({
+      stream: "analytics.events-0",
+      partition: 0,
+    })),
+    publish: vi.fn(async () => ({ stream: "analytics.events-0", partition: 0 })),
+    publishToQueue: vi.fn(async () => undefined),
   };
 }
 
@@ -142,9 +163,12 @@ describe("buildAnalyticsProjectorApp", () => {
       startRuntime: false,
     });
     try {
-      // Injection short-circuits the kafka-client construction; the app
-      // does not call connect/disconnect on injected handles.
-      expect(consumer.connect).not.toHaveBeenCalled();
+      // Injection short-circuits the transport construction; the app does
+      // not touch the lifecycle of injected handles. The consumer has no
+      // connect() of its own any more — the shared connection owns that —
+      // so ownership is asserted through the subscribe/disconnect pair.
+      expect(consumer.subscribe).not.toHaveBeenCalled();
+      expect(consumer.disconnect).not.toHaveBeenCalled();
       expect(producer.connect).not.toHaveBeenCalled();
       expect(result.ownsConsumer).toBe(false);
       expect(result.ownsProducer).toBe(false);

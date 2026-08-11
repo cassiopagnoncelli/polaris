@@ -537,11 +537,11 @@ describe("polaris dlq retry", () => {
       disconnect: async () => {
         disconnects += 1;
       },
-      send: async (record) => {
+      publishToQueue: async (record) => {
         sends.push({
-          topic: record.topic,
-          bodies: record.messages.map((m) => m.value.toString("utf8")),
-          headers: record.messages.map((m) => ({ ...(m.headers ?? {}) })),
+          topic: record.queue,
+          bodies: [record.value.toString("utf8")],
+          headers: [{ ...(record.headers ?? {}) }],
         });
       },
     };
@@ -557,7 +557,7 @@ describe("polaris dlq retry", () => {
     };
   }
 
-  it("republishes to source_topic, marks resolved, and writes an audit row", async () => {
+  it("republishes to the vendor redelivery queue, marks resolved, and writes an audit row", async () => {
     const row = makeDlqRecord({
       dlq_id: "polaris_dlq_retry_1",
       source_topic: "analytics.events.shared",
@@ -591,12 +591,14 @@ describe("polaris dlq retry", () => {
       { dlqId: "polaris_dlq_retry_1", note: "vendor fixed their bug" },
       makeContext(capture.streams),
     );
-    // Producer was called exactly once on the right topic with the
-    // original bytes + headers.
+    // Producer was called exactly once, targeting the failing vendor's
+    // redelivery queue rather than the source stream: republishing into
+    // analytics.events would re-deliver the event to the ClickHouse sink
+    // and every sibling destination too.
     expect(harness.connects).toBe(1);
     expect(harness.disconnects).toBe(1);
     expect(harness.sends).toHaveLength(1);
-    expect(harness.sends[0]?.topic).toBe("analytics.events.shared");
+    expect(harness.sends[0]?.topic).toBe("meta-capi.redeliver");
     expect(harness.sends[0]?.bodies).toEqual(['{"event":"payment.approved"}']);
     expect(harness.sends[0]?.headers[0]?.["polaris-delivery-key"]).toBe("polaris_del_keep");
     // Resolution + audit landed.
@@ -604,7 +606,7 @@ describe("polaris dlq retry", () => {
     expect(auditSeen?.auditId).toBe("audit-retry-1");
     expect(auditSeen?.actorLabel).toBe("cli@test");
     expect(auditSeen?.note).toBe("vendor fixed their bug");
-    expect(auditSeen?.republishedTopic).toBe("analytics.events.shared");
+    expect(auditSeen?.republishedTopic).toBe("meta-capi.redeliver");
     expect(capture.stdout.join("")).toContain("retried polaris_dlq_retry_1");
   });
 
@@ -646,7 +648,7 @@ describe("polaris dlq retry", () => {
     expect(harness.sends).toHaveLength(0);
   });
 
-  it("does NOT mark resolved when the producer.send fails", async () => {
+  it("does NOT mark resolved when the republish fails", async () => {
     const row = makeDlqRecord();
     let markCalled = false;
     const runner = buildDlqRetryRunner({
@@ -661,7 +663,7 @@ describe("polaris dlq retry", () => {
       openProducer: async () => ({
         connect: async () => {},
         disconnect: async () => {},
-        send: async () => {
+        publishToQueue: async () => {
           throw new Error("broker unavailable");
         },
       }),

@@ -224,7 +224,7 @@ export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
         projectId: existing.project_id,
         environment: existing.environment as AuditEnvironment,
         note: noteValue,
-        republishedTopic: existing.source_topic,
+        republishedTopic: redeliverQueueName(existing.vendor),
       };
 
       const updated = await store.markResolvedWithAudit(id, actorLabel, noteValue, now, audit);
@@ -251,7 +251,7 @@ export function buildDlqRetryRunner(hooks: DlqRetryHooks = {}) {
         republished: true,
         resolvedAt: updated.resolved_at,
         resolvedBy: updated.resolved_by,
-        republishedTopic: existing.source_topic,
+        republishedTopic: redeliverQueueName(existing.vendor),
       });
     } finally {
       await store.close();

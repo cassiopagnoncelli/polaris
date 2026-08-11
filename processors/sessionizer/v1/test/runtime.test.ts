@@ -23,11 +23,15 @@ import {
   decodeEvent,
   type PolarisConsumer,
   type TransportMessageContext,
+  type TransportMessagePayload,
+  buildEventHeaders,
+  encodeEvent,
   type PolarisProducer,
+  type PublishEventInput,
+  type PublishResult,
   STREAM_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
 import { createRuntime, OUTPUT_STREAM_FAMILY } from "../src/runtime.js";
 import { InMemorySessionStore } from "../src/store.js";
@@ -35,22 +39,20 @@ import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 
 const RAN_AT_ISO = "2026-05-12T12:30:00.000Z";
 
-function buildPayload(value: Buffer | null): EachMessagePayload {
+function buildPayload(value: Buffer | null): TransportMessagePayload {
   return {
-    topic: STREAM_FAMILY_RAW_EVENTS,
+    stream: `${STREAM_FAMILY_RAW_EVENTS}-0`,
+    family: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
-      key: Buffer.from("partition-key"),
+      key: "partition-key",
       value,
       offset: "42",
       headers: {},
       timestamp: "0",
-      attributes: 0,
-      size: value === null ? 0 : value.length,
-    } as EachMessagePayload["message"],
-    heartbeat: async () => {},
-    pause: () => () => {},
-  } as EachMessagePayload;
+      redelivered: false,
+    },
+  };
 }
 
 class RecordingProducer {
@@ -61,39 +63,43 @@ class RecordingProducer {
     headers: Record<string, string> | undefined;
   }> = [];
   public throwOnSend: Error | undefined;
-  public readonly raw: unknown = null;
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
-  async publishEvent(): Promise<RecordMetadata[]> {
-    throw new Error("RecordingProducer.publishEvent should not be called by sessionizer");
+  async publish(): Promise<PublishResult> {
+    throw new Error("RecordingProducer.publish should not be called by sessionizer");
   }
-  async send(record: ProducerRecord): Promise<RecordMetadata[]> {
+  async publishToQueue(): Promise<void> {
+    throw new Error("RecordingProducer.publishToQueue should not be called by sessionizer");
+  }
+  /**
+   * `session.events` is a canonical family now, so the sessionizer goes
+   * through `publishEvent` rather than the producer's low-level send.
+   */
+  async publishEvent(input: PublishEventInput): Promise<PublishResult> {
     if (this.throwOnSend !== undefined) {
       const err = this.throwOnSend;
       this.throwOnSend = undefined;
       throw err;
     }
-    const message = record.messages[0];
-    if (message === undefined) {
-      throw new Error("RecordingProducer.send: record had no message");
-    }
-    const headers = message.headers as Record<string, string> | undefined;
-    const keyValue = message.key;
-    let keyString: string | undefined;
-    if (typeof keyValue === "string") keyString = keyValue;
-    else if (keyValue !== undefined && keyValue !== null) keyString = keyValue.toString("utf8");
-    let valueBuffer: Buffer | string | undefined;
-    if (Buffer.isBuffer(message.value)) valueBuffer = message.value;
-    else if (typeof message.value === "string") valueBuffer = message.value;
-    else valueBuffer = undefined;
+    const event = input.event as unknown as Record<string, unknown>;
     this.publishes.push({
-      topic: record.topic,
-      value: valueBuffer,
-      key: keyString,
-      headers,
+      topic: input.family,
+      value: encodeEvent(event),
+      key: input.partitionKey,
+      headers: buildEventHeaders({
+        event_id: String(event["event_id"]),
+        event_name: String(event["event"]),
+        schema_version: Number(event["schema_version"]),
+        project_id: String(event["project_id"]),
+        environment: String(event["environment"]),
+        occurred_at: String(event["occurred_at"]),
+        ingested_at: event["ingested_at"] as string | undefined,
+        producer: "sessionizer-v1",
+        topic_family: input.family,
+      }) as Record<string, string>,
     });
-    return [];
+    return { stream: `${input.family}-0`, partition: 0 };
   }
 
   /** Decode the i-th published payload as a JSON object. */

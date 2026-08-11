@@ -20,7 +20,7 @@ const BASE_ENV: Record<string, string> = {
   POLARIS_HTTP_HOST: "0.0.0.0",
   POLARIS_HTTP_PORT: "5003",
   POLARIS_HTTP_BODY_LIMIT_BYTES: "1048576",
-  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@localhost:5672",
   POLARIS_RABBITMQ_CLIENT_ID: "tiktok",
   POLARIS_RABBITMQ_TLS: "false",
   POLARIS_POSTGRES_HOST: "localhost",
@@ -33,7 +33,6 @@ describe("tiktokConfigSchema", () => {
   it("loads defaults for the consumer-scoped knobs", () => {
     const config = tiktokConfigSchema().parse(BASE_ENV);
     expect(config.tiktok.consumerGroup).toBe("polaris-tiktok-v1");
-    expect(config.tiktok.partitionsConsumedConcurrently).toBe(4);
     expect(config.tiktok.requestTimeoutMs).toBe(5000);
     expect(config.tiktok.allowReplay).toBe(false);
     expect(config.tiktok.apiHost).toBe(DEFAULT_TIKTOK_API_HOST);
@@ -43,22 +42,17 @@ describe("tiktokConfigSchema", () => {
     const config = tiktokConfigSchema().parse({
       ...BASE_ENV,
       POLARIS_TIKTOK_CONSUMER_GROUP: "polaris-tiktok-canary",
-      POLARIS_TIKTOK_CONCURRENCY: "8",
       POLARIS_TIKTOK_REQUEST_TIMEOUT_MS: "12000",
       POLARIS_TIKTOK_ALLOW_REPLAY: "true",
       POLARIS_TIKTOK_API_HOST: "business-api.tiktok.test",
     });
     expect(config.tiktok.consumerGroup).toBe("polaris-tiktok-canary");
-    expect(config.tiktok.partitionsConsumedConcurrently).toBe(8);
     expect(config.tiktok.requestTimeoutMs).toBe(12000);
     expect(config.tiktok.allowReplay).toBe(true);
     expect(config.tiktok.apiHost).toBe("business-api.tiktok.test");
   });
 
   it("rejects non-positive concurrency / timeout", () => {
-    expect(() =>
-      tiktokConfigSchema().parse({ ...BASE_ENV, POLARIS_TIKTOK_CONCURRENCY: "0" }),
-    ).toThrow();
     expect(() =>
       tiktokConfigSchema().parse({
         ...BASE_ENV,

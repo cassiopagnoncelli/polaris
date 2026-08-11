@@ -16,7 +16,7 @@ const BASE_ENV: Record<string, string> = {
   POLARIS_HTTP_HOST: "0.0.0.0",
   POLARIS_HTTP_PORT: "5004",
   POLARIS_HTTP_BODY_LIMIT_BYTES: "1048576",
-  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@localhost:5672",
   POLARIS_RABBITMQ_CLIENT_ID: "braze",
   POLARIS_RABBITMQ_TLS: "false",
   POLARIS_POSTGRES_HOST: "localhost",
@@ -29,7 +29,6 @@ describe("brazeConfigSchema", () => {
   it("loads defaults for the consumer-scoped knobs", () => {
     const config = brazeConfigSchema().parse(BASE_ENV);
     expect(config.braze.consumerGroup).toBe("polaris-braze-v1");
-    expect(config.braze.partitionsConsumedConcurrently).toBe(4);
     expect(config.braze.requestTimeoutMs).toBe(5000);
     expect(config.braze.allowReplay).toBe(false);
     expect(config.braze.apiHost).toBe(DEFAULT_BRAZE_API_HOST);
@@ -39,22 +38,17 @@ describe("brazeConfigSchema", () => {
     const config = brazeConfigSchema().parse({
       ...BASE_ENV,
       POLARIS_BRAZE_CONSUMER_GROUP: "polaris-braze-canary",
-      POLARIS_BRAZE_CONCURRENCY: "8",
       POLARIS_BRAZE_REQUEST_TIMEOUT_MS: "12000",
       POLARIS_BRAZE_ALLOW_REPLAY: "true",
       POLARIS_BRAZE_API_HOST: "rest.{instance}.braze.test",
     });
     expect(config.braze.consumerGroup).toBe("polaris-braze-canary");
-    expect(config.braze.partitionsConsumedConcurrently).toBe(8);
     expect(config.braze.requestTimeoutMs).toBe(12000);
     expect(config.braze.allowReplay).toBe(true);
     expect(config.braze.apiHost).toBe("rest.{instance}.braze.test");
   });
 
   it("rejects non-positive concurrency / timeout", () => {
-    expect(() =>
-      brazeConfigSchema().parse({ ...BASE_ENV, POLARIS_BRAZE_CONCURRENCY: "0" }),
-    ).toThrow();
     expect(() =>
       brazeConfigSchema().parse({
         ...BASE_ENV,

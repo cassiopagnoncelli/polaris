@@ -16,7 +16,7 @@ const basePostgresEnv: Record<string, string> = {
 };
 
 const baseRabbitmqEnv: Record<string, string> = {
-  POLARIS_RABBITMQ_URL: "localhost:9092",
+  POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@localhost:5672",
   POLARIS_RABBITMQ_CLIENT_ID: INGESTER_SERVICE_NAME,
 };
 

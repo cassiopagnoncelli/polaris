@@ -26,19 +26,17 @@ function fixtureEnvelope() {
 
 function fixturePayload(headers: Record<string, string | Buffer> = {}) {
   return {
-    topic: "raw.events",
+    stream: "raw.events-0",
+    family: "raw.events",
     partition: 0,
     message: {
-      key: Buffer.from("storefront.production.user.1"),
+      key: "storefront.production.user.1",
       value: Buffer.from(JSON.stringify({ event: "page.viewed" })),
       headers,
       offset: "42",
       timestamp: "0",
-      attributes: 0,
-      size: 0,
+      redelivered: false,
     },
-    heartbeat: async () => {},
-    pause: () => () => {},
   };
 }
 
@@ -50,11 +48,9 @@ function fakeProducer() {
       connect: async () => undefined,
       disconnect: async () => undefined,
       isConnected: () => true,
-      send: async (record: { topic: string }) => {
-        sent.push({ topic: record.topic });
-        return [];
+      publishToQueue: async (record: { queue: string }) => {
+        sent.push({ topic: record.queue });
       },
-      sendBatch: async () => [],
     } as unknown as Parameters<typeof publishToDlq>[0]["producer"],
   };
 }
@@ -155,7 +151,7 @@ describe("publishToDlq — dual-write (3L2HKMND)", () => {
     expect(row.attempts).toBe(3);
     expect(row.error_class).toBe("TypeError");
     expect(row.error_message).toBe("cannot read property of undefined");
-    expect(row.source_topic).toBe("raw.events");
+    expect(row.source_topic).toBe("raw.events-0");
     expect(row.source_offset).toBe("42");
     expect(row.headers["x-trace-id"]).toBe("trace-1");
     expect(row.payload).not.toBeNull();

@@ -18,7 +18,6 @@
 import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
 import type { SecretResolver } from "@polaris/shared-secrets";
-import type { IHeaders } from "kafkajs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -111,10 +110,11 @@ interface SecretResolverCall {
 }
 
 interface ProducerSend {
+  /** Target queue — DLQ routing goes to a queue, not a stream. */
   topic: string;
   key: string | Buffer | null;
   vendor: string;
-  headers: IHeaders;
+  headers: MessageHeaders;
 }
 
 interface TestPayload {
@@ -207,28 +207,26 @@ interface ProducerStubOpts {
 
 function makeProducerStub({ producerSends }: ProducerStubOpts) {
   // Minimal stub matching the subset of PolarisProducer the runtime uses
-  // (only .send for DLQ routing).
+  // (only `publishToQueue`, for DLQ routing).
   return {
-    send: async (input: {
-      topic: string;
-      messages: Array<{ key?: string | Buffer | null; headers?: IHeaders }>;
+    publishToQueue: async (input: {
+      queue: string;
+      headers?: MessageHeaders;
+      partitionKey?: string | null;
     }) => {
-      for (const msg of input.messages) {
-        const headers = msg.headers ?? {};
-        const vendor = readHeaderString(headers, POLARIS_HEADER_DESTINATION_VENDOR);
-        producerSends.push({
-          topic: input.topic,
-          key: msg.key ?? null,
-          vendor,
-          headers,
-        });
-      }
+      const headers = input.headers ?? {};
+      producerSends.push({
+        topic: input.queue,
+        key: input.partitionKey ?? null,
+        vendor: readHeaderString(headers, POLARIS_HEADER_DESTINATION_VENDOR),
+        headers,
+      });
     },
     // The runtime doesn't call any other producer method on this path.
   } as unknown as Parameters<typeof createDestinationConsumer>[0]["producer"];
 }
 
-function readHeaderString(headers: IHeaders, key: string): string {
+function readHeaderString(headers: MessageHeaders, key: string): string {
   const raw = headers[key];
   if (raw === undefined) return "";
   if (typeof raw === "string") return raw;
@@ -275,7 +273,7 @@ function makeFakeKafkaPayload(): {
   partition: number;
   message: {
     value: Buffer;
-    headers: IHeaders;
+    headers: MessageHeaders;
     offset: string;
     timestamp: string;
     attributes: number;
