@@ -47,19 +47,33 @@ function envOr(key, fallback) {
   return v !== undefined && v !== "" ? v : fallback;
 }
 
+// Flags that take a value. Listed explicitly rather than inferred from the
+// next token, so a future boolean flag cannot silently swallow a positional.
+const VALUE_FLAGS = new Set(["limit"]);
+
 function parseArgs(argv) {
   const out = { _: [] };
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
     if (!arg.startsWith("--")) {
       out._.push(arg);
       continue;
     }
     const eq = arg.indexOf("=");
-    if (eq === -1) {
-      out[arg.slice(2)] = true;
-    } else {
+    if (eq !== -1) {
       out[arg.slice(2, eq)] = arg.slice(eq + 1);
+      continue;
     }
+    // `--limit N` as well as `--limit=N`: the usage string documents the
+    // spaced form, so accept it.
+    const name = arg.slice(2);
+    const next = argv[i + 1];
+    if (VALUE_FLAGS.has(name) && next !== undefined && !next.startsWith("--")) {
+      out[name] = next;
+      i += 1;
+      continue;
+    }
+    out[name] = true;
   }
   return out;
 }
@@ -82,6 +96,12 @@ async function runQuery(client, sql, format = "Pretty") {
   return body;
 }
 
+// Pretty format renders zero rows as an empty body, which reads like the
+// command silently failed. Say so instead.
+function writeResult(body) {
+  process.stdout.write(body.trim() === "" ? "(no rows)\n" : body);
+}
+
 async function ping(client) {
   const resp = await fetch(`${client.url}/ping`);
   const body = await resp.text();
@@ -98,7 +118,7 @@ async function schema(client) {
     WHERE database = 'polaris'
     ORDER BY name
   `;
-  process.stdout.write(await runQuery(client, sql));
+  writeResult(await runQuery(client, sql));
 }
 
 async function ingestLog(client, opts) {
@@ -117,7 +137,7 @@ async function ingestLog(client, opts) {
     ORDER BY _consumed_at DESC
     LIMIT ${limit}
   `;
-  process.stdout.write(await runQuery(client, sql));
+  writeResult(await runQuery(client, sql));
 }
 
 async function rawCount(client) {
@@ -130,7 +150,7 @@ async function rawCount(client) {
            max(occurred_at)         AS latest_occurred_at
     FROM polaris.analytics_raw
   `;
-  process.stdout.write(await runQuery(client, sql));
+  writeResult(await runQuery(client, sql));
 }
 
 async function eventDailyCounts(client, opts) {
@@ -149,7 +169,7 @@ async function eventDailyCounts(client, opts) {
     ORDER BY occurred_date DESC, project_id, event
     LIMIT ${limit}
   `;
-  process.stdout.write(await runQuery(client, sql));
+  writeResult(await runQuery(client, sql));
 }
 
 function usage() {
