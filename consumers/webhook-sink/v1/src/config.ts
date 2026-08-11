@@ -1,7 +1,7 @@
 /**
  * Runtime configuration for the webhook-sink v1 destination consumer.
  *
- * Composes the shared config fragments (service/http/redpanda/postgres) with
+ * Composes the shared config fragments (service/http/rabbitmq/postgres) with
  * a vendor-specific block that tunes the consumer group, concurrency, and
  * HTTP timeout. Per-destination instance knobs (status, mode, max_rps,
  * retry_policy, dead_letter_threshold) live in the PostgreSQL `destinations`
@@ -98,7 +98,7 @@ export const webhookSinkEnvKeys = [
  *
  *   - service   — name, version, env, log level, build metadata
  *   - http      — host/port for /health, /ready, /metrics (no business routes)
- *   - redpanda  — broker list, SSL, SASL, timeouts
+ *   - rabbitmq  — connection URL, TLS, partitions, checkpoint cadence
  *   - postgres  — destinations + delivery_records connection
  *   - sink      — consumer-specific knobs above
  */

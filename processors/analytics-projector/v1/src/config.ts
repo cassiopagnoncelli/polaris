@@ -67,7 +67,7 @@ export const analyticsProjectorEnvKeys = ["POLARIS_ANALYTICS_PROJECTOR_CONSUMER_
  *
  *   - service   — name, version, env, log level, build metadata
  *   - http      — host/port for /health, /ready, /metrics (no business routes)
- *   - redpanda  — broker list, SSL, SASL, timeouts
+ *   - rabbitmq  — connection URL, TLS, partitions, checkpoint cadence
  *   - projector — processor-specific knobs above
  */
 export interface AnalyticsProjectorRuntimeConfig {

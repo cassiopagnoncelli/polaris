@@ -143,8 +143,8 @@ describe("buildAnalyticsProjectorApp", () => {
       producer: stubProducer(),
       startRuntime: false,
       readinessProbes: [
-        async function redpanda() {
-          return { name: "redpanda", status: "down", detail: "broker unreachable" };
+        async function rabbitmq() {
+          return { name: "rabbitmq", status: "down", detail: "broker unreachable" };
         },
       ],
     });

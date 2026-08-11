@@ -1,7 +1,7 @@
 /**
  * Unit coverage for the pure parts of `scripts/smoke/harness.mjs`.
  *
- * Exercising the smoke runner end-to-end requires Docker (Redpanda,
+ * Exercising the smoke runner end-to-end requires Docker (RabbitMQ,
  * PostgreSQL, Redis, ClickHouse) and lives in
  * `tests/smoke/vertical-slice.test.ts` gated on POLARIS_SMOKE_DOCKER=1.
  * This file covers the deterministic helpers so a `pnpm test` without

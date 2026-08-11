@@ -97,8 +97,8 @@ describe("bootstrapService", () => {
         async function postgres() {
           return { name: "postgres", status: "up" };
         },
-        async function redpanda() {
-          return { name: "redpanda", status: "down", detail: "broker unreachable" };
+        async function rabbitmq() {
+          return { name: "rabbitmq", status: "down", detail: "broker unreachable" };
         },
       ],
     });
@@ -109,7 +109,7 @@ describe("bootstrapService", () => {
       expect(body.status).toBe("not_ready");
       const names = body.probes.map((p) => p.name);
       expect(names).toContain("postgres");
-      expect(names).toContain("redpanda");
+      expect(names).toContain("rabbitmq");
     } finally {
       await app.close();
     }

@@ -1,6 +1,6 @@
 # Polaris monorepo task entrypoints.
 #
-# Bare-metal-first: targets assume Redpanda, PostgreSQL, Redis, and ClickHouse
+# Bare-metal-first: targets assume RabbitMQ, PostgreSQL, Redis, and ClickHouse
 # are reachable at their default localhost endpoints. `docker-*` targets bring
 # those up via docker-compose.yml for developers who don't run native infra.
 #

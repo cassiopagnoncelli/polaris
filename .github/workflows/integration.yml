@@ -1,7 +1,7 @@
 # Polaris Integration CI — Docker-backed checks against real services.
 #
 # Per docs/architecture/09-engineering-standards.md "CI Quality Gates",
-# integration checks against PostgreSQL, Redis, Redpanda, and ClickHouse
+# integration checks against PostgreSQL, Redis, RabbitMQ, and ClickHouse
 # (plus the vertical-slice smoke test) run scheduled, manually, or on PRs
 # that opt in via the `integration` label — not on every PR — until the
 # test suite stabilises.
@@ -9,11 +9,13 @@
 # v1 of the integration suite runs the P5-001 vertical-slice smoke against
 # the same `docker-compose.yml` developers use locally. Using compose
 # (rather than GitHub's `services:` containers) keeps the network shape
-# identical between CI and local: ClickHouse's Kafka Engine table is
-# wired to `redpanda:9092` inside the compose `polaris` bridge network,
-# and that resolution path only exists when every service shares that
-# network. P9-* destination consumer tests will plug into this same
-# compose-backed setup.
+# identical between CI and local. P9-* destination consumer tests plug
+# into this same compose-backed setup.
+#
+# RabbitMQ auto-creates nothing, so `pnpm rabbitmq:provision` is a hard
+# prerequisite here, not a convenience: without it every publish comes
+# back unroutable and the smoke fails with a confusing error rather than
+# a missing-topology one.
 
 name: Integration
 
@@ -84,11 +86,15 @@ jobs:
       - name: Build (tsc emit)
         run: pnpm build
 
-      # Bring up Redpanda + PostgreSQL + Redis + ClickHouse in the same
+      # Bring up RabbitMQ + PostgreSQL + Redis + ClickHouse in the same
       # compose network the local-dev stack uses. The smoke runner then
       # reaches each service through the published host ports.
       - name: Start local stack
         run: docker compose up -d --wait
+
+      # Declare the streams, exchanges, and retry/DLQ queues. Idempotent.
+      - name: Declare RabbitMQ topology
+        run: pnpm rabbitmq:provision
 
       - name: Apply PostgreSQL migrations
         run: pnpm db:migrate
@@ -111,7 +117,8 @@ jobs:
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
           POLARIS_HTTP_PORT: "8080"
-          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
           POLARIS_POSTGRES_PORT: "5432"
           POLARIS_POSTGRES_DATABASE: polaris
@@ -131,7 +138,49 @@ jobs:
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
           POLARIS_HTTP_PORT: "8081"
-          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          # Stream consumers own their resume point in PostgreSQL: AMQP
+          # has no server-side offset store.
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+
+
+      # The ClickHouse sink is what carries analytics.events into
+      # ClickHouse. It replaced the Kafka Engine table, which used to make
+      # this hop invisible in CI — without this service the smoke's
+      # analytics_raw poll never sees a row.
+      - name: Start clickhouse-sink
+        run: |
+          pnpm --filter @polaris/consumer-clickhouse-sink-v1 run start \
+            > /tmp/polaris-logs/clickhouse-sink.log 2>&1 &
+          echo $! > /tmp/polaris-logs/clickhouse-sink.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-clickhouse-sink
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8082"
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_CLICKHOUSE_URL: http://localhost:8123
+          POLARIS_CLICKHOUSE_DATABASE: polaris
+          POLARIS_CLICKHOUSE_SERVICE_USER: polaris_service
+          POLARIS_CLICKHOUSE_SERVICE_PASSWORD: polaris_service
+          POLARIS_CLICKHOUSE_SINK_USER: polaris_sink
+          POLARIS_CLICKHOUSE_SINK_PASSWORD: polaris_sink
+          # Keep CI latency low: flush small batches quickly so the smoke
+          # poll does not wait on the default batching window.
+          POLARIS_CLICKHOUSE_SINK_BATCH_MAX_ROWS: "1"
+          POLARIS_CLICKHOUSE_SINK_BATCH_MAX_MS: "250"
 
       # Wait for the ingester to expose /ready before running the smoke.
       - name: Wait for ingester readiness
@@ -162,6 +211,8 @@ jobs:
           tail -n 200 /tmp/polaris-logs/ingester.log || true
           echo "=== analytics-projector ==="
           tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== clickhouse-sink ==="
+          tail -n 200 /tmp/polaris-logs/clickhouse-sink.log || true
           echo "=== docker compose logs (last 200 lines) ==="
           docker compose logs --tail=200 || true
 
@@ -173,6 +224,9 @@ jobs:
           fi
           if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
             kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/clickhouse-sink.pid ]; then
+            kill "$(cat /tmp/polaris-logs/clickhouse-sink.pid)" 2>/dev/null || true
           fi
           docker compose down -v || true
 
@@ -227,6 +281,9 @@ jobs:
       - name: Start local stack
         run: docker compose up -d --wait
 
+      - name: Declare RabbitMQ topology
+        run: pnpm rabbitmq:provision
+
       - name: Apply PostgreSQL migrations
         run: pnpm db:migrate
 
@@ -245,7 +302,8 @@ jobs:
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
           POLARIS_HTTP_PORT: "8080"
-          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
           POLARIS_POSTGRES_PORT: "5432"
           POLARIS_POSTGRES_DATABASE: polaris
@@ -265,7 +323,44 @@ jobs:
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
           POLARIS_HTTP_PORT: "8081"
-          POLARIS_REDPANDA_BROKERS: localhost:19092
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          # Stream consumers own their resume point in PostgreSQL: AMQP
+          # has no server-side offset store.
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+
+
+      # The ClickHouse sink carries analytics.events into ClickHouse.
+      - name: Start clickhouse-sink
+        run: |
+          pnpm --filter @polaris/consumer-clickhouse-sink-v1 run start \
+            > /tmp/polaris-logs/clickhouse-sink.log 2>&1 &
+          echo $! > /tmp/polaris-logs/clickhouse-sink.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-clickhouse-sink
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "8082"
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_CLICKHOUSE_URL: http://localhost:8123
+          POLARIS_CLICKHOUSE_DATABASE: polaris
+          POLARIS_CLICKHOUSE_SERVICE_USER: polaris_service
+          POLARIS_CLICKHOUSE_SERVICE_PASSWORD: polaris_service
+          POLARIS_CLICKHOUSE_SINK_USER: polaris_sink
+          POLARIS_CLICKHOUSE_SINK_PASSWORD: polaris_sink
+          POLARIS_CLICKHOUSE_SINK_BATCH_MAX_ROWS: "1"
+          POLARIS_CLICKHOUSE_SINK_BATCH_MAX_MS: "250"
 
       - name: Wait for ingester readiness
         run: |
@@ -290,6 +385,8 @@ jobs:
           tail -n 200 /tmp/polaris-logs/ingester.log || true
           echo "=== analytics-projector ==="
           tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== clickhouse-sink ==="
+          tail -n 200 /tmp/polaris-logs/clickhouse-sink.log || true
           echo "=== docker compose logs (last 200 lines) ==="
           docker compose logs --tail=200 || true
 
@@ -301,5 +398,8 @@ jobs:
           fi
           if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
             kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/clickhouse-sink.pid ]; then
+            kill "$(cat /tmp/polaris-logs/clickhouse-sink.pid)" 2>/dev/null || true
           fi
           docker compose down -v || true

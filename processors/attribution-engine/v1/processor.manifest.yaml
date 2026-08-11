@@ -35,7 +35,7 @@ description: |
   - Sessionizer + identity-resolver also consume `raw.events` directly;
     placing attribution downstream of analytics keeps the topology
     explicit and avoids triple-fanout on the raw topic.
-  - Per `docs/architecture/03-redpanda-topics.md`, `analytics.events` is
+  - Per `docs/architecture/03-rabbitmq-streams.md`, `analytics.events` is
     the canonical "decorated raw" stream; attribution is one of its
     documented consumers.
 

@@ -71,7 +71,7 @@ export const geoipEnricherEnvKeys = ["POLARIS_GEOIP_ENRICHER_CONSUMER_GROUP"] as
  *
  *   - service   — name, version, env, log level, build metadata
  *   - http      — host/port for /health, /ready, /metrics
- *   - redpanda  — broker list, SSL, SASL, timeouts
+ *   - rabbitmq  — connection URL, TLS, partitions, checkpoint cadence
  *   - enricher  — processor-specific knobs above
  */
 export interface GeoipEnricherRuntimeConfig {

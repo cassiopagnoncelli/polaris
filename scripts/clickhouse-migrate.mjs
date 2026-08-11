@@ -108,12 +108,13 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  *
  *   2. Even where macro expansion does fire (e.g. inside string literals),
  *      values that depend on the *operator's* viewpoint — not the
- *      ClickHouse server's — can't be modelled server-side. The Kafka
- *      Engine broker list is the canonical example: docker compose's
- *      ClickHouse reaches Redpanda at `redpanda:9092` (compose network);
- *      a bare-metal ClickHouse reaches the host-mapped Redpanda at
- *      `localhost:19092`. The server can't infer the right value, so the
- *      runner substitutes it from the environment instead.
+ *      ClickHouse server's — can't be modelled server-side. The engine
+ *      family (`{replicated}`) is the remaining example: local runs use
+ *      plain MergeTree, production uses the Replicated variants.
+ *
+ *      The broker list used to be the canonical case here. It is gone:
+ *      ClickHouse no longer connects to the broker at all, since
+ *      consumers/clickhouse-sink pushes rows in.
  *
  * Other macros (e.g. `{cluster}` inside `ON CLUSTER '{cluster}'`) stay
  * in string-literal position and remain server-side.

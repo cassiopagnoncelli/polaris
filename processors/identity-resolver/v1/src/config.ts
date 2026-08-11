@@ -50,7 +50,7 @@ export interface IdentityResolverConfig {
 export const identityResolverEnvKeys = ["POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP"] as const;
 
 /**
- * Full runtime config: service / http / redpanda / postgres / resolver.
+ * Full runtime config: service / http / rabbitmq / postgres / resolver.
  */
 export interface IdentityResolverRuntimeConfig {
   readonly service: ServiceConfig;

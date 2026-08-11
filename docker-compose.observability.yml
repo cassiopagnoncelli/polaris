@@ -1,7 +1,7 @@
 # Polaris local OPTIONAL observability stack.
 #
 # This compose file is a separate overlay. The core data path
-# (Redpanda, PostgreSQL, Redis, ClickHouse) in docker-compose.yml runs
+# (RabbitMQ, PostgreSQL, Redis, ClickHouse) in docker-compose.yml runs
 # without observability backends — they are preferred but not hard
 # runtime dependencies, per
 # docs/architecture/08-observability-and-operations.md.
@@ -73,7 +73,7 @@ services:
   prometheus:
     # Pull-based metrics store. Scrapes the ingester `/metrics` endpoint
     # (port 8080 by default), the analytics-projector `/metrics`
-    # endpoint (port 8081), the Redpanda admin API, and itself. Short
+    # endpoint (port 8081), the RabbitMQ metrics endpoint, and itself. Short
     # local retention (15d) keeps the on-disk footprint small for dev.
     #
     # The image is pinned to a recent stable to keep `up -d` deterministic
@@ -171,7 +171,7 @@ services:
 
   promtail:
     # Tails Docker container stdout (Pino JSON for Polaris services,
-    # plaintext for redpanda/postgres/redis/clickhouse) via Docker
+    # plaintext for rabbitmq/postgres/redis/clickhouse) via Docker
     # service discovery and pushes to Loki. The application logger
     # keeps writing JSON to stdout exactly as before — Loki ingest is
     # an out-of-band tail, so no Polaris service depends on promtail
@@ -258,7 +258,7 @@ networks:
   polaris:
     # The core compose file (docker-compose.yml) owns this network. The
     # observability overlay reuses it so Prometheus can resolve
-    # `redpanda:9644`, `clickhouse:8123`, and any other in-network
+    # `polaris-rabbitmq:15692`, `clickhouse:8123`, and any other in-network
     # service. When running this overlay alone (without the core
     # compose), the network is created by this file.
     name: polaris

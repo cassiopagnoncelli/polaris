@@ -53,7 +53,7 @@ procLog.info("processor run starting");
 ```
 
 Child loggers compose. Stack `withRequest`, `withProcessor`, and `withMessage`
-on the same chain to attach request, processor, and per-Redpanda-message
+on the same chain to attach request, processor, and per-message
 identifiers without rebuilding the binding object at every call site.
 
 ## Redaction guarantees
@@ -100,9 +100,9 @@ Logs include stable identifiers where applicable:
 | `project_id`         | stamped from API key                            |
 | `environment`        | stamped from API key                            |
 | `source_id`          | trusted source metadata                         |
-| `topic`              | Redpanda topic                                  |
-| `partition`          | Redpanda partition                              |
-| `offset`             | Redpanda message offset                         |
+| `topic`              | Concrete partition stream                       |
+| `partition`          | Partition index within the super stream         |
+| `offset`             | Stream offset                         |
 | `processor_name`     | processor immutable directory                   |
 | `processor_version`  | processor immutable version directory (`v1`...) |
 | `consumer_name`      | destination consumer name                       |

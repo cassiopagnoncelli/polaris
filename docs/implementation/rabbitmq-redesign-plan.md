@@ -1,6 +1,7 @@
 # RabbitMQ Redesign Plan
 
-Status: **approved direction, not started**
+Status: **shipped** — see "What actually shipped" at the end for the
+deviations from this plan.
 Decision: replace Redpanda with RabbitMQ as the end-to-end event transport.
 Date: 2026-08-10
 Owner: Cassio
@@ -195,3 +196,85 @@ processor-lag alerting signal, CI shape.
 | 3 | Package name | new `@polaris/shared-transport`, `shared-kafka` deleted at R9 |
 | 4 | Dual-write phase | No (pre-GA assumption) — confirm |
 | 5 | Broker HA target for prod (3-node quorum/stream replication) | 3-node, RF=3, mirrors current prod posture |
+
+
+---
+
+## What actually shipped
+
+The plan held. Five deviations are worth recording, because each one
+changes something an operator or a future implementer would otherwise
+assume from reading above.
+
+### 1. R0 landed as part of the swap, not before it
+
+The plan sequenced R0 (the port abstraction) as a standalone step that
+kept the tree green **on Redpanda**, then swapped drivers underneath. In
+practice the port and the RabbitMQ driver landed together: writing a
+KafkaJS driver for a port whose only purpose was to delete KafkaJS would
+have doubled the work for one intermediate green build.
+
+The architectural value survives — `@polaris/shared-transport` is a real
+port, no amqplib type crosses its boundary, and a second driver is a new
+file rather than a refactor. What was given up is the hybrid off-ramp
+being *demonstrated* mid-migration rather than merely available.
+
+### 2. Retry uses fixed tiers, not per-message TTL
+
+The plan said one retry queue with a per-message `expiration`. That is
+wrong on RabbitMQ: TTL expiry is evaluated at the head of the queue, so a
+message with a 30-minute backoff parked at the head holds back every
+5-second retry behind it.
+
+Shipped instead: five queues (`<component>.retry.{5000,30000,120000,600000,1800000}`)
+each with a queue-level `x-message-ttl`, so expiry order equals arrival
+order within a tier.
+
+### 3. DLQ retry targets the redelivery queue, not the source stream
+
+The plan did not mention this because Kafka had no better option. The
+CLI's `polaris dlq retry` used to republish to `source_topic` — which
+under RabbitMQ would re-deliver the event to *every* consumer of
+`analytics.events` (the ClickHouse sink and four sibling destinations
+included), turning one operator's retry into platform-wide double
+processing.
+
+It now publishes to `<component>.redeliver`, and the audit row records
+that target.
+
+### 4. Every processor gained a PostgreSQL dependency
+
+The plan claimed Postgres was "already a hard dependency of every
+processor (via `processor_runs`)". That was only half true: four of the
+five processors had no DB client wired. They have one now, purely for
+`transport_checkpoints`.
+
+This is the honest cost of the broker not owning offsets. It also
+enabled a simplification: `createDb({postgres})` in `@polaris/shared-db`
+replaced the same hand-rolled connection string in five services.
+
+### 5. `session.events` became a canonical family
+
+Not in the plan at all. The sessionizer always emitted `session.events`,
+but the family existed nowhere — no constant, no migration CHECK, no
+provisioning step. It worked only because Redpanda auto-created topics
+on first publish.
+
+RabbitMQ forced the question. `session.events` is now first-class:
+declared, isolatable, and published through `publishEvent` like every
+other family. This closed a TODO that had been sitting in
+`sessionizer/v1/src/runtime.ts` describing it as "a follow-up cross-cut".
+
+### Verification performed
+
+- Full unit suite: 2,399 passing, 12 skipped.
+- Live end-to-end against RabbitMQ 4.1 (`docker compose up rabbitmq`):
+  topology declaration, partition-key routing stability, publish/consume
+  round trip, checkpoint resume skipping handled messages, retry-tier TTL
+  dead-lettering into redelivery, the ClickHouse sink's batching and
+  lineage stamping, and the replay range reader returning a time window.
+- The R3 throughput gate named in this plan was **not** run. It needs a
+  sustained benchmark against a production-shaped cluster, not a laptop
+  container. It remains the one open risk: if AMQP-over-streams cannot
+  match the previous baseline, the escape hatch is the native stream
+  protocol client behind the same port.

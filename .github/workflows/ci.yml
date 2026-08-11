@@ -4,7 +4,7 @@
 # ("CI Quality Gates") plus the ClickHouse import-restriction check from
 # docs/architecture/07-clickhouse.md ("Access Control").
 #
-# Docker-backed integration checks (Postgres, Redis, Redpanda, ClickHouse,
+# Docker-backed integration checks (Postgres, Redis, RabbitMQ, ClickHouse,
 # vertical-slice smoke test) live in `integration.yml` and run on a schedule,
 # manual dispatch, or the `integration` PR label. See `docs/development/ci.md`.
 
