@@ -78,7 +78,7 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-provision seed ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq topology + dev seeds). Assumes infra is running at default endpoints.
+setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-bootstrap rabbitmq-provision seed ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq user + rabbitmq topology + dev seeds). Assumes infra is running at default endpoints.
 
 # Runs last in `setup`: seeding writes rows, so it needs the schema migrated
 # and the CLI built. Split out as its own target because re-seeding after a
@@ -199,6 +199,9 @@ clickhouse-bootstrap: ## Create local ClickHouse DB + apply DDL + local-only use
 
 clickhouse-migrate: ## Apply ClickHouse SQL migrations only (no local-user init)
 	pnpm clickhouse:migrate
+
+rabbitmq-bootstrap: ## Create the local RabbitMQ user/vhost/permissions named by POLARIS_RABBITMQ_URL (bare-metal only; docker compose does this itself)
+	pnpm rabbitmq:bootstrap-local
 
 rabbitmq-provision: ## Declare the RabbitMQ topology (super streams + retry/DLQ queues). Idempotent; required before any service starts.
 	pnpm rabbitmq:provision

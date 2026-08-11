@@ -22,6 +22,25 @@ non-provisioned environment does not work.**
 `make up` and CI run provisioning. If you brought infra up another way,
 run it yourself.
 
+## ACCESS_REFUSED before you get that far
+
+Provisioning authenticates as the user in `POLARIS_RABBITMQ_URL`
+(`polaris:polaris` locally). Docker compose creates that user from
+`RABBITMQ_DEFAULT_USER`; a bare-metal broker ships only `guest`, so the
+first run fails the handshake with `403 (ACCESS-REFUSED)` — a missing user,
+not a wrong password.
+
+```bash
+pnpm rabbitmq:bootstrap-local
+```
+
+Idempotent. Creates the user, vhost, and full permissions named by
+`POLARIS_RABBITMQ_URL` via `rabbitmqctl` (which authenticates over the
+Erlang cookie, so it needs no broker credentials), and no-ops when the
+credentials already work. `make setup` runs it before provisioning.
+Local development only — production provisions its broker user
+out-of-band with least-privilege permissions.
+
 ## Declare or repair the topology
 
 ```bash

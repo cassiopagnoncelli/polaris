@@ -33,6 +33,7 @@
     "clickhouse:migrate:dry-run": "node scripts/clickhouse-migrate.mjs --dry-run",
     "clickhouse:bootstrap-local": "node scripts/clickhouse-bootstrap-local.mjs",
     "clickhouse:query": "node scripts/clickhouse-query.mjs",
+    "rabbitmq:bootstrap-local": "node scripts/rabbitmq-bootstrap-local.mjs",
     "rabbitmq:provision": "node scripts/rabbitmq-provision.mjs",
     "rabbitmq:provision:dry-run": "node scripts/rabbitmq-provision.mjs --dry-run",
     "openapi": "pnpm --filter @polaris/ingester-api run build && node scripts/openapi-generate.mjs",
