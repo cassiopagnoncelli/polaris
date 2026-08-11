@@ -31,9 +31,8 @@ import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   connectDb,
+  createOperatorTokenWithAudit,
   type InsertOperatorTokenInput,
-  insertAuditRecord,
-  insertOperatorToken,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import {
@@ -166,26 +165,16 @@ export function buildOperatorsCreateRunner(hooks: OperatorsCreateHooks = {}) {
 function defaultStore(env: NodeJS.ProcessEnv): OperatorsCreateStore {
   const handle = connectDb({ env });
   return {
-    insertWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        await insertOperatorToken(trx, input);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "operators.create",
-          target_type: "operator_token",
-          target_id: input.operator_token_id,
-          // operator tokens are cross-project; the audit row reflects that.
-          project_id: null,
-          environment: null,
-          before: null,
-          after: audit.after,
-          reason: null,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-      }),
+    insertWithAudit: async (input, audit) => {
+      await createOperatorTokenWithAudit(handle.db, input, {
+        auditId: audit.auditId,
+        actorSource: audit.actorSource,
+        actorLabel: audit.actorLabel,
+        occurredAt: audit.occurredAt,
+        before: null,
+        after: audit.after,
+      });
+    },
     close: () => handle.close(),
   };
 }

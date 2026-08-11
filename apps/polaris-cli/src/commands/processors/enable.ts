@@ -26,9 +26,8 @@ import {
   type AuditEnvironment,
   connectDb,
   type EnableProcessorActivationInput,
-  enableProcessorActivation,
+  enableProcessorActivationWithAudit,
   findActivationByKey,
-  insertAuditRecord,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
 } from "../../db/index.js";
@@ -261,27 +260,22 @@ function defaultStore(env: NodeJS.ProcessEnv): ProcessorsEnableStore {
   const handle = connectDb({ env });
   return {
     findByKey: (key) => findActivationByKey(handle.db, key),
-    enableWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        const applied = await enableProcessorActivation(trx, input);
-        if (!applied) return false;
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "processors.enable",
-          target_type: "processor_activation",
-          target_id: `${input.processor_name}:${input.processor_version}:${input.project_id}:${input.environment}`,
-          project_id: audit.projectId,
-          environment: audit.environment,
+    enableWithAudit: async (input, audit) => {
+      const existing = await findActivationByKey(handle.db, input);
+      const outcome = await enableProcessorActivationWithAudit(
+        handle.db,
+        { key: input, existing, changedBy: input.lastChangedBy },
+        {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          occurredAt: audit.occurredAt,
           before: audit.before,
           after: audit.after,
-          reason: null,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-        return true;
-      }),
+        },
+      );
+      return outcome.applied;
+    },
     close: () => handle.close(),
   };
 }

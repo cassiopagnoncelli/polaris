@@ -83,6 +83,8 @@ export {
   type OperatorTokensTable,
 } from "./queries/operator-tokens.js";
 export {
+  type DisableProcessorActivationInput,
+  type EnableProcessorActivationInput,
   findActivationByKey,
   listActivationsForProcessor,
   listAllActivations,
@@ -142,10 +144,25 @@ export {
   syncSourcesWithAudit,
 } from "./mutations/catalog-sync.js";
 export {
+  abortClickhouseRebuildJobWithAudit,
+  createClickhouseRebuildJobWithAudit,
+  startClickhouseRebuildWithAudit,
+} from "./mutations/clickhouse-rebuild-jobs.js";
+export {
+  createApiKeyWithAudit,
+  createOperatorTokenWithAudit,
+  type RotateApiKeyOutcome,
+  revokeOperatorTokenWithAudit,
+  rotateApiKeyWithAudit,
+} from "./mutations/credentials.js";
+export {
+  createDestinationWithAudit,
   type DestinationAuditSnapshot,
   disableDestinationWithAudit,
   enableDestinationWithAudit,
+  setDestinationReplayOptInWithAudit,
   toDestinationSnapshot,
+  updateDestinationOpsWithAudit,
 } from "./mutations/destinations.js";
 export {
   DLQ_RESOLUTION_NOTE_MAX_LENGTH,
@@ -164,12 +181,17 @@ export {
 } from "./mutations/processor-activations.js";
 export {
   cancelReplayJobWithAudit,
+  createReplayJobWithAudit,
   pauseReplayJobWithAudit,
   type ReplayAuditSnapshot,
   resumeReplayJobWithAudit,
   startReplayExecutionWithAudit,
   toReplaySnapshot,
 } from "./mutations/replay-jobs.js";
+export {
+  deisolateTopicWithAudit,
+  isolateTopicWithAudit,
+} from "./mutations/topic-isolations.js";
 
 // ---- deliberately internal ----------------------------------------------
 //

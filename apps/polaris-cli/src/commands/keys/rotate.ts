@@ -35,9 +35,7 @@ import {
   connectDb,
   findApiKeyById,
   type InsertApiKeyInput,
-  insertApiKey,
-  insertAuditRecord,
-  revokeApiKey,
+  rotateApiKeyWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -244,48 +242,25 @@ function defaultStore(env: NodeJS.ProcessEnv): KeysRotateStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findApiKeyById(handle.db, id),
-    rotate: (input) =>
-      handle.db.transaction().execute(async (trx) => {
-        // INSERT new + UPDATE old + INSERT two audit rows. All four
-        // writes are in one transaction so a partial failure cannot
-        // leave the system half-rotated.
-        await insertApiKey(trx, input.newRow);
-        const applied = await revokeApiKey(trx, input.oldApiKeyId, input.revokedAt);
-        if (!applied) return false;
-        // Audit row for the newly-issued key (action: keys.rotate.issue).
-        await insertAuditRecord(trx, {
-          audit_id: input.audit.issueAuditId,
-          actor_source: input.audit.actorSource,
-          actor_label: input.audit.actorLabel,
-          action: "keys.rotate.issue",
-          target_type: "api_key",
-          target_id: input.newRow.api_key_id,
-          project_id: input.audit.projectId,
-          environment: input.audit.environment,
-          before: null,
-          after: input.audit.newKey,
-          reason: null,
-          request_id: input.audit.issueAuditId,
-          created_at: input.audit.occurredAt,
-        });
-        // Audit row for the revoked old key (action: keys.rotate.revoke).
-        await insertAuditRecord(trx, {
-          audit_id: input.audit.revokeAuditId,
-          actor_source: input.audit.actorSource,
-          actor_label: input.audit.actorLabel,
-          action: "keys.rotate.revoke",
-          target_type: "api_key",
-          target_id: input.oldApiKeyId,
-          project_id: input.audit.projectId,
-          environment: input.audit.environment,
-          before: input.audit.oldKeyBefore,
-          after: input.audit.oldKeyAfter,
-          reason: null,
-          request_id: input.audit.revokeAuditId,
-          created_at: input.audit.occurredAt,
-        });
-        return true;
-      }),
+    rotate: async (input) => {
+      const previous = await findApiKeyById(handle.db, input.oldApiKeyId);
+      if (previous === null) return false;
+      // INSERT new + UPDATE old + two audit rows, one transaction. A partial
+      // failure cannot leave a live replacement paired with an unrevoked
+      // original.
+      await rotateApiKeyWithAudit(
+        handle.db,
+        { previous, replacement: input.newRow },
+        {
+          auditId: input.audit.issueAuditId,
+          revokeAuditId: input.audit.revokeAuditId,
+          actorSource: input.audit.actorSource,
+          actorLabel: input.audit.actorLabel,
+          occurredAt: input.revokedAt,
+        },
+      );
+      return true;
+    },
     close: () => handle.close(),
   };
 }

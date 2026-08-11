@@ -11,9 +11,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./unaudited": {
-      "types": "./dist/unaudited.d.ts",
-      "import": "./dist/unaudited.js"
+    "./progress": {
+      "types": "./dist/progress.d.ts",
+      "import": "./dist/progress.js"
     }
   },
   "files": [

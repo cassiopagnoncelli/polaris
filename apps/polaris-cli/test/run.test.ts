@@ -146,6 +146,61 @@ describe("run / polaris version", () => {
     expect(combined).not.toContain("polaris_ot_SECRET_VALUE_42");
   });
 
+  it("gives a subcommand's own --version to the subcommand, not the CLI version", async () => {
+    // Regression: commander matches a root option ANYWHERE in argv unless
+    // positional options are enabled, so `processors enable x --version v1`
+    // used to hit the root's `-v, --version`, print the CLI version, and exit
+    // 0 without ever touching the activation row. Every runner-level test
+    // passed because none of them went through argv.
+    //
+    // The command must get far enough to fail on something LATER than parsing
+    // — here, the absent DATABASE_URL — which proves the flag reached it.
+    const capture = captureOutput();
+    const code = await run({
+      argv: [
+        "processors",
+        "enable",
+        "analytics-projector",
+        "--version",
+        "v1",
+        "--project",
+        "storefront",
+        "--env",
+        "development",
+      ],
+      env: {},
+      output: capture.streams,
+      meta: META,
+    });
+    expect(code).toBe(ExitCode.ConfigError);
+    const combined = capture.stdout.join("") + capture.stderr.join("");
+    expect(combined).not.toContain("0.0.0-test");
+    expect(combined).toContain("DATABASE_URL");
+  });
+
+  it("accepts a global flag before or after the subcommand", async () => {
+    // Enabling positional options is what stops the root from swallowing
+    // `--version`; re-declaring the globals per command is what keeps
+    // `polaris <cmd> --output json` — the form the ops runbooks use — working.
+    for (const argv of [
+      ["version", "--output", "json"],
+      ["--output", "json", "version"],
+    ]) {
+      const capture = captureOutput();
+      const code = await run({
+        argv,
+        env: { ...VALID_ENV },
+        output: capture.streams,
+        meta: META,
+      });
+      expect(code, argv.join(" ")).toBe(ExitCode.Ok);
+      expect(JSON.parse(capture.stdout.join("")), argv.join(" ")).toMatchObject({
+        name: "polaris",
+        version: "0.0.0-test",
+      });
+    }
+  });
+
   it("emits a JSON-formatted error envelope when POLARIS_OUTPUT=json", async () => {
     // Trigger a real config error (malformed URL) so the JSON envelope shape
     // gets exercised. The "missing token / api-url" path no longer reaches

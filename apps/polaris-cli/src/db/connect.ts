@@ -2,10 +2,9 @@
  * Thin PostgreSQL bridge for the `polaris` CLI.
  *
  * The CLI is normally a thin HTTP client over `apps/control-plane-api/`, but
- * the projects/sources sync commands are the first surface that lands ahead
- * of the API service. They write directly to PostgreSQL through
- * `@polaris/shared-db` so operators can materialize catalog declarations
- * before the API ships.
+ * every v1 command lands ahead of the API service and reads or writes
+ * PostgreSQL directly through `@polaris/shared-db` — the catalog syncs, the
+ * activation toggles, and the read-only inspection commands alike.
  *
  * When the control-plane API arrives, these commands will be re-pointed at
  * its endpoints; the sync planner stays the same.
@@ -14,6 +13,11 @@
  *
  *   - `POLARIS_DATABASE_URL` is checked first (CLI-specific override).
  *   - `DATABASE_URL` is the workspace-wide default also used by dbmate.
+ *
+ * There is deliberately NO built-in localhost fallback. A CLI that can
+ * mutate production state should never guess which database it is pointed
+ * at; `./polaris` at the repo root loads `.env.local` for the dev path
+ * instead, the same way the Makefile does.
  *
  * No URL is provided => `ConfigError` (exit code 3), matching the rest of
  * the CLI's config-failure path.
@@ -47,7 +51,18 @@ export function connectDb(options: ConnectDbOptions = {}): DbHandle {
   const connectionString = explicit ?? fromEnv;
   if (connectionString === undefined) {
     throw new ConfigError(
-      "POLARIS_DATABASE_URL (or DATABASE_URL) is required for commands that materialize catalog declarations.",
+      [
+        "no PostgreSQL connection configured: set POLARIS_DATABASE_URL or DATABASE_URL.",
+        "",
+        "Every v1 command reads or writes control-plane state directly, so this is",
+        "required for all of them — not just the catalog syncs.",
+        "",
+        "For local development, `./polaris` loads .env.local for you:",
+        "  ./polaris processors list",
+        "",
+        "Otherwise export it yourself:",
+        "  export DATABASE_URL=postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable",
+      ].join("\n"),
     );
   }
   const db = createDb({ connectionString });

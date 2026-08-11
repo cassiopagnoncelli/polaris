@@ -20,10 +20,9 @@ import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   type AuditEnvironment,
-  cancelReplayJob,
+  cancelReplayJobWithAudit,
   connectDb,
   findReplayJobById,
-  insertAuditRecord,
   isTerminalReplayStatus,
   type ReplayJobRow,
 } from "../../db/index.js";
@@ -138,41 +137,31 @@ function defaultStore(env: NodeJS.ProcessEnv): ReplayCancelStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
-    cancelWithAudit: async (input) =>
-      handle.db.transaction().execute(async (trx) => {
-        const cancelled = await cancelReplayJob(trx, input.replayJobId, input.cancelledAt);
-        if (!cancelled) {
-          // Race: another caller cancelled or completed first. Re-read and
-          // surface idempotently.
-          const after = await findReplayJobById(trx, input.replayJobId);
-          if (after === null) {
-            return { kind: "not_found" as const };
-          }
-          return { kind: "already_terminal" as const, row: after };
-        }
-        await insertAuditRecord(trx, {
-          audit_id: input.auditId,
-          actor_source: input.actorSource,
-          actor_label: input.actorLabel,
-          action: "replay.cancel",
-          target_type: "replay_job",
-          target_id: input.replayJobId,
-          project_id: input.projectId,
-          environment: input.environment,
-          before: input.before as unknown as Record<string, unknown>,
-          after: {
-            ...input.before,
-            status: "cancelled",
-            finished_at: input.cancelledAt.toISOString(),
-          } as unknown as Record<string, unknown>,
+    cancelWithAudit: async (input) => {
+      const row = await findReplayJobById(handle.db, input.replayJobId);
+      if (row === null) return { kind: "not_found" as const };
+
+      const outcome = await cancelReplayJobWithAudit(
+        handle.db,
+        { row },
+        {
+          auditId: input.auditId,
+          actorSource: input.actorSource,
+          actorLabel: input.actorLabel,
           reason: input.reason,
-        });
-        const after = await findReplayJobById(trx, input.replayJobId);
-        if (after === null) {
-          throw new Error(`replay cancel: row "${input.replayJobId}" disappeared mid-transaction`);
-        }
-        return { kind: "cancelled" as const, row: after };
-      }),
+          occurredAt: input.cancelledAt,
+          before: input.before,
+        },
+      );
+
+      const after = await findReplayJobById(handle.db, input.replayJobId);
+      if (after === null) return { kind: "not_found" as const };
+      // applied=false means the guard matched nothing: a peer got there
+      // first, or the row was never in a cancellable state.
+      return outcome.applied
+        ? { kind: "cancelled" as const, row: after }
+        : { kind: "already_terminal" as const, row: after };
+    },
     close: () => handle.close(),
   };
 }

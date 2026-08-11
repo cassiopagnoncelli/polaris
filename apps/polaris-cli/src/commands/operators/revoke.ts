@@ -24,9 +24,8 @@ import {
   type AuditActorSource,
   connectDb,
   findOperatorTokenById,
-  insertAuditRecord,
   type OperatorTokenRow,
-  revokeOperatorToken,
+  revokeOperatorTokenWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -184,27 +183,24 @@ function defaultStore(env: NodeJS.ProcessEnv): OperatorsRevokeStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findOperatorTokenById(handle.db, id),
-    revokeWithAudit: async (id, revokedAt, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        const applied = await revokeOperatorToken(trx, id, revokedAt);
-        if (!applied) return false;
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "operators.revoke",
-          target_type: "operator_token",
-          target_id: id,
-          project_id: null,
-          environment: null,
+    revokeWithAudit: async (id, revokedAt, audit) => {
+      const row = await findOperatorTokenById(handle.db, id);
+      if (row === null) return false;
+      const outcome = await revokeOperatorTokenWithAudit(
+        handle.db,
+        { row },
+        {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          reason: audit.reason,
+          occurredAt: revokedAt,
           before: audit.before,
           after: audit.after,
-          reason: audit.reason,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-        return true;
-      }),
+        },
+      );
+      return outcome.applied;
+    },
     close: () => handle.close(),
   };
 }

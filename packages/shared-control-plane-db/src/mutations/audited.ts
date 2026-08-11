@@ -44,6 +44,21 @@ export interface AuditContext {
   readonly reason?: string | null;
   readonly requestId?: string | null;
   readonly occurredAt: Date;
+  /**
+   * Snapshot overrides.
+   *
+   * Each mutation builds a sensible default from the row it already has, and
+   * that is what the admin UI uses. Some callers know more: `destinations
+   * create` holds the full operator input, `keys create` the issuance
+   * context. Rather than have those callers lose detail — or have this
+   * package grow a parameter per command to reconstruct it — they pass the
+   * snapshot they already built.
+   *
+   * The transaction, the guard, and the decision of whether to write a row at
+   * all stay here regardless. Only the payload is negotiable.
+   */
+  readonly before?: unknown;
+  readonly after?: unknown;
 }
 
 /**
@@ -97,8 +112,9 @@ export async function withAudit(
       target_id: target.targetId,
       project_id: target.projectId ?? null,
       environment: target.environment ?? null,
-      before: target.before ?? null,
-      after: target.after ?? null,
+      // Caller override wins; otherwise the mutation's own snapshot.
+      before: audit.before !== undefined ? audit.before : (target.before ?? null),
+      after: audit.after !== undefined ? audit.after : (target.after ?? null),
       reason: audit.reason ?? null,
       // The CLI stamps request_id = audit_id because it has no request. The
       // API passes its own UUIDv7 request id, which makes audit rows joinable

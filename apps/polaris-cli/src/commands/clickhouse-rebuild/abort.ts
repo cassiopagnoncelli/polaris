@@ -21,11 +21,10 @@ import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
-  abortClickhouseRebuildJob,
+  abortClickhouseRebuildJobWithAudit,
   type ClickhouseRebuildJobRow,
   connectDb,
   findClickhouseRebuildJobById,
-  insertAuditRecord,
   isTerminalClickhouseRebuildStatus,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
@@ -138,23 +137,19 @@ function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildAbortStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findClickhouseRebuildJobById(handle.db, id),
-    abortWithAudit: async (input) =>
-      handle.db.transaction().execute(async (trx) => {
-        const aborted = await abortClickhouseRebuildJob(trx, input.jobId, input.abortedAt);
-        if (!aborted) {
-          const after = await findClickhouseRebuildJobById(trx, input.jobId);
-          if (after === null) return { kind: "not_found" as const };
-          return { kind: "already_terminal" as const, row: after };
-        }
-        await insertAuditRecord(trx, {
-          audit_id: input.auditId,
-          actor_source: input.actorSource,
-          actor_label: input.actorLabel,
-          action: "clickhouse-rebuild.abort",
-          target_type: "clickhouse_rebuild_job",
-          target_id: input.jobId,
-          project_id: null,
-          environment: null,
+    abortWithAudit: async (input) => {
+      const row = await findClickhouseRebuildJobById(handle.db, input.jobId);
+      if (row === null) return { kind: "not_found" as const };
+
+      const outcome = await abortClickhouseRebuildJobWithAudit(
+        handle.db,
+        { row },
+        {
+          auditId: input.auditId,
+          actorSource: input.actorSource,
+          actorLabel: input.actorLabel,
+          reason: input.reason,
+          occurredAt: input.abortedAt,
           before: input.before as unknown as Record<string, unknown>,
           after: {
             ...input.before,
@@ -162,16 +157,21 @@ function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildAbortStore {
             completed_at: input.abortedAt.toISOString(),
             updated_at: input.abortedAt.toISOString(),
           } as unknown as Record<string, unknown>,
-          reason: input.reason,
-        });
-        const after = await findClickhouseRebuildJobById(trx, input.jobId);
-        if (after === null) {
-          throw new Error(
-            `clickhouse-rebuild abort: row "${input.jobId}" disappeared mid-transaction`,
-          );
-        }
-        return { kind: "aborted" as const, row: after };
-      }),
+        },
+      );
+
+      const after = await findClickhouseRebuildJobById(handle.db, input.jobId);
+      if (after === null) {
+        throw new Error(
+          `clickhouse-rebuild abort: row "${input.jobId}" disappeared mid-transaction`,
+        );
+      }
+      // applied=false means the guard matched nothing, i.e. the job was
+      // already in a terminal state when we got here.
+      return outcome.applied
+        ? { kind: "aborted" as const, row: after }
+        : { kind: "already_terminal" as const, row: after };
+    },
     close: () => handle.close(),
   };
 }

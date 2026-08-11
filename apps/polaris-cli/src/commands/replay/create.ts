@@ -35,9 +35,8 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  createReplayJobWithAudit,
   type InsertReplayJobInput,
-  insertAuditRecord,
-  insertReplayJob,
   REPLAY_JOB_MODES,
   REPLAY_JOB_TARGETS,
   type ReplayJobMode,
@@ -253,25 +252,17 @@ const runReplayCreate = buildReplayCreateRunner();
 function defaultStore(env: NodeJS.ProcessEnv): ReplayCreateStore {
   const handle = connectDb({ env });
   return {
-    insertWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        await insertReplayJob(trx, input);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "replay.create",
-          target_type: "replay_job",
-          target_id: input.replay_job_id,
-          project_id: audit.projectId,
-          environment: audit.environment,
-          before: null,
-          after: audit.after,
-          reason: audit.reason,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-      }),
+    insertWithAudit: async (input, audit) => {
+      await createReplayJobWithAudit(handle.db, input, {
+        auditId: audit.auditId,
+        actorSource: audit.actorSource,
+        actorLabel: audit.actorLabel,
+        reason: audit.reason,
+        occurredAt: audit.occurredAt,
+        before: null,
+        after: audit.after,
+      });
+    },
     close: () => handle.close(),
   };
 }

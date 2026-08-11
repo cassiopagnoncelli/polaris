@@ -51,9 +51,8 @@ import type { CommandContext, CommandDefinition, CommandResult } from "../../com
 import {
   type AuditActorSource,
   connectDb,
+  createClickhouseRebuildJobWithAudit,
   type InsertClickhouseRebuildJobInput,
-  insertAuditRecord,
-  insertClickhouseRebuildJob,
   markClickhouseRebuildJobCompleted,
   markClickhouseRebuildJobFailed,
   markClickhouseRebuildJobRunning,
@@ -442,25 +441,17 @@ const runCreate = buildClickhouseRebuildCreateRunner();
 function defaultStore(env: NodeJS.ProcessEnv): ClickhouseRebuildCreateStore {
   const handle = connectDb({ env });
   return {
-    insertWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        await insertClickhouseRebuildJob(trx, input);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "clickhouse-rebuild.create",
-          target_type: "clickhouse_rebuild_job",
-          target_id: input.clickhouse_rebuild_job_id,
-          project_id: null,
-          environment: null,
-          before: null,
-          after: audit.after as unknown as Record<string, unknown>,
-          reason: audit.reason,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-      }),
+    insertWithAudit: async (input, audit) => {
+      await createClickhouseRebuildJobWithAudit(handle.db, input, {
+        auditId: audit.auditId,
+        actorSource: audit.actorSource,
+        actorLabel: audit.actorLabel,
+        reason: audit.reason,
+        occurredAt: audit.occurredAt,
+        before: null,
+        after: audit.after as unknown as Record<string, unknown>,
+      });
+    },
     close: () => handle.close(),
   };
 }

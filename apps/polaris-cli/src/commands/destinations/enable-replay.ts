@@ -44,9 +44,8 @@ import {
   type AuditEnvironment,
   connectDb,
   type DestinationRow,
-  enableDestinationReplay,
   findDestinationById,
-  insertAuditRecord,
+  setDestinationReplayOptInWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -271,27 +270,24 @@ function defaultStore(env: NodeJS.ProcessEnv): DestinationsEnableReplayStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    enableReplayWithAudit: async (id, reason, now, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        const applied = await enableDestinationReplay(trx, id, reason, now);
-        if (!applied) return false;
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "destinations.enable-replay",
-          target_type: "destination",
-          target_id: id,
-          project_id: audit.projectId,
-          environment: audit.environment,
+    enableReplayWithAudit: async (id, reason, now, audit) => {
+      const row = await findDestinationById(handle.db, id);
+      if (row === null) return false;
+      const outcome = await setDestinationReplayOptInWithAudit(
+        handle.db,
+        { row, enabled: true, reason },
+        {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          reason: audit.reason,
+          occurredAt: now,
           before: audit.before,
           after: audit.after,
-          reason: audit.reason,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-        return true;
-      }),
+        },
+      );
+      return outcome.applied;
+    },
     close: () => handle.close(),
   };
 }

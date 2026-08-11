@@ -26,17 +26,48 @@ function flushAndExit(code: number): void {
   process.exitCode = code;
 }
 
+/**
+ * `polaris ... | head` closes the pipe as soon as it has its lines. Every
+ * later write then fails with EPIPE — including the diagnostic write inside
+ * the `uncaughtException` handler below, which re-enters the same handler and
+ * spins the process at 100% CPU until it is killed.
+ *
+ * Node reports the broken pipe as a stream error rather than delivering
+ * SIGPIPE, so a truncating reader is a normal, successful end to the run:
+ * exit 0 immediately, without touching the streams again.
+ */
+function isBrokenPipe(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === "EPIPE";
+}
+
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (error: unknown) => {
+    if (isBrokenPipe(error)) process.exit(0);
+  });
+}
+
+/** Never re-throws — a failed diagnostic must not become the next exception. */
+function writeDiagnostic(text: string): void {
+  try {
+    process.stderr.write(text);
+  } catch {
+    // stderr is gone (closed pipe, full disk). Nothing left to report with.
+  }
+}
+
 process.on("uncaughtException", (error) => {
-  process.stderr.write(`polaris: uncaught exception: ${error?.message ?? String(error)}\n`);
+  if (isBrokenPipe(error)) process.exit(0);
+  writeDiagnostic(`polaris: uncaught exception: ${error?.message ?? String(error)}\n`);
   if (process.env["POLARIS_DEBUG"] === "1" && error?.stack) {
-    process.stderr.write(`${error.stack}\n`);
+    writeDiagnostic(`${error.stack}\n`);
   }
   flushAndExit(ExitCode.GenericFailure);
 });
 
 process.on("unhandledRejection", (reason) => {
+  if (isBrokenPipe(reason)) process.exit(0);
   const message = reason instanceof Error ? reason.message : String(reason);
-  process.stderr.write(`polaris: unhandled rejection: ${message}\n`);
+  writeDiagnostic(`polaris: unhandled rejection: ${message}\n`);
   flushAndExit(ExitCode.GenericFailure);
 });
 

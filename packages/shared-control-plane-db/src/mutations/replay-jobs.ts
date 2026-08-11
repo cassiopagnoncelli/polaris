@@ -34,6 +34,8 @@ import type { Kysely } from "kysely";
 import type { AuditEnvironment } from "../queries/audit-records.js";
 import {
   cancelReplayJob,
+  type InsertReplayJobInput,
+  insertReplayJob,
   markReplayJobRunning,
   pauseReplayJob,
   type ReplayJobRow,
@@ -122,6 +124,48 @@ export async function startReplayExecutionWithAudit(
       // markReplayJobRunning returns the post-update row (or null). Only a
       // real move to `running` counts as a transition worth recording.
       return transition !== null && transition.status === "running";
+    },
+  );
+}
+
+/**
+ * Create a replay job.
+ *
+ * Creation is the operator declaring intent; nothing is republished until
+ * `startReplayExecutionWithAudit`. The two are separate audit actions because
+ * they are separately consequential, and often separate people.
+ */
+export async function createReplayJobWithAudit(
+  db: Kysely<Database>,
+  input: InsertReplayJobInput,
+  audit: AuditContext,
+): Promise<MutationOutcome> {
+  return withAudit(
+    db,
+    audit,
+    {
+      action: "replay.create",
+      targetType: "replay_job",
+      targetId: input.replay_job_id,
+      projectId: input.project_id,
+      environment: input.environment as AuditEnvironment,
+      before: null,
+      after: {
+        replay_job_id: input.replay_job_id,
+        project_id: input.project_id,
+        environment: input.environment,
+        target: input.target,
+        mode: input.mode,
+        status: "pending",
+        window_from: input.window_from.toISOString(),
+        window_to: input.window_to.toISOString(),
+        event_name: input.event_name ?? null,
+        event_id: input.event_id ?? null,
+      },
+    },
+    async (trx) => {
+      await insertReplayJob(trx, input);
+      return true;
     },
   );
 }

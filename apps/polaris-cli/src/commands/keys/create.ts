@@ -24,9 +24,8 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  createApiKeyWithAudit,
   type InsertApiKeyInput,
-  insertApiKey,
-  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -187,25 +186,16 @@ export function buildKeysCreateRunner(hooks: KeysCreateHooks = {}) {
 function defaultStore(env: NodeJS.ProcessEnv): KeysCreateStore {
   const handle = connectDb({ env });
   return {
-    insertWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        await insertApiKey(trx, input);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "keys.create",
-          target_type: "api_key",
-          target_id: input.api_key_id,
-          project_id: audit.projectId,
-          environment: audit.environment,
-          before: null,
-          after: audit.after,
-          reason: null,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-      }),
+    insertWithAudit: async (input, audit) => {
+      await createApiKeyWithAudit(handle.db, input, {
+        auditId: audit.auditId,
+        actorSource: audit.actorSource,
+        actorLabel: audit.actorLabel,
+        occurredAt: audit.occurredAt,
+        before: null,
+        after: audit.after,
+      });
+    },
     close: () => handle.close(),
   };
 }

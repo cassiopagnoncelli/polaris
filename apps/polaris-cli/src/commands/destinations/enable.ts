@@ -24,9 +24,8 @@ import {
   type AuditEnvironment,
   connectDb,
   type DestinationRow,
-  enableDestination,
+  enableDestinationWithAudit,
   findDestinationById,
-  insertAuditRecord,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -204,27 +203,23 @@ function defaultStore(env: NodeJS.ProcessEnv): DestinationsEnableStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    enableWithAudit: async (id, now, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        const applied = await enableDestination(trx, id, now);
-        if (!applied) return false;
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "destinations.enable",
-          target_type: "destination",
-          target_id: id,
-          project_id: audit.projectId,
-          environment: audit.environment,
+    enableWithAudit: async (id, now, audit) => {
+      const row = await findDestinationById(handle.db, id);
+      if (row === null) return false;
+      const outcome = await enableDestinationWithAudit(
+        handle.db,
+        { row },
+        {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          occurredAt: now,
           before: audit.before,
           after: audit.after,
-          reason: null,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-        return true;
-      }),
+        },
+      );
+      return outcome.applied;
+    },
     close: () => handle.close(),
   };
 }

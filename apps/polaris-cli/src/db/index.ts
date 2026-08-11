@@ -1,34 +1,49 @@
 /**
- * Internal DB surface for the CLI. Re-exported through a small index so the
- * command layer never reaches into `./db/*` directly.
+ * Internal DB surface for the CLI.
+ *
+ * Almost everything here lives in `@polaris/shared-control-plane-db`, which
+ * the CLI and the control-plane API both use so that one write has one
+ * implementation, one audit snapshot, and one transaction shape. This barrel
+ * exists so the command layer imports from a single place rather than
+ * reaching into the package's internals.
+ *
+ * Two things stay local: `connect.ts`, which owns the CLI's own
+ * `DATABASE_URL` resolution and `ConfigError`, and the transport-facing
+ * isolation lookup, which belongs to the runtime hot path rather than the
+ * control plane.
  */
 
-// Moved to @polaris/shared-control-plane-db so the control-plane API and the
-// CLI share one implementation of every control-plane write. Re-exported here
-// unchanged, so no command file had to move with them.
-
-// The unaudited writers. CLI commands own their own transactions and write
-// their audit rows inside them; the API cannot reach these at all.
-
-// Everything below lives in @polaris/shared-control-plane-db so the CLI and
-// the control-plane API share one implementation of every control-plane
-// write. Re-exported here unchanged, so no command file had to move.
+// ---- reads and audited mutations ---------------------------------------
 export {
   ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
   type ApiKeyRow,
   AUDIT_ACTOR_SOURCES,
   AUDIT_ENVIRONMENTS,
   type AuditActorSource,
+  type AuditContext,
   type AuditEnvironment,
   type AuditRecordRow,
   type AuditRecordsTable,
+  abortClickhouseRebuildJobWithAudit,
   CLICKHOUSE_REBUILD_JOB_STATUSES,
   type ClickhouseRebuildJobRow,
   type ClickhouseRebuildJobStatus,
   type ClickhouseRebuildJobsTable,
   type CompleteReplayJobInput,
   cancelReplayJobWithAudit,
+  createApiKeyWithAudit,
+  createClickhouseRebuildJobWithAudit,
+  createDestinationWithAudit,
+  createOperatorTokenWithAudit,
+  createReplayJobWithAudit,
   type DestinationRow,
+  type DisableProcessorActivationInput,
+  deisolateTopicWithAudit,
+  disableDestinationWithAudit,
+  disableProcessorActivationWithAudit,
+  type EnableProcessorActivationInput,
+  enableDestinationWithAudit,
+  enableProcessorActivationWithAudit,
   type FailReplayJobInput,
   fetchAllProjects,
   fetchAllSources,
@@ -52,6 +67,7 @@ export {
   type InsertReplayJobInput,
   type InsertTopicIsolationInput,
   isAbortableClickhouseRebuildStatus,
+  isolateTopicWithAudit,
   isTerminalClickhouseRebuildStatus,
   isTerminalReplayStatus,
   type ListAuditRecordsFilter,
@@ -68,6 +84,7 @@ export {
   listOperatorTokens,
   listReplayJobs,
   type MarkReplayJobRunningInput,
+  type MutationOutcome,
   markDlqResolvedWithAudit,
   markProcessorDlqResolvedWithAudit,
   markProcessorDlqRetriedWithAudit,
@@ -78,6 +95,8 @@ export {
   type OperatorTokensTable,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
+  type ProjectFile,
+  type ProjectRow,
   pauseReplayJobWithAudit,
   REPLAY_JOB_MODES,
   REPLAY_JOB_STATUSES,
@@ -89,6 +108,13 @@ export {
   type ReplayJobsTable,
   type ReplayJobTarget,
   resumeReplayJobWithAudit,
+  revokeApiKeyWithAudit,
+  revokeOperatorTokenWithAudit,
+  rotateApiKeyWithAudit,
+  type SourceFile,
+  type SourceRow,
+  setDestinationReplayOptInWithAudit,
+  startClickhouseRebuildWithAudit,
   startReplayExecutionWithAudit,
   syncProjectsWithAudit,
   syncSourcesWithAudit,
@@ -96,47 +122,23 @@ export {
   TERMINAL_REPLAY_JOB_STATUSES,
   type TopicIsolationRow,
   type UpdateDestinationOpsInput,
+  updateDestinationOpsWithAudit,
 } from "@polaris/shared-control-plane-db";
-// The unaudited writers, still reached directly by CLI commands that own
-// their own transactions. Shrinking as each one moves onto a *WithAudit
-// function; the subpath goes away when the list is empty.
+
+// ---- executor progress --------------------------------------------------
+// NOT operator actions: a running job reporting where it got to. They carry
+// no audit row and never should — the decision that started the job was
+// recorded when it started. See the package's progress.ts.
 export {
-  abortClickhouseRebuildJob,
-  cancelReplayJob,
   completeReplayJob,
-  type DisableProcessorActivationInput,
-  deactivateIsolation,
-  disableDestination,
-  disableDestinationReplay,
-  disableProcessorActivation,
-  type EnableProcessorActivationInput,
-  enableDestination,
-  enableDestinationReplay,
-  enableProcessorActivation,
   failReplayJob,
-  type InsertAuditRecordInput,
-  insertApiKey,
-  insertAuditRecord,
-  insertClickhouseRebuildJob,
-  insertDestination,
-  insertOperatorToken,
-  insertProject,
-  insertReplayJob,
-  insertSource,
-  insertTopicIsolation,
   markClickhouseRebuildJobCompleted,
   markClickhouseRebuildJobFailed,
   markClickhouseRebuildJobRunning,
-  markReplayJobRunning,
-  pauseReplayJob,
   recordReplayChunkProgress,
-  resumeReplayJob,
-  revokeApiKey,
-  revokeOperatorToken,
   touchOperatorTokenLastUsedAt,
-  updateDestinationOps,
-  updateProject,
-  updateSource,
-} from "@polaris/shared-control-plane-db/unaudited";
+} from "@polaris/shared-control-plane-db/progress";
+
+// ---- CLI-local ----------------------------------------------------------
 export { type ConnectDbOptions, connectDb, type DbHandle } from "./connect.js";
 export { createKyselyScopedIsolationLookup } from "./topic-isolations.js";

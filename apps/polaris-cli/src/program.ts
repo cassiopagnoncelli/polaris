@@ -198,14 +198,6 @@ export function buildProgram(options: BuildOptions): Command {
       ].join("\n"),
     )
     .version(meta.version, "-v, --version", "Show CLI version and exit")
-    .addOption(new Option("--profile <name>", "Profile defined in ~/.polaris/config.toml"))
-    .addOption(
-      new Option("--output <format>", "Output format")
-        .choices([...OUTPUT_FORMATS])
-        .default("human"),
-    )
-    .addOption(new Option("--debug", "Enable debug-level logging").conflicts("quiet"))
-    .addOption(new Option("--quiet", "Suppress non-error output").conflicts("debug"))
     // Documented so `--help` shows the supported env vars without making them
     // commander options. The actual reads happen in `loadCliConfig`.
     .addHelpText(
@@ -234,7 +226,17 @@ export function buildProgram(options: BuildOptions): Command {
     )
     // Without this, commander calls `process.exit` on `--help`, unknown
     // commands, etc., which makes the CLI uncomposable in tests.
-    .exitOverride();
+    .exitOverride()
+    // Options declared here are matched ANYWHERE in argv unless positional
+    // options are on — which meant the root's `--version` swallowed
+    // `processors enable <name> --version v1`, printing the CLI version and
+    // exiting 0. See `attachGlobalOptions` for why every command re-declares
+    // the global flags instead of inheriting them.
+    .enablePositionalOptions();
+
+  for (const option of globalOptions()) {
+    program.addOption(option);
+  }
 
   // Pin help / error output to our streams so unit tests capture them.
   program.configureOutput({
@@ -251,7 +253,7 @@ export function buildProgram(options: BuildOptions): Command {
       definition: { readonly id: string; readonly mutates: boolean },
       handler: CommandHandler<Args>,
     ) => {
-      return async (args: Args, _command: Command): Promise<void> => {
+      return async (args: Args, command: Command): Promise<void> => {
         // Production-mutation gate. Applied for every command, ONCE,
         // after argv has parsed (so `--env` is visible on `args`) and
         // BEFORE the handler runs. Refusals throw
@@ -270,6 +272,7 @@ export function buildProgram(options: BuildOptions): Command {
           output,
           meta,
           program,
+          invoked: command,
           definition,
           actor,
         });
@@ -289,7 +292,83 @@ export function buildProgram(options: BuildOptions): Command {
     command.register(program, deps);
   }
 
+  attachGlobalOptions(program);
+
   return program;
+}
+
+/**
+ * The flags every command accepts, rebuilt fresh per command.
+ *
+ * Fresh instances matter: commander stores parse state on the `Option`, so
+ * one shared instance across 40+ commands would leak values between them.
+ *
+ * `--output` carries no commander-level default on purpose — `loadCliConfig`
+ * owns the fallback, and a default here would report a source of `"default"`
+ * at every level of the command chain, which is exactly the signal
+ * {@link resolveGlobalOption} uses to find the level the operator typed at.
+ */
+function globalOptions(): readonly Option[] {
+  return [
+    new Option("--profile <name>", "Profile defined in ~/.polaris/config.toml"),
+    new Option("--output <format>", "Output format (default: human)").choices([...OUTPUT_FORMATS]),
+    new Option("--debug", "Enable debug-level logging").conflicts("quiet"),
+    new Option("--quiet", "Suppress non-error output").conflicts("debug"),
+  ];
+}
+
+/**
+ * Re-declare the global flags on every subcommand, and turn on positional
+ * options all the way down.
+ *
+ * Commander does not scope options to the command they were declared on: with
+ * positional options off, the root matches a known flag anywhere in argv, so
+ * `polaris processors enable x --version v1` hit the root's `--version` and
+ * printed `0.0.0`. `enablePositionalOptions()` fixes that by making each
+ * level parse only the options it owns.
+ *
+ * The cost is that a global flag would then only be accepted before the
+ * subcommand — breaking `polaris destinations list --output json`, the form
+ * the ops runbooks use. Re-declaring the globals on each command buys back
+ * both positions. Copies are hidden from per-command help; the root's
+ * `--help` is where they are documented.
+ *
+ * A command that declares its own flag of the same name keeps it — the
+ * `_findOption` check below never overwrites a real command option.
+ */
+function attachGlobalOptions(parent: Command): void {
+  for (const command of parent.commands) {
+    command.enablePositionalOptions();
+    for (const option of globalOptions()) {
+      if (command.options.some((existing) => existing.long === option.long)) continue;
+      command.addOption(option.hideHelp());
+    }
+    attachGlobalOptions(command);
+  }
+}
+
+/**
+ * Read a global flag from the level of the command chain the operator
+ * actually typed it at.
+ *
+ * With the globals re-declared per command, `--output json` may land on the
+ * leaf (`processors list --output json`), on a group, or on the root
+ * (`polaris --output json processors list`). Walk leaf-to-root and take the
+ * first level whose value came from argv; fall back to the root otherwise.
+ *
+ * Deliberately not `optsWithGlobals()` — that merges root LAST, so the root
+ * would win over the leaf, which is backwards.
+ */
+function resolveGlobalOption<T>(invoked: Command | undefined, program: Command, key: string): T {
+  for (let command = invoked; command !== undefined; command = command.parent ?? undefined) {
+    // Defensive: an action handler registered without commander's trailing
+    // `Command` argument passes something else here.
+    if (typeof command.getOptionValueSource !== "function") break;
+    if (command.getOptionValueSource(key) === "cli") {
+      return command.getOptionValue(key) as T;
+    }
+  }
+  return program.getOptionValue(key) as T;
 }
 
 /**
@@ -339,15 +418,21 @@ async function buildContextForCommand(options: {
   readonly output: OutputStreams;
   readonly meta: PackageMeta;
   readonly program: Command;
+  /** The command commander dispatched to. Globals may be set at any level above it. */
+  readonly invoked: Command | undefined;
   readonly definition: { readonly id: string; readonly mutates: boolean };
   readonly actor: ResolvedActor;
 }): Promise<CommandContext> {
-  const opts = options.program.opts<{
-    profile?: string;
-    output?: OutputFormat;
-    debug?: boolean;
-    quiet?: boolean;
-  }>();
+  const opts = {
+    profile: resolveGlobalOption<string | undefined>(options.invoked, options.program, "profile"),
+    output: resolveGlobalOption<OutputFormat | undefined>(
+      options.invoked,
+      options.program,
+      "output",
+    ),
+    debug: resolveGlobalOption<boolean | undefined>(options.invoked, options.program, "debug"),
+    quiet: resolveGlobalOption<boolean | undefined>(options.invoked, options.program, "quiet"),
+  };
 
   const logLevel: CliLogLevel | undefined = opts.debug ? "debug" : opts.quiet ? "error" : undefined;
 
@@ -448,12 +533,45 @@ function handleTopLevelError(error: unknown, ctx: ErrorContext): ExitCode {
   }
 
   // Unknown error: surface the message and respect `--debug` for stack output.
-  const message = error instanceof Error ? error.message : String(error);
-  ctx.output.writeErr(`polaris: ${message}`);
+  ctx.output.writeErr(`polaris: ${describeUnknownError(error)}`);
   if (ctx.env["POLARIS_DEBUG"] === "1" && error instanceof Error && error.stack) {
     ctx.output.writeErr(error.stack);
   }
   return ExitCode.GenericFailure;
+}
+
+/**
+ * Best-effort one-line description of an error the CLI does not model.
+ *
+ * `error.message` alone is not enough. A refused PostgreSQL connection
+ * arrives as an `AggregateError` — Node's happy-eyeballs path wraps one error
+ * per resolved address — and its own `message` is the empty string, so the
+ * CLI printed a bare `polaris: ` and exited 1. Fall back to the error `code`,
+ * then to the wrapped errors, then to the constructor name, so there is
+ * always something actionable on stderr.
+ */
+function describeUnknownError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+
+  // `AggregateError.errors` — one entry per address attempted. Duplicates are
+  // common (same failure on ::1 and 127.0.0.1) and add nothing.
+  const nested = (error as { errors?: unknown }).errors;
+  const inner = Array.isArray(nested)
+    ? [
+        ...new Set(
+          nested
+            .map((item) => (item instanceof Error ? describeUnknownError(item) : String(item)))
+            .filter((text) => text.length > 0),
+        ),
+      ].join("; ")
+    : "";
+
+  const text = [error.message, inner].filter((part) => part.length > 0).join(" ");
+  const code = (error as NodeJS.ErrnoException).code;
+  if (typeof code === "string" && code.length > 0 && !text.includes(code)) {
+    return text.length > 0 ? `${text} (${code})` : code;
+  }
+  return text.length > 0 ? text : error.constructor.name;
 }
 
 function emitCliError(error: CliError, ctx: ErrorContext): void {

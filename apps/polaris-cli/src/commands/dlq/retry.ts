@@ -45,13 +45,12 @@ import {
 } from "@polaris/shared-transport";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
-
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
-  insertAuditRecord,
+  markDlqResolvedWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -268,29 +267,33 @@ function defaultStore(env: NodeJS.ProcessEnv): DlqRetryStore {
   return {
     findById: (id) => repo.findRecord(id),
     markResolvedWithAudit: async (id, actorLabel, note, now, audit) => {
-      return handle.db.transaction().execute(async (trx) => {
-        const trxRepo = createKyselyDlqRecordRepository({ db: trx });
-        const outcome = await trxRepo.markResolved(id, actorLabel, note, now);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "dlq.retry",
-          target_type: "dlq_record",
-          target_id: id,
-          project_id: audit.projectId,
-          environment: audit.environment,
+      const existing = await repo.findRecord(id);
+      if (existing === null) {
+        throw new Error(`dlq_records: id "${id}" not found`);
+      }
+      const outcome = await markDlqResolvedWithAudit(
+        handle.db,
+        {
+          dlqId: existing.dlq_id,
+          projectId: existing.project_id,
+          environment: existing.environment,
+          owner: existing.vendor,
+          reason: existing.reason,
+        },
+        { resolvedBy: actorLabel, note },
+        {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          occurredAt: now,
           before: audit.before,
-          after: {
-            ...audit.after,
-            republished_topic: audit.republishedTopic,
-          },
-          reason: audit.note ?? null,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-        return outcome.record;
-      });
+          after: audit.after,
+        },
+      );
+      // The store contract returns the row; `applied` is implicit in whether
+      // resolved_at moved, which the caller reads off the record.
+      void outcome;
+      return (await repo.findRecord(id)) ?? existing;
     },
     close: () => handle.close(),
   };

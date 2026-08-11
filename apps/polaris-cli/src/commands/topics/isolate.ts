@@ -44,8 +44,7 @@ import {
   type AuditEnvironment,
   connectDb,
   type InsertTopicIsolationInput,
-  insertAuditRecord,
-  insertTopicIsolation,
+  isolateTopicWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -247,26 +246,20 @@ function defaultStore(env: NodeJS.ProcessEnv): TopicsIsolateStore {
   return {
     insertWithAudit: async (input, audit): Promise<IsolateInsertOutcome> => {
       try {
-        await handle.db.transaction().execute(async (trx) => {
-          await insertTopicIsolation(trx, input);
-          await insertAuditRecord(trx, {
-            audit_id: audit.auditId,
-            actor_source: audit.actorSource,
-            actor_label: audit.actorLabel,
-            action: "topics.isolate",
-            target_type: "topic_isolation",
-            target_id: input.id,
-            project_id: audit.projectId,
-            environment: audit.environment,
-            before: null,
-            after: audit.after,
-            reason: audit.reason,
-            request_id: audit.auditId,
-            created_at: audit.occurredAt,
-          });
+        await isolateTopicWithAudit(handle.db, input, {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          reason: audit.reason,
+          occurredAt: audit.occurredAt,
+          before: null,
+          after: audit.after,
         });
         return "inserted";
       } catch (error) {
+        // The partial unique index on (family, project, environment) WHERE
+        // deactivated_at IS NULL is what enforces one active isolation per
+        // triple; a duplicate is an operator mistake, not a failure.
         if (isUniqueViolation(error)) {
           return "duplicate";
         }

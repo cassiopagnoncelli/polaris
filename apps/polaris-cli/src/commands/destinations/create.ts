@@ -32,9 +32,8 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  createDestinationWithAudit,
   type InsertDestinationInput,
-  insertAuditRecord,
-  insertDestination,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -254,25 +253,17 @@ const runDestinationsCreate = buildDestinationsCreateRunner();
 function defaultStore(env: NodeJS.ProcessEnv): DestinationsCreateStore {
   const handle = connectDb({ env });
   return {
-    insertWithAudit: async (input, audit) =>
-      handle.db.transaction().execute(async (trx) => {
-        await insertDestination(trx, input);
-        await insertAuditRecord(trx, {
-          audit_id: audit.auditId,
-          actor_source: audit.actorSource,
-          actor_label: audit.actorLabel,
-          action: "destinations.create",
-          target_type: "destination",
-          target_id: input.destination_id,
-          project_id: audit.projectId,
-          environment: audit.environment,
-          before: null,
-          after: audit.after,
-          reason: audit.reason,
-          request_id: audit.auditId,
-          created_at: audit.occurredAt,
-        });
-      }),
+    insertWithAudit: async (input, audit) => {
+      await createDestinationWithAudit(handle.db, input, {
+        auditId: audit.auditId,
+        actorSource: audit.actorSource,
+        actorLabel: audit.actorLabel,
+        reason: audit.reason,
+        occurredAt: audit.occurredAt,
+        before: null,
+        after: audit.after,
+      });
+    },
     close: () => handle.close(),
   };
 }

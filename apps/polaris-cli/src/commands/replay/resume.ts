@@ -18,9 +18,8 @@ import {
   type AuditEnvironment,
   connectDb,
   findReplayJobById,
-  insertAuditRecord,
   type ReplayJobRow,
-  resumeReplayJob,
+  resumeReplayJobWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
@@ -129,36 +128,31 @@ function defaultStore(env: NodeJS.ProcessEnv): ReplayResumeStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findReplayJobById(handle.db, id),
-    resumeWithAudit: async (input) =>
-      handle.db.transaction().execute(async (trx) => {
-        // v1 only supports resume to 'running'. The planner (P7-002) restores
-        // the prior status when it re-picks up the job; we default to running
-        // here so the executor (P7-003) gets a clear signal to start.
-        const resumed = await resumeReplayJob(trx, input.replayJobId, "running", input.resumedAt);
-        if (!resumed) {
-          const after = await findReplayJobById(trx, input.replayJobId);
-          if (after === null) return { kind: "not_found" as const };
-          return { kind: "not_paused" as const, row: after };
-        }
-        await insertAuditRecord(trx, {
-          audit_id: input.auditId,
-          actor_source: input.actorSource,
-          actor_label: input.actorLabel,
-          action: "replay.resume",
-          target_type: "replay_job",
-          target_id: input.replayJobId,
-          project_id: input.projectId,
-          environment: input.environment,
-          before: input.before as unknown as Record<string, unknown>,
-          after: { ...input.before, status: "running" } as unknown as Record<string, unknown>,
+    resumeWithAudit: async (input) => {
+      const row = await findReplayJobById(handle.db, input.replayJobId);
+      if (row === null) return { kind: "not_found" as const };
+
+      // v1 only resumes to `running`: the executor takes a clear signal to
+      // start, and the planner restores prior status when it re-picks the job.
+      const outcome = await resumeReplayJobWithAudit(
+        handle.db,
+        { row, targetStatus: "running" },
+        {
+          auditId: input.auditId,
+          actorSource: input.actorSource,
+          actorLabel: input.actorLabel,
           reason: input.reason,
-        });
-        const after = await findReplayJobById(trx, input.replayJobId);
-        if (after === null) {
-          throw new Error(`replay resume: row "${input.replayJobId}" disappeared mid-transaction`);
-        }
-        return { kind: "resumed" as const, row: after };
-      }),
+          occurredAt: input.resumedAt,
+          before: input.before,
+        },
+      );
+
+      const after = await findReplayJobById(handle.db, input.replayJobId);
+      if (after === null) return { kind: "not_found" as const };
+      return outcome.applied
+        ? { kind: "resumed" as const, row: after }
+        : { kind: "not_paused" as const, row: after };
+    },
     close: () => handle.close(),
   };
 }
