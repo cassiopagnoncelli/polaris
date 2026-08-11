@@ -340,7 +340,7 @@ Long-term historical analytics live in ClickHouse. Long-term raw replay
 should eventually come from an object-storage archive, not indefinite
 stream retention.
 
-## SDK diagnostics stream (optional)
+## SDK diagnostics stream (optional, not yet declared)
 
 SDKs do not emit diagnostic events to Polaris by default. Operators may
 opt into a diagnostic stream per project, per environment:
@@ -367,6 +367,15 @@ Rules:
   processors or destinations.
 - A small `polaris diagnostics inspect` CLI command lets operators tail
   the stream for a project.
+
+**Not provisioned yet.** Nothing produces to this stream: no SDK emits
+diagnostics and `polaris diagnostics inspect` does not exist. Declaring
+it anyway would reserve disk and put a permanently-empty stream on every
+dashboard — and an always-idle stream teaches operators to ignore idle
+streams, which is the opposite of what the queue-depth panels are for.
+`diagnosticsSuperStream()` in `packages/shared-transport/src/topology.ts`
+builds the spec; add it to the provisioning call in the same change that
+ships a producer.
 
 ## Per-project observability
 

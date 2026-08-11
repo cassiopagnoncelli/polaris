@@ -219,6 +219,7 @@ export {
   declareTopologyOnChannel,
   type DeclareTopologyInput,
   defaultSuperStreams,
+  diagnosticsSuperStream,
   DIAGNOSTICS_RETENTION_DAYS,
   POLARIS_COMPONENTS,
   type SuperStreamSpec,

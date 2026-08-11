@@ -37,14 +37,12 @@
 import { connect } from "amqplib";
 
 import {
-  DEFAULT_STREAM_MAX_BYTES,
-  DIAGNOSTICS_RETENTION_DAYS,
-  POLARIS_COMPONENTS,
-  RETRY_BACKOFF_TIERS_MS,
   CANONICAL_STREAM_FAMILIES,
-  STREAM_DIAGNOSTICS_EVENTS,
+  DEFAULT_STREAM_MAX_BYTES,
   declareComponentQueues,
   declareSuperStream,
+  POLARIS_COMPONENTS,
+  RETRY_BACKOFF_TIERS_MS,
 } from "@polaris/shared-transport";
 
 const DEFAULT_URL = "amqp://polaris:polaris@localhost:5672";
@@ -86,20 +84,15 @@ export function buildPlan(options = {}) {
 
   const widthFor = (family) => overrides[family] ?? partitions;
 
-  const superStreams = [
-    ...CANONICAL_STREAM_FAMILIES.map((family) => ({
-      family,
-      partitions: widthFor(family),
-      retentionDays,
-      maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
-    })),
-    {
-      family: STREAM_DIAGNOSTICS_EVENTS,
-      partitions: widthFor(STREAM_DIAGNOSTICS_EVENTS),
-      retentionDays: DIAGNOSTICS_RETENTION_DAYS,
-      maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
-    },
-  ];
+  // The SDK diagnostics stream is deliberately not declared: nothing
+  // produces to it yet. See defaultSuperStreams() in
+  // packages/shared-transport/src/topology.ts.
+  const superStreams = CANONICAL_STREAM_FAMILIES.map((family) => ({
+    family,
+    partitions: widthFor(family),
+    retentionDays,
+    maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
+  }));
 
   return {
     url: options.url ?? envOr("POLARIS_RABBITMQ_URL", DEFAULT_URL),

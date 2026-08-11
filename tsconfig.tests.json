@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  // ---------------------------------------------------------------
+  // Type-checks test files, which nothing else does.
+  //
+  // Every package's `tsconfig.json` excludes `test/` so the build emits
+  // only `src/`. The side effect was that NO config covered test files:
+  // `pnpm typecheck` ran the per-package configs (src only), the root
+  // config excludes the workspace trees outright, and
+  // `tests/tsconfig.json` covers only the repo-root `tests/` directory.
+  //
+  // Vitest transpiles without checking types, so a test could reference a
+  // deleted dependency or a removed API and stay green until that exact
+  // line ran. That is how four processor tests kept importing `kafkajs`
+  // types straight through the RabbitMQ migration — building Kafka-shaped
+  // payloads and casting them into a handler that expected the transport
+  // shape, leaving `payload.stream` undefined in every assertion.
+  //
+  // Packages must be built first, since this resolves `@polaris/*` through
+  // the workspace symlinks — the same precondition the per-package
+  // typechecks already have.
+  //
+  // RATCHET: the excludes below are pre-existing debt (382 errors at the
+  // time of writing), not a design choice. They are mostly index-signature
+  // access (TS4111), fixtures missing fields their type has since gained,
+  // and `.mjs` script imports without declarations. Fix a tree, delete its
+  // line. Do not add lines.
+  // ---------------------------------------------------------------
+  "include": [
+    "apps/*/test/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "processors/*/*/test/**/*.ts",
+    "consumers/*/*/test/**/*.ts",
+    "scripts/__tests__/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    "**/build",
+    "**/coverage",
+    "**/fixtures",
+
+    "apps/ingester-api/test",
+    "apps/polaris-cli/test",
+    "consumers/braze/v1/test",
+    "consumers/ga4/v1/test",
+    "consumers/meta-capi/v1/test",
+    "consumers/tiktok/v1/test",
+    "consumers/webhook-sink/v1/test",
+    "packages/shared-clickhouse/test",
+    "packages/shared-config/test",
+    "packages/shared-destinations/test",
+    "packages/shared-logger/test",
+    "packages/shared-policy/test",
+    "packages/shared-service-bootstrap/test",
+    "packages/web-sdk/test",
+    "processors/analytics-projector/v1/test",
+    "processors/attribution-engine/v1/test",
+    "processors/identity-resolver/v1/test",
+    "processors/sessionizer/v1/test",
+    "scripts/__tests__"
+  ]
+}

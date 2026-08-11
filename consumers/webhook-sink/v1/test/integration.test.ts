@@ -15,13 +15,13 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
-import type { NormalizableEnvelope, PolarisProducer } from "@polaris/shared-destinations";
-
 import {
   createDestinationConsumer,
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationInstanceReader,
 } from "@polaris/shared-destinations";
+import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
+import type { PolarisProducer } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import { SecretResolver } from "@polaris/shared-secrets";
 import { describe, expect, it } from "vitest";

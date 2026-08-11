@@ -5,6 +5,7 @@ import {
   declareSuperStream,
   declareTopologyOnChannel,
   defaultSuperStreams,
+  diagnosticsSuperStream,
 } from "../src/topology.js";
 import { FakeChannel, testRabbitmqConfig } from "./fakes.js";
 
@@ -122,7 +123,7 @@ describe("declareComponentQueues", () => {
 });
 
 describe("defaultSuperStreams", () => {
-  it("covers every canonical family plus diagnostics", () => {
+  it("covers every canonical family, and nothing else", () => {
     const specs = defaultSuperStreams(testRabbitmqConfig);
     expect(specs.map((s) => s.family)).toEqual([
       "raw.events",
@@ -131,11 +132,22 @@ describe("defaultSuperStreams", () => {
       "session.events",
       "attribution.events",
       "analytics.events",
-      "polaris.diagnostics.events",
     ]);
   });
 
-  it("gives diagnostics a short retention and honours per-family width overrides", () => {
+  it("leaves the diagnostics stream undeclared until something produces to it", () => {
+    // Reserving disk and putting a permanently-empty stream on every
+    // dashboard teaches operators to ignore idle streams.
+    const specs = defaultSuperStreams(testRabbitmqConfig);
+    expect(specs.map((s) => s.family)).not.toContain("polaris.diagnostics.events");
+
+    // The spec still exists for whoever ships the feature.
+    const diagnostics = diagnosticsSuperStream(testRabbitmqConfig);
+    expect(diagnostics.family).toBe("polaris.diagnostics.events");
+    expect(diagnostics.retentionDays).toBe(7);
+  });
+
+  it("honours per-family width overrides", () => {
     const specs = defaultSuperStreams({
       ...testRabbitmqConfig,
       partitions: 3,
@@ -143,11 +155,10 @@ describe("defaultSuperStreams", () => {
       streamRetentionDays: 90,
     });
     const raw = specs.find((s) => s.family === "raw.events");
-    const diagnostics = specs.find((s) => s.family === "polaris.diagnostics.events");
+    const analytics = specs.find((s) => s.family === "analytics.events");
     expect(raw?.partitions).toBe(6);
     expect(raw?.retentionDays).toBe(90);
-    expect(diagnostics?.partitions).toBe(3);
-    expect(diagnostics?.retentionDays).toBe(7);
+    expect(analytics?.partitions).toBe(3);
   });
 });
 

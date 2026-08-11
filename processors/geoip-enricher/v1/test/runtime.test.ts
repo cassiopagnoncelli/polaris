@@ -129,12 +129,11 @@ class RecordingProducer {
  */
 function stubConsumer(): PolarisConsumer {
   return {
-    connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     subscribe: vi.fn(async () => {}),
     runEach: vi.fn(async () => {}),
-    run: vi.fn(async () => {}),
-    raw: {} as PolarisConsumer["raw"],
+    streams: [],
+    queues: [],
   };
 }
 

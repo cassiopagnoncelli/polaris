@@ -11,7 +11,7 @@
   "packageManager": "pnpm@10.30.0",
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && pnpm -r --if-present run typecheck",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && pnpm -r --if-present run typecheck",
     "lint": "biome lint . && pnpm lint:clickhouse-imports",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
@@ -42,7 +42,8 @@
     "test:integration": "POLARIS_INTEGRATION=1 vitest run --root . tests/integration",
     "test:acceptance": "node scripts/run-acceptance.mjs",
     "docker:build": "node scripts/docker-build.mjs",
-    "docker:build:list": "node scripts/docker-build.mjs --list"
+    "docker:build:list": "node scripts/docker-build.mjs --list",
+    "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

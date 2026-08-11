@@ -69,27 +69,40 @@ export interface DeclareTopologyInput {
 
 /**
  * Build the default topology for an environment: every canonical stream
- * family plus the diagnostics stream, sized from config.
+ * family, sized from config.
  *
- * Dedicated per-project families are **not** included: they are created by
- * the isolation cutover procedure, which is a deliberate operator action.
+ * Two things are deliberately absent:
+ *
+ *   - **Dedicated per-project families.** Created by the isolation cutover
+ *     procedure, which is an operator action.
+ *   - **The SDK diagnostics stream.** Nothing produces to it yet: no SDK
+ *     emits diagnostics and `polaris diagnostics inspect` does not exist.
+ *     Declaring it anyway would reserve disk and put an empty stream on
+ *     every dashboard, and an always-idle stream teaches operators to
+ *     ignore idle streams. `diagnosticsSuperStream()` below builds the
+ *     spec for whoever ships the feature.
  */
 export function defaultSuperStreams(config: RabbitmqConfig): ReadonlyArray<SuperStreamSpec> {
-  const canonical = CANONICAL_STREAM_FAMILIES.map((family) => ({
+  return CANONICAL_STREAM_FAMILIES.map((family) => ({
     family,
     partitions: partitionsForFamily(config, family),
     retentionDays: config.streamRetentionDays,
     maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
   }));
-  return [
-    ...canonical,
-    {
-      family: STREAM_DIAGNOSTICS_EVENTS,
-      partitions: partitionsForFamily(config, STREAM_DIAGNOSTICS_EVENTS),
-      retentionDays: DIAGNOSTICS_RETENTION_DAYS,
-      maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
-    },
-  ];
+}
+
+/**
+ * The SDK diagnostics stream spec. Not part of the default topology —
+ * see the note on `defaultSuperStreams`. Add it to a `declareTopology`
+ * call when a producer for it exists.
+ */
+export function diagnosticsSuperStream(config: RabbitmqConfig): SuperStreamSpec {
+  return {
+    family: STREAM_DIAGNOSTICS_EVENTS,
+    partitions: partitionsForFamily(config, STREAM_DIAGNOSTICS_EVENTS),
+    retentionDays: DIAGNOSTICS_RETENTION_DAYS,
+    maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
+  };
 }
 
 /** Every Polaris component that owns a retry/DLQ queue set. */

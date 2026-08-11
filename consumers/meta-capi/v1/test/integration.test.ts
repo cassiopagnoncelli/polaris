@@ -17,9 +17,9 @@ import {
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationInstanceReader,
   InMemoryDlqRecordRepository,
-  type NormalizableEnvelope,
-  type PolarisProducer,
 } from "@polaris/shared-destinations";
+import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
+import type { PolarisProducer } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
 import { SecretResolver } from "@polaris/shared-secrets";
 import { describe, expect, it } from "vitest";
@@ -369,19 +369,17 @@ describe("meta-capi v1 integration (handleEvent driven)", () => {
       envelope: fixtureEnvelope(),
       destination_id: instance.destination_id,
       payload: {
-        topic: "analytics.events",
+        stream: "analytics.events-0",
+        family: "analytics.events",
         partition: 0,
         message: {
           value: Buffer.from(JSON.stringify(fixtureEnvelope()), "utf8"),
           headers: {},
           offset: "1",
           timestamp: "0",
-          attributes: 0,
-          size: 0,
           key: null,
+          redelivered: false,
         },
-        heartbeat: async () => {},
-        pause: () => () => {},
       },
     });
 

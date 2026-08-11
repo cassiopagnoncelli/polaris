@@ -24,7 +24,9 @@ import type { ControlPlaneConfig } from "../src/config.js";
 // Fixtures
 // ---------------------------------------------------------------------------
 
-function makeConfig(env: string = "local"): ControlPlaneConfig {
+function makeConfig(
+  env: ControlPlaneConfig["service"]["environment"] = "local",
+): ControlPlaneConfig {
   return {
     service: {
       serviceName: "control-plane-api",
@@ -34,6 +36,7 @@ function makeConfig(env: string = "local"): ControlPlaneConfig {
       logPretty: false,
       gitSha: "deadbee",
       buildTime: "2026-05-14T10:00:00.000Z",
+      releaseLabel: undefined,
     },
     http: {
       host: "127.0.0.1",
