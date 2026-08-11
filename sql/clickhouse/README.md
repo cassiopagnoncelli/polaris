@@ -12,23 +12,33 @@ configuration that drives environment selection.
 ## Pipeline
 
 ```text
-Redpanda analytics.events
-    |
-    v
-polaris.analytics_events_queue          (Null engine, never queried)
-    |
-    +--> MV ----> polaris.analytics_ingest_log   (MergeTree, append-only)
-    |
-    +--> MV ----> polaris.analytics_raw          (ReplacingMergeTree, deduped facts)
+RabbitMQ analytics.events                RabbitMQ enriched / session /
+    |                                     identity / attribution .events
+    v                                            |
+polaris.analytics_events_queue                   v
+    (Null engine, never queried)      polaris.analytics_processed_queue
+    |                                     (Null engine, never queried)
+    +--> MV --> polaris.analytics_ingest_log     |
+    |             (MergeTree, append-only)       +--> MV --> polaris.analytics_processed
+    |                                                          (ReplacingMergeTree,
+    +--> MV --> polaris.analytics_raw                           deduped derived facts)
+                  (ReplacingMergeTree, deduped source facts)
                        |
                        v
                   argMax MV ----> projection tables (query surface)
 ```
 
-The ingestion interface table is **never** queried directly. The two MVs
-that read from it are the only sanctioned consumers. Application
-queries hit projection tables. `analytics_raw` reads only happen
-through the helper-package's `replay` namespace under the
+Two ingestion interface tables, split by what the event *is*:
+`analytics_events_queue` takes source events (what a producer reported),
+`analytics_processed_queue` takes derived events (what a Polaris
+processor concluded). `clickhouse-sink` picks the destination by stream
+family at INSERT time, so every MV below stays unfiltered — see the
+rationale on `11_analytics_processed_queue.sql`.
+
+Neither interface table is **ever** queried directly. The MVs that read
+from them are the only sanctioned consumers. Application queries hit
+projection tables. `analytics_raw` and `analytics_processed` reads only
+happen through the helper-package's `replay` namespace under the
 `polaris_operator` role.
 
 ## File layout
@@ -36,11 +46,14 @@ through the helper-package's `replay` namespace under the
 ```text
 sql/clickhouse/
   00_database.sql                              CREATE DATABASE polaris
-  10_analytics_events_queue.sql                ingestion interface table
+  10_analytics_events_queue.sql                ingestion interface, source events
+  11_analytics_processed_queue.sql             ingestion interface, derived events
   20_analytics_ingest_log.sql                  append-only ingest log
   21_mv_queue_to_ingest_log.sql                MV: queue -> ingest log
-  30_analytics_raw.sql                         ReplacingMergeTree raw facts
+  30_analytics_raw.sql                         ReplacingMergeTree source facts
   31_mv_queue_to_raw.sql                       MV: queue -> raw (flatten JSON)
+  32_analytics_processed.sql                   ReplacingMergeTree derived facts
+  33_mv_processed_queue_to_processed.sql       MV: processed queue -> processed
   projections/
     40_event_daily_counts.sql                  example SummingMergeTree projection
   materialized-views/
@@ -60,7 +73,7 @@ top-down. New objects slot into the appropriate ranges:
 00-09   database / cluster bootstrap
 10-19   ingestion interface tables
 20-29   ingest log + its MV
-30-39   analytics_raw + its MV
+30-39   raw-tier fact tables (analytics_raw, analytics_processed) + their MVs
 40-89   projection tables and their argMax MVs
 roles/  role definitions and grants (re-applied last)
 ```
@@ -85,11 +98,12 @@ The macro files live at
 
 ## Query rules (enforced by roles)
 
-- Never `SELECT` from `polaris.analytics_events_queue`. Not from
-  services, not from operators. Use the ingest log to diagnose
-  ingestion.
-- Never `SELECT` from `polaris.analytics_raw` without an explicit
-  dedupe construct. The three sanctioned shapes are:
+- Never `SELECT` from `polaris.analytics_events_queue` or
+  `polaris.analytics_processed_queue`. Not from services, not from
+  operators. Use the ingest log to diagnose ingestion.
+- Never `SELECT` from `polaris.analytics_raw` or
+  `polaris.analytics_processed` without an explicit dedupe construct.
+  Both are ReplacingMergeTree; the three sanctioned shapes are:
   - `argMax(col, _version)` inside an MV feeding a projection
     (the canonical pattern; do this by default)
   - `SETTINGS final = 1` for ad-hoc operator queries
@@ -105,8 +119,8 @@ The macro files live at
 See [`roles/README.md`](./roles/README.md). The short version:
 
 - `polaris_service`: SELECT on `analytics_ingest_log` and every
-  projection table. No access to `analytics_raw` or the ingestion interface
-  table.
+  projection table. No access to the raw-tier tables (`analytics_raw`,
+  `analytics_processed`) or to either ingestion interface table.
 - `polaris_operator`: full read access to `polaris.*` plus
   schema/replay grants.
 

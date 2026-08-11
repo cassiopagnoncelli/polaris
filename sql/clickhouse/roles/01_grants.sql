@@ -11,27 +11,31 @@
 --     +  SELECT on polaris.analytics_ingest_log
 --     +  SELECT on every projection table
 --     -  NO grant on polaris.analytics_raw
---     -  NO grant on polaris.analytics_events_queue (Null ingestion
---        interface; clickhouse-sink INSERTs, MVs read)
+--     -  NO grant on polaris.analytics_processed (raw-tier, same rule)
+--     -  NO grant on either ingestion interface table (Null engines;
+--        clickhouse-sink INSERTs, MVs read)
 --     -  NO grant on any materialized view (MVs read into TO-tables;
---        their TO-tables are either projections or analytics_raw,
+--        their TO-tables are either projections or raw-tier tables,
 --        and only the projections are exposed to services)
 --
 --   polaris_sink
 --     +  INSERT on polaris.analytics_events_queue
+--     +  INSERT on polaris.analytics_processed_queue
 --     -  NO SELECT on anything, anywhere
 --
 --   polaris_operator
 --     +  SELECT on every table in `polaris` (including
---        analytics_raw)
+--        analytics_raw and analytics_processed)
 --     +  Schema-evolution grants (CREATE / ALTER / DROP /
 --        INSERT / TRUNCATE / SYSTEM RELOAD) on `polaris`
 --     -  No grants outside the `polaris` database.
 --
--- The ingestion interface table polaris.analytics_events_queue is
--- NEVER granted to either role for direct SELECT. It is a Null engine
--- (see 10_analytics_events_queue.sql), so a SELECT would return an
--- empty result and read as "no data ingested" during an incident.
+-- The ingestion interface tables (polaris.analytics_events_queue,
+-- polaris.analytics_processed_queue) are NEVER granted to either role
+-- for direct SELECT. They are Null engines (see
+-- 10_analytics_events_queue.sql, 11_analytics_processed_queue.sql), so a
+-- SELECT would return an empty result and read as "no data ingested"
+-- during an incident.
 -- Operators diagnosing ingestion lag use the Polaris metric
 -- `polaris_clickhouse_sink_lag_seconds`, system.replicas, and the
 -- analytics_ingest_log. See docs/architecture/07-clickhouse.md
@@ -60,7 +64,15 @@ REVOKE ON CLUSTER '{cluster}'
     FROM polaris_service;
 
 REVOKE ON CLUSTER '{cluster}'
+    ALL ON polaris.analytics_processed
+    FROM polaris_service;
+
+REVOKE ON CLUSTER '{cluster}'
     ALL ON polaris.analytics_events_queue
+    FROM polaris_service;
+
+REVOKE ON CLUSTER '{cluster}'
+    ALL ON polaris.analytics_processed_queue
     FROM polaris_service;
 
 -- ---------------------------------------------------------------
@@ -117,10 +129,14 @@ GRANT ON CLUSTER '{cluster}' SELECT ON system.columns           TO polaris_opera
 -- resolves to zero.
 GRANT ON CLUSTER '{cluster}' SELECT ON system.query_log         TO polaris_operator;
 
--- Even for operators, the ingestion interface table is never granted
+-- Even for operators, the ingestion interface tables are never granted
 -- for direct SELECT. The MV pipeline is the only authorized reader.
 REVOKE ON CLUSTER '{cluster}'
     SELECT ON polaris.analytics_events_queue
+    FROM polaris_operator;
+
+REVOKE ON CLUSTER '{cluster}'
+    SELECT ON polaris.analytics_processed_queue
     FROM polaris_operator;
 
 -- ---------------------------------------------------------------
@@ -128,11 +144,16 @@ REVOKE ON CLUSTER '{cluster}'
 -- ---------------------------------------------------------------
 --
 -- The ClickHouse sink (consumers/clickhouse-sink) is the only writer
--- into ClickHouse. It needs INSERT on the ingestion interface table
--- and nothing else: the materialized views carry `SQL SECURITY NONE`
--- so their SELECT is not checked against the inserting user, and the
--- sink never touches analytics_ingest_log, analytics_raw, or any
--- projection directly.
+-- into ClickHouse. It needs INSERT on the two ingestion interface
+-- tables and nothing else: the materialized views carry
+-- `SQL SECURITY NONE` so their SELECT is not checked against the
+-- inserting user, and the sink never touches analytics_ingest_log,
+-- analytics_raw, analytics_processed, or any projection directly.
+--
+-- The sink routes each message to one of the two queue tables by stream
+-- family (source events -> analytics_events_queue, derived events ->
+-- analytics_processed_queue), so both grants are load-bearing on the
+-- same process.
 --
 -- That clause is load-bearing, not decoration. A materialized view
 -- without it runs its SELECT as whoever performed the INSERT, and an
@@ -148,10 +169,18 @@ GRANT ON CLUSTER '{cluster}'
     INSERT ON polaris.analytics_events_queue
     TO polaris_sink;
 
+GRANT ON CLUSTER '{cluster}'
+    INSERT ON polaris.analytics_processed_queue
+    TO polaris_sink;
+
 -- Defensive REVOKE, mirroring the polaris_service pattern: even if a
 -- future grant in this file widens scope, the sink stays write-only.
 REVOKE ON CLUSTER '{cluster}'
     SELECT ON polaris.analytics_raw
+    FROM polaris_sink;
+
+REVOKE ON CLUSTER '{cluster}'
+    SELECT ON polaris.analytics_processed
     FROM polaris_sink;
 
 REVOKE ON CLUSTER '{cluster}'

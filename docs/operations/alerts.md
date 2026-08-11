@@ -39,17 +39,18 @@ Alertmanager routing tree consumes that label to decide who and how.
 | `PolarisProcessorDLQGrowthPage` | page | processor | processor DLQ growth >1000/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisDestinationDeliveryFailureRate` | page | destination | per-instance delivery failure rate >1% over 5 minutes | [Destination API Failure](runbook-destination-api-failure.md) |
 | `PolarisDestinationDLQGrowth` | page | destination | per-instance DLQ growth >50/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
-| `PolarisClickHouseIngestionLagWarn` | warn | clickhouse | Kafka ingestion lag >2 min | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
-| `PolarisClickHouseIngestionLagPage` | page | clickhouse | Kafka ingestion lag >10 min | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
+| `PolarisClickHouseIngestionLagWarn` | warn | clickhouse | sink ingestion lag >2 min (per interface table) | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
+| `PolarisClickHouseIngestionLagPage` | page | clickhouse | sink ingestion lag >10 min (per interface table) | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
+| `PolarisClickHouseSinkRowsSkipped` | warn | clickhouse | sink skipping >1 message/min for 10 min | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
 | `PolarisClickHouseMVFailure` | page | clickhouse | any materialized view in `failed` state | [ClickHouse Ingestion Lag](runbook-clickhouse-ingestion-lag.md) |
 | `PolarisReplayJobStuck` | page | replay-coordinator | a `running` replay job makes no progress for 30 min | [Replay Stuck](runbook-replay-stuck.md) |
 | `PolarisOperatorGateDenialRate` | warn | control-plane | operator gate denials sustained >5/min | [Replay Stuck](runbook-replay-stuck.md) |
 
-Severity distribution: **10 page, 4 warn**, 14 alerts total.
+Severity distribution: **10 page, 5 warn**, 15 alerts total.
 
 ## V1 metric coverage
 
-All 14 alert rules now reference real metrics; none use a
+All 15 alert rules now reference real metrics; none use a
 `vector(0)` placeholder. The metrics close out as follows:
 
 - **Ingester** (`PolarisRabbitMQPublishFailureRate`): emitted by
@@ -57,10 +58,15 @@ All 14 alert rules now reference real metrics; none use a
   `polaris_ingest_publish_failed_total` /
   `polaris_ingest_publish_success_total` (MKEF1I9G).
 - **ClickHouse** (`PolarisClickHouseIngestionLagWarn`/`...Page`,
-  `PolarisClickHouseMVFailure`): emitted by the analytics-projector
-  via the ClickHouse probe poller (PI2CRFZC). The poller queries
-  `system.materialized_views` on a 30s
-  cadence.
+  `PolarisClickHouseSinkRowsSkipped`): emitted by
+  `consumers/clickhouse-sink`. Lag and consumed-row series carry a
+  `table` label, so the two ingestion paths — source events into
+  `analytics_events_queue`, derived events into
+  `analytics_processed_queue` — are alerted independently by the same
+  `max by (table)` rules.
+- **ClickHouse MVs** (`PolarisClickHouseMVFailure`): emitted by the
+  analytics-projector via the ClickHouse probe poller (PI2CRFZC). The
+  poller queries `system.materialized_views` on a 30s cadence.
 - **Operator gate** (`PolarisOperatorGateDenialRate`): emitted by
   `enforceProductionMutationGate` via the `OperatorGateMetricsSink`
   the control-plane API wires (2JZZXTMY).

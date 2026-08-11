@@ -30,8 +30,21 @@ import {
 import type { Logger } from "@polaris/shared-logger";
 import { ClickHouseConnectionError, ClickHouseQueryError } from "./errors.js";
 
-/** Table the sink writes into. */
+/** Ingestion interface table for source events (`analytics.events`). */
 export const ANALYTICS_QUEUE_TABLE = "analytics_events_queue";
+
+/**
+ * Ingestion interface table for derived events (`enriched.events`,
+ * `session.events`, `identity.events`, `attribution.events`).
+ *
+ * A second table rather than a discriminator column on the first: the
+ * sink picks the destination at INSERT time, so each MV downstream stays
+ * unfiltered and a routing mistake shows up as rows in the wrong table
+ * instead of as quietly inflated counts in `analytics_raw`.
+ *
+ * @see sql/clickhouse/11_analytics_processed_queue.sql
+ */
+export const ANALYTICS_PROCESSED_QUEUE_TABLE = "analytics_processed_queue";
 
 /**
  * One row as INSERTed into the ingestion interface table. Field names and
@@ -78,12 +91,16 @@ export interface CreateAnalyticsSinkWriterInput {
 
 export interface AnalyticsSinkWriter {
   /**
-   * INSERT a batch. Resolves only when ClickHouse has acknowledged the
-   * write — the sink's checkpoint advance depends on that, so a
-   * fire-and-forget insert here would turn at-least-once delivery into
-   * silent data loss.
+   * INSERT a batch into one of the two ingestion interface tables.
+   * Resolves only when ClickHouse has acknowledged the write — the
+   * sink's checkpoint advance depends on that, so a fire-and-forget
+   * insert here would turn at-least-once delivery into silent data loss.
+   *
+   * `table` defaults to the source-event queue. Both tables have an
+   * identical column shape, which is why one row type and one method
+   * serve both paths.
    */
-  insertBatch(rows: ReadonlyArray<AnalyticsQueueRow>): Promise<void>;
+  insertBatch(rows: ReadonlyArray<AnalyticsQueueRow>, table?: string): Promise<void>;
   /** Close the underlying connection pool. Idempotent. */
   close(): Promise<void>;
 }
@@ -113,11 +130,11 @@ export function createAnalyticsSinkWriter(
   let closed = false;
 
   return {
-    async insertBatch(rows): Promise<void> {
+    async insertBatch(rows, table = ANALYTICS_QUEUE_TABLE): Promise<void> {
       if (rows.length === 0) return;
       try {
         await underlying.insert({
-          table: ANALYTICS_QUEUE_TABLE,
+          table,
           values: rows,
           format: "JSONEachRow",
           clickhouse_settings: {
@@ -138,12 +155,12 @@ export function createAnalyticsSinkWriter(
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "non-Error cause";
         throw new ClickHouseQueryError(
-          `ClickHouse insert into ${database}.${ANALYTICS_QUEUE_TABLE} failed (${String(rows.length)} rows): ${message}`,
+          `ClickHouse insert into ${database}.${table} failed (${String(rows.length)} rows): ${message}`,
           { cause },
         );
       }
       input.logger?.debug(
-        { component: "clickhouse.sink", rows: rows.length },
+        { component: "clickhouse.sink", table, rows: rows.length },
         "inserted analytics batch",
       );
     },

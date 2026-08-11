@@ -1,13 +1,39 @@
 /**
  * ClickHouse sink runtime.
  *
- * Consumes the `analytics.events` super stream and INSERTs batches into
- * `polaris.analytics_events_queue`, which fans them into the two
- * materialized views. This service exists because the RabbitMQ migration
- * removed ClickHouse's ability to consume for itself: the Kafka Engine
- * table pulled rows on its own, RabbitMQ streams have no ClickHouse
- * engine, and the AMQP engine that does exist has no offsets and
- * therefore no honest recovery story.
+ * Consumes every canonical super stream and INSERTs batches into one of
+ * two ingestion interface tables, which fan them into the materialized
+ * views. This service exists because the RabbitMQ migration removed
+ * ClickHouse's ability to consume for itself: the Kafka Engine table
+ * pulled rows on its own, RabbitMQ streams have no ClickHouse engine,
+ * and the AMQP engine that does exist has no offsets and therefore no
+ * honest recovery story.
+ *
+ * ## Routing
+ *
+ * Polaris streams carry two kinds of fact, and they answer different
+ * questions:
+ *
+ *   analytics.events     what a producer reported   -> analytics_events_queue
+ *   enriched.events      \
+ *   session.events        \  what Polaris concluded -> analytics_processed_queue
+ *   identity.events       /
+ *   attribution.events   /
+ *
+ * The split is made here, at INSERT time, rather than by a WHERE clause
+ * in each materialized view. A filter would have to be right in three
+ * places and fails silently when it is not — a derived event landing in
+ * `analytics_raw` inflates every projection built on it, and nothing in
+ * the system would say so. Choosing the table instead makes a routing
+ * bug visible as rows in the wrong place.
+ *
+ * Both tables have an identical column shape, so one `toQueueRow`
+ * projection serves both paths; only the destination differs.
+ *
+ * Until this landed the sink read `analytics.events` alone, which meant
+ * every geoip enrichment, session window, identity link and touchpoint
+ * the processors computed expired with stream retention without ever
+ * becoming queryable.
  *
  * ## Batching
  *
@@ -61,7 +87,12 @@
  * cross-partition order, and ReplacingMergeTree resolves per event key.
  */
 
-import type { AnalyticsQueueRow, AnalyticsSinkWriter } from "@polaris/shared-clickhouse";
+import {
+  ANALYTICS_PROCESSED_QUEUE_TABLE,
+  ANALYTICS_QUEUE_TABLE,
+  type AnalyticsQueueRow,
+  type AnalyticsSinkWriter,
+} from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
 import {
   consumerFamiliesFor,
@@ -70,12 +101,43 @@ import {
   type PolarisConsumer,
   redeliverQueueName,
   STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_ATTRIBUTION_EVENTS,
+  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_SESSION_EVENTS,
   type TransportMessageHandler,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
 
 import { SINK_COMPONENT } from "./config.js";
 import type { SinkMetrics } from "./metrics.js";
+
+/**
+ * Families carrying derived facts. Everything the sink reads that is not
+ * `analytics.events` lands in `analytics_processed_queue`.
+ */
+const DERIVED_STREAM_FAMILIES = [
+  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_SESSION_EVENTS,
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_ATTRIBUTION_EVENTS,
+] as const;
+
+/**
+ * True when a delivery came from the source-event family.
+ *
+ * The `.` prefix check covers per-project isolation: an isolated project
+ * reads from `analytics.events.<project_id>`, which is still source
+ * events and must still route to `analytics_events_queue`. Matching the
+ * bare family alone would silently divert every isolated project's
+ * events into the derived table.
+ */
+function isSourceEventFamily(family: string): boolean {
+  return (
+    family === STREAM_FAMILY_ANALYTICS_EVENTS ||
+    family.startsWith(`${STREAM_FAMILY_ANALYTICS_EVENTS}.`)
+  );
+}
 
 export interface ClickhouseSinkRuntimeDeps {
   readonly consumer: PolarisConsumer;
@@ -92,7 +154,11 @@ export interface ClickhouseSinkRuntimeDeps {
    * delivery guarantees.
    */
   readonly checkpoints: DeferredCheckpointStore;
-  /** Projects currently isolated for `analytics.events`. */
+  /**
+   * Projects currently isolated. Applied to every family the sink reads,
+   * not just `analytics.events` — a project isolated for its source
+   * events is isolated for its derived events too.
+   */
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Clock seam for tests. */
   readonly now?: () => number;
@@ -103,28 +169,51 @@ export interface ClickhouseSinkRuntime {
   stop(): Promise<void>;
   /** Exposed so tests can drive the handler without a broker. */
   readonly handler: TransportMessageHandler;
-  /** Flush the open batch immediately. Used by shutdown and by tests. */
+  /** Flush both open batches immediately. Used by shutdown and by tests. */
   flush(): Promise<void>;
-  /** Rows currently buffered. Tests assert on this. */
+  /** Rows currently buffered across both batches. Tests assert on this. */
   readonly pending: number;
 }
 
 export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRuntime {
   const now = deps.now ?? ((): number => Date.now());
-  let batch: AnalyticsQueueRow[] = [];
+  let sourceBatch: AnalyticsQueueRow[] = [];
+  let processedBatch: AnalyticsQueueRow[] = [];
   let batchOpenedAt = now();
 
+  /**
+   * Flush both batches, then commit once.
+   *
+   * The single commit is the part that matters. `DeferredCheckpointStore`
+   * holds positions for every stream the sink reads, so committing after
+   * the first INSERT would advance the derived families' checkpoints past
+   * rows still sitting in the second buffer. One commit, after both
+   * writes are acknowledged, keeps the durability contract that the
+   * module note describes.
+   *
+   * If the second INSERT fails after the first succeeded, the rollback
+   * re-reads both batches. The source rows are then inserted twice and
+   * ReplacingMergeTree collapses them — the same at-least-once behaviour
+   * a crash mid-batch already produces.
+   */
   async function flush(): Promise<void> {
-    if (batch.length === 0) return;
-    const rows = batch;
-    // Swap the buffer before awaiting so a delivery that lands during the
+    if (sourceBatch.length === 0 && processedBatch.length === 0) return;
+    const sourceRows = sourceBatch;
+    const processedRows = processedBatch;
+    // Swap the buffers before awaiting so a delivery that lands during the
     // INSERT accumulates into the next batch instead of being lost or
     // double-counted.
-    batch = [];
+    sourceBatch = [];
+    processedBatch = [];
     batchOpenedAt = now();
     const started = now();
     try {
-      await deps.writer.insertBatch(rows);
+      if (sourceRows.length > 0) {
+        await deps.writer.insertBatch(sourceRows, ANALYTICS_QUEUE_TABLE);
+      }
+      if (processedRows.length > 0) {
+        await deps.writer.insertBatch(processedRows, ANALYTICS_PROCESSED_QUEUE_TABLE);
+      }
     } catch (err) {
       // Drop the held positions so the transport re-reads these rows
       // rather than resuming past them.
@@ -133,9 +222,20 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     }
     // The rows are durable in ClickHouse; the positions may follow.
     await deps.checkpoints.commit();
-    deps.metrics.recordBatch(rows.length, now() - started);
+    const duration = now() - started;
+    if (sourceRows.length > 0) {
+      deps.metrics.recordBatch(sourceRows.length, duration, ANALYTICS_QUEUE_TABLE);
+    }
+    if (processedRows.length > 0) {
+      deps.metrics.recordBatch(processedRows.length, duration, ANALYTICS_PROCESSED_QUEUE_TABLE);
+    }
     deps.logger.debug(
-      { component: "clickhouse-sink.flush", rows: rows.length, duration_ms: now() - started },
+      {
+        component: "clickhouse-sink.flush",
+        rows: sourceRows.length,
+        processed_rows: processedRows.length,
+        duration_ms: duration,
+      },
       "flushed batch to clickhouse",
     );
   }
@@ -146,11 +246,17 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
       deps.metrics.recordSkipped();
       return;
     }
-    batch.push(row);
-    deps.metrics.recordConsumed(row.project_id, row.environment);
-    deps.metrics.recordLag(row.ingested_at, now());
+    const source = isSourceEventFamily(payload.family);
+    const table = source ? ANALYTICS_QUEUE_TABLE : ANALYTICS_PROCESSED_QUEUE_TABLE;
+    if (source) {
+      sourceBatch.push(row);
+    } else {
+      processedBatch.push(row);
+    }
+    deps.metrics.recordConsumed(row.project_id, row.environment, table);
+    deps.metrics.recordLag(row.ingested_at, now(), table);
 
-    const full = batch.length >= deps.batchMaxRows;
+    const full = sourceBatch.length + processedBatch.length >= deps.batchMaxRows;
     const stale = now() - batchOpenedAt >= deps.batchMaxMs;
     if (full || stale) {
       // Awaiting here is what makes the checkpoint safe: the transport
@@ -166,17 +272,17 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const families = consumerFamiliesFor(
-      STREAM_FAMILY_ANALYTICS_EVENTS,
-      deps.isolatedProjects ?? [],
+    const isolated = deps.isolatedProjects ?? [];
+    const families = [STREAM_FAMILY_ANALYTICS_EVENTS, ...DERIVED_STREAM_FAMILIES].flatMap(
+      (family) => [...consumerFamiliesFor(family, isolated)],
     );
     await deps.consumer.subscribe({
-      families: [...families],
+      families,
       queues: [redeliverQueueName(SINK_COMPONENT)],
     });
     deps.logger.info(
       { component: "clickhouse-sink.runtime", families, batch_max_rows: deps.batchMaxRows },
-      "clickhouse sink subscribed to analytics.events",
+      "clickhouse sink subscribed to source and derived event streams",
     );
     await deps.consumer.runEach(handler);
 
@@ -184,7 +290,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     // message arrives, which could be minutes. The ticker bounds that.
     ticker = setInterval(
       () => {
-        if (batch.length === 0) return;
+        if (sourceBatch.length === 0 && processedBatch.length === 0) return;
         if (now() - batchOpenedAt < deps.batchMaxMs) return;
         void flush().catch((err: unknown) => {
           const error = err as Error;
@@ -218,7 +324,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     handler,
     flush,
     get pending(): number {
-      return batch.length;
+      return sourceBatch.length + processedBatch.length;
     },
   };
 }

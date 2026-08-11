@@ -78,6 +78,7 @@ export {
 } from "./rebuild/index.js";
 export type { ReplayReader } from "./replay.js";
 export {
+  ANALYTICS_PROCESSED_QUEUE_TABLE,
   ANALYTICS_QUEUE_TABLE,
   type AnalyticsQueueRow,
   type AnalyticsSinkWriter,

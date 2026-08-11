@@ -9,25 +9,56 @@ It is part of the stream graph, not just an afterthought database.
 The mature ingestion path is:
 
 ```text
-RabbitMQ analytics.events
-    |
-    v
-ClickHouse ingestion interface table
-    |
-    v
-analytics_ingest_log
-    |
-    v
-analytics_raw
-    |
-    v
-materialized views
-    |
-    v
-projection tables
+RabbitMQ analytics.events          RabbitMQ enriched / session /
+    |                               identity / attribution .events
+    v                                          |
+ingestion interface table                      v
+    |                              ingestion interface table
+    +--> analytics_ingest_log                  |
+    |                                          v
+    +--> analytics_raw                 analytics_processed
+             |
+             v
+      materialized views
+             |
+             v
+      projection tables
 ```
 
-The ingestion interface table is transient. They are not queried directly.
+The ingestion interface tables are transient. They are not queried directly.
+
+## Two Kinds of Fact
+
+Polaris streams carry two kinds of fact, and conflating them makes
+`count()` meaningless:
+
+- **Source events** are what a producer reported. They arrive on
+  `analytics.events` and land in `analytics_raw`.
+- **Derived events** are what a Polaris processor concluded —
+  `enriched.geoip`, `session.started`, `identity.linked`,
+  `touchpoint_captured`. They arrive on the four derived families and
+  land in `analytics_processed`.
+
+Both are full canonical envelopes; a derived event carries the emitting
+processor in `source.id` and its own payload schema in `properties`.
+Processors fan out from `raw.events` rather than chaining, so there is no
+"enriched copy" of a source event — the two are siblings, and one page
+view that triggers a geoip lookup and a session start is one row in
+`analytics_raw` and two in `analytics_processed`, not three of anything.
+
+`clickhouse-sink` routes by stream family at INSERT time rather than
+filtering in the materialized views. A `WHERE` in each MV would have to
+be right in three places and fails silently when it is not: a derived
+event reaching `analytics_raw` inflates every projection built on it and
+nothing in the system says so. Picking the destination table instead
+makes a routing bug visible as rows in the wrong place.
+
+One consequence to know: the derived path has no ingest log. Duplicate
+deliveries collapse in `analytics_processed`'s ReplacingMergeTree and
+their lineage collapses with them, so duplicate-delivery forensics for
+derived events rely on the sink's metrics rather than on a stored
+append-only record. The lineage columns (`_topic`, `_partition`,
+`_offset`) ride on `analytics_processed` itself for the surviving row.
 
 ## Initial Format
 
@@ -167,6 +198,33 @@ processor metadata
 _version
 ```
 
+### Deduped Derived-Fact Table
+
+One table for all four derived families, not four tables: they share the
+canonical envelope, they are queried together far more often than
+separately, and `event` is already in the sort key.
+
+```text
+analytics_processed
+ENGINE = ReplacingMergeTree(_version)
+PARTITION BY toYYYYMM(occurred_at)
+ORDER BY (project_id, environment, event, event_id)
+TTL occurred_at + INTERVAL 400 DAY
+```
+
+Same sort key and TTL as `analytics_raw`, so the query patterns below
+apply verbatim and joins between the two never outlive one side. It
+carries `source_id` / `source_type` (which processor concluded the fact),
+the identity block (the join keys back to `analytics_raw`),
+`properties_json` (the derived payload), and the transport lineage
+columns.
+
+`ip`, `user_agent` and `locale` are deliberately **not** flattened here.
+Processors strip the source IP when they emit — the geoip enricher
+forwards a SHA-256 hash and an empty context precisely so raw IP lives on
+exactly one record — and a structurally-always-empty `ip` column would
+read as "no IPs observed" rather than "IPs are not on this table".
+
 `ReplacingMergeTree` deduplication is merge-time behavior. Queries and projections that require strict dedupe must be designed around stable event keys. Do not use `FINAL` broadly by default because it can be expensive. The query patterns below define how dedupe is handled in practice.
 
 ## Query Patterns
@@ -231,9 +289,9 @@ WHERE project_id = 'storefront' AND occurred_at >= now() - INTERVAL 1 DAY;
 
 ### What is banned
 
-- Plain `SELECT *` on `analytics_raw` without `argMax`, `SETTINGS final = 1`, or a `count(DISTINCT event_id)` shape.
+- Plain `SELECT *` on `analytics_raw` or `analytics_processed` without `argMax`, `SETTINGS final = 1`, or a `count(DISTINCT event_id)` shape.
 - Production dashboards that use `FINAL` on hot data without an explicit review note.
-- Querying `analytics_events_queue` (the ingestion interface table) directly.
+- Querying either ingestion interface table (`analytics_events_queue`, `analytics_processed_queue`) directly.
 
 ## Access Control
 
@@ -241,18 +299,20 @@ The query patterns above are policy. The actual enforcement is at the database l
 
 ### Roles
 
-Two roles ship in v1:
+Three roles ship in v1:
 
 ```text
 polaris_service     SELECT on projection tables and analytics_ingest_log only
-polaris_operator    broader access including analytics_raw and DDL
+polaris_operator    broader access including the raw-tier tables and DDL
+polaris_sink        INSERT on the two ingestion interface tables, SELECT on nothing
 ```
 
 Role definitions and grants live in `sql/clickhouse/roles/` and are applied as part of P1-003.
 
 ### Connection identity
 
-- Services (ingester, processors, consumers, future dashboard API) authenticate as `polaris_service`. The connection literally cannot read `analytics_raw`.
+- Services (ingester, processors, consumers, future dashboard API) authenticate as `polaris_service`. The connection literally cannot read `analytics_raw` or `analytics_processed`.
+- `clickhouse-sink` authenticates as `polaris_sink`, which holds INSERT on the two interface tables and no SELECT anywhere — the correct blast radius for a process whose whole job is moving bytes in one direction.
 - Operator workflows (CLI replay execution, manual investigation via `clickhouse-client`, rebuild jobs) authenticate as `polaris_operator`.
 - The CLI splits its workload: routine read commands use the service role; replay/rebuild commands use the operator role.
 

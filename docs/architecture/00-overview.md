@@ -34,16 +34,34 @@ Ingester API
     v
 RabbitMQ: raw.events
     |
-    v
-Versioned processors
+    +--> analytics-projector --> analytics.events
+    +--> geoip-enricher      --> enriched.events
+    +--> sessionizer         --> session.events
+    +--> identity-resolver   --> identity.events
+
+RabbitMQ: analytics.events
     |
-    v
-RabbitMQ: identity.events / enriched.events / attribution.events / analytics.events
-    |
+    +--> attribution-engine  --> attribution.events
     +--> Destination consumers
     |
-    +--> clickhouse-sink -> persisted analytical tables
+    v
+clickhouse-sink
+    |
+    +--> analytics_events_queue     <- analytics.events
+    |        +--> analytics_ingest_log      (append-only transport truth)
+    |        +--> analytics_raw             (deduped source facts)
+    |
+    +--> analytics_processed_queue  <- enriched / session / identity / attribution
+             +--> analytics_processed       (deduped derived facts)
 ```
+
+Processors fan out from `raw.events` rather than chaining: each one emits
+its own derived events (`enriched.geoip`, `session.started`,
+`identity.linked`, `touchpoint_captured`) as full canonical envelopes
+stamped with the emitting processor. There is no "enriched copy" of a
+source event anywhere in the system — a source event and the facts
+Polaris derives from it are siblings, which is why they land in two
+tables rather than one.
 
 ## Primary Stack
 

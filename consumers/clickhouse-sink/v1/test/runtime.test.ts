@@ -1,4 +1,9 @@
-import type { AnalyticsQueueRow, AnalyticsSinkWriter } from "@polaris/shared-clickhouse";
+import {
+  ANALYTICS_PROCESSED_QUEUE_TABLE,
+  ANALYTICS_QUEUE_TABLE,
+  type AnalyticsQueueRow,
+  type AnalyticsSinkWriter,
+} from "@polaris/shared-clickhouse";
 import {
   DeferredCheckpointStore,
   InMemoryCheckpointStore,
@@ -61,17 +66,51 @@ function payload(
   } as TransportMessagePayload;
 }
 
-function fakeWriter(): { writer: AnalyticsSinkWriter; batches: AnalyticsQueueRow[][] } {
+interface RecordedBatch {
+  readonly table: string;
+  readonly rows: AnalyticsQueueRow[];
+}
+
+function fakeWriter(): {
+  writer: AnalyticsSinkWriter;
+  batches: AnalyticsQueueRow[][];
+  writes: RecordedBatch[];
+} {
   const batches: AnalyticsQueueRow[][] = [];
+  const writes: RecordedBatch[] = [];
   return {
     batches,
+    writes,
     writer: {
-      async insertBatch(rows) {
+      async insertBatch(rows, table = ANALYTICS_QUEUE_TABLE) {
         batches.push([...rows]);
+        writes.push({ table, rows: [...rows] });
       },
       async close() {},
     },
   };
+}
+
+/** A delivery from one of the derived families. */
+function derivedPayload(
+  body: unknown,
+  family = "session.events",
+  partition = 1,
+): TransportMessagePayload {
+  return payload(body, {
+    stream: `${family}-${String(partition)}`,
+    family,
+    partition,
+  });
+}
+
+function derivedEnvelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return envelope({
+    event: "session.started",
+    source: { id: "sessionizer", type: "internal" },
+    processor: { name: "sessionizer", version: "v1" },
+    ...overrides,
+  });
 }
 
 const noopConsumer: PolarisConsumer = {
@@ -267,40 +306,247 @@ describe("clickhouse sink runtime batching", () => {
 });
 
 describe("SinkMetrics", () => {
+  function lagFor(metrics: SinkMetrics, table: string) {
+    return metrics
+      .getSamples()
+      .find((s) => s.name === "polaris_clickhouse_sink_lag_seconds" && s.labels["table"] === table);
+  }
+
   it("reports ingestion lag from the envelope's ingested_at", () => {
     const metrics = new SinkMetrics();
     const ingestedAt = "2026-08-01T10:00:00.000Z";
-    metrics.recordLag(ingestedAt, Date.parse(ingestedAt) + 4_500);
+    metrics.recordLag(ingestedAt, Date.parse(ingestedAt) + 4_500, ANALYTICS_QUEUE_TABLE);
 
-    const sample = metrics
-      .getSamples()
-      .find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
-    expect(sample?.value).toBeCloseTo(4.5, 3);
-    expect(sample?.labels).toEqual({ table: "analytics_events_queue" });
+    expect(lagFor(metrics, ANALYTICS_QUEUE_TABLE)?.value).toBeCloseTo(4.5, 3);
   });
 
   it("ignores an unparsable timestamp instead of reporting a huge lag", () => {
     const metrics = new SinkMetrics();
-    metrics.recordLag("not-a-date", Date.now());
-    const sample = metrics
-      .getSamples()
-      .find((s) => s.name === "polaris_clickhouse_sink_lag_seconds");
+    metrics.recordLag("not-a-date", Date.now(), ANALYTICS_QUEUE_TABLE);
     // Paging someone because one message had a malformed timestamp is a
     // worse failure than under-reporting lag for that message.
-    expect(sample?.value).toBe(0);
+    expect(lagFor(metrics, ANALYTICS_QUEUE_TABLE)?.value).toBe(0);
   });
 
-  it("counts consumed rows per project and environment", () => {
+  it("emits a lag series for both tables before either has seen a row", () => {
+    // An absent series and a healthy-but-idle one look identical to
+    // Prometheus, so the derived path must not go quiet just because it
+    // has not received anything yet.
     const metrics = new SinkMetrics();
-    metrics.recordConsumed("project-alpha", "production");
-    metrics.recordConsumed("project-alpha", "production");
-    metrics.recordConsumed("project-beta", "staging");
+    expect(lagFor(metrics, ANALYTICS_QUEUE_TABLE)?.value).toBe(0);
+    expect(lagFor(metrics, ANALYTICS_PROCESSED_QUEUE_TABLE)?.value).toBe(0);
+  });
+
+  it("tracks lag per table independently", () => {
+    const metrics = new SinkMetrics();
+    const ingestedAt = "2026-08-01T10:00:00.000Z";
+    metrics.recordLag(ingestedAt, Date.parse(ingestedAt) + 1_000, ANALYTICS_QUEUE_TABLE);
+    metrics.recordLag(ingestedAt, Date.parse(ingestedAt) + 9_000, ANALYTICS_PROCESSED_QUEUE_TABLE);
+
+    expect(lagFor(metrics, ANALYTICS_QUEUE_TABLE)?.value).toBeCloseTo(1, 3);
+    expect(lagFor(metrics, ANALYTICS_PROCESSED_QUEUE_TABLE)?.value).toBeCloseTo(9, 3);
+  });
+
+  it("counts consumed rows per project, environment and table", () => {
+    const metrics = new SinkMetrics();
+    metrics.recordConsumed("project-alpha", "production", ANALYTICS_QUEUE_TABLE);
+    metrics.recordConsumed("project-alpha", "production", ANALYTICS_QUEUE_TABLE);
+    metrics.recordConsumed("project-alpha", "production", ANALYTICS_PROCESSED_QUEUE_TABLE);
+    metrics.recordConsumed("project-beta", "staging", ANALYTICS_QUEUE_TABLE);
 
     const consumed = metrics
       .getSamples()
       .filter((s) => s.name === "polaris_clickhouse_sink_rows_consumed_total");
-    expect(consumed).toHaveLength(2);
-    expect(consumed.find((s) => s.labels["project_id"] === "project-alpha")?.value).toBe(2);
+    expect(consumed).toHaveLength(3);
+    expect(
+      consumed.find(
+        (s) =>
+          s.labels["project_id"] === "project-alpha" && s.labels["table"] === ANALYTICS_QUEUE_TABLE,
+      )?.value,
+    ).toBe(2);
+    expect(consumed.find((s) => s.labels["table"] === ANALYTICS_PROCESSED_QUEUE_TABLE)?.value).toBe(
+      1,
+    );
+  });
+});
+
+describe("derived-event routing", () => {
+  it("routes derived families to the processed queue table", async () => {
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+
+    await runtime.handler(derivedPayload(derivedEnvelope({ event_id: "s1" })), {});
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.table).toBe(ANALYTICS_PROCESSED_QUEUE_TABLE);
+    expect(writes[0]?.rows[0]?.event).toBe("session.started");
+    // Lineage still names the concrete derived stream.
+    expect(writes[0]?.rows[0]?._topic).toBe("session.events-1");
+  });
+
+  it.each([
+    "enriched.events",
+    "session.events",
+    "identity.events",
+    "attribution.events",
+  ])("routes %s to the processed queue table", async (family) => {
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+
+    await runtime.handler(derivedPayload(derivedEnvelope(), family), {});
+    expect(writes[0]?.table).toBe(ANALYTICS_PROCESSED_QUEUE_TABLE);
+  });
+
+  it("keeps an isolated project's source events on the source table", async () => {
+    // An isolated project reads `analytics.events.<project_id>`. Matching
+    // the bare family alone would divert every isolated project's source
+    // events into the derived table.
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+
+    await runtime.handler(
+      payload(envelope(), {
+        stream: "analytics.events.project-alpha-0",
+        family: "analytics.events.project-alpha",
+        partition: 0,
+      }),
+      {},
+    );
+
+    expect(writes[0]?.table).toBe(ANALYTICS_QUEUE_TABLE);
+  });
+
+  it("splits a mixed batch into one INSERT per table", async () => {
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 3 });
+
+    await runtime.handler(payload(envelope({ event_id: "e1" })), {});
+    await runtime.handler(derivedPayload(derivedEnvelope({ event_id: "s1" })), {});
+    expect(writes).toHaveLength(0);
+    expect(runtime.pending).toBe(2);
+
+    await runtime.handler(payload(envelope({ event_id: "e2" })), {});
+
+    expect(writes).toHaveLength(2);
+    expect(writes[0]).toMatchObject({ table: ANALYTICS_QUEUE_TABLE });
+    expect(writes[0]?.rows.map((r) => r.event_id)).toEqual(["e1", "e2"]);
+    expect(writes[1]).toMatchObject({ table: ANALYTICS_PROCESSED_QUEUE_TABLE });
+    expect(writes[1]?.rows.map((r) => r.event_id)).toEqual(["s1"]);
+    expect(runtime.pending).toBe(0);
+  });
+
+  it("holds the checkpoint until BOTH inserts are acknowledged", async () => {
+    // The deferred store holds positions for every stream the sink reads.
+    // Committing after the first INSERT would advance the derived
+    // families past rows still sitting in the second buffer.
+    const writes: string[] = [];
+    const underlying = new InMemoryCheckpointStore();
+    const deferred = new DeferredCheckpointStore(underlying);
+    const writer: AnalyticsSinkWriter = {
+      async insertBatch(_rows, table = ANALYTICS_QUEUE_TABLE) {
+        writes.push(table);
+        if (table === ANALYTICS_QUEUE_TABLE) {
+          // The derived rows are still buffered at this point.
+          expect(await underlying.read("sink", "session.events-1")).toBeUndefined();
+        }
+      },
+      async close() {},
+    };
+    const runtime = runtimeWith(writer, { batchMaxRows: 2, checkpoints: deferred });
+
+    await runtime.handler(payload(envelope({ event_id: "e1" })), {});
+    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "1" });
+    await runtime.handler(derivedPayload(derivedEnvelope({ event_id: "s1" })), {});
+    await deferred.write({ group_name: "sink", stream: "session.events-1", last_offset: "5" });
+
+    expect(writes).toEqual([ANALYTICS_QUEUE_TABLE, ANALYTICS_PROCESSED_QUEUE_TABLE]);
+    expect(await underlying.read("sink", "analytics.events-2")).toBe("1");
+  });
+
+  it("rolls the checkpoint back when the derived insert fails after the source one", async () => {
+    // Both batches are re-read. The source rows are then inserted twice
+    // and ReplacingMergeTree collapses them — the same at-least-once
+    // behaviour a crash mid-batch already produces.
+    const underlying = new InMemoryCheckpointStore();
+    await underlying.write({ group_name: "sink", stream: "session.events-1", last_offset: "4" });
+    const deferred = new DeferredCheckpointStore(underlying);
+    const runtime = runtimeWith(
+      {
+        async insertBatch(_rows, table = ANALYTICS_QUEUE_TABLE) {
+          if (table === ANALYTICS_PROCESSED_QUEUE_TABLE) throw new Error("clickhouse 503");
+        },
+        async close() {},
+      },
+      { batchMaxRows: 2, checkpoints: deferred },
+    );
+
+    await runtime.handler(payload(envelope({ event_id: "e1" })), {});
+    await expect(
+      runtime.handler(derivedPayload(derivedEnvelope({ event_id: "s1" })), {}),
+    ).rejects.toThrow(/clickhouse 503/);
+
+    expect(await underlying.read("sink", "session.events-1")).toBe("4");
+  });
+
+  it("subscribes to the source family and all four derived families", async () => {
+    const subscriptions: string[][] = [];
+    const runtime = createRuntime({
+      consumer: {
+        async subscribe(input: { families: readonly string[] }) {
+          subscriptions.push([...input.families]);
+        },
+        async runEach() {},
+        async disconnect() {},
+        streams: [],
+        queues: [],
+      } as unknown as PolarisConsumer,
+      writer: fakeWriter().writer,
+      logger: silentLogger,
+      metrics: new SinkMetrics(),
+      batchMaxRows: 10,
+      batchMaxMs: 60_000,
+      checkpoints: new DeferredCheckpointStore(new InMemoryCheckpointStore()),
+    });
+
+    await runtime.start();
+    await runtime.stop();
+
+    expect(subscriptions[0]).toEqual([
+      "analytics.events",
+      "enriched.events",
+      "session.events",
+      "identity.events",
+      "attribution.events",
+    ]);
+  });
+
+  it("includes each isolated project's dedicated family for every stream", async () => {
+    const subscriptions: string[][] = [];
+    const runtime = createRuntime({
+      consumer: {
+        async subscribe(input: { families: readonly string[] }) {
+          subscriptions.push([...input.families]);
+        },
+        async runEach() {},
+        async disconnect() {},
+        streams: [],
+        queues: [],
+      } as unknown as PolarisConsumer,
+      writer: fakeWriter().writer,
+      logger: silentLogger,
+      metrics: new SinkMetrics(),
+      batchMaxRows: 10,
+      batchMaxMs: 60_000,
+      checkpoints: new DeferredCheckpointStore(new InMemoryCheckpointStore()),
+      isolatedProjects: ["project-alpha"],
+    });
+
+    await runtime.start();
+    await runtime.stop();
+
+    expect(subscriptions[0]).toContain("analytics.events.project-alpha");
+    expect(subscriptions[0]).toContain("session.events.project-alpha");
+    expect(subscriptions[0]).toHaveLength(10);
   });
 });
 

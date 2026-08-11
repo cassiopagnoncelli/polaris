@@ -283,6 +283,38 @@ groups:
             Triage with the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
+      # `polaris_clickhouse_sink_rows_skipped_total` counts messages the
+      # sink could not project onto an ingestion row — an undecodable
+      # body, or an envelope missing one of the six required fields. The
+      # sink skips them and advances its checkpoint, which is the right
+      # call (throwing would rewind the partition and re-deliver the same
+      # broken message forever, stalling every healthy event behind it)
+      # but it is also the only path where an event leaves the pipeline
+      # without landing in ClickHouse, a DLQ, or an ingester rejection.
+      #
+      # A steady trickle is the signal that matters: the projector emits
+      # canonical envelopes, so a non-zero rate means something upstream
+      # is publishing to these streams that should not be, or a processor
+      # has started emitting a malformed envelope. Alerting on the rate
+      # rather than the total keeps a long-ago incident from pinning the
+      # alert on forever.
+      - alert: PolarisClickHouseSinkRowsSkipped
+        expr: sum(rate(polaris_clickhouse_sink_rows_skipped_total[5m])) * 60 > 1
+        for: 10m
+        labels:
+          severity: warn
+          service: clickhouse
+          team: platform-data
+        annotations:
+          summary: "ClickHouse sink is skipping messages"
+          description: |
+            The ClickHouse sink has been skipping more than 1 message per
+            minute for 10 minutes. These events reach neither ClickHouse
+            nor a DLQ. Grep the sink logs for
+            `component=clickhouse-sink.decode` to see the offending
+            stream and offset.
+          runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
+
       # `polaris_clickhouse_mv_state{view, state}` is also emitted by
       # the analytics-projector's probe poller (PI2CRFZC). The probe
       # loop emits a sample of value 1 per observed (view, state) tuple;
