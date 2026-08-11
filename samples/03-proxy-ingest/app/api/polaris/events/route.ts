@@ -18,7 +18,7 @@ import { NextResponse } from "next/server";
  * are yours to add here.
  */
 
-const ENDPOINT = process.env.POLARIS_ENDPOINT ?? "http://localhost:8080/v1/events";
+const ENDPOINT = process.env.POLARIS_ENDPOINT ?? "http://localhost:4000/v1/events";
 const API_KEY = process.env.POLARIS_API_KEY ?? "";
 
 /** The Web SDK batches at 20; anything much larger is not our SDK talking. */

@@ -15,60 +15,64 @@ it for anything involving money, entitlements, or a webhook.
 
 ## One-time setup
 
-Everything below runs from the repo root, once.
+Everything below runs from the repo root, once. Development is bare metal:
+PostgreSQL, RabbitMQ, Redis, and ClickHouse are expected at their default
+localhost endpoints. If you would rather run those in containers, `make
+docker-up` brings them up and the rest is unchanged.
 
-**1. Bring up the platform** (see
+**1. Bootstrap and seed** (see
 [getting-started](../docs/development/getting-started.md) for the long
 version):
 
 ```bash
-pnpm install && docker compose up -d --wait && pnpm db:migrate
+make setup
 ```
 
-**2. Build the workspace.** The samples link to `packages/*/dist`, and the
-CLI runs from `dist` too, so this is not optional:
+That installs the workspace, builds the packages the samples link against,
+creates the `polaris` role and database, applies the PostgreSQL and
+ClickHouse migrations, declares the RabbitMQ topology, and then seeds — the
+`storefront` project, its `storefront-web` / `payments-api` sources, and the
+browser origin allow-list entry `01-web-events` needs.
 
-```bash
-pnpm build
-```
+Seeding is `bin/setup`, and it is idempotent. Re-run just that part with
+`make seed` after changing anything under `catalog/`.
 
-**3. Materialize the catalog** — the sample `storefront` project and its
-`storefront-web` / `payments-api` sources:
-
-```bash
-export POLARIS_API_URL=http://localhost:8080
-export POLARIS_TOKEN=local-dev
-export POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable'
-node apps/polaris-cli/dist/bin/polaris.js projects sync
-node apps/polaris-cli/dist/bin/polaris.js sources sync
-```
-
-**4. Issue the keys.** Each command prints its token exactly once — only an
+**2. Issue the keys.** Each command prints its token exactly once — only an
 argon2id hash is stored, so a lost token is reissued, never recovered:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js keys create \
-  --project storefront --env development --source storefront-web --type web
+make api_key
 ```
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js keys create \
-  --project storefront --env development --source payments-api --type backend
+make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
 ```
 
-**5. Allow the browser origin** — only for `01-web-events`, which posts from
-the browser to a different origin. The ingester denies unknown origins by
-default, and there is no CLI surface for the allow-list yet:
+The first is the web key for samples 01 and 03; the second is the backend key
+for sample 02. `KEY_PROJECT` and `KEY_ENV` override the rest.
+
+**3. Start the ingester** and leave it running:
 
 ```bash
-docker compose exec -T postgres psql -U polaris -d polaris -c "INSERT INTO source_allowed_origins (project_id, source_id, environment, origin) VALUES ('storefront', 'storefront-web', 'development', 'http://localhost:3000') ON CONFLICT DO NOTHING;"
+make dev-ingester
 ```
 
-**6. Start the ingester** and leave it running:
+It listens on **4000**, which is what every sample's `.env.example` points at.
+
+### Running a browser app on a different port
+
+The ingester checks the `Origin` header of browser-sent batches against a
+per-source allow-list and denies anything it does not know, so sample 01 has
+to be allow-listed before its events are accepted. The seed covers its
+documented port. If you moved it, add yours to `.env.local` at the repo root
+and re-seed:
 
 ```bash
-POLARIS_HTTP_PORT=8080 pnpm --filter @polaris/ingester-api run start
+echo 'POLARIS_DEV_ORIGINS=http://localhost:3641' >> .env.local && make seed
 ```
+
+Samples 02 and 03 reach the ingester server-side — no `Origin` header, so
+nothing to allow-list.
 
 ## Running a sample
 
@@ -91,7 +95,7 @@ The ingester answers per event, so the first check is the HTTP response —
 the samples surface it in the page or in the dev-server log. After that:
 
 ```bash
-curl -s http://localhost:8080/metrics | grep polaris_ingest
+curl -s http://localhost:4000/metrics | grep polaris_ingest
 ```
 
 RabbitMQ's management UI at <http://localhost:15672> (polaris / polaris)

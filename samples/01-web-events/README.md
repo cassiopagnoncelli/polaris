@@ -9,22 +9,27 @@ browser (web key) ──HTTPS──▶ ingester ──▶ raw.events
 
 ## Run it
 
-Finish the [one-time setup](../README.md#one-time-setup) first — including
-step 5, the origin allow-list row, which this sample needs and the other two
-do not.
+Finish the [one-time setup](../README.md#one-time-setup) first. `make setup`
+seeds the origin allow-list entry this sample needs and the other two do not
+— it is the only one that posts from the browser to a different origin.
 
 ```bash
 pnpm install --ignore-workspace
 ```
 
 ```bash
-cp .env.example .env.local   # paste the web key
+cp .env.example .env.local   # paste the key from `make api_key`
 pnpm dev
 ```
 
 Open <http://localhost:3000>. The activity panel on the home page is fed by
 the SDK's diagnostic callbacks, so you can watch queueing, flushing, and
 rejection happen.
+
+Serving on another port means allow-listing it — see
+[running a browser app on a different port](../README.md#running-a-browser-app-on-a-different-port).
+Without an API key the page still renders and the activity panel says what
+is missing, so a half-finished setup explains itself rather than crashing.
 
 ## The four files that matter
 

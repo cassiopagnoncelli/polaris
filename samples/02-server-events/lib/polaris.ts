@@ -23,7 +23,7 @@ export function getPolaris(): PolarisNodeSdk {
       throw new Error("POLARIS_API_KEY is not set — copy .env.example to .env.local");
     }
     globalForPolaris.__polaris = new PolarisNodeSdk({
-      endpoint: process.env.POLARIS_ENDPOINT ?? "http://localhost:8080/v1/events",
+      endpoint: process.env.POLARIS_ENDPOINT ?? "http://localhost:4000/v1/events",
       apiKey,
       source: {
         type: "backend",

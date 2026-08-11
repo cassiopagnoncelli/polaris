@@ -14,14 +14,33 @@ import { HttpsTransport, PolarisWebSdk } from "@polaris/web-sdk";
  * and every caller awaits the same instance.
  */
 
-const ENDPOINT = process.env.NEXT_PUBLIC_POLARIS_ENDPOINT ?? "http://localhost:8080/v1/events";
+const ENDPOINT = process.env.NEXT_PUBLIC_POLARIS_ENDPOINT ?? "http://localhost:4000/v1/events";
 const API_KEY = process.env.NEXT_PUBLIC_POLARIS_API_KEY ?? "";
 const SOURCE_ID = process.env.NEXT_PUBLIC_POLARIS_SOURCE_ID ?? "storefront-web";
 
-let instance: Promise<PolarisWebSdk> | undefined;
+let instance: Promise<PolarisWebSdk | null> | undefined;
 
-export function getPolaris(): Promise<PolarisWebSdk> {
+/**
+ * Resolves `null` when the sample is not configured yet. Every consumer
+ * already handles a null SDK — the provider starts out null and the demo
+ * panel disables itself on it — so an unconfigured sample renders and
+ * explains itself instead of crashing.
+ */
+export function getPolaris(): Promise<PolarisWebSdk | null> {
   if (instance === undefined) {
+    if (API_KEY === "") {
+      // `HttpsTransport` throws from its constructor on an empty key, and
+      // it is constructed as an argument below — so the throw escapes
+      // `getPolaris()` synchronously, out of the provider's effect, and
+      // takes down the tree with a stack pointing into SDK internals. A
+      // missing key is an unfinished setup step, not a defect worth a
+      // stack trace: say so where the sample already reports things.
+      record(
+        "NEXT_PUBLIC_POLARIS_API_KEY is not set — cp .env.example .env.local, then paste a web key",
+      );
+      instance = Promise.resolve(null);
+      return instance;
+    }
     instance = PolarisWebSdk.create({
       endpoint: ENDPOINT,
       apiKey: API_KEY,
