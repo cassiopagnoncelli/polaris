@@ -36,19 +36,6 @@
  * `@polaris/shared-processor`.
  */
 
-import {
-  buildRawEventsPartitionKey,
-  consumerFamiliesFor,
-  decodeEvent,
-  type PolarisConsumer,
-  type TransportMessageHandler,
-  type TransportMessageContext,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
-  STREAM_FAMILY_IDENTITY_EVENTS,
-  STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -56,6 +43,19 @@ import {
   ProcessorMetrics,
   type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import {
+  buildRawEventsPartitionKey,
+  consumerFamiliesFor,
+  decodeEvent,
+  type PolarisConsumer,
+  type PolarisProducer,
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
+  type TransportMessageHandler,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 import {
   buildIdentityEventEnvelope,
@@ -104,11 +104,13 @@ export interface IdentityResolverRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
-   * Per-run identifier (UUIDv7). Stamped onto every emitted identity.*
-   * event in both the nested `processor.run_id` slot and the property
-   * `run_id` field.
+   * Per-run identifier (UUIDv7) from `openProcessorRun`. Stamped onto every
+   * emitted event in both the nested `processor.run_id` slot and the property
+   * `run_id` field. Required: it identifies the `processor_runs` row this
+   * output belongs to, and a fabricated stand-in would look joinable without
+   * being so. `app.ts` always supplies it.
    */
-  readonly run_id?: string | undefined;
+  readonly run_id: string;
   /**
    * UUIDv7 allocator. Tests inject a deterministic counter; production
    * uses the real `uuidv7()`.
@@ -152,7 +154,7 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
       metrics,
       newEventId,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
-      ...(deps.run_id !== undefined ? { run_id: deps.run_id } : {}),
+      run_id: deps.run_id,
     });
   };
 
@@ -196,7 +198,8 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   readonly newEventId: () => string;
   readonly now?: () => Date;
-  readonly run_id?: string | undefined;
+  /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
+  readonly run_id: string;
 }
 
 async function handleMessage(input: HandleMessageInput): Promise<void> {
@@ -273,7 +276,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       candidate,
       repository,
       now: now ?? ((): Date => new Date()),
-      ...(input.run_id !== undefined ? { run_id: input.run_id } : {}),
+      run_id: input.run_id,
     });
   } catch (err) {
     const classification: ProcessorRetryClassification = classifyError(err);
@@ -301,7 +304,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     emission,
     eventId: newEventId(),
     now: now ?? ((): Date => new Date()),
-    ...(input.run_id !== undefined ? { run_id: input.run_id } : {}),
+    run_id: input.run_id,
   });
 
   // Reuse the SAME canonical partition key as the source raw.events
@@ -380,7 +383,8 @@ async function applyExplicitOverlap(input: {
   };
   readonly repository: IdentityLinkRepository;
   readonly now: () => Date;
-  readonly run_id?: string | undefined;
+  /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
+  readonly run_id: string;
 }): Promise<IdentityEventEmission> {
   const { raw, candidate, repository, now } = input;
   // The transform already ordered the pair so `left.kind <= right.kind`.
@@ -455,7 +459,7 @@ async function applyExplicitOverlap(input: {
     reason: `explicit overlap observed in event ${raw.event} (${raw.event_id})`,
     processor_name: PROCESSOR_NAME,
     processor_version: PROCESSOR_VERSION,
-    ...(input.run_id !== undefined ? { run_id: input.run_id } : {}),
+    run_id: input.run_id,
     created_at: now(),
   });
 

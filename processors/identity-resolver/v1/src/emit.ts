@@ -155,7 +155,13 @@ export interface BuildIdentityEventEnvelopeOptions {
   readonly emission: IdentityEventEmission;
   readonly eventId: string;
   readonly now: () => Date;
-  readonly run_id?: string | undefined;
+  /**
+   * Run that is emitting this event, from `openProcessorRun`. Required, and
+   * deliberately not defaulted to `emission.link.run_id`: that column records
+   * the run which first created the link, which is a different run from the
+   * one emitting now whenever the link is replayed or re-read.
+   */
+  readonly run_id: string;
 }
 
 /**
@@ -169,8 +175,7 @@ export function buildIdentityEventEnvelope(
   options: BuildIdentityEventEnvelopeOptions,
 ): IdentityEventEnvelope {
   const { raw, emission, eventId, now } = options;
-  const runId =
-    options.run_id ?? emission.link.run_id ?? buildSyntheticRunId(emission.link.link_id);
+  const runId = options.run_id;
   const ingestedAt = now().toISOString();
 
   const properties = buildPropertiesPayload(emission, runId);
@@ -192,7 +197,7 @@ export function buildIdentityEventEnvelope(
   const stamped = stampProcessorMetadata(baseEnvelope, {
     identity: PROCESSOR_IDENTITY,
     now,
-    ...(options.run_id !== undefined ? { run_id: options.run_id } : {}),
+    run_id: runId,
   });
 
   return stamped as unknown as IdentityEventEnvelope;
@@ -274,15 +279,4 @@ function otherIdentifier(row: IdentityLinkRecord, shared: string): string {
   throw new Error(
     `identity-resolver: link row ${row.link_id} does not carry the shared identifier "${shared}"`,
   );
-}
-
-/**
- * Generate a synthetic run id when the runtime has not been wired to the
- * `ProcessorRunRepository` yet. The run id is intentionally derived from
- * the link id (UUIDv7) so it stays stable across replays of the same
- * event, but it is NOT a registered run row. The boot layer should always
- * pass an explicit `run_id` once P8-001 wiring lands in deployment.
- */
-function buildSyntheticRunId(linkId: string): string {
-  return `synthetic:${linkId}`;
 }

@@ -23,20 +23,17 @@
  * RabbitMQ broker.
  */
 
-import {
-  createTransportConnection,
-  type TransportConnection,
-  createPolarisConsumer,
-  PostgresCheckpointStore,
-  createPolarisProducer,
-  type PolarisConsumer,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-} from "@polaris/shared-transport";
+import { hostname } from "node:os";
 import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
+import {
+  openProcessorRun,
+  ProcessorMetrics,
+  type ProcessorRunHandle,
+  type ProcessorRunRepository,
+  processorLogContext,
+} from "@polaris/shared-processor";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -44,6 +41,16 @@ import {
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
+import {
+  createPolarisConsumer,
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisConsumer,
+  type PolarisProducer,
+  PostgresCheckpointStore,
+  type SyncIsolationLookup,
+  type TransportConnection,
+} from "@polaris/shared-transport";
 
 import type { GeoipEnricherRuntimeConfig } from "./config.js";
 import type { IPLookup } from "./lookup.js";
@@ -106,6 +113,18 @@ export interface BuildAppOptions {
    * drive the runtime's `handler` directly.
    */
   readonly startRuntime?: boolean;
+  /**
+   * Pre-built `processor_runs` repository. Defaults to a Kysely repository
+   * over the checkpoint pool — the processor already holds that handle, so
+   * recording a run costs no extra connection.
+   */
+  readonly runRepository?: ProcessorRunRepository;
+  /**
+   * Whether to record a `processor_runs` row for this process. Defaults to
+   * `true`. Tests that build the app without PostgreSQL set `false` so
+   * bootstrap does not reach for a database that is not there.
+   */
+  readonly recordRun?: boolean;
   /** Per-run identifier (UUIDv7) stamped on every emitted event. */
   readonly run_id?: string;
 }
@@ -132,6 +151,12 @@ export interface BuiltGeoipEnricherApp {
   readonly ownsProducer: boolean;
   /** `true` when the app owns the consumer lifecycle. */
   readonly ownsConsumer: boolean;
+  /**
+   * This process's run. `run.run_id` is what every derived event carries in
+   * `processor.run_id`; `run.registered` says whether a `processor_runs` row
+   * exists to join it against.
+   */
+  readonly run: ProcessorRunHandle;
 }
 
 export async function buildGeoipEnricherApp(
@@ -204,6 +229,27 @@ export async function buildGeoipEnricherApp(
     }
   }
 
+  // ---- processor run ---------------------------------------------------
+  // Registered BEFORE the runtime is built: the runtime stamps
+  // `processor.run_id` onto every derived event, and the id has to exist by
+  // the time the first message lands. `openProcessorRun` never throws — a
+  // control-plane outage costs the run row, not the data path.
+  const run = await openProcessorRun({
+    enabled: options.recordRun ?? true,
+    ...(options.runRepository !== undefined ? { repository: options.runRepository } : {}),
+    db: checkpointDb,
+    identity: PROCESSOR_IDENTITY,
+    // No `project_id`: the processor reads every project's events off the
+    // shared stream, so the run is cross-project by construction.
+    environment: config.service.environment,
+    host: hostname(),
+    logger: processorLogger,
+    metrics,
+    // Explicit id from the caller (replay tooling, tests): the ROW takes it
+    // too, so the stamped id and the recorded run never disagree.
+    ...(options.run_id !== undefined ? { run_id: options.run_id } : {}),
+  });
+
   // ---- streaming runtime ----------------------------------------------
   const runtime = createRuntime({
     consumer,
@@ -216,7 +262,7 @@ export async function buildGeoipEnricherApp(
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
-    ...(options.run_id !== undefined ? { run_id: options.run_id } : {}),
+    run_id: run.run_id,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -230,6 +276,13 @@ export async function buildGeoipEnricherApp(
         "runtime stop error during shutdown",
       );
     }
+  });
+  // Straight after the runtime stops and well before `closeDb` at the end of
+  // the list: the run row is written through the checkpoint pool, so it has to
+  // close out while that pool is still open. Counters are read from the metrics
+  // registry once the runtime is quiet. A no-op when nothing was registered.
+  shutdownTasks.push(async () => {
+    await run.complete();
   });
   if (ownsConsumer) {
     shutdownTasks.push(async () => {
@@ -331,6 +384,7 @@ export async function buildGeoipEnricherApp(
     lookup,
     ownsProducer,
     ownsConsumer,
+    run,
   };
 }
 

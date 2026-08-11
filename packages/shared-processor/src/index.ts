@@ -16,6 +16,7 @@
  *   - processor identity types and structured log context (`./identity`)
  *   - dual-shape metadata stamping (`./metadata`)
  *   - PostgreSQL processor-run registration (`./runs`)
+ *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
  *   - in-memory metrics counters (`./metrics`)
@@ -115,6 +116,14 @@ export {
   type ProcessorMetricLabels,
   ProcessorMetrics,
 } from "./metrics.js";
+export {
+  type OpenProcessorRunInput,
+  openProcessorRun,
+  type ProcessorRunHandle,
+  readCounters,
+  type StartProcessorRunInput,
+  startProcessorRun,
+} from "./run-lifecycle.js";
 export {
   type CancelRunInput,
   type CompleteRunInput,

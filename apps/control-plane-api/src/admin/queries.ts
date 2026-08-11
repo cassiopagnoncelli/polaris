@@ -93,6 +93,27 @@ export interface ProcessorActivationRow {
   readonly last_changed_by: string;
 }
 
+/**
+ * A row of `processor_runs` — what actually ran, as opposed to what an
+ * operator activated. Written by each processor's boot layer through
+ * `@polaris/shared-processor`'s `openProcessorRun`.
+ */
+export interface ProcessorRunRow {
+  readonly run_id: string;
+  readonly processor_name: string;
+  readonly processor_version: string;
+  readonly project_id: string | null;
+  readonly environment: string | null;
+  readonly started_at: Date;
+  readonly finished_at: Date | null;
+  readonly status: string;
+  readonly events_consumed: number;
+  readonly events_emitted: number;
+  readonly events_failed: number;
+  readonly host: string | null;
+  readonly error_summary: string | null;
+}
+
 export interface AuditRow {
   readonly audit_id: string;
   readonly created_at: Date;
@@ -189,6 +210,7 @@ export interface AdminQueries {
   listApiKeys(filter: ApiKeyFilter): Promise<readonly ApiKeyRow[]>;
   findApiKey(apiKeyId: string): Promise<ApiKeyRow | null>;
   listProcessorActivations(): Promise<readonly ProcessorActivationRow[]>;
+  listProcessorRuns(limit: number): Promise<readonly ProcessorRunRow[]>;
   listAudit(filter: AuditFilter): Promise<readonly AuditRow[]>;
   findAudit(auditId: string): Promise<AuditRow | null>;
   listDlq(filter: DlqFilter): Promise<readonly DlqRow[]>;
@@ -354,6 +376,32 @@ export function createKyselyAdminQueries(db: Kysely<Database>): AdminQueries {
         .orderBy("processor_name")
         .orderBy("processor_version")
         .orderBy("project_id")
+        .execute();
+    },
+
+    async listProcessorRuns(limit: number): Promise<readonly ProcessorRunRow[]> {
+      // Newest first, and `running` rows sort with the rest — a run that
+      // started days ago and is still open is exactly what an operator needs
+      // to see at the top of the list, not something to filter out.
+      return db
+        .selectFrom("processor_runs")
+        .select([
+          "run_id",
+          "processor_name",
+          "processor_version",
+          "project_id",
+          "environment",
+          "started_at",
+          "finished_at",
+          "status",
+          "events_consumed",
+          "events_emitted",
+          "events_failed",
+          "host",
+          "error_summary",
+        ])
+        .orderBy("started_at", "desc")
+        .limit(limit)
         .execute();
     },
 

@@ -1,21 +1,26 @@
 /**
  * `polaris processors runs show <run_id>` — read-only.
  *
- * Surfaces one processor-run record when the `processor_runs` table
- * exists. See the long-form comment on `runs-list.ts` for the wiring
- * contract — the same shape applies here:
+ * Shows one row of `processor_runs`: the process behind a derived event's
+ * `processor.run_id`. Rows are written by the processors themselves at boot
+ * through `@polaris/shared-processor`'s `openProcessorRun`; this command
+ * only reads them.
  *
- *   1. Args validated.
- *   2. `rejectProcessorRuleArguments` gate fires.
- *   3. Store `probe()` decides between "not yet provisioned" and a real
- *      `findById(run_id)` lookup.
- *   4. The default store stub returns the P8-001 "not yet provisioned"
- *      message and exit 0.
+ * Scope note: this is the RUN, not the processor. Inputs, outputs, mode, and
+ * replay support are semantics and live in the manifest — `polaris processors
+ * show <name> --version <v>` is the command for those. Earlier drafts of this
+ * command declared `git_sha`, `config_hash`, `runtime_settings_hash`,
+ * `input_topic`, and `output_topic` on the detail shape; none of those are
+ * columns of `processor_runs`, and rendering them would have meant inventing
+ * values. The lineage chain in
+ * `docs/architecture/05-processors-and-replay.md` reaches them through the
+ * processor version, which every run row carries.
  *
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
+import { connectDb, findProcessorRunById } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import { rejectProcessorRuleArguments } from "./validation.js";
@@ -25,30 +30,30 @@ interface ProcessorsRunsShowArgs {
 }
 
 /**
- * Future-facing read-shape. Mirrors `runs-list.ts`'s
- * `ProcessorRunListRow` plus the metric / lineage payload the architecture
- * doc spells out in
- * `docs/architecture/05-processors-and-replay.md "Processor Metadata"`.
+ * Read-shape rendered by this command — one row of `processor_runs`, no more.
+ *
+ * `project_id` / `environment` are nullable: a processor consuming the shared
+ * stream registers a cross-project run, and a deployment whose environment
+ * label is outside the control plane's three environments records unscoped.
  */
 export interface ProcessorRunDetail {
   readonly run_id: string;
   readonly processor_name: string;
   readonly processor_version: string;
-  readonly git_sha: string;
-  readonly config_hash: string;
-  readonly runtime_settings_hash: string;
-  readonly input_topic: string;
-  readonly output_topic: string;
-  readonly project_id: string;
-  readonly environment: string;
+  readonly project_id: string | null;
+  readonly environment: string | null;
   readonly status: string;
   readonly started_at: string;
   readonly finished_at: string | null;
-  readonly metrics: Readonly<Record<string, number | string>>;
+  readonly events_consumed: number;
+  readonly events_emitted: number;
+  readonly events_failed: number;
+  readonly host: string | null;
+  readonly error_summary: string | null;
 }
 
+/** Storage seam. Tests inject an in-memory lookup; production is Kysely. */
 export interface ProcessorsRunsShowStore {
-  probe(): Promise<null | { pendingTask: string; message: string }>;
   findById(runId: string): Promise<ProcessorRunDetail | null>;
   close(): Promise<void>;
 }
@@ -63,9 +68,7 @@ export const processorsRunsShowCommand: CommandDefinition = {
   register: (parent, deps) => {
     const cmd = parent
       .command("show <run_id>")
-      .description(
-        "Show one processor run. Surfaces 'not yet provisioned' until P8-001 lands processor_runs.",
-      );
+      .description("Show one processor run. For what the processor does, see `processors show`.");
     cmd.action(async (runId: string, _opts: unknown, command: Command) => {
       const wrapped = deps.runCommand<ProcessorsRunsShowArgs>(
         { id: "processors.runs.show", mutates: false },
@@ -92,23 +95,6 @@ export function buildProcessorsRunsShowRunner(hooks: ProcessorsRunsShowHooks = {
 
     const store = openStore();
     try {
-      const probe = await store.probe();
-      if (probe !== null) {
-        ctx.output.writeErr(probe.message);
-        ctx.output.writeOut(
-          renderAccordingTo(ctx.config.output, {
-            human: probe.message,
-            json: {
-              not_provisioned: true,
-              pending_task: probe.pendingTask,
-              message: probe.message,
-              run: null,
-            },
-          }),
-        );
-        return undefined;
-      }
-
       const detail = await store.findById(runId);
       if (detail === null) {
         throw new UsageError(`processor run "${runId}" not found`);
@@ -124,18 +110,10 @@ export function buildProcessorsRunsShowRunner(hooks: ProcessorsRunsShowHooks = {
 const runProcessorsRunsShow = buildProcessorsRunsShowRunner();
 
 function defaultStore(): ProcessorsRunsShowStore {
+  const handle = connectDb();
   return {
-    probe: async () => ({
-      pendingTask: "P8-001",
-      message:
-        "processor_runs table not yet provisioned — wired in P8-001 (Processor Runtime Helpers).",
-    }),
-    findById: async () => {
-      throw new UsageError(
-        "processor_runs lookup is not implemented in P6-005 — P8-001 must replace defaultStore() with a Kysely-backed findById.",
-      );
-    },
-    close: async () => {},
+    findById: (runId) => findProcessorRunById(handle.db, runId),
+    close: () => handle.close(),
   };
 }
 
@@ -150,26 +128,22 @@ function emit(ctx: CommandContext, detail: ProcessorRunDetail): void {
 
 function renderHuman(detail: ProcessorRunDetail): string {
   const lines = [
-    `run_id                 ${detail.run_id}`,
-    `processor_name         ${detail.processor_name}`,
-    `processor_version      ${detail.processor_version}`,
-    `git_sha                ${detail.git_sha}`,
-    `config_hash            ${detail.config_hash}`,
-    `runtime_settings_hash  ${detail.runtime_settings_hash}`,
-    `input_topic            ${detail.input_topic}`,
-    `output_topic           ${detail.output_topic}`,
-    `project_id             ${detail.project_id}`,
-    `environment            ${detail.environment}`,
-    `status                 ${detail.status}`,
-    `started_at             ${detail.started_at}`,
-    `finished_at            ${detail.finished_at ?? "(running)"}`,
+    `run_id             ${detail.run_id}`,
+    `processor_name     ${detail.processor_name}`,
+    `processor_version  ${detail.processor_version}`,
+    `project_id         ${detail.project_id ?? "(cross-project)"}`,
+    `environment        ${detail.environment ?? "(unscoped)"}`,
+    `status             ${detail.status}`,
+    `host               ${detail.host ?? "(unknown)"}`,
+    `started_at         ${detail.started_at}`,
+    `finished_at        ${detail.finished_at ?? "(running)"}`,
+    // Written once, when the run ends — a running row reads zero.
+    `events_consumed    ${detail.events_consumed}`,
+    `events_emitted     ${detail.events_emitted}`,
+    `events_failed      ${detail.events_failed}`,
   ];
-  const metricKeys = Object.keys(detail.metrics).sort();
-  if (metricKeys.length > 0) {
-    lines.push("metrics:");
-    for (const key of metricKeys) {
-      lines.push(`  ${key}=${detail.metrics[key]}`);
-    }
+  if (detail.error_summary !== null) {
+    lines.push(`error_summary      ${detail.error_summary}`);
   }
   return lines.join("\n");
 }

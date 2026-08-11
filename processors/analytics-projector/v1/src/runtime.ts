@@ -31,19 +31,6 @@
  * streaming runtime here.
  */
 
-import {
-  buildRawEventsPartitionKey,
-  consumerFamiliesFor,
-  decodeEvent,
-  type PolarisConsumer,
-  type TransportMessageHandler,
-  type TransportMessageContext,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
-  STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -51,6 +38,19 @@ import {
   ProcessorMetrics,
   type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import {
+  buildRawEventsPartitionKey,
+  consumerFamiliesFor,
+  decodeEvent,
+  type PolarisConsumer,
+  type PolarisProducer,
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
+  type TransportMessageHandler,
+} from "@polaris/shared-transport";
 import {
   PROCESSOR_NAME,
   PROCESSOR_VERSION,

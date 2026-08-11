@@ -213,6 +213,7 @@ function makeQueries(overrides: Partial<AdminQueries> = {}): AdminQueries {
     ],
     findApiKey: async () => null,
     listProcessorActivations: async () => [],
+    listProcessorRuns: async () => [],
     listAudit: async () => [
       {
         audit_id: "polaris_aud_1",
@@ -585,6 +586,101 @@ describe("admin UI — OAuth flow", () => {
     expect(res.statusCode).toBe(403);
     expect(revokeRefreshToken).not.toHaveBeenCalled();
     await app.app.close();
+  });
+});
+
+describe("admin UI — processors page", () => {
+  const RUN = {
+    run_id: "019ff118-7484-709a-9179-77994d4702bf",
+    processor_name: "analytics-projector",
+    processor_version: "v1",
+    project_id: null,
+    environment: "development",
+    started_at: new Date("2026-02-01T00:00:00Z"),
+    finished_at: null,
+    status: "running",
+    events_consumed: 0,
+    events_emitted: 0,
+    events_failed: 0,
+    host: "pod-7",
+    error_summary: null,
+  };
+
+  const ACTIVATION = {
+    processor_name: "analytics-projector",
+    processor_version: "v1",
+    project_id: "storefront",
+    environment: "development",
+    enabled_state: "enabled",
+    enabled_at: new Date("2026-01-01T00:00:00Z"),
+    disabled_at: null,
+    last_changed_by: "cli",
+  };
+
+  async function fetchPage(overrides: Partial<AdminQueries>) {
+    const app = await buildApp({ queries: makeQueries(overrides) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/processors",
+      headers: { cookie: sessionCookie("admin-token") },
+    });
+    await app.app.close();
+    return res;
+  }
+
+  it("explains an empty activations table instead of just saying zero rows", async () => {
+    // A fresh install lands here, and this page reading as broken is what
+    // sent an operator digging through the CLI to find out whether it was.
+    const res = await fetchPage({});
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("No processor has been activated yet");
+    expect(res.body).toContain("polaris processors enable");
+    // Names the gap between "no rows" and "no processors".
+    expect(res.body).toContain("not the processors");
+  });
+
+  it("shows an activated processor that is not running", async () => {
+    const res = await fetchPage({
+      listProcessorActivations: async () => [ACTIVATION],
+      listProcessorRuns: async () => [],
+    });
+    expect(res.body).toContain("not running");
+    expect(res.body).not.toContain("1 running");
+  });
+
+  it("marks an activation as running when a run row is open for it", async () => {
+    const res = await fetchPage({
+      listProcessorActivations: async () => [ACTIVATION],
+      listProcessorRuns: async () => [RUN],
+    });
+    expect(res.body).toContain("1 running");
+    expect(res.body).toContain("pod-7");
+    expect(res.body).toContain(RUN.run_id);
+  });
+
+  it("counts only open runs as running", async () => {
+    const res = await fetchPage({
+      listProcessorActivations: async () => [ACTIVATION],
+      listProcessorRuns: async () => [{ ...RUN, status: "completed", finished_at: new Date() }],
+    });
+    expect(res.body).toContain("not running");
+  });
+
+  it("surfaces a run whose processor was never activated", async () => {
+    // The disagreement that matters most in v1: nothing gates consumption on
+    // an activation row, so a processor can run with no row at all.
+    const res = await fetchPage({
+      listProcessorActivations: async () => [],
+      listProcessorRuns: async () => [RUN],
+    });
+    expect(res.body).toContain("No processor has been activated yet");
+    expect(res.body).toContain(RUN.run_id);
+    expect(res.body).toContain("analytics-projector");
+  });
+
+  it("says activation does not gate consumption in v1", async () => {
+    const res = await fetchPage({ listProcessorActivations: async () => [ACTIVATION] });
+    expect(res.body).toContain("nothing gates consumption");
   });
 });
 

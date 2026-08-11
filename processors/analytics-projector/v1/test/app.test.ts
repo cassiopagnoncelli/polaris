@@ -11,6 +11,7 @@
  *   - shutdown tasks tear the runtime down deterministically.
  */
 
+import { InMemoryProcessorRunRepository, type ProcessorRunHandle } from "@polaris/shared-processor";
 import type {
   PolarisConsumer,
   PolarisProducer,
@@ -102,6 +103,7 @@ describe("buildAnalyticsProjectorApp", () => {
       consumer: stubConsumer(),
       producer: stubProducer(),
       startRuntime: false,
+      recordRun: false,
     });
     try {
       const res = await bootstrap.app.inject({ method: "GET", url: "/health" });
@@ -123,6 +125,7 @@ describe("buildAnalyticsProjectorApp", () => {
       consumer: stubConsumer(),
       producer: stubProducer(),
       startRuntime: false,
+      recordRun: false,
     });
     try {
       const res = await bootstrap.app.inject({ method: "GET", url: "/ready" });
@@ -142,6 +145,7 @@ describe("buildAnalyticsProjectorApp", () => {
       consumer: stubConsumer(),
       producer: stubProducer(),
       startRuntime: false,
+      recordRun: false,
       readinessProbes: [
         async function rabbitmq() {
           return { name: "rabbitmq", status: "down", detail: "broker unreachable" };
@@ -165,6 +169,7 @@ describe("buildAnalyticsProjectorApp", () => {
       consumer,
       producer,
       startRuntime: false,
+      recordRun: false,
     });
     try {
       // Injection short-circuits the transport construction; the app does
@@ -176,6 +181,88 @@ describe("buildAnalyticsProjectorApp", () => {
       expect(producer.connect).not.toHaveBeenCalled();
       expect(result.ownsConsumer).toBe(false);
       expect(result.ownsProducer).toBe(false);
+    } finally {
+      await result.bootstrap.app.close();
+    }
+  });
+});
+
+describe("buildAnalyticsProjectorApp run registration", () => {
+  it("registers a processor_runs row and hands its id to the runtime", async () => {
+    const runs = new InMemoryProcessorRunRepository();
+    const result = await buildAnalyticsProjectorApp({
+      config: TEST_CONFIG,
+      installShutdown: false,
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      runRepository: runs,
+    });
+    try {
+      expect(result.run).not.toBeNull();
+      const run = result.run as ProcessorRunHandle;
+      expect(run.registered).toBe(true);
+
+      const row = await runs.findRun(run.run_id);
+      expect(row?.processor_name).toBe("analytics-projector");
+      expect(row?.processor_version).toBe("v1");
+      expect(row?.status).toBe("running");
+      // `local` is a deployment label, not one of the control plane's three
+      // environments, so the run is recorded unscoped rather than failing the
+      // `processor_runs_environment_allowed` CHECK.
+      expect(row?.environment).toBeNull();
+      // Cross-project by construction: the projector reads every project's
+      // events off the shared stream.
+      expect(row?.project_id).toBeNull();
+      // The id stamped on derived events is the id of the row, not a
+      // `synthetic:` placeholder.
+      expect(run.run_id).not.toContain("synthetic");
+    } finally {
+      await result.bootstrap.app.close();
+    }
+  });
+
+  it("closes the run out on shutdown", async () => {
+    const runs = new InMemoryProcessorRunRepository();
+    // `installShutdown: true` is required for `bootstrap.shutdown()` to do
+    // anything — with it false the handle is a no-op stub. `shutdownExit`
+    // keeps the shutdown path from calling `process.exit` under vitest.
+    const result = await buildAnalyticsProjectorApp({
+      config: TEST_CONFIG,
+      installShutdown: true,
+      shutdownExit: () => {},
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      runRepository: runs,
+    });
+    const run = result.run as ProcessorRunHandle;
+
+    await result.bootstrap.shutdown("SIGTERM");
+
+    const row = await runs.findRun(run.run_id);
+    expect(row?.status).toBe("completed");
+    expect(row?.finished_at).not.toBeNull();
+  });
+
+  it("still allocates a run id when recording is disabled, but records no row", async () => {
+    // Every derived event schema declares `run_id` as required, so there is
+    // always an id. `registered` is what says whether it joins to a row.
+    const result = await buildAnalyticsProjectorApp({
+      config: TEST_CONFIG,
+      installShutdown: false,
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      recordRun: false,
+    });
+    try {
+      expect(result.run.registered).toBe(false);
+      expect(result.run.run_id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
+      // Terminal calls are safe with nothing to write to.
+      await expect(result.run.complete()).resolves.toBeUndefined();
     } finally {
       await result.bootstrap.app.close();
     }

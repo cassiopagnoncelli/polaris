@@ -18,20 +18,17 @@
  * RabbitMQ broker.
  */
 
-import {
-  createTransportConnection,
-  type TransportConnection,
-  createPolarisConsumer,
-  PostgresCheckpointStore,
-  createPolarisProducer,
-  type PolarisConsumer,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-} from "@polaris/shared-transport";
+import { hostname } from "node:os";
 import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { ProcessorMetrics, processorLogContext } from "@polaris/shared-processor";
+import {
+  openProcessorRun,
+  ProcessorMetrics,
+  type ProcessorRunHandle,
+  type ProcessorRunRepository,
+  processorLogContext,
+} from "@polaris/shared-processor";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -39,6 +36,16 @@ import {
   type ReadinessProbe,
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
+import {
+  createPolarisConsumer,
+  createPolarisProducer,
+  createTransportConnection,
+  type PolarisConsumer,
+  type PolarisProducer,
+  PostgresCheckpointStore,
+  type SyncIsolationLookup,
+  type TransportConnection,
+} from "@polaris/shared-transport";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
 import { type AttributionEngineRuntime, createRuntime } from "./runtime.js";
@@ -62,6 +69,18 @@ export interface BuildAppOptions {
   readonly store?: TouchpointStore;
   /** Whether to start the streaming runtime as part of bootstrap. */
   readonly startRuntime?: boolean;
+  /**
+   * Pre-built `processor_runs` repository. Defaults to a Kysely repository
+   * over the checkpoint pool — the processor already holds that handle, so
+   * recording a run costs no extra connection.
+   */
+  readonly runRepository?: ProcessorRunRepository;
+  /**
+   * Whether to record a `processor_runs` row for this process. Defaults to
+   * `true`. Tests that build the app without PostgreSQL set `false` so
+   * bootstrap does not reach for a database that is not there.
+   */
+  readonly recordRun?: boolean;
 }
 
 export interface BuiltAttributionEngineApp {
@@ -73,6 +92,12 @@ export interface BuiltAttributionEngineApp {
   readonly metrics: ProcessorMetrics;
   readonly ownsProducer: boolean;
   readonly ownsConsumer: boolean;
+  /**
+   * This process's run. `run.run_id` is what every derived event carries in
+   * `processor.run_id`; `run.registered` says whether a `processor_runs` row
+   * exists to join it against.
+   */
+  readonly run: ProcessorRunHandle;
 }
 
 export async function buildAttributionEngineApp(
@@ -130,6 +155,24 @@ export async function buildAttributionEngineApp(
     }
   }
 
+  // ---- processor run ---------------------------------------------------
+  // Registered BEFORE the runtime is built: the runtime stamps
+  // `processor.run_id` onto every derived event, and the id has to exist by
+  // the time the first message lands. `openProcessorRun` never throws — a
+  // control-plane outage costs the run row, not the data path.
+  const run = await openProcessorRun({
+    enabled: options.recordRun ?? true,
+    ...(options.runRepository !== undefined ? { repository: options.runRepository } : {}),
+    db: checkpointDb,
+    identity: PROCESSOR_IDENTITY,
+    // No `project_id`: the processor reads every project's events off the
+    // shared stream, so the run is cross-project by construction.
+    environment: config.service.environment,
+    host: hostname(),
+    logger: processorLogger,
+    metrics,
+  });
+
   // ---- streaming runtime ----------------------------------------------
   const runtime = createRuntime({
     consumer,
@@ -142,6 +185,7 @@ export async function buildAttributionEngineApp(
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
+    run_id: run.run_id,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -155,6 +199,13 @@ export async function buildAttributionEngineApp(
         "runtime stop error during shutdown",
       );
     }
+  });
+  // Straight after the runtime stops and well before `closeDb` at the end of
+  // the list: the run row is written through the checkpoint pool, so it has to
+  // close out while that pool is still open. Counters are read from the metrics
+  // registry once the runtime is quiet. A no-op when nothing was registered.
+  shutdownTasks.push(async () => {
+    await run.complete();
   });
   if (ownsConsumer) {
     shutdownTasks.push(async () => {
@@ -251,6 +302,7 @@ export async function buildAttributionEngineApp(
     metrics,
     ownsProducer,
     ownsConsumer,
+    run,
   };
 }
 

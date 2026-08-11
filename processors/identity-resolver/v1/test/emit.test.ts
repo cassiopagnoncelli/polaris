@@ -78,6 +78,13 @@ const SUPERSEDED_LINK: IdentityLinkRecord = {
 
 const NOW = () => new Date("2026-05-12T12:00:00.600Z");
 
+/**
+ * The run doing the emitting. Distinct from `ACTIVE_LINK.run_id` on purpose:
+ * on the idempotent path the link was created by an earlier run, and the
+ * event still belongs to the run that emitted it.
+ */
+const EMITTING_RUN = "019ff118-7484-709a-9179-77994d4702bf";
+
 describe("buildIdentityEventEnvelope — common shape", () => {
   it("stamps the processor identity on both nested + flat shapes", () => {
     const emission: IdentityEventEmission = {
@@ -90,6 +97,7 @@ describe("buildIdentityEventEnvelope — common shape", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000001",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.processor_name).toBe(PROCESSOR_NAME);
     expect(env.processor_version).toBe(PROCESSOR_VERSION);
@@ -109,6 +117,7 @@ describe("buildIdentityEventEnvelope — common shape", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000002",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.project_id).toBe(RAW.project_id);
     expect(env.environment).toBe(RAW.environment);
@@ -127,6 +136,7 @@ describe("buildIdentityEventEnvelope — common shape", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000003",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.source.type).toBe("internal");
     expect(env.source.id).toBe("identity-resolver");
@@ -145,6 +155,7 @@ describe("buildIdentityEventEnvelope — common shape", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000004",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.event_id).toBe("018f1b9e-7b50-7b12-aaaa-000000000004");
   });
@@ -162,6 +173,7 @@ describe("buildIdentityEventEnvelope — identity.linked properties", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000005",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.event).toBe("identity.linked");
     const props = env.properties as Record<string, unknown>;
@@ -170,7 +182,11 @@ describe("buildIdentityEventEnvelope — identity.linked properties", () => {
     expect(props["left_identifier"]).toBe(ACTIVE_LINK.left_identifier);
     expect(props["right_identifier"]).toBe(ACTIVE_LINK.right_identifier);
     expect(props["evidence_type"]).toBe(ACTIVE_LINK.evidence_type);
-    expect(props["run_id"]).toBe(ACTIVE_LINK.run_id);
+    // The emitting run, not `ACTIVE_LINK.run_id` (the run that first created
+    // the link). Before runs were registered this field carried
+    // `synthetic:<link_id>`, which joined to nothing.
+    expect(props["run_id"]).toBe(EMITTING_RUN);
+    expect(env.processor.run_id).toBe(EMITTING_RUN);
   });
 });
 
@@ -192,6 +208,7 @@ describe("buildIdentityEventEnvelope — identity.merged properties", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000006",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.event).toBe("identity.merged");
     const props = env.properties as Record<string, unknown>;
@@ -229,6 +246,7 @@ describe("buildIdentityEventEnvelope — identity.rotated properties", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000007",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(env.event).toBe("identity.rotated");
     const props = env.properties as Record<string, unknown>;
@@ -250,12 +268,14 @@ describe("buildIdentityEventEnvelope — determinism", () => {
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000008",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     const e2 = buildIdentityEventEnvelope({
       raw: RAW,
       emission,
       eventId: "018f1b9e-7b50-7b12-aaaa-000000000008",
       now: NOW,
+      run_id: EMITTING_RUN,
     });
     expect(JSON.stringify(e1)).toBe(JSON.stringify(e2));
   });

@@ -46,20 +46,6 @@
  * from `@polaris/shared-processor`.
  */
 
-import {
-  buildRawEventsPartitionKey,
-  consumerFamiliesFor,
-  decodeEvent,
-  type PolarisConsumer,
-  type TransportMessageHandler,
-  type TransportMessageContext,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
-  STREAM_FAMILY_ATTRIBUTION_EVENTS,
-} from "@polaris/shared-transport";
-
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -67,6 +53,19 @@ import {
   ProcessorMetrics,
   type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import {
+  buildRawEventsPartitionKey,
+  consumerFamiliesFor,
+  decodeEvent,
+  type PolarisConsumer,
+  type PolarisProducer,
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_ATTRIBUTION_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
+  type TransportMessageHandler,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 
 import {
@@ -125,11 +124,13 @@ export interface AttributionEngineRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
-   * Per-run identifier (UUIDv7). Stamped onto every emitted attribution.*
-   * event in both the nested `processor.run_id` slot and the property
-   * `run_id` field.
+   * Per-run identifier (UUIDv7) from `openProcessorRun`. Stamped onto every
+   * emitted event in both the nested `processor.run_id` slot and the property
+   * `run_id` field. Required: it identifies the `processor_runs` row this
+   * output belongs to, and a fabricated stand-in would look joinable without
+   * being so. `app.ts` always supplies it.
    */
-  readonly run_id?: string | undefined;
+  readonly run_id: string;
   /**
    * UUIDv7 allocator. Tests inject a deterministic counter; production
    * uses the real `uuidv7()`.
@@ -175,7 +176,7 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
       metrics,
       newEventId,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
-      ...(deps.run_id !== undefined ? { run_id: deps.run_id } : {}),
+      run_id: deps.run_id,
     });
   };
 
@@ -219,7 +220,8 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   readonly newEventId: () => string;
   readonly now?: () => Date;
-  readonly run_id?: string | undefined;
+  /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
+  readonly run_id: string;
 }
 
 async function handleMessage(input: HandleMessageInput): Promise<void> {
@@ -300,7 +302,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   const startedAt = Date.now();
   const nowFn = input.now ?? ((): Date => new Date());
-  const runId = input.run_id ?? buildSyntheticRunId(raw.event_id);
+  const runId = input.run_id;
 
   try {
     // All three decision branches first emit `touchpoint_captured`.
@@ -622,15 +624,4 @@ function errSummary(err: unknown): { name?: string; message?: string } {
   if (err instanceof Error) return { name: err.name, message: err.message };
   if (typeof err === "string") return { message: err };
   return {};
-}
-
-/**
- * Synthetic run_id used when the runtime has not been wired to the
- * `ProcessorRunRepository` yet. Derived from the source event id so
- * replays produce the same value, but it is NOT a registered run row.
- * Production bootstrap should pass an explicit `run_id` once the
- * processor-run table is wired in deployment.
- */
-function buildSyntheticRunId(sourceEventId: string): string {
-  return `synthetic:${sourceEventId}`;
 }

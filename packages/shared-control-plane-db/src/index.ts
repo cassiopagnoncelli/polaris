@@ -91,6 +91,12 @@ export {
   type ProcessorActivationRow,
 } from "./queries/processor-activations.js";
 export {
+  findProcessorRunById,
+  listProcessorRuns,
+  type ProcessorRunRow,
+  type ProcessorRunScope,
+} from "./queries/processor-runs.js";
+export {
   fetchAllProjects,
   fetchAllSources,
   fetchSourcesById,

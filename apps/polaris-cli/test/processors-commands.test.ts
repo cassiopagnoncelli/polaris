@@ -23,14 +23,14 @@
  *      against the typed surface in `@polaris/shared-db` AND against the
  *      live migration SQL on disk.
  *
- *   3. `processor_runs` not yet provisioned: `runs list` / `runs show`
- *      surface the structured "wired in P8-001" message without crashing.
+ *   3. `processor_runs` reads: `runs list` / `runs show` render rows the
+ *      processors write at boot, and an empty table reads as zero runs.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
+import type { ProcessorRunScope } from "../src/db/index.js";
 import {
   buildProcessorsDisableRunner,
   buildProcessorsEnableRunner,
@@ -45,6 +45,8 @@ import {
   type PackageMeta,
   type ProcessorActivationKey,
   type ProcessorActivationRow,
+  type ProcessorRunDetail,
+  type ProcessorRunListRow,
   type ProcessorsDisableStore,
   type ProcessorsEnableStore,
   type ProcessorsListStore,
@@ -988,34 +990,75 @@ describe("processors disable runner", () => {
   });
 });
 
-describe("processors runs list (P8-001 not yet provisioned)", () => {
-  it("surfaces a 'not yet provisioned' message on stderr and stdout", async () => {
-    const capture = captureOutput();
-    const runner = buildProcessorsRunsListRunner();
-    await runner({}, makeContext(capture.streams));
-    expect(capture.stderr.join("")).toContain("processor_runs table not yet provisioned");
-    expect(capture.stderr.join("")).toContain("P8-001");
-    expect(capture.stdout.join("")).toContain("processor_runs table not yet provisioned");
-  });
+describe("processors runs list", () => {
+  const ROW = {
+    run_id: "019ff156-2c1a-7f3e-8a11-2b7c9d0e5f61",
+    processor_name: PROCESSOR_NAME,
+    processor_version: PROCESSOR_VERSION,
+    project_id: null,
+    environment: null,
+    status: "running",
+    started_at: "2026-05-12T10:00:00.000Z",
+    finished_at: null,
+  };
 
-  it("returns a structured JSON envelope marking the gap", async () => {
+  function storeReturning(rows: readonly ProcessorRunListRow[], seen: ProcessorRunScope[] = []) {
+    const store: ProcessorsRunsListStore = {
+      list: async (scope) => {
+        seen.push(scope);
+        return rows;
+      },
+      close: async () => {},
+    };
+    return store;
+  }
+
+  it("renders rows from the processor_runs table", async () => {
     const capture = captureOutput();
-    const runner = buildProcessorsRunsListRunner();
+    const runner = buildProcessorsRunsListRunner({ openStore: () => storeReturning([ROW]) });
     await runner({}, jsonContext(capture.streams));
     const parsed = JSON.parse(capture.stdout.join(""));
-    expect(parsed.not_provisioned).toBe(true);
-    expect(parsed.pending_task).toBe("P8-001");
+    expect(parsed.count).toBe(1);
+    expect(parsed.rows[0].run_id).toBe(ROW.run_id);
+  });
+
+  it("passes the filter flags through as the query scope", async () => {
+    const seen: ProcessorRunScope[] = [];
+    const capture = captureOutput();
+    const runner = buildProcessorsRunsListRunner({ openStore: () => storeReturning([], seen) });
+    await runner(
+      { project: "storefront", env: "development", processor: PROCESSOR_NAME, version: "v1" },
+      jsonContext(capture.streams),
+    );
+    expect(seen[0]).toEqual({
+      project_id: "storefront",
+      environment: "development",
+      processor_name: PROCESSOR_NAME,
+      processor_version: "v1",
+    });
+  });
+
+  it("reports an empty table as zero rows, not as a missing feature", async () => {
+    // This command used to print "processor_runs table not yet provisioned".
+    // Rows are written at processor boot now, so empty means nothing has
+    // started — the operator should not go looking for unshipped wiring.
+    const capture = captureOutput();
+    const runner = buildProcessorsRunsListRunner({ openStore: () => storeReturning([]) });
+    await runner({}, jsonContext(capture.streams));
+    const parsed = JSON.parse(capture.stdout.join(""));
+    expect(parsed.count).toBe(0);
     expect(parsed.rows).toEqual([]);
+    expect(capture.stderr.join("")).toBe("");
+    expect(JSON.stringify(parsed)).not.toContain("not_provisioned");
   });
 
   it("rejects rule-shaped flags before invoking the store", async () => {
     let opened = 0;
     const store: ProcessorsRunsListStore = {
-      probe: async () => {
+      list: async () => {
         opened += 1;
-        return null;
+        return [];
       },
-      list: async () => [],
       close: async () => {},
     };
     const capture = captureOutput();
@@ -1025,54 +1068,35 @@ describe("processors runs list (P8-001 not yet provisioned)", () => {
     ).rejects.toMatchObject({ name: "UsageError" });
     expect(opened).toBe(0);
   });
-
-  it("falls through to the real list when the probe returns null", async () => {
-    const store: ProcessorsRunsListStore = {
-      probe: async () => null,
-      list: async () => [
-        {
-          run_id: "run_abc",
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
-          project_id: "storefront",
-          environment: "production",
-          status: "succeeded",
-          started_at: "2026-05-12T10:00:00.000Z",
-          finished_at: "2026-05-12T10:05:00.000Z",
-        },
-      ],
-      close: async () => {},
-    };
-    const capture = captureOutput();
-    const runner = buildProcessorsRunsListRunner({ openStore: () => store });
-    await runner({}, jsonContext(capture.streams));
-    const parsed = JSON.parse(capture.stdout.join(""));
-    expect(parsed.count).toBe(1);
-    expect(parsed.rows[0].run_id).toBe("run_abc");
-  });
 });
 
-describe("processors runs show (P8-001 not yet provisioned)", () => {
-  it("surfaces the 'not yet provisioned' message", async () => {
-    const capture = captureOutput();
-    const runner = buildProcessorsRunsShowRunner();
-    await runner({ runId: "run_x" }, makeContext(capture.streams));
-    expect(capture.stderr.join("")).toContain("processor_runs table not yet provisioned");
-  });
+describe("processors runs show", () => {
+  const DETAIL = {
+    run_id: "019ff156-2c1a-7f3e-8a11-2b7c9d0e5f61",
+    processor_name: PROCESSOR_NAME,
+    processor_version: PROCESSOR_VERSION,
+    project_id: null,
+    environment: null,
+    status: "completed",
+    started_at: "2026-05-12T10:00:00.000Z",
+    finished_at: "2026-05-12T10:05:00.000Z",
+    events_consumed: 100,
+    events_emitted: 100,
+    events_failed: 0,
+    host: "pod-7",
+    error_summary: null,
+  };
 
-  it("returns a structured JSON envelope marking the gap", async () => {
-    const capture = captureOutput();
-    const runner = buildProcessorsRunsShowRunner();
-    await runner({ runId: "run_x" }, jsonContext(capture.streams));
-    const parsed = JSON.parse(capture.stdout.join(""));
-    expect(parsed.not_provisioned).toBe(true);
-    expect(parsed.pending_task).toBe("P8-001");
-    expect(parsed.run).toBeNull();
-  });
+  function storeReturning(detail: ProcessorRunDetail | null): ProcessorsRunsShowStore {
+    return {
+      findById: async () => detail,
+      close: async () => {},
+    };
+  }
 
   it("requires a run_id", async () => {
     const capture = captureOutput();
-    const runner = buildProcessorsRunsShowRunner();
+    const runner = buildProcessorsRunsShowRunner({ openStore: () => storeReturning(null) });
     await expect(runner({ runId: "  " }, makeContext(capture.streams))).rejects.toMatchObject({
       name: "UsageError",
     });
@@ -1080,7 +1104,7 @@ describe("processors runs show (P8-001 not yet provisioned)", () => {
 
   it("rejects rule-shaped flags", async () => {
     const capture = captureOutput();
-    const runner = buildProcessorsRunsShowRunner();
+    const runner = buildProcessorsRunsShowRunner({ openStore: () => storeReturning(null) });
     await expect(
       runner(
         { runId: "run_x", ...({ transform: "x" } as Record<string, string>) },
@@ -1089,34 +1113,35 @@ describe("processors runs show (P8-001 not yet provisioned)", () => {
     ).rejects.toMatchObject({ name: "UsageError" });
   });
 
-  it("renders run detail when the probe returns null", async () => {
-    const store: ProcessorsRunsShowStore = {
-      probe: async () => null,
-      findById: async () => ({
-        run_id: "run_abc",
-        processor_name: PROCESSOR_NAME,
-        processor_version: PROCESSOR_VERSION,
-        git_sha: "deadbeef",
-        config_hash: "cfg_hash",
-        runtime_settings_hash: "rs_hash",
-        input_topic: "raw.events",
-        output_topic: "analytics.events",
-        project_id: "storefront",
-        environment: "production",
-        status: "succeeded",
-        started_at: "2026-05-12T10:00:00.000Z",
-        finished_at: "2026-05-12T10:05:00.000Z",
-        metrics: { events_consumed: 100, events_produced: 100 },
-      }),
-      close: async () => {},
-    };
+  it("fails with a usage error when the run is unknown", async () => {
     const capture = captureOutput();
-    const runner = buildProcessorsRunsShowRunner({ openStore: () => store });
-    await runner({ runId: "run_abc" }, makeContext(capture.streams));
+    const runner = buildProcessorsRunsShowRunner({ openStore: () => storeReturning(null) });
+    await expect(
+      runner({ runId: "no-such-run" }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+  });
+
+  it("renders the run row", async () => {
+    const capture = captureOutput();
+    const runner = buildProcessorsRunsShowRunner({ openStore: () => storeReturning(DETAIL) });
+    await runner({ runId: DETAIL.run_id }, makeContext(capture.streams));
     const stdout = capture.stdout.join("");
-    expect(stdout).toContain("run_id                 run_abc");
-    expect(stdout).toContain("status                 succeeded");
-    expect(stdout).toContain("events_consumed=100");
+    expect(stdout).toContain(`run_id             ${DETAIL.run_id}`);
+    expect(stdout).toContain("status             completed");
+    expect(stdout).toContain("events_consumed    100");
+    expect(stdout).toContain("host               pod-7");
+  });
+
+  it("labels a cross-project, unscoped, still-running row rather than printing blanks", async () => {
+    const capture = captureOutput();
+    const runner = buildProcessorsRunsShowRunner({
+      openStore: () => storeReturning({ ...DETAIL, status: "running", finished_at: null }),
+    });
+    await runner({ runId: DETAIL.run_id }, makeContext(capture.streams));
+    const stdout = capture.stdout.join("");
+    expect(stdout).toContain("project_id         (cross-project)");
+    expect(stdout).toContain("environment        (unscoped)");
+    expect(stdout).toContain("finished_at        (running)");
   });
 });
 

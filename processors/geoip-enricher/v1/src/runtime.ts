@@ -39,19 +39,6 @@
  * `source_ip_hash`.
  */
 
-import {
-  buildRawEventsPartitionKey,
-  consumerFamiliesFor,
-  decodeEvent,
-  type PolarisConsumer,
-  type TransportMessageHandler,
-  type TransportMessageContext,
-  type PolarisProducer,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
-  STREAM_FAMILY_ENRICHED_EVENTS,
-  STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
 import {
   classifyError,
@@ -59,6 +46,19 @@ import {
   ProcessorMetrics,
   type ProcessorRetryClassification,
 } from "@polaris/shared-processor";
+import {
+  buildRawEventsPartitionKey,
+  consumerFamiliesFor,
+  decodeEvent,
+  type PolarisConsumer,
+  type PolarisProducer,
+  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
+  type TransportMessageHandler,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 
 import { buildGeoipEnvelope, type GeoipEnvelope } from "./emit.js";
@@ -110,11 +110,13 @@ export interface GeoipEnricherRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
-   * Per-run identifier (UUIDv7). Stamped onto every emitted
-   * `enriched.geoip` event in both the nested `processor.run_id` slot
-   * and the property `run_id` field. Synthesised when omitted.
+   * Per-run identifier (UUIDv7) from `openProcessorRun`. Stamped onto every
+   * emitted event in both the nested `processor.run_id` slot and the property
+   * `run_id` field. Required: it identifies the `processor_runs` row this
+   * output belongs to, and a fabricated stand-in would look joinable without
+   * being so. `app.ts` always supplies it.
    */
-  readonly run_id?: string | undefined;
+  readonly run_id: string;
   /**
    * UUIDv7 allocator. Tests inject a deterministic counter; production
    * uses the real `uuidv7()`.
@@ -150,7 +152,6 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const lookup = deps.lookup ?? new NoOpIPLookup();
   const newEventId = deps.newEventId ?? ((): string => uuidv7());
-  const synthRunId = deps.run_id ?? `synthetic:${uuidv7()}`;
 
   const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
@@ -162,7 +163,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
       isolation,
       metrics,
       newEventId,
-      run_id: synthRunId,
+      run_id: deps.run_id,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
     });
   };

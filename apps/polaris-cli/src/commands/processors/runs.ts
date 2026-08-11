@@ -7,8 +7,9 @@
  *   polaris processors runs list
  *   polaris processors runs show <run_id>
  *
- * Both are read-only and surface a "processor_runs table not yet
- * provisioned — wired in P8-001" message until the table lands.
+ * Both are read-only and render rows from `processor_runs`, which each
+ * processor writes at boot through `@polaris/shared-processor`'s
+ * `openProcessorRun`.
  */
 import type { CommandDefinition } from "../../command.js";
 import { processorsRunsListCommand } from "./runs-list.js";
@@ -29,7 +30,7 @@ export const processorsRunsCommand: CommandDefinition = {
     const group = parent
       .command("runs")
       .description(
-        "Inspect processor runs (list, show). Surfaces 'not yet provisioned' until P8-001.",
+        "Inspect processor runs (list, show) — what actually ran, as opposed to what is activated.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

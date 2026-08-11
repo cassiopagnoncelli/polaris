@@ -1131,8 +1131,15 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       });
 
       guarded.get("/processors", async (request, reply) => {
-        const activations = await deps.queries.listProcessorActivations();
-        return sendHtml(reply, 200, renderProcessorsPage({ ctx: context(request), activations }));
+        const [activations, runs] = await Promise.all([
+          deps.queries.listProcessorActivations(),
+          deps.queries.listProcessorRuns(config.pageSize),
+        ]);
+        return sendHtml(
+          reply,
+          200,
+          renderProcessorsPage({ ctx: context(request), activations, runs }),
+        );
       });
 
       guarded.get("/dlq", async (request, reply) => {

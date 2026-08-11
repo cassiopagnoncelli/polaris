@@ -60,13 +60,24 @@ Derived events include metadata:
   "processor": {
     "name": "identity-resolver",
     "version": "v2",
-    "run_id": "run_2026_05_11_001"
+    "run_id": "019ff156-5d5c-70d3-a159-09c103a9a134"
   },
   "pipeline": {
     "version": "2026.05"
   }
 }
 ```
+
+`run_id` is a UUIDv7 identifying a row in `processor_runs`. The processor
+allocates it at boot and registers the row before the first message is
+handled, so the id on a derived event always names a run an operator can look
+up (`polaris processors runs show <run_id>`, or the Processors page in the
+admin panel).
+
+Registration is deliberately non-fatal: a processor whose control-plane
+database is unreachable keeps consuming and logs a warning. The run id stays
+stable and the row is inserted on the next attempt, so a short outage costs
+the record its start, not the pipeline its throughput.
 
 Runtime traceability includes:
 

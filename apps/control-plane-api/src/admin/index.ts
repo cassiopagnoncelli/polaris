@@ -101,6 +101,7 @@ function buildQueries(db: Kysely<Database> | undefined): AdminQueries {
     listApiKeys: unavailable,
     findApiKey: unavailable,
     listProcessorActivations: unavailable,
+    listProcessorRuns: unavailable,
     listAudit: unavailable,
     findAudit: unavailable,
     listDlq: unavailable,

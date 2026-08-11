@@ -27,11 +27,11 @@
  *   enable/disable wrap their mutation + insertAuditRecord in one Kysely
  *   transaction (wired in P6-006).
  *
- * Processor-runs hand-off:
+ * Processor runs:
  *
- *   `processor_runs` is owned by P8-001. Until that lands, `runs list`
- *   and `runs show` surface a structured "not yet provisioned" message
- *   instead of crashing.
+ *   `runs list` / `runs show` read `processor_runs`, which each processor
+ *   writes at boot through `@polaris/shared-processor`'s `openProcessorRun`.
+ *   Activations say what SHOULD run; runs say what DID.
  *
  * @see docs/architecture/05-processors-and-replay.md
  * @see docs/architecture/02-control-plane.md "Processors"

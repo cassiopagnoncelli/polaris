@@ -1,28 +1,27 @@
 /**
  * `polaris processors runs list` — read-only.
  *
- * Surfaces processor-run records when the `processor_runs` table exists.
+ * Lists rows of `processor_runs`: which processor version ran, on which host,
+ * since when, and how it ended. The rows are written by the processors
+ * themselves at boot, through `@polaris/shared-processor`'s
+ * `openProcessorRun`; this command only reads them.
  *
- * IMPORTANT: `processor_runs` is owned by P8-001 (Processor Runtime
- * Helpers), which is still in Ready. Until P8-001 lands the table and
- * schema, this command prints a structured message explaining that the
- * runtime helpers are not yet provisioned, AND returns exit 0 with an empty
- * result set (so scripts that pipe `polaris processors runs list` into
- * other tooling get a stable shape). Tests assert the command structure
- * but skip the SELECT side.
+ * A run row is what an emitted event's `processor.run_id` points at, so this
+ * is the command that turns a derived event back into the process that
+ * produced it.
  *
- * The implementation is wired exactly the same way every other command in
- * the group is: parsed args -> `rejectProcessorRuleArguments` gate ->
- * store call -> render. Swapping the in-memory `notProvisioned()` stub for
- * a real Kysely-backed listing is a one-line change once the migration
- * lands.
+ * Empty output means no processor has started since run recording landed —
+ * not that the feature is missing.
  *
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { UsageError } from "../../errors.js";
+import { connectDb, listProcessorRuns, type ProcessorRunScope } from "../../db/index.js";
 import { renderAccordingTo } from "../../output.js";
 import { rejectProcessorRuleArguments } from "./validation.js";
+
+/** Rows returned by one `runs list` call. Matches the admin panel's page size. */
+const DEFAULT_LIMIT = 50;
 
 interface ProcessorsRunsListArgs {
   readonly project?: string;
@@ -31,45 +30,30 @@ interface ProcessorsRunsListArgs {
   readonly version?: string;
 }
 
-/**
- * Stand-in for the future `processor_runs` repository. Production wires
- * this to `listProcessorRuns(...)` over Kysely once P8-001 ships the
- * migration. The shape exposes both the listing call and a structured
- * "not provisioned" probe so the command can render a polite message
- * instead of crashing.
- */
+/** Storage seam. Tests inject an in-memory listing; production is Kysely. */
 export interface ProcessorsRunsListStore {
   /**
-   * Probe the `processor_runs` table. `null` means the table exists; a
-   * `{ pendingTask, message }` object means the table is not yet
-   * provisioned and the command should surface the message verbatim.
+   * List run records matching the given scope. Implementations return
+   * ISO-stamped rows so JSON output matches the human path.
    */
-  probe(): Promise<null | { pendingTask: string; message: string }>;
-  /**
-   * List run records matching the given scope. Only called when `probe()`
-   * returns `null`. Implementations return ISO-stamped rows so JSON
-   * output matches the human path.
-   */
-  list(scope: {
-    project_id?: string;
-    environment?: string;
-    processor_name?: string;
-    processor_version?: string;
-  }): Promise<readonly ProcessorRunListRow[]>;
+  list(scope: ProcessorRunScope): Promise<readonly ProcessorRunListRow[]>;
   close(): Promise<void>;
 }
 
 /**
- * Read-shape returned by the (future) `processor_runs` listing. Mirrors
- * the audit envelope in `docs/architecture/05-processors-and-replay.md`
- * "Processor Metadata".
+ * Read-shape rendered by this command. Mirrors the run envelope in
+ * `docs/architecture/05-processors-and-replay.md` "Processor Metadata".
+ *
+ * `project_id` / `environment` are nullable: a processor consuming the shared
+ * stream registers a cross-project run, and a deployment whose environment
+ * label is outside the control plane's three environments records unscoped.
  */
 export interface ProcessorRunListRow {
   readonly run_id: string;
   readonly processor_name: string;
   readonly processor_version: string;
-  readonly project_id: string;
-  readonly environment: string;
+  readonly project_id: string | null;
+  readonly environment: string | null;
   readonly status: string;
   readonly started_at: string;
   readonly finished_at: string | null;
@@ -86,8 +70,8 @@ export const processorsRunsListCommand: CommandDefinition = {
     parent
       .command("list")
       .description(
-        "List processor runs (filter with --project, --env, --processor, --version). " +
-          "Surfaces a 'not yet provisioned' message until P8-001 lands the table.",
+        "List processor runs — what actually ran, as opposed to what is activated " +
+          "(filter with --project, --env, --processor, --version).",
       )
       .option("--project <project_id>", "Filter results to one project.")
       .option(
@@ -124,24 +108,6 @@ export function buildProcessorsRunsListRunner(hooks: ProcessorsRunsListHooks = {
 
     const store = openStore();
     try {
-      const probe = await store.probe();
-      if (probe !== null) {
-        ctx.output.writeErr(probe.message);
-        ctx.output.writeOut(
-          renderAccordingTo(ctx.config.output, {
-            human: probe.message,
-            json: {
-              not_provisioned: true,
-              pending_task: probe.pendingTask,
-              message: probe.message,
-              count: 0,
-              rows: [],
-            },
-          }),
-        );
-        return undefined;
-      }
-
       const rows = await store.list(scope);
       emit(ctx, scope, rows);
     } finally {
@@ -153,26 +119,11 @@ export function buildProcessorsRunsListRunner(hooks: ProcessorsRunsListHooks = {
 
 const runProcessorsRunsList = buildProcessorsRunsListRunner();
 
-/**
- * Default store: hard-coded "not yet provisioned" probe. P8-001 will swap
- * this for a Kysely-backed listing.
- */
 function defaultStore(): ProcessorsRunsListStore {
+  const handle = connectDb();
   return {
-    probe: async () => ({
-      pendingTask: "P8-001",
-      message:
-        "processor_runs table not yet provisioned — wired in P8-001 (Processor Runtime Helpers).",
-    }),
-    list: async () => {
-      // Unreachable until P8-001 lands. If we ever do reach here, surface
-      // a usage error so the operator notices the missing wiring rather
-      // than getting a silent empty list.
-      throw new UsageError(
-        "processor_runs listing is not implemented in P6-005 — P8-001 must replace defaultStore() with a Kysely-backed listing.",
-      );
-    },
-    close: async () => {},
+    list: (scope) => listProcessorRuns(handle.db, scope, DEFAULT_LIMIT),
+    close: () => handle.close(),
   };
 }
 
@@ -213,8 +164,12 @@ function renderHuman(
   }
   const lines: string[] = [`count=${rows.length}${filter === "" ? "" : ` ${filter}`}`];
   for (const row of rows) {
+    // Null scope is the normal case, not missing data: processors consume the
+    // shared stream cross-project. Say that rather than printing "null".
+    const project = row.project_id ?? "(cross-project)";
+    const environment = row.environment ?? "(unscoped)";
     lines.push(
-      `  ${row.run_id} ${row.processor_name} ${row.processor_version} project=${row.project_id} env=${row.environment} status=${row.status} started=${row.started_at} finished=${row.finished_at ?? "(running)"}`,
+      `  ${row.run_id} ${row.processor_name} ${row.processor_version} project=${project} env=${environment} status=${row.status} started=${row.started_at} finished=${row.finished_at ?? "(running)"}`,
     );
   }
   return lines.join("\n");
