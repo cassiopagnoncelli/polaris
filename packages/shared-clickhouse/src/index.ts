@@ -38,15 +38,12 @@ export type { HealthChecker } from "./health.js";
 export type { IngestLogReader } from "./ingest-log.js";
 export type {
   ClickHouseHealthProbes,
-  KafkaIngestionLagInput,
-  KafkaIngestionLagRow,
   MaterializedViewStateRow,
   MaterializedViewStatesInput,
   PartsHealthRow,
   PartsSummaryInput,
 } from "./probes/index.js";
 export {
-  buildKafkaIngestionLagSql,
   buildMaterializedViewStatesSql,
   buildPartsSummarySql,
   createClickHouseHealthProbes,

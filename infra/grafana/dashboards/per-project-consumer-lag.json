@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Per-project consumer lag against shared-topic offsets. Operators consult this dashboard to spot the lag-isolation trigger from docs/architecture/03-redpanda-topics.md (a project's primary consumer cannot keep up with shared-topic offsets and is dragging end-to-end lag SLOs for unrelated projects). The lag panel splits by project_id; a per-project end-to-end lag gauge surfaces the last observation for quick alerting reference.",
+  "description": "Per-project consumer lag against shared-stream position. Operators consult this dashboard to spot the lag-isolation trigger from docs/architecture/03-rabbitmq-streams.md (a project's primary consumer cannot keep up with shared-stream position and is dragging end-to-end lag SLOs for unrelated projects). The lag panel splits by project_id; a per-project end-to-end lag gauge surfaces the last observation for quick alerting reference.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -25,7 +25,7 @@
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "options": {
-        "content": "# Per-project consumer lag against shared-topic offsets\n\nUses the Polaris topic-family labels `project_id`, `environment`, `topic_family`, `concrete_topic`, `partition`. The `polaris_processor_lag_ms_last` gauge is emitted by the shared processor metrics registry per partition.\n\n- Sustained lag growth on one project across multiple consumer pods is the lag-isolation trigger documented in `docs/architecture/03-redpanda-topics.md`.\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the trigger has persisted for one operational review cycle.",
+        "content": "# Per-project consumer lag against shared-stream position\n\nUses the Polaris topic-family labels `project_id`, `environment`, `topic_family`, `concrete_topic`, `partition`. The `polaris_processor_lag_ms_last` gauge is emitted by the shared processor metrics registry per partition.\n\n- Sustained lag growth on one project across multiple consumer pods is the lag-isolation trigger documented in `docs/architecture/03-rabbitmq-streams.md`.\n- Use `polaris topics isolate --project <id> --env <env> --family <name>` once the trigger has persisted for one operational review cycle.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",

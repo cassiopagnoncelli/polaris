@@ -177,7 +177,7 @@ to each service's `src/config.ts` for the exhaustive list:
 - `processors/<name>/v1/src/config.ts`
 - `consumers/<name>/v1/src/config.ts`
 
-The shared HTTP, Postgres, Redpanda, Redis, ClickHouse schemas live under
+The shared HTTP, Postgres, RabbitMQ, Redis, ClickHouse schemas live under
 `packages/shared-config/src/schemas/`. Every variable name is prefixed
 `POLARIS_*` so there is one obvious namespace to grep for.
 

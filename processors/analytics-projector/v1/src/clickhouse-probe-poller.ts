@@ -22,7 +22,6 @@ import type { ClickHouseHealthProbes } from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
 import {
   type ClickHouseProbeMetrics,
-  METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS,
   METRIC_CLICKHOUSE_MV_STATE,
 } from "./clickhouse-probe-metrics.js";
 
@@ -79,19 +78,9 @@ export function createClickHouseProbePoller(
 
   async function tick(): Promise<void> {
     try {
-      const [lagRows, mvRows] = await Promise.all([
-        options.probes.kafkaIngestionLag(probeInput),
-        options.probes.materializedViewStates(probeInput),
-      ]);
+      const mvRows = await options.probes.materializedViewStates(probeInput);
       // Clear prior label tuples; only the rows seen on this tick are
       // emitted on the next scrape.
-      options.metrics.clear(METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS);
-      for (const row of lagRows) {
-        options.metrics.observeKafkaIngestionLagSeconds(
-          { database: row.database, table: row.table },
-          row.lag_seconds,
-        );
-      }
       options.metrics.clear(METRIC_CLICKHOUSE_MV_STATE);
       for (const row of mvRows) {
         // For each view, emit one sample per *observed* state value

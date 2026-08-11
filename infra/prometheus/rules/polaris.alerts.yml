@@ -24,8 +24,8 @@
 # `docs/operations/alerts.md` and in the P10-005 commit body. They
 # will land alongside the corresponding service work:
 #
-#   * Redpanda publish failure rate    → ingester-api Kafka publisher
-#   * ClickHouse Kafka ingestion lag   → polaris-clickhouse-exporter (future)
+#   * RabbitMQ publish failure rate    → ingester-api transport publisher
+#   * ClickHouse ingestion lag         → polaris_clickhouse_sink_lag_seconds
 #   * ClickHouse MV failure            → polaris-clickhouse-exporter (future)
 #   * replay job stuck                 → replay coordinator (P5/P7 work)
 #   * operator gate denial rate        → polaris-cli / control-plane gate
@@ -78,12 +78,12 @@ groups:
           runbook_url: docs/operations/runbook-ingestion-rejection-spike.md
 
   # ---------------------------------------------------------------
-  # Redpanda
+  # RabbitMQ
   # ---------------------------------------------------------------
-  - name: polaris-redpanda
+  - name: polaris-rabbitmq
     interval: 30s
     rules:
-      - alert: PolarisRedpandaPublishFailureRate
+      - alert: PolarisRabbitmqPublishFailureRate
         expr: |
           sum by (project_id, environment, topic) (
             rate(polaris_ingest_publish_failed_total[1m])
@@ -102,26 +102,28 @@ groups:
           service: ingester-api
           team: platform-data
         annotations:
-          summary: "Redpanda publish failure rate above 0.5%"
+          summary: "RabbitMQ publish failure rate above 0.5%"
           description: |
-            More than 0.5% of ingester publish attempts to Redpanda
+            More than 0.5% of ingester publish attempts to RabbitMQ
             failed over the last minute for {{ $labels.project_id }} /
-            {{ $labels.environment }} on topic {{ $labels.topic }}.
-            Common causes: broker unavailability, topic ACL drift,
-            authentication failures. See the runbook for triage.
-          runbook_url: docs/operations/runbook-redpanda-publish-failures.md
+            {{ $labels.environment }} on stream {{ $labels.topic }}.
+            Common causes: broker unavailability, an undeclared
+            exchange (publishes come back unroutable), permission
+            drift on the vhost, or the broker blocking publishers on a
+            disk/memory alarm. See the runbook for triage.
+          runbook_url: docs/operations/runbook-rabbitmq-publish-failures.md
 
       # Consumer lag (warn at 5 min, page at 15 min). Polaris emits
       # `polaris_processor_lag_ms_last` per (processor_name,
       # processor_version, project_id, environment, topic_family,
       # concrete_topic, partition). 5 min = 300_000 ms; 15 min =
       # 900_000 ms.
-      - alert: PolarisRedpandaConsumerLagWarn
+      - alert: PolarisConsumerLagWarn
         expr: max by (processor_name, processor_version, project_id, environment, topic_family, concrete_topic, partition) (polaris_processor_lag_ms_last) > 300000
         for: 5m
         labels:
           severity: warn
-          service: redpanda
+          service: rabbitmq
           team: platform-data
         annotations:
           summary: "Consumer lag >5 min on {{ $labels.processor_name }} / {{ $labels.concrete_topic }} (project={{ $labels.project_id }})"
@@ -133,12 +135,12 @@ groups:
             slow downstream; if it persists, see the runbook.
           runbook_url: docs/operations/runbook-processor-lag.md
 
-      - alert: PolarisRedpandaConsumerLagPage
+      - alert: PolarisConsumerLagPage
         expr: max by (processor_name, processor_version, project_id, environment, topic_family, concrete_topic, partition) (polaris_processor_lag_ms_last) > 900000
         for: 5m
         labels:
           severity: page
-          service: redpanda
+          service: rabbitmq
           team: platform-data
         annotations:
           summary: "Consumer lag >15 min on {{ $labels.processor_name }} / {{ $labels.concrete_topic }} (project={{ $labels.project_id }})"
@@ -241,37 +243,42 @@ groups:
   - name: polaris-clickhouse
     interval: 30s
     rules:
-      # `polaris_clickhouse_kafka_ingestion_lag_seconds{database, table}`
-      # is emitted by the analytics-projector's probe poller (PI2CRFZC).
-      # The probe loop reads `system.kafka_consumers` once per scrape
-      # interval; the projector re-publishes the per-(database, table)
-      # max lag-seconds value as a Polaris gauge.
+      # `polaris_clickhouse_sink_lag_seconds{table}` is emitted by
+      # consumers/clickhouse-sink: now - the envelope's `ingested_at`
+      # for the last row it wrote.
+      #
+      # It replaces `polaris_clickhouse_kafka_ingestion_lag_seconds`,
+      # which the analytics-projector derived from
+      # `system.kafka_consumers`. That system table is empty now that
+      # ClickHouse consumes nothing — the alert would have silently
+      # stopped firing rather than failing loudly, which is the worst
+      # way for a lag alert to break.
       - alert: PolarisClickHouseIngestionLagWarn
-        expr: max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds) > 120
+        expr: max by (table) (polaris_clickhouse_sink_lag_seconds) > 120
         for: 5m
         labels:
           severity: warn
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse Kafka ingestion lag >2 min"
+          summary: "ClickHouse ingestion lag >2 min"
           description: |
-            ClickHouse Kafka-Engine ingestion lag for table
+            The ClickHouse sink's ingestion lag for table
             {{ $labels.table }} has been above 2 minutes for 5 minutes.
             Triage with the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
       - alert: PolarisClickHouseIngestionLagPage
-        expr: max by (table) (polaris_clickhouse_kafka_ingestion_lag_seconds) > 600
+        expr: max by (table) (polaris_clickhouse_sink_lag_seconds) > 600
         for: 5m
         labels:
           severity: page
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse Kafka ingestion lag >10 min"
+          summary: "ClickHouse ingestion lag >10 min"
           description: |
-            ClickHouse Kafka-Engine ingestion lag for table
+            The ClickHouse sink's ingestion lag for table
             {{ $labels.table }} has been above 10 minutes for 5 minutes.
             Triage with the runbook.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md

@@ -6,7 +6,6 @@
  */
 import type {
   ClickHouseHealthProbes,
-  KafkaIngestionLagRow,
   MaterializedViewStateRow,
   PartsHealthRow,
 } from "@polaris/shared-clickhouse";
@@ -15,7 +14,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ClickHouseProbeMetrics,
-  METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS,
   METRIC_CLICKHOUSE_MV_STATE,
 } from "../src/clickhouse-probe-metrics.js";
 import { createClickHouseProbePoller } from "../src/clickhouse-probe-poller.js";
@@ -27,17 +25,11 @@ const SILENT_LOGGER = createLogger({
 });
 
 function makeProbes(input: {
-  readonly lag?: ReadonlyArray<KafkaIngestionLagRow>;
   readonly mv?: ReadonlyArray<MaterializedViewStateRow>;
   readonly parts?: ReadonlyArray<PartsHealthRow>;
-  readonly lagThrows?: Error;
   readonly mvThrows?: Error;
 }): ClickHouseHealthProbes {
   return {
-    async kafkaIngestionLag() {
-      if (input.lagThrows) throw input.lagThrows;
-      return [...(input.lag ?? [])];
-    },
     async materializedViewStates() {
       if (input.mvThrows) throw input.mvThrows;
       return [...(input.mv ?? [])];
@@ -49,35 +41,26 @@ function makeProbes(input: {
 }
 
 describe("ClickHouseProbeMetrics", () => {
-  it("records lag and MV-state samples and clears stale tuples", () => {
+  it("records MV-state samples and clears stale tuples", () => {
     const metrics = new ClickHouseProbeMetrics();
-    metrics.observeKafkaIngestionLagSeconds(
-      { database: "polaris", table: "analytics_events_queue" },
-      42,
-    );
     metrics.observeMaterializedViewState(
       { database: "polaris", view: "mv_sessions", state: "running" },
       1,
     );
-    expect(metrics.getSamples()).toHaveLength(2);
+    expect(metrics.getSamples()).toHaveLength(1);
 
-    metrics.clear(METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS);
-    expect(
-      metrics
-        .getSamples()
-        .map((s) => s.name)
-        .sort(),
-    ).toEqual([METRIC_CLICKHOUSE_MV_STATE]);
+    metrics.clear(METRIC_CLICKHOUSE_MV_STATE);
+    expect(metrics.getSamples()).toHaveLength(0);
   });
 
   it("upserts the same label tuple in place", () => {
     const metrics = new ClickHouseProbeMetrics();
-    const labels = { database: "polaris", table: "analytics_events_queue" };
-    metrics.observeKafkaIngestionLagSeconds(labels, 5);
-    metrics.observeKafkaIngestionLagSeconds(labels, 9);
+    const labels = { database: "polaris", view: "mv_sessions", state: "running" };
+    metrics.observeMaterializedViewState(labels, 0);
+    metrics.observeMaterializedViewState(labels, 1);
     const samples = metrics.getSamples();
     expect(samples).toHaveLength(1);
-    expect(samples[0]?.value).toBe(9);
+    expect(samples[0]?.value).toBe(1);
   });
 });
 
@@ -85,15 +68,6 @@ describe("createClickHouseProbePoller", () => {
   it("translates probe rows into Polaris gauges on each tick", async () => {
     const metrics = new ClickHouseProbeMetrics();
     const probes = makeProbes({
-      lag: [
-        {
-          database: "polaris",
-          table: "analytics_events_queue",
-          lag_seconds: 12,
-          is_currently_used: 1,
-          last_exception: "",
-        },
-      ],
       mv: [
         {
           database: "polaris",
@@ -117,10 +91,6 @@ describe("createClickHouseProbePoller", () => {
     await poller.tick();
 
     const samples = metrics.getSamples();
-    const lag = samples.find((s) => s.name === METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS);
-    expect(lag?.value).toBe(12);
-    expect(lag?.labels).toEqual({ database: "polaris", table: "analytics_events_queue" });
-
     const mvs = samples.filter((s) => s.name === METRIC_CLICKHOUSE_MV_STATE);
     expect(mvs).toHaveLength(2);
     expect(mvs.find((s) => s.labels.state === "failed")).toBeDefined();
@@ -132,9 +102,6 @@ describe("createClickHouseProbePoller", () => {
       { database: "polaris", view: "mv_old", state: "running", last_exception: "" },
     ];
     const probes: ClickHouseHealthProbes = {
-      async kafkaIngestionLag() {
-        return [];
-      },
       async materializedViewStates() {
         return [...mv];
       },
@@ -164,7 +131,7 @@ describe("createClickHouseProbePoller", () => {
       child: () => SILENT_LOGGER,
     } as unknown as Parameters<typeof createClickHouseProbePoller>[0]["logger"];
     const metrics = new ClickHouseProbeMetrics();
-    const probes = makeProbes({ lagThrows: new Error("boom") });
+    const probes = makeProbes({ mvThrows: new Error("boom") });
     const poller = createClickHouseProbePoller({ probes, metrics, logger });
 
     await poller.tick();

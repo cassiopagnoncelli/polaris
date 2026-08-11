@@ -4,16 +4,16 @@
 //
 // Proves the wired path end-to-end against a running local stack:
 //
-//   curl POST /v1/events  ->  ingester  ->  Redpanda raw.events
+//   curl POST /v1/events  ->  ingester  ->  RabbitMQ raw.events
 //                          ->  analytics-projector v1
-//                          ->  Redpanda analytics.events
-//                          ->  ClickHouse Kafka Engine
+//                          ->  RabbitMQ analytics.events
+//                          ->  clickhouse-sink
 //                          ->  analytics_raw
 //
 // The script is intentionally a black-box exercise: it talks to the
 // ingester over HTTPS/HTTP, then queries ClickHouse to confirm the row
-// landed. It does NOT crack open KafkaJS, Redis, or PostgreSQL directly —
-// the whole point is to prove the real wire path.
+// landed. It does NOT crack open the AMQP client, Redis, or PostgreSQL
+// directly — the whole point is to prove the real wire path.
 //
 // Steps:
 //

@@ -53,8 +53,8 @@ export interface ClickHouseOperatorClient {
   readonly replay: ReplayReader;
   readonly raw: OperatorRaw;
   /**
-   * Typed probes for `system.parts`, `system.materialized_views`, and
-   * `system.kafka_consumers`. Operator-scoped because `system.*` reads
+   * Typed probes for `system.parts` and `system.materialized_views`.
+   * Operator-scoped because `system.*` reads
    * require the broader `polaris_operator` grants; the v1 dashboards/alerts
    * surface these signals through the analytics-projector's
    * proxy-via-canonical-consumer pattern (`docs/operations/dashboards.md`).

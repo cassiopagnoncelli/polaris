@@ -9,7 +9,7 @@
 # P10-003 ships the v1 Polaris dashboards into infra/grafana/dashboards/:
 #
 #   polaris-ingestion.json    — accept/reject, reject reasons, dedupe
-#   polaris-redpanda.json     — native broker metrics + publish-fail proxy
+#   polaris-rabbitmq.json     — native broker metrics + publish-fail proxy
 #   polaris-processors.json   — per-processor consumed/emitted/failed/DLQ
 #   polaris-destinations.json — per-vendor delivery success/failure
 #   polaris-clickhouse.json   — analytics-projector proxy + escape-hatch audit

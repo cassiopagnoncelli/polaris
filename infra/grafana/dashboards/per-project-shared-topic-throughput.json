@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Per-project share of shared-topic throughput. Operators consult this dashboard to spot the volume-share isolation trigger from docs/architecture/03-redpanda-topics.md (a project drives more than 25% of a shared topic's sustained throughput). The shared family is selected via the $topic_family template variable; the $environment variable filters to one runtime environment. Lines split by project_id; the right-hand stat panel surfaces the per-project share as a percentage of the family total.",
+  "description": "Per-project share of shared-topic throughput. Operators consult this dashboard to spot the volume-share isolation trigger from docs/architecture/03-rabbitmq-streams.md (a project drives more than 25% of a shared topic's sustained throughput). The shared family is selected via the $topic_family template variable; the $environment variable filters to one runtime environment. Lines split by project_id; the right-hand stat panel surfaces the per-project share as a percentage of the family total.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,

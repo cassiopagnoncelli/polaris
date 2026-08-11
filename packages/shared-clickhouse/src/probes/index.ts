@@ -3,7 +3,7 @@
  *
  * The v1 dashboards/alerts pattern is **proxy-via-analytics-projector**: the
  * analytics-projector processor (the only Polaris component that ingests into
- * ClickHouse through the Kafka Engine table) periodically asks ClickHouse for
+ * ClickHouse through the ingestion interface table) periodically asks ClickHouse for
  * its own `system.*` health signals and re-publishes them as Polaris
  * Prometheus gauges. There is no sidecar `clickhouse_exporter` process in v1.
  *
@@ -12,7 +12,14 @@
  *
  *   - `system.parts`              — projection-table parts pressure
  *   - `system.materialized_views` — MV-state ledger (`failed` → page alert)
- *   - `system.kafka_consumers`    — Kafka-Engine ingestion-lag in seconds
+ *
+ * A third probe read `system.kafka_consumers` for ingestion lag. It is
+ * gone: ClickHouse consumes nothing since the RabbitMQ migration, so that
+ * table is permanently empty and the probe would have reported a
+ * confident zero forever — the worst possible failure mode for a lag
+ * signal. Ingestion lag is now `polaris_clickhouse_sink_lag_seconds`,
+ * emitted by `consumers/clickhouse-sink` from the envelope's
+ * `ingested_at`.
  *
  * Each helper executes a parameter-bound SQL string against the underlying
  * `@clickhouse/client` connection. They are intentionally low-level: they do
@@ -22,8 +29,8 @@
  *
  * @see docs/architecture/07-clickhouse.md "Two-Layer Raw Storage" and
  *      "Query Patterns" — these probes target `system.*` views ONLY; they
- *      never query Kafka-Engine tables, `analytics_raw`, or projection
- *      tables directly.
+ *      never query the ingestion interface table, `analytics_raw`, or
+ *      projection tables directly.
  * @see docs/operations/runbook-clickhouse-ingestion-lag.md — the operator
  *      runbook that maps each probe row to a triage step.
  */
@@ -63,21 +70,6 @@ export interface MaterializedViewStateRow {
 }
 
 /**
- * Single row from `system.kafka_consumers`. The Kafka-Engine ingestion-lag
- * probe reduces this to a per-`(database, table)` lag-seconds value by taking
- * `max(now() - last_poll_time_seconds)` over the consumer's partition
- * assignments. The row also surfaces `last_exception` so the operator
- * runbook can grep for it.
- */
-export interface KafkaIngestionLagRow {
-  readonly database: string;
-  readonly table: string;
-  readonly lag_seconds: number;
-  readonly is_currently_used: number;
-  readonly last_exception: string;
-}
-
-/**
  * Set of probes exposed by the operator-profile client.
  *
  * The probes are operator-scoped because `system.*` reads are gated by
@@ -97,12 +89,6 @@ export interface ClickHouseHealthProbes {
    * the analytics-projector to emit `polaris_clickhouse_mv_state{view,state}`.
    */
   materializedViewStates(input?: MaterializedViewStatesInput): Promise<MaterializedViewStateRow[]>;
-  /**
-   * Per-(`database`,`table`) maximum Kafka-Engine consumer lag in seconds.
-   * Returns one row per Kafka-Engine table seen by the consumer; tables with
-   * no active consumer (e.g. on cold start) are omitted.
-   */
-  kafkaIngestionLag(input?: KafkaIngestionLagInput): Promise<KafkaIngestionLagRow[]>;
 }
 
 export interface PartsSummaryInput {
@@ -113,11 +99,6 @@ export interface PartsSummaryInput {
 }
 
 export interface MaterializedViewStatesInput {
-  readonly database?: string;
-  readonly limit?: number;
-}
-
-export interface KafkaIngestionLagInput {
   readonly database?: string;
   readonly limit?: number;
 }
@@ -180,29 +161,6 @@ export function createClickHouseHealthProbes(input: {
       }));
     },
 
-    async kafkaIngestionLag(opts) {
-      const database = resolveDatabase(opts?.database);
-      const limit = resolveLimit(opts?.limit);
-      const sql = buildKafkaIngestionLagSql();
-      const rows = await runQuery<{
-        database: string;
-        table: string;
-        lag_seconds: number | string;
-        is_currently_used: number | string;
-        last_exception: string | null;
-      }>({
-        underlying,
-        query: sql,
-        parameters: { database, limit },
-      });
-      return rows.map((row) => ({
-        database: String(row.database),
-        table: String(row.table),
-        lag_seconds: Number(row.lag_seconds),
-        is_currently_used: Number(row.is_currently_used),
-        last_exception: row.last_exception ?? "",
-      }));
-    },
   };
 }
 
@@ -264,36 +222,6 @@ export function buildMaterializedViewStatesSql(): string {
     LIMIT ${bindScalar("limit", "UInt32")}
   `.trim();
   return assertNoFinal(sql, "probes.materializedViewStates");
-}
-
-/**
- * SELECT against `system.kafka_consumers`. ClickHouse reports a consumer row
- * per (`database`,`table`,`consumer_id`,`partition`); we reduce to the per-
- * (`database`,`table`) maximum `lag_seconds` and the `is_currently_used`
- * flag so the analytics-projector emits one gauge sample per Kafka-Engine
- * table.
- *
- * `lag_seconds` is computed as `now() - last_poll_time` on the server side,
- * matching the ingestion-lag definition used by the alert thresholds (2 min
- * warn / 10 min page). Tables with no active consumer are filtered out so a
- * cold-start ClickHouse doesn't fire the page alert.
- */
-export function buildKafkaIngestionLagSql(): string {
-  const sql = `
-    SELECT
-      database,
-      table,
-      max(toUInt32(dateDiff('second', last_poll_time, now()))) AS lag_seconds,
-      max(toUInt8(is_currently_used)) AS is_currently_used,
-      anyLast(coalesce(exceptions.text[1], '')) AS last_exception
-    FROM system.kafka_consumers
-    WHERE database = ${bindScalar("database", "String")}
-      AND is_currently_used = 1
-    GROUP BY database, table
-    ORDER BY lag_seconds DESC, table ASC
-    LIMIT ${bindScalar("limit", "UInt32")}
-  `.trim();
-  return assertNoFinal(sql, "probes.kafkaIngestionLag");
 }
 
 function resolveDatabase(database?: string): string {

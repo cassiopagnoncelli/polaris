@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Per-project schema validation rate and error rate. Operators consult this dashboard to spot the schema-risk isolation trigger from docs/architecture/03-redpanda-topics.md (a project's experimental or high-cardinality event traffic would meaningfully degrade validation latency or skew metrics for unrelated projects). The top panel surfaces the per-project accepted rate; the bottom panel surfaces the per-project rejection rate broken down by reason.",
+  "description": "Per-project schema validation rate and error rate. Operators consult this dashboard to spot the schema-risk isolation trigger from docs/architecture/03-rabbitmq-streams.md (a project's experimental or high-cardinality event traffic would meaningfully degrade validation latency or skew metrics for unrelated projects). The top panel surfaces the per-project accepted rate; the bottom panel surfaces the per-project rejection rate broken down by reason.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,

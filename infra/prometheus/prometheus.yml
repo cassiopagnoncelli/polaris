@@ -4,7 +4,7 @@
 # docker-compose.observability.yml. Targets reflect the local layout:
 # Polaris services typically run on the host (so Prometheus reaches
 # them via `host.docker.internal` from inside the compose network);
-# Redpanda and ClickHouse run inside the compose network and are
+# RabbitMQ and ClickHouse run inside the compose network and are
 # reachable by service name.
 #
 # Metric ownership:
@@ -83,20 +83,33 @@ scrape_configs:
           polaris_component: processor
 
   # ---------------------------------------------------------------
-  # Redpanda admin API. Redpanda exposes Prometheus-shape metrics on
-  # the admin listener at `/public_metrics` (and the legacy `/metrics`
-  # which is louder). `polaris-redpanda` is the container name from
+  # RabbitMQ. The `rabbitmq_prometheus` plugin (enabled in
+  # infra/rabbitmq/enabled_plugins) serves Prometheus metrics on
+  # :15692/metrics. `polaris-rabbitmq` is the container name from
   # docker-compose.yml; the compose network resolves it.
   #
+  # `/metrics` is the aggregated endpoint. Per-queue series (depth,
+  # publish/deliver rates) need the detailed endpoint, which is why the
+  # per-object metrics families are requested explicitly — the default
+  # aggregated view would collapse every stream into one number and make
+  # "which family is backing up?" unanswerable.
+  #
   # See:
-  #   https://docs.redpanda.com/current/manage/monitoring/
+  #   https://www.rabbitmq.com/docs/prometheus
   # ---------------------------------------------------------------
-  - job_name: polaris-redpanda
-    metrics_path: /public_metrics
+  - job_name: polaris-rabbitmq
+    metrics_path: /metrics/detailed
+    params:
+      family:
+        - queue_coarse_metrics
+        - queue_metrics
+        - channel_metrics
+        - connection_churn_metrics
+        - node_coarse_metrics
     static_configs:
-      - targets: ["polaris-redpanda:9644"]
+      - targets: ["polaris-rabbitmq:15692"]
         labels:
-          polaris_service: redpanda
+          polaris_service: rabbitmq
           polaris_component: streaming
 
   # ---------------------------------------------------------------

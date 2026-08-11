@@ -99,10 +99,10 @@ scrape_configs:
 
     relabel_configs:
       # The compose service name (`ingester-api`, `analytics-projector`,
-      # `redpanda`, ...) becomes the `service` label. This matches the
+      # `rabbitmq`, ...) becomes the `service` label. This matches the
       # `service` binding emitted by @polaris/shared-logger so logs
       # from JSON-aware services line up with logs from infrastructure
-      # containers (redpanda, postgres, clickhouse) that don't emit
+      # containers (rabbitmq, postgres, clickhouse) that don't emit
       # Pino JSON.
       - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
         target_label: service
@@ -139,7 +139,7 @@ scrape_configs:
       # ---------------------------------------------------------
       # Try to parse the unwrapped line as Pino JSON. Fields we
       # care about for stream routing get extracted; if the line
-      # is not JSON (e.g. Redpanda's plaintext startup log,
+      # is not JSON (e.g. RabbitMQ's plaintext startup log,
       # Postgres' default logger), the json stage records an
       # error in `__error__` and downstream stages skip cleanly.
       # ---------------------------------------------------------

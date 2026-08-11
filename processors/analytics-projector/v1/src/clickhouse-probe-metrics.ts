@@ -1,17 +1,24 @@
 /**
  * ClickHouse-probe metrics emitted by the analytics-projector.
  *
- * The architecture forbids querying Kafka-Engine tables directly (see
- * `docs/architecture/07-clickhouse.md`); the canonical-consumer pattern
- * is that the analytics-projector — which is the only Polaris component
- * that already owns the ClickHouse-side of analytics ingestion — polls
+ * The architecture forbids querying the ingestion interface table
+ * directly (see `docs/architecture/07-clickhouse.md`); the
+ * canonical-consumer pattern is that the analytics-projector — which
+ * already owns the ClickHouse side of analytics ingestion — polls
  * `system.*` views on a schedule and re-publishes their state as
- * Polaris Prometheus gauges. Three v1 alerts gate on these gauges:
+ * Polaris Prometheus gauges. One alert gates on these gauges:
  *
- *   - `PolarisClickHouseIngestionLagWarn` / `...Page` — driven by
- *     `polaris_clickhouse_kafka_ingestion_lag_seconds{table}`.
  *   - `PolarisClickHouseMVFailure` — driven by
  *     `polaris_clickhouse_mv_state{view, state}` matching `state="failed"`.
+ *
+ * The ingestion-lag gauge that used to live here
+ * (`polaris_clickhouse_kafka_ingestion_lag_seconds`, derived from
+ * `system.kafka_consumers`) is gone. ClickHouse consumes nothing since
+ * the RabbitMQ migration, so that system table is permanently empty and
+ * the gauge would have reported a confident zero forever — the worst
+ * possible failure mode for a lag signal. `consumers/clickhouse-sink`
+ * emits `polaris_clickhouse_sink_lag_seconds` instead, and the alerts
+ * point at that.
  *
  * The registry intentionally lives next to the analytics-projector
  * (rather than in `@polaris/shared-clickhouse`) because the metrics
@@ -21,9 +28,6 @@
  */
 import type { MetricSample } from "@polaris/shared-metrics";
 
-export const METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS =
-  "polaris_clickhouse_kafka_ingestion_lag_seconds";
-
 /**
  * Per-(view, state) gauge for materialized-view state. The alert layer
  * watches `state="failed"`; intermediate states (`idle`, `running`)
@@ -31,11 +35,6 @@ export const METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS =
  * the legend.
  */
 export const METRIC_CLICKHOUSE_MV_STATE = "polaris_clickhouse_mv_state";
-
-export interface KafkaIngestionLagLabels {
-  readonly database: string;
-  readonly table: string;
-}
 
 export interface MaterializedViewStateLabels {
   readonly database: string;
@@ -56,11 +55,6 @@ export interface MaterializedViewStateLabels {
  */
 export class ClickHouseProbeMetrics {
   private readonly samples = new Map<string, MetricSample>();
-
-  observeKafkaIngestionLagSeconds(labels: KafkaIngestionLagLabels, value: number): void {
-    const labelRecord = { database: labels.database, table: labels.table };
-    this.set(METRIC_CLICKHOUSE_KAFKA_INGESTION_LAG_SECONDS, labelRecord, value);
-  }
 
   observeMaterializedViewState(labels: MaterializedViewStateLabels, value: number): void {
     const labelRecord = {

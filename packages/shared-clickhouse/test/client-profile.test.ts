@@ -372,30 +372,6 @@ describe("operator profile: ClickHouse health probes", () => {
     ]);
   });
 
-  it("kafkaIngestionLag issues a system.kafka_consumers query and decodes rows", async () => {
-    setQueryRows([
-      {
-        database: "polaris",
-        table: "analytics_events_queue",
-        lag_seconds: 7,
-        is_currently_used: 1,
-        last_exception: "",
-      },
-    ]);
-
-    const client = createClickHouseClient({
-      url: "http://localhost:8123",
-      role: "operator",
-      credential: { username: "polaris_operator", password: "p" },
-    });
-
-    const rows = await client.probes.kafkaIngestionLag();
-    const sql = String(queryMock.mock.calls[0]?.[0].query);
-    expect(sql).toMatch(/FROM\s+system\.kafka_consumers/);
-    expect(rows[0]?.lag_seconds).toBe(7);
-    expect(rows[0]?.table).toBe("analytics_events_queue");
-  });
-
   it("rejects an out-of-range limit", async () => {
     const client = createClickHouseClient({
       url: "http://localhost:8123",
