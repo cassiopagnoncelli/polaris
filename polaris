@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Polaris CLI shortcut.
+#
+#   ./polaris processors list
+#   ./polaris keys create --project storefront --env development ...
+#
+# Equivalent to `node apps/polaris-cli/dist/bin/polaris.js`, plus the two
+# things that make the CLI usable from a fresh checkout:
+#
+#   1. Loads `.env.local` from the repo root, so DATABASE_URL and friends are
+#      set exactly as they are for `make`. The Makefile already does this
+#      (see its `include .env.local`); running the built binary by hand did
+#      not, which is why `processors list` failed with a config error while
+#      `make seed` worked. Real environment variables win — export
+#      DATABASE_URL yourself and this script leaves it alone.
+#
+#   2. Builds the CLI if `dist/` is missing or stale, instead of failing with
+#      a bare MODULE_NOT_FOUND. Staleness is "any .ts under src/ is newer
+#      than the build stamp".
+#
+# Deliberately NOT a global install: the script resolves paths relative to
+# itself, so it always drives the CLI from this checkout, and `.env.local` is
+# a development file that has no business on an operator's PATH.
+
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CLI_DIR="$ROOT/apps/polaris-cli"
+ENTRY="$CLI_DIR/dist/bin/polaris.js"
+
+# `set -a` marks every subsequent assignment for export, so sourcing the file
+# puts its keys into the environment. The `${VAR:-}` idiom inside .env.local
+# is not required — plain `KEY=value` lines work, matching the Makefile's
+# expectations for the same file.
+if [[ -f "$ROOT/.env.local" ]]; then
+  # Snapshot what the caller already exported; those values must survive.
+  preexisting="$(env)"
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env.local"
+  set +a
+  # Restore any variable the caller had set explicitly — .env.local is a
+  # default, not an override. Running against staging by exporting
+  # DATABASE_URL should not be silently undone by a local dev file.
+  while IFS='=' read -r key value; do
+    if [[ -n "$key" ]]; then
+      export "$key=$value"
+    fi
+  done < <(printf '%s\n' "$preexisting" | grep -E '^(POLARIS_[A-Z0-9_]*|DATABASE_URL)=' || true)
+fi
+
+# Compared against source mtimes rather than the emitted JS: tsc runs with
+# `incremental: true`, so it leaves an unchanged output file's mtime alone and
+# `dist/bin/polaris.js` would look stale forever after any edit elsewhere.
+STAMP="$CLI_DIR/dist/.build-stamp"
+
+needs_build() {
+  if [[ ! -f "$ENTRY" || ! -f "$STAMP" ]]; then
+    return 0
+  fi
+  find "$CLI_DIR/src" -name '*.ts' -newer "$STAMP" -print -quit | grep -q .
+}
+
+if needs_build; then
+  echo "polaris: building CLI (dist/ missing or stale)..." >&2
+  pnpm --filter @polaris/polaris-cli run build >&2
+  touch "$STAMP"
+fi
+
+exec node "$ENTRY" "$@"

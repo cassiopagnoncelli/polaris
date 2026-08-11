@@ -42,14 +42,26 @@ The CLI and services run from `dist/`, so build before using them directly.
 
 ## 3. Configure CLI Environment
 
-The CLI currently requires control-plane-style environment variables even for
-commands that read/write PostgreSQL directly.
+Run the CLI through `./polaris` at the repo root. It builds the CLI if `dist/`
+is missing or stale, then loads `.env.local` — the same file `make` includes —
+so a PostgreSQL connection string is already in place:
 
 ```bash
-export POLARIS_API_URL=http://localhost:8080
-export POLARIS_TOKEN=local-dev
-export POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable'
+./polaris --help
 ```
+
+Every v1 command talks to PostgreSQL directly and needs a connection string.
+There is no built-in localhost default: a CLI that can mutate production must
+not guess which database it is pointed at. To run the binary without the
+shortcut, export one yourself:
+
+```bash
+export POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable'
+node apps/polaris-cli/dist/bin/polaris.js projects list --from-catalog
+```
+
+`POLARIS_API_URL` and `POLARIS_TOKEN` are for the HTTP boundary only. No v1
+command uses it, so leave them unset unless you are exercising that path.
 
 ## 4. Seed the Catalog
 
@@ -61,21 +73,21 @@ The repo ships a sample `storefront` project and two sources:
 Inspect catalog files without touching PostgreSQL:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js projects list --from-catalog
-node apps/polaris-cli/dist/bin/polaris.js sources list --from-catalog
+./polaris projects list --from-catalog
+./polaris sources list --from-catalog
 ```
 
 Materialize them into PostgreSQL:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js projects sync
-node apps/polaris-cli/dist/bin/polaris.js sources sync
+./polaris projects sync
+./polaris sources sync
 ```
 
 ## 5. Create an API Key
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js keys create \
+./polaris keys create \
   --project storefront \
   --env development \
   --source storefront-web \
@@ -185,7 +197,7 @@ curl http://localhost:8080/metrics
 Recent audit records:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js audit list --limit 10
+./polaris audit list --limit 10
 ```
 
 If you did not export the CLI env vars, run:
@@ -194,7 +206,7 @@ If you did not export the CLI env vars, run:
 POLARIS_API_URL=http://localhost:8080 \
 POLARIS_TOKEN=local-dev \
 POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable' \
-node apps/polaris-cli/dist/bin/polaris.js audit list --limit 10
+./polaris audit list --limit 10
 ```
 
 ## ClickHouse Note

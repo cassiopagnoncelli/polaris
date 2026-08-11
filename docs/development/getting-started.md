@@ -118,13 +118,19 @@ commands (`projects`, `sources`, `keys`, `destinations`, `processors`, `audit`,
 control-plane API service lands later in P6-000.
 
 ```bash
-# Build it once (no auto-rebuild watcher in v1).
-pnpm --filter @polaris/polaris-cli run build
-
-# Run it.
-node apps/polaris-cli/dist/bin/polaris.js --help
-# or: make cli
+./polaris --help
 ```
+
+`./polaris` at the repo root is the shortcut. It builds the CLI when `dist/`
+is missing or stale, then loads `.env.local` before exec'ing it — the same
+file `make` includes, so `DATABASE_URL` is set the way every other target
+sees it. Variables you exported yourself always win over the file.
+
+The underlying binary is `node apps/polaris-cli/dist/bin/polaris.js` after
+`pnpm --filter @polaris/polaris-cli run build`. Use that form where the repo
+root is not the working directory, and set `POLARIS_DATABASE_URL` or
+`DATABASE_URL` yourself — every v1 command talks to PostgreSQL directly, and
+the CLI never guesses a connection string.
 
 The CLI's auth surface is documented in
 [`apps/polaris-cli/README.md`](../../apps/polaris-cli/README.md) (profile
@@ -158,7 +164,7 @@ resolver.
 ### Issue an API key
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js keys create \
+./polaris keys create \
   --project storefront \
   --env development \
   --source storefront-web \
@@ -180,10 +186,10 @@ source of truth for project and source declarations. The CLI materializes
 those declarations into PostgreSQL with two `sync` commands:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js projects sync --dry-run
-node apps/polaris-cli/dist/bin/polaris.js projects sync
-node apps/polaris-cli/dist/bin/polaris.js sources sync --dry-run
-node apps/polaris-cli/dist/bin/polaris.js sources sync
+./polaris projects sync --dry-run
+./polaris projects sync
+./polaris sources sync --dry-run
+./polaris sources sync
 ```
 
 Removing a project from `catalog/projects/` is NOT a delete signal — the
@@ -246,8 +252,8 @@ The ingester also exposes `/metrics` (Prometheus text exposition) and
 ### Inspect audit records
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js audit list --limit 20
-node apps/polaris-cli/dist/bin/polaris.js audit show <audit_id>
+./polaris audit list --limit 20
+./polaris audit show <audit_id>
 ```
 
 Every mutating CLI command writes one audit row inside the same transaction
@@ -258,7 +264,7 @@ in the [Audit and Export runbook](./audit-and-export.md).
 ### Activate the analytics projector for a project
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js processors enable analytics-projector \
+./polaris processors enable analytics-projector \
   --version v1 \
   --project storefront \
   --env development
@@ -314,7 +320,7 @@ To introduce `v2` of a processor:
 5. **Activate `v2` per-project** via the CLI:
 
    ```bash
-   node apps/polaris-cli/dist/bin/polaris.js processors enable my-processor \
+   ./polaris processors enable my-processor \
      --version v2 \
      --project storefront \
      --env development
@@ -325,7 +331,7 @@ To introduce `v2` of a processor:
    for both directions):
 
    ```bash
-   node apps/polaris-cli/dist/bin/polaris.js processors disable my-processor \
+   ./polaris processors disable my-processor \
      --version v1 \
      --project storefront \
      --env development

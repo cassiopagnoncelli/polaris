@@ -125,7 +125,7 @@ Add `POLARIS_WEBHOOK_TEST_URL=http://localhost:4321/hook` to `.env.local`,
 restart `make dev-all` so the consumers pick it up, then:
 
 ```bash
-node apps/polaris-cli/dist/bin/polaris.js destinations create --project storefront --env development --vendor webhook --instance-label local-test-sink --secret-ref env:POLARIS_WEBHOOK_TEST_URL
+./polaris destinations create --project storefront --env development --vendor webhook --instance-label local-test-sink --secret-ref env:POLARIS_WEBHOOK_TEST_URL
 ```
 
 The next event through the sample arrives on 4321 within a few seconds, and
