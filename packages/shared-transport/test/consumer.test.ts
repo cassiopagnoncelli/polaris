@@ -351,3 +351,167 @@ describe("createPolarisConsumer", () => {
     expect(await checkpoints.read("g", "raw.events-0")).toBe("33");
   });
 });
+
+describe("poison messages", () => {
+  /** A producer double that records DLQ publishes. */
+  function poisonProducer(): { producer: never; sent: Array<{ queue: string }> } {
+    const sent: Array<{ queue: string }> = [];
+    const producer = {
+      async connect() {},
+      async disconnect() {},
+      async publishEvent() {
+        throw new Error("not used");
+      },
+      async publish() {
+        throw new Error("not used");
+      },
+      async publishToQueue(input: { queue: string }) {
+        sent.push({ queue: input.queue });
+      },
+    } as unknown as never;
+    return { producer, sent };
+  }
+
+  it("routes a message that keeps failing to the DLQ and advances past it", async () => {
+    // Without this, one bad payload pins its partition forever and every
+    // healthy event behind it waits with it.
+    const connection = new FakeConnection({
+      ...testRabbitmqConfig,
+      partitions: 1,
+      checkpointEvery: 1,
+    });
+    const checkpoints = new InMemoryCheckpointStore();
+    const { producer, sent } = poisonProducer();
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints,
+      retryDelayMs: 1,
+      maxRetryDelayMs: 2,
+      maxDeliveryAttempts: 3,
+      poison: { component: "sessionizer", producer },
+    });
+    let calls = 0;
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async () => {
+      calls += 1;
+      throw new Error("always fails");
+    });
+
+    // Re-deliver the same offset as the broker would after each rewind.
+    for (let i = 0; i < 3; i += 1) {
+      connection.last.deliver(streamDelivery({ offset: 9 }));
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(calls).toBeGreaterThanOrEqual(3);
+    expect(sent).toEqual([{ queue: "sessionizer.dlq" }]);
+    // Checkpoint advanced past the poison offset, so the partition drains.
+    expect(await checkpoints.read("g", "raw.events-0")).toBe("9");
+    await consumer.disconnect();
+  });
+
+  it("counts failures per offset, so an intermittent error never trips the limit", async () => {
+    const connection = new FakeConnection({
+      ...testRabbitmqConfig,
+      partitions: 1,
+      checkpointEvery: 1,
+    });
+    const { producer, sent } = poisonProducer();
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints: new InMemoryCheckpointStore(),
+      retryDelayMs: 1,
+      maxRetryDelayMs: 2,
+      maxDeliveryAttempts: 2,
+      poison: { component: "sessionizer", producer },
+    });
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async () => {
+      throw new Error("transient");
+    });
+
+    // Different offsets each time: progress, not poison.
+    for (let offset = 1; offset <= 3; offset += 1) {
+      connection.last.deliver(streamDelivery({ offset }));
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(sent).toEqual([]);
+    await consumer.disconnect();
+  });
+
+  it("keeps rewinding — loudly — when no DLQ is wired", async () => {
+    const connection = new FakeConnection({ ...testRabbitmqConfig, partitions: 1 });
+    const events: string[] = [];
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints: new InMemoryCheckpointStore(),
+      retryDelayMs: 1,
+      maxRetryDelayMs: 2,
+      maxDeliveryAttempts: 2,
+      hooks: {
+        onEvent: (event) => {
+          events.push(event);
+        },
+      },
+    });
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async () => {
+      throw new Error("always fails");
+    });
+
+    for (let i = 0; i < 2; i += 1) {
+      connection.last.deliver(streamDelivery({ offset: 4 }));
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    // Silently dropping the event would be worse than a visible stall, so
+    // the consumer keeps trying — but it says so.
+    expect(events).toContain("consumer.poisoned");
+    await consumer.disconnect();
+  });
+});
+
+describe("rewind discards in-flight deliveries", () => {
+  it("does not process messages the broker pushed before the rewind", async () => {
+    // Prefetch means the broker runs ahead of the handler. When a message
+    // fails, the ones already queued behind it sit at HIGHER offsets —
+    // handling them would advance the checkpoint past the failure and
+    // silently skip the event the rewind exists to retry.
+    const connection = new FakeConnection({
+      ...testRabbitmqConfig,
+      partitions: 1,
+      checkpointEvery: 1,
+    });
+    const checkpoints = new InMemoryCheckpointStore();
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints,
+      retryDelayMs: 5,
+      maxRetryDelayMs: 10,
+    });
+    const handled: string[] = [];
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async (payload) => {
+      if (payload.message.offset === "5") throw new Error("fails");
+      handled.push(payload.message.offset);
+    });
+
+    const channel = connection.channels[0];
+    // Offset 5 fails; 6 and 7 were already in flight behind it.
+    channel?.deliver(streamDelivery({ offset: 5 }));
+    channel?.deliver(streamDelivery({ offset: 6 }));
+    channel?.deliver(streamDelivery({ offset: 7 }));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    expect(handled).toEqual([]);
+    // The checkpoint must not have jumped past the failed offset.
+    const stored = await checkpoints.read("g", "raw.events-0");
+    expect(stored === undefined || BigInt(stored) < 5n).toBe(true);
+    await consumer.disconnect();
+  });
+});

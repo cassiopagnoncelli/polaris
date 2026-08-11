@@ -144,6 +144,7 @@ export async function buildGa4App(options: BuildAppOptions): Promise<BuiltGa4App
     consumerLogger,
     connection,
     checkpoints,
+    producer,
   );
   if (ownsProducer) {
     try {
@@ -327,6 +328,7 @@ function buildConsumer(
   logger: Logger,
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
+  producer: PolarisProducer,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
@@ -336,6 +338,7 @@ function buildConsumer(
     logger,
     consumerName: CONSUMER_VENDOR,
     consumerVersion: CONSUMER_VERSION,
+    poison: { component: "ga4", producer },
     groupName: config.ga4.consumerGroup,
     checkpoints,
   });

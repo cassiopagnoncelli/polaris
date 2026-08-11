@@ -24,13 +24,30 @@
  *
  *   1. rows accumulate in memory,
  *   2. the batch is INSERTed and ClickHouse acknowledges it,
- *   3. only then does the consumer's checkpoint advance.
+ *   3. only then does the consumer's checkpoint become durable.
  *
  * A crash between (1) and (3) re-reads the batch from the stream and
  * re-inserts it. `analytics_raw`'s ReplacingMergeTree collapses the
  * duplicates on `(event_id, _version)` — which is exactly what it already
  * did for Kafka-engine redelivery, so the semantics downstream are
  * unchanged.
+ *
+ * Step (3) needs `DeferredCheckpointStore` to be true. The transport
+ * advances a checkpoint as soon as the handler resolves, and this handler
+ * resolves for rows that are still only buffered — so without deferral
+ * the checkpoint would claim rows ClickHouse never received, and a crash
+ * would drop up to `batchMaxRows` of them silently. Wrapping the store
+ * holds those positions until the INSERT is acknowledged.
+ *
+ * The sink is the only consumer that needs this, because it is the only
+ * one whose handler defers its side effect.
+ *
+ * One consequence worth knowing during an incident: the durable position
+ * lags the last inserted row by exactly one message. The transport writes
+ * a message's checkpoint *after* its handler returns, so the row that
+ * triggered a flush is committed with the following batch. The lag errs
+ * the safe way — a crash re-reads that row and ReplacingMergeTree
+ * collapses the duplicate.
  *
  * The ingest log intentionally keeps duplicates: it records transport
  * truth, and "this batch was delivered twice" is a fact worth being able
@@ -49,6 +66,7 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   consumerFamiliesFor,
   decodeEvent,
+  type DeferredCheckpointStore,
   type PolarisConsumer,
   redeliverQueueName,
   STREAM_FAMILY_ANALYTICS_EVENTS,
@@ -68,6 +86,12 @@ export interface ClickhouseSinkRuntimeDeps {
   readonly batchMaxRows: number;
   /** Flush when the open batch is this old. */
   readonly batchMaxMs: number;
+  /**
+   * The consumer's checkpoint store, wrapped for deferral. The runtime
+   * commits it after each acknowledged INSERT — see the module note on
+   * delivery guarantees.
+   */
+  readonly checkpoints: DeferredCheckpointStore;
   /** Projects currently isolated for `analytics.events`. */
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Clock seam for tests. */
@@ -99,7 +123,16 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     batch = [];
     batchOpenedAt = now();
     const started = now();
-    await deps.writer.insertBatch(rows);
+    try {
+      await deps.writer.insertBatch(rows);
+    } catch (err) {
+      // Drop the held positions so the transport re-reads these rows
+      // rather than resuming past them.
+      deps.checkpoints.rollback();
+      throw err;
+    }
+    // The rows are durable in ClickHouse; the positions may follow.
+    await deps.checkpoints.commit();
     deps.metrics.recordBatch(rows.length, now() - started);
     deps.logger.debug(
       { component: "clickhouse-sink.flush", rows: rows.length, duration_ms: now() - started },

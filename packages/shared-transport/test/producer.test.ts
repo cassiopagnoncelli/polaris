@@ -219,3 +219,72 @@ describe("createPolarisProducer.publishToQueue", () => {
     );
   });
 });
+
+describe("unroutable returns under concurrent publishes", () => {
+  it("blames the publish that was actually returned, not whichever confirm lands first", async () => {
+    // The failure this guards: a shared "last return" slot. Publish A is
+    // unroutable and publish B is fine; if the producer keys off a single
+    // mutable slot, B inherits A's return (spurious 5xx) while A reports
+    // success even though the broker dropped it — a silently lost event,
+    // which is the worst outcome the ingester can produce.
+    const connection = new FakeConnection();
+    const producer = createPolarisProducer({
+      connection: connection.asConnection(),
+      producerName: "ingester-api",
+    });
+    await producer.connect();
+    const channel = connection.last;
+    channel.deferConfirms = true;
+
+    const a = producer.publishEvent({
+      family: STREAM_FAMILY_RAW_EVENTS,
+      event: envelope({ event_id: "a", identity: { customer_id: "cust-a" } }) as never,
+      isolation: sharedOnlyIsolationLookup,
+    });
+    const b = producer.publishEvent({
+      family: STREAM_FAMILY_RAW_EVENTS,
+      event: envelope({ event_id: "b", identity: { customer_id: "cust-b" } }) as never,
+      isolation: sharedOnlyIsolationLookup,
+    });
+
+    // Let both publishes reach the channel before the broker responds.
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    expect(channel.publishes).toHaveLength(2);
+
+    // The broker returns A as unroutable, then confirms both — B first.
+    channel.returnPublish(0);
+    channel.releaseConfirm(1);
+    channel.releaseConfirm(0);
+
+    await expect(a).rejects.toThrow(/unroutable/);
+    await expect(b).resolves.toBeDefined();
+  });
+
+  it("does not leak a stale return onto the next publish", async () => {
+    const connection = new FakeConnection();
+    const producer = createPolarisProducer({
+      connection: connection.asConnection(),
+      producerName: "ingester-api",
+    });
+    await producer.connect();
+    const channel = connection.last;
+
+    channel.returnAt.add(0);
+    await expect(
+      producer.publishEvent({
+        family: STREAM_FAMILY_RAW_EVENTS,
+        event: envelope({ event_id: "a" }) as never,
+        isolation: sharedOnlyIsolationLookup,
+      }),
+    ).rejects.toThrow(/unroutable/);
+
+    // The next publish is routable and must not inherit the failure.
+    await expect(
+      producer.publishEvent({
+        family: STREAM_FAMILY_RAW_EVENTS,
+        event: envelope({ event_id: "b" }) as never,
+        isolation: sharedOnlyIsolationLookup,
+      }),
+    ).resolves.toBeDefined();
+  });
+});

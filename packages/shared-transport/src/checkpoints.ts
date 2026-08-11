@@ -113,6 +113,72 @@ export class PostgresCheckpointStore implements CheckpointStore {
   }
 }
 
+/**
+ * A checkpoint store that holds writes until the owner says the work is
+ * durable.
+ *
+ * The consumer advances a stream's checkpoint as soon as the handler
+ * resolves — correct for a handler whose side effect completed inside the
+ * call, wrong for one that *buffers*. The ClickHouse sink is the case
+ * that forced this: it accumulates rows and INSERTs in batches, so its
+ * handler resolves for rows that are still only in memory. Left alone,
+ * the checkpoint claims those rows were handled and a crash discards
+ * them — silent loss, on the one path with no upstream retry.
+ *
+ * Wrapping the real store defers every write until `commit()` is called,
+ * which the owner does only after its batch is durable. `rollback()`
+ * drops the pending positions so a failed batch is re-read.
+ *
+ * Positions still only move forward: `commit()` forwards the highest
+ * pending offset per stream.
+ */
+export class DeferredCheckpointStore implements CheckpointStore {
+  readonly #inner: CheckpointStore;
+  readonly #pending = new Map<string, Checkpoint>();
+
+  constructor(inner: CheckpointStore) {
+    this.#inner = inner;
+  }
+
+  /** Reads fall through: a resume must see the last DURABLE position. */
+  async read(groupName: string, stream: string): Promise<string | undefined> {
+    return this.#inner.read(groupName, stream);
+  }
+
+  async readAll(groupName: string): Promise<ReadonlyMap<string, string>> {
+    return this.#inner.readAll(groupName);
+  }
+
+  /** Hold the position. Nothing reaches the durable store until `commit`. */
+  async write(checkpoint: Checkpoint): Promise<void> {
+    const entryKey = key(checkpoint.group_name, checkpoint.stream);
+    const existing = this.#pending.get(entryKey);
+    if (existing !== undefined && BigInt(existing.last_offset) >= BigInt(checkpoint.last_offset)) {
+      return;
+    }
+    this.#pending.set(entryKey, checkpoint);
+  }
+
+  /** Flush every held position to the durable store. */
+  async commit(): Promise<void> {
+    const held = [...this.#pending.values()];
+    this.#pending.clear();
+    for (const checkpoint of held) {
+      await this.#inner.write(checkpoint);
+    }
+  }
+
+  /** Drop held positions so the owner's failed work is re-read. */
+  rollback(): void {
+    this.#pending.clear();
+  }
+
+  /** Positions currently held but not yet durable. Tests assert on this. */
+  get pending(): number {
+    return this.#pending.size;
+  }
+}
+
 /** Non-durable store. Tests, dry runs, and the replay reader. */
 export class InMemoryCheckpointStore implements CheckpointStore {
   readonly #entries = new Map<string, string>();

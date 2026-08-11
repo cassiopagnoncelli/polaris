@@ -194,6 +194,19 @@ jobs:
           echo "ingester did not become ready"
           exit 1
 
+
+      # PostgresCheckpointStore is the resume point for every stream
+      # consumer; a store that silently rewinds or advances is an incident
+      # either way. The unit suite can only cover the in-memory store.
+      - name: Run PostgreSQL integration tests
+        run: pnpm test:integration
+        env:
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+
       - name: Run vertical-slice smoke (P5-001)
         run: pnpm smoke:vertical-slice
 

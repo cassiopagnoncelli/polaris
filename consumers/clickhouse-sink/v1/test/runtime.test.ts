@@ -1,5 +1,10 @@
 import type { AnalyticsQueueRow, AnalyticsSinkWriter } from "@polaris/shared-clickhouse";
-import type { PolarisConsumer, TransportMessagePayload } from "@polaris/shared-transport";
+import {
+  DeferredCheckpointStore,
+  InMemoryCheckpointStore,
+  type PolarisConsumer,
+  type TransportMessagePayload,
+} from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { SinkMetrics } from "../src/metrics.js";
@@ -79,7 +84,12 @@ const noopConsumer: PolarisConsumer = {
 
 function runtimeWith(
   writer: AnalyticsSinkWriter,
-  overrides: { batchMaxRows?: number; batchMaxMs?: number; now?: () => number } = {},
+  overrides: {
+    batchMaxRows?: number;
+    batchMaxMs?: number;
+    now?: () => number;
+    checkpoints?: DeferredCheckpointStore;
+  } = {},
 ) {
   return createRuntime({
     consumer: noopConsumer,
@@ -88,6 +98,8 @@ function runtimeWith(
     metrics: new SinkMetrics(),
     batchMaxRows: overrides.batchMaxRows ?? 3,
     batchMaxMs: overrides.batchMaxMs ?? 60_000,
+    checkpoints:
+      overrides.checkpoints ?? new DeferredCheckpointStore(new InMemoryCheckpointStore()),
     ...(overrides.now !== undefined ? { now: overrides.now } : {}),
   });
 }
@@ -289,5 +301,109 @@ describe("SinkMetrics", () => {
       .filter((s) => s.name === "polaris_clickhouse_sink_rows_consumed_total");
     expect(consumed).toHaveLength(2);
     expect(consumed.find((s) => s.labels["project_id"] === "project-alpha")?.value).toBe(2);
+  });
+});
+
+describe("checkpoint safety", () => {
+  it("does not let the checkpoint advance past rows that are only buffered", async () => {
+    // The transport advances a stream's checkpoint as soon as the handler
+    // resolves. The sink's handler resolves WITHOUT inserting whenever the
+    // batch bounds have not tripped, so with the shipped defaults
+    // (batchMaxRows=1000, checkpointEvery=500) a crash discards up to a
+    // thousand rows the checkpoint already claims were handled — silent
+    // loss on the one path that has no upstream retry.
+    const { writer, batches } = fakeWriter();
+    const underlying = new InMemoryCheckpointStore();
+    const deferred = new DeferredCheckpointStore(underlying);
+    const runtime = createRuntime({
+      consumer: noopConsumer,
+      writer,
+      logger: silentLogger,
+      metrics: new SinkMetrics(),
+      batchMaxRows: 3,
+      batchMaxMs: 60_000,
+      checkpoints: deferred,
+    });
+
+    // Two rows buffered, nothing inserted. The transport would have
+    // written a checkpoint by now; it must not reach the durable store.
+    await runtime.handler(payload(envelope({ event_id: "e1" })), {});
+    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "1" });
+    await runtime.handler(payload(envelope({ event_id: "e2" })), {});
+    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "2" });
+
+    expect(batches).toHaveLength(0);
+    expect(await underlying.read("sink", "analytics.events-2")).toBeUndefined();
+
+    // The third row trips the bound; once ClickHouse has acknowledged the
+    // insert, the held positions become durable.
+    await runtime.handler(payload(envelope({ event_id: "e3" })), {});
+    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "3" });
+
+    expect(batches).toHaveLength(1);
+    // Durable at 2, not 3: the transport writes a message's checkpoint
+    // AFTER its handler returns, so the position of the row that
+    // triggered the flush lands in the next batch's window. The lag is
+    // one message and it errs the safe way — a crash re-reads offset 3
+    // and ReplacingMergeTree collapses the duplicate.
+    expect(await underlying.read("sink", "analytics.events-2")).toBe("2");
+  });
+
+  it("keeps the checkpoint pinned when the insert fails", async () => {
+    const underlying = new InMemoryCheckpointStore();
+    await underlying.write({
+      group_name: "sink",
+      stream: "analytics.events-2",
+      last_offset: "10",
+    });
+    const deferred = new DeferredCheckpointStore(underlying);
+    const runtime = createRuntime({
+      consumer: noopConsumer,
+      writer: {
+        async insertBatch() {
+          throw new Error("clickhouse 503");
+        },
+        async close() {},
+      },
+      logger: silentLogger,
+      metrics: new SinkMetrics(),
+      batchMaxRows: 1,
+      batchMaxMs: 60_000,
+      checkpoints: deferred,
+    });
+
+    await expect(runtime.handler(payload(envelope({ event_id: "e1" })), {})).rejects.toThrow(
+      /clickhouse 503/,
+    );
+    await expect(
+      deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "11" }),
+    ).resolves.toBeUndefined();
+
+    // Still at the pre-batch position, so the rows are re-read.
+    expect(await underlying.read("sink", "analytics.events-2")).toBe("10");
+  });
+
+  it("flushes and commits the position on clean shutdown", async () => {
+    const { writer, batches } = fakeWriter();
+    const underlying = new InMemoryCheckpointStore();
+    const deferred = new DeferredCheckpointStore(underlying);
+    const runtime = createRuntime({
+      consumer: noopConsumer,
+      writer,
+      logger: silentLogger,
+      metrics: new SinkMetrics(),
+      batchMaxRows: 1000,
+      batchMaxMs: 60_000,
+      checkpoints: deferred,
+    });
+    await runtime.start();
+
+    await runtime.handler(payload(envelope({ event_id: "e1" })), {});
+    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "7" });
+    expect(await underlying.read("sink", "analytics.events-2")).toBeUndefined();
+
+    await runtime.stop();
+    expect(batches).toHaveLength(1);
+    expect(await underlying.read("sink", "analytics.events-2")).toBe("7");
   });
 });

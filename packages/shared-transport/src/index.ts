@@ -63,6 +63,7 @@
 export {
   type Checkpoint,
   type CheckpointStore,
+  DeferredCheckpointStore,
   InMemoryCheckpointStore,
   PostgresCheckpointStore,
 } from "./checkpoints.js";
@@ -79,6 +80,7 @@ export {
   createPolarisConsumer,
   offsetSpec,
   type PolarisConsumer,
+  type PoisonHandle,
   QUEUE_PARTITION,
   type StreamStartPosition,
   type SubscribeInput,

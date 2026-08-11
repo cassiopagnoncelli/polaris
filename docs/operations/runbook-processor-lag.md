@@ -166,6 +166,13 @@ way the schema-validation gate at ingest didn't catch.
   downstream API is the bottleneck, throttle the producer via the
   ingester's rate-limit knob (per-key, per-project). The SDK retries
   back-pressure-aware.
+- **Check whether the transport already skipped it.** A message that
+  fails 5 times in a row at the same offset is published to
+  `<component>.dlq` and skipped automatically, with a
+  `consumer.poisoned` hook and an error log naming the offset. If lag
+  recovered on its own, look there first — the event is in the DLQ, not
+  lost, and `polaris dlq list` will show it.
+
 - **Skip the poison message** by DLQ-ing it manually (operator
   judgment). Use the processor's DLQ surface (`polaris dlq retry` for
   destination DLQ; processor-side DLQ surfaces ship per processor —

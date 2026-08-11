@@ -54,6 +54,14 @@ export class FakeChannel {
   cancelled: string[] = [];
   /** Set when the caller should be told a publish was unroutable. */
   returnOnPublish = false;
+  /**
+   * Hold confirms instead of resolving them inline, so a test can
+   * interleave two concurrent publishes. Resolve them with
+   * `releaseConfirm(index)`.
+   */
+  deferConfirms = false;
+  /** Publish indexes whose broker return should fire (unroutable). */
+  returnAt = new Set<number>();
   /** Fail the Nth publish (0-based) with this error. */
   failPublishAt: number | undefined;
 
@@ -99,6 +107,8 @@ export class FakeChannel {
     return {};
   }
 
+  #pendingConfirms = new Map<number, (err: unknown, ok: object) => void>();
+
   publish(
     exchange: string,
     routingKey: string,
@@ -108,15 +118,39 @@ export class FakeChannel {
   ): boolean {
     const index = this.publishes.length;
     this.publishes.push({ exchange, routingKey, content, options });
-    if (this.returnOnPublish) {
-      this.emit("return", { fields: { exchange, routingKey } });
+    if (this.returnOnPublish || this.returnAt.has(index)) {
+      // A real broker returns the whole message, properties included —
+      // that is what lets a publisher tell WHICH publish came back.
+      this.emit("return", { fields: { exchange, routingKey }, properties: { ...options } });
     }
     if (this.failPublishAt === index) {
       callback?.(new Error("nacked by broker"), {});
       return true;
     }
+    if (this.deferConfirms) {
+      if (callback !== undefined) this.#pendingConfirms.set(index, callback);
+      return true;
+    }
     callback?.(null, {});
     return true;
+  }
+
+  /** Resolve a deferred confirm by publish index. */
+  releaseConfirm(index: number, err: unknown = null): void {
+    const callback = this.#pendingConfirms.get(index);
+    if (callback === undefined) throw new Error(`no pending confirm at index ${String(index)}`);
+    this.#pendingConfirms.delete(index);
+    callback(err, {});
+  }
+
+  /** Fire a broker return for an already-issued publish, by index. */
+  returnPublish(index: number): void {
+    const publish = this.publishes[index];
+    if (publish === undefined) throw new Error(`no publish at index ${String(index)}`);
+    this.emit("return", {
+      fields: { exchange: publish.exchange, routingKey: publish.routingKey },
+      properties: { ...publish.options },
+    });
   }
 
   sendToQueue(

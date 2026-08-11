@@ -211,7 +211,17 @@ Rules:
 - Flush cadence is `POLARIS_RABBITMQ_CHECKPOINT_EVERY` messages or
   `POLARIS_RABBITMQ_CHECKPOINT_INTERVAL_MS`, whichever trips first, plus a
   forced flush on clean shutdown. Larger values mean fewer Postgres writes
-  and more redelivery after a crash.
+  and more redelivery after a crash. Lag in that direction is always
+  safe: it only ever causes re-delivery.
+
+- **A handler that defers its side effect must defer its checkpoint too.**
+  The consumer advances the position as soon as the handler resolves,
+  which is correct only when the effect completed inside the call. The
+  ClickHouse sink batches, so its handler returns for rows still sitting
+  in memory; it wraps its store in `DeferredCheckpointStore` and commits
+  only after ClickHouse acknowledges the INSERT. Any future consumer that
+  buffers must do the same, or its checkpoint will claim work the process
+  can still lose.
 - Deleting a checkpoint row rewinds that consumer to the start of
   retention. Operators do this deliberately, never services.
 
@@ -246,6 +256,30 @@ not meaningful on a stream, where nothing is ever removed.
 
 Components that want retry/DLQ routing instead of redelivery catch the
 error themselves and call the helpers in `@polaris/shared-transport/dlq`.
+
+Two properties of the rewind are easy to get wrong and are worth stating
+explicitly, because both were bugs before they were features:
+
+**In-flight deliveries are discarded.** Prefetch means the broker pushes
+up to `POLARIS_RABBITMQ_PREFETCH` messages ahead of the handler, so a
+rewind always leaves some already queued. Those messages sit at *higher*
+offsets than the one that failed; processing them would advance the
+checkpoint past the failure and silently skip the very event the rewind
+exists to retry. Each attach therefore carries an epoch, and deliveries
+from a superseded epoch are dropped.
+
+**A message that always fails is dead-lettered, not retried forever.**
+After `maxDeliveryAttempts` consecutive failures at the same offset
+(default 5), the consumer publishes the message to `<component>.dlq`,
+advances past it, and emits `consumer.poisoned`. Without this, one bad
+payload pins its partition indefinitely and every healthy event behind it
+waits with it — with only the lag alert to notice.
+
+The counter is per-offset, so an intermittent error never trips it;
+only a message that cannot make progress does. If a component is wired
+without a DLQ target the consumer keeps rewinding rather than dropping
+the event, but escalates the log and still emits `consumer.poisoned` —
+a visible stall beats silent loss.
 
 ## Retry and DLQ queues
 

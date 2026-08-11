@@ -34,6 +34,21 @@
  * allow (`basic.nack` with requeue is not meaningful on a stream, where
  * nothing is ever removed). Components that want retry/DLQ routing rather
  * than redelivery catch the error themselves and call `./dlq`.
+ *
+ * ## Poison messages
+ *
+ * Redelivering forever is the wrong answer for a message that can never
+ * succeed: one bad payload would pin its partition indefinitely, and
+ * every healthy event behind it would wait with it. So a message that
+ * fails `maxDeliveryAttempts` times in a row at the *same offset* is
+ * routed to the component's DLQ and skipped, exactly as an exhausted
+ * retry would be.
+ *
+ * That needs a `poison` handle (component name + producer). Without one
+ * the consumer keeps rewinding — but it escalates the log and emits
+ * `consumer.poisoned` so the stall is visible rather than silent. Every
+ * Polaris component wires the handle; the option is optional only so the
+ * port stays usable without a producer.
  */
 
 import { partitionsForFamily } from "@polaris/shared-config";
@@ -41,6 +56,7 @@ import type { Logger } from "@polaris/shared-logger";
 import type { Channel, ConsumeMessage } from "amqplib";
 import type { CheckpointStore } from "./checkpoints.js";
 import type { TransportConnection } from "./connection.js";
+import { republishToDlq } from "./dlq.js";
 import {
   fromAmqpHeaders,
   POLARIS_HEADER_ENVIRONMENT,
@@ -50,6 +66,7 @@ import {
   readHeaderString,
 } from "./headers.js";
 import { emitHook, type TransportHookPayload, type TransportHooks } from "./hooks.js";
+import type { PolarisProducer } from "./producer.js";
 import { partitionStreamName } from "./streams.js";
 import type {
   TransportMessage,
@@ -94,6 +111,26 @@ export interface CreatePolarisConsumerOptions {
   readonly retryDelayMs?: number;
   /** Maximum backoff between re-attach attempts. */
   readonly maxRetryDelayMs?: number;
+  /**
+   * Consecutive failures at the same offset before the message is treated
+   * as poison. Defaults to 5.
+   */
+  readonly maxDeliveryAttempts?: number;
+  /**
+   * Where to send a poison message. Without this the consumer cannot skip
+   * one safely — it would have to choose between losing the event and
+   * stalling the partition — so it keeps rewinding and escalates the log
+   * instead.
+   */
+  readonly poison?: PoisonHandle;
+}
+
+/** Component identity + producer used to DLQ a poison message. */
+export interface PoisonHandle {
+  /** Component name; the DLQ queue is `<component>.dlq`. */
+  readonly component: string;
+  /** Connected producer used for the DLQ publish. */
+  readonly producer: PolarisProducer;
 }
 
 /** Streams to read, expressed as families plus a partition assignment. */
@@ -146,6 +183,14 @@ interface Reader {
   lastCheckpointAt: number;
   stopped: boolean;
   reattachAttempt: number;
+  /**
+   * Incremented on every attach and detach. Deliveries captured under an
+   * older epoch are discarded — see `attach`.
+   */
+  epoch: number;
+  /** Offset currently failing, and how many times in a row it has. */
+  poisonOffset: string | undefined;
+  poisonAttempts: number;
 }
 
 export function createPolarisConsumer(options: CreatePolarisConsumerOptions): PolarisConsumer {
@@ -156,6 +201,8 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
   const startPosition: StreamStartPosition = options.startPosition ?? "next";
   const baseRetryDelayMs = options.retryDelayMs ?? 1_000;
   const maxRetryDelayMs = options.maxRetryDelayMs ?? 30_000;
+  const maxDeliveryAttempts = options.maxDeliveryAttempts ?? 5;
+  const poison = options.poison;
 
   const readers = new Map<string, Reader>();
   let handler: TransportMessageHandler | undefined;
@@ -227,8 +274,14 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
    * Handle one delivery. Runs inside the reader's serial chain, so
    * `await`ing here is what preserves per-partition ordering.
    */
-  async function deliver(reader: Reader, raw: ConsumeMessage): Promise<void> {
+  async function deliver(reader: Reader, raw: ConsumeMessage, epoch: number): Promise<void> {
     if (reader.stopped || handler === undefined) return;
+    // A delivery from a cancelled consumer. The broker pushes up to
+    // `prefetch` messages ahead of the handler, so a rewind always leaves
+    // some already queued; processing them would defeat the rewind
+    // entirely — they sit AFTER the message that just failed, so handling
+    // them would advance the checkpoint past it and silently skip it.
+    if (reader.epoch !== epoch) return;
     const message = toTransportMessage(reader, raw);
     const payload: TransportMessagePayload = {
       stream: reader.source,
@@ -243,6 +296,8 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
     try {
       await handler(payload, context);
       reader.channel?.ack(raw);
+      reader.poisonOffset = undefined;
+      reader.poisonAttempts = 0;
       if (reader.kind === "stream") {
         reader.lastOffset = message.offset;
         reader.sinceCheckpoint += 1;
@@ -260,6 +315,37 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
         error_class: error.name,
         error_message: error.message,
       });
+      if (reader.kind === "queue") {
+        // Quorum queues carry a delivery limit and dead-letter poison
+        // messages, so a requeue here is bounded.
+        logger?.error(
+          {
+            component: "transport.consumer",
+            consumer: consumerName,
+            group_id: groupName,
+            source: reader.source,
+            err: { name: error.name, message: error.message },
+          },
+          "handler failed; requeueing",
+        );
+        reader.channel?.nack(raw, false, true);
+        return;
+      }
+
+      // Count consecutive failures at this exact offset. A different
+      // offset means progress, so the counter restarts.
+      if (reader.poisonOffset === message.offset) {
+        reader.poisonAttempts += 1;
+      } else {
+        reader.poisonOffset = message.offset;
+        reader.poisonAttempts = 1;
+      }
+
+      if (reader.poisonAttempts >= maxDeliveryAttempts) {
+        const skipped = await skipPoison(reader, raw, payload, error);
+        if (skipped) return;
+      }
+
       logger?.error(
         {
           component: "transport.consumer",
@@ -269,18 +355,108 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
           source: reader.source,
           partition: reader.partition,
           offset: message.offset,
+          delivery_attempts: reader.poisonAttempts,
           err: { name: error.name, message: error.message },
         },
         "handler failed; rewinding to checkpoint",
       );
-      if (reader.kind === "queue") {
-        // Quorum queues carry a delivery limit and dead-letter poison
-        // messages, so a requeue here is bounded.
-        reader.channel?.nack(raw, false, true);
-        return;
-      }
       await rewind(reader);
     }
+  }
+
+  /**
+   * Route a message that keeps failing to the component's DLQ, then skip
+   * past it so the partition drains.
+   *
+   * Returns false when there is no DLQ to route to — the caller then
+   * falls back to rewinding, because dropping the event silently would be
+   * worse than a visible stall.
+   */
+  async function skipPoison(
+    reader: Reader,
+    raw: ConsumeMessage,
+    payload: TransportMessagePayload,
+    error: Error,
+  ): Promise<boolean> {
+    const base = {
+      topic: reader.source,
+      topic_family: reader.family,
+      partition: reader.partition,
+      offset: payload.message.offset,
+      group_id: groupName,
+      attempt: reader.poisonAttempts,
+      error_class: error.name,
+      error_message: error.message,
+    };
+    if (poison === undefined) {
+      emitHook(hooks, "consumer.poisoned", base);
+      logger?.error(
+        {
+          component: "transport.consumer",
+          consumer: consumerName,
+          group_id: groupName,
+          source: reader.source,
+          partition: reader.partition,
+          offset: payload.message.offset,
+          delivery_attempts: reader.poisonAttempts,
+          err: { name: error.name, message: error.message },
+        },
+        "message has failed repeatedly and no DLQ is wired: this partition is STALLED and will not advance until the message succeeds or an operator intervenes",
+      );
+      return false;
+    }
+
+    try {
+      await republishToDlq(poison.producer, {
+        component: poison.component,
+        value: payload.message.value,
+        ...(payload.message.key !== null ? { key: payload.message.key } : {}),
+        headers: payload.message.headers,
+        sourceTopic: reader.source,
+        sourcePartition: reader.partition,
+        sourceOffset: payload.message.offset,
+        reason: "poison_message",
+        errorClass: error.name,
+        errorMessage: error.message,
+        failedAt: new Date().toISOString(),
+      });
+    } catch (dlqErr) {
+      const dlqError = dlqErr as Error;
+      logger?.error(
+        {
+          component: "transport.consumer",
+          source: reader.source,
+          offset: payload.message.offset,
+          err: { name: dlqError.name, message: dlqError.message },
+        },
+        "DLQ publish failed for a poison message; rewinding instead of skipping",
+      );
+      return false;
+    }
+
+    // The event is durable in the DLQ, so advancing past it loses nothing.
+    reader.channel?.ack(raw);
+    reader.lastOffset = payload.message.offset;
+    reader.sinceCheckpoint += 1;
+    reader.poisonOffset = undefined;
+    reader.poisonAttempts = 0;
+    await saveCheckpoint(reader, true);
+    emitHook(hooks, "consumer.poisoned", base);
+    logger?.error(
+      {
+        component: "transport.consumer",
+        consumer: consumerName,
+        group_id: groupName,
+        source: reader.source,
+        partition: reader.partition,
+        offset: payload.message.offset,
+        delivery_attempts: maxDeliveryAttempts,
+        dlq_queue: `${poison.component}.dlq`,
+        err: { name: error.name, message: error.message },
+      },
+      "message failed repeatedly; routed to DLQ and skipped so the partition can advance",
+    );
+    return true;
   }
 
   /**
@@ -291,7 +467,11 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
     if (reader.stopped) return;
     await detach(reader);
     if (stopped) return;
-    const delay = Math.min(baseRetryDelayMs * 2 ** reader.reattachAttempt, maxRetryDelayMs);
+    // Back off on whichever counter is higher. `reattachAttempt` resets on
+    // a successful attach, so on its own it would never grow for a poison
+    // message — attach succeeds every time, the delivery is what fails.
+    const attempt = Math.max(reader.reattachAttempt, reader.poisonAttempts);
+    const delay = Math.min(baseRetryDelayMs * 2 ** attempt, maxRetryDelayMs);
     reader.reattachAttempt += 1;
     emitHook(hooks, "consumer.rewound", {
       topic: reader.source,
@@ -341,12 +521,17 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
       consumeOptions.arguments = { "x-stream-offset": offsetSpec(stored, startPosition) };
     }
 
+    // Every attach gets its own epoch so deliveries buffered against a
+    // previous one can be told apart and dropped.
+    reader.epoch += 1;
+    const epoch = reader.epoch;
+
     const reply = await channel.consume(
       reader.source,
       (raw) => {
         if (raw === null) return;
         reader.chain = reader.chain
-          .then(() => deliver(reader, raw))
+          .then(() => deliver(reader, raw, epoch))
           .catch((err: unknown) => {
             const error = err as Error;
             logger?.error(
@@ -386,6 +571,8 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
 
   /** Cancel and close a reader's channel, flushing its checkpoint. */
   async function detach(reader: Reader): Promise<void> {
+    // Invalidate anything the broker already pushed to the old consumer.
+    reader.epoch += 1;
     const channel = reader.channel;
     const tag = reader.consumerTag;
     reader.channel = undefined;
@@ -500,6 +687,9 @@ function newReader(
     lastCheckpointAt: Date.now(),
     stopped: false,
     reattachAttempt: 0,
+    epoch: 0,
+    poisonOffset: undefined,
+    poisonAttempts: 0,
   };
 }
 

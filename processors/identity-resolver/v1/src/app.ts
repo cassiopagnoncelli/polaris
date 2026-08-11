@@ -121,6 +121,7 @@ export async function buildIdentityResolverApp(
     processorLogger,
     connection,
     checkpoints,
+    producer,
   );
 
   if (ownsProducer) {
@@ -306,6 +307,7 @@ function buildConsumer(
   logger: Logger,
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
+  producer: PolarisProducer,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
@@ -315,6 +317,7 @@ function buildConsumer(
     logger,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
+    poison: { component: "identity-resolver", producer },
     groupName: config.resolver.consumerGroup,
     checkpoints,
   });

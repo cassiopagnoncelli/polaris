@@ -31,15 +31,20 @@ import {
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 import {
+  type CheckpointStore,
   createPolarisConsumer,
+  createPolarisProducer,
   createTransportConnection,
+  DeferredCheckpointStore,
+  InMemoryCheckpointStore,
   type PolarisConsumer,
+  type PolarisProducer,
   PostgresCheckpointStore,
   type TransportConnection,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
-import { type ClickhouseSinkRuntimeConfig, SINK_SERVICE_NAME } from "./config.js";
+import { type ClickhouseSinkRuntimeConfig, SINK_COMPONENT, SINK_SERVICE_NAME } from "./config.js";
 import { SinkMetrics } from "./metrics.js";
 import { type ClickhouseSinkRuntime, createRuntime } from "./runtime.js";
 
@@ -55,6 +60,12 @@ export interface BuildAppOptions {
   readonly writer?: AnalyticsSinkWriter;
   /** Pre-built Kysely client. Not closed on shutdown when supplied. */
   readonly db?: Kysely<Database>;
+  /**
+   * Underlying checkpoint store. Defaults to the Postgres one; tests pass
+   * an in-memory store. It is wrapped in a `DeferredCheckpointStore`
+   * either way — the sink's durability contract depends on that wrapper.
+   */
+  readonly checkpoints?: CheckpointStore;
   /** Projects currently isolated for `analytics.events`. */
   readonly isolatedProjects?: ReadonlyArray<string>;
   /** Start the runtime after bootstrap. Tests set `false`. */
@@ -83,19 +94,40 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
   const db = options.db ?? createDb({ postgres: config.postgres });
   const ownsDb = options.db === undefined;
 
+  // The transport advances a checkpoint when the handler resolves; the
+  // sink's handler resolves for rows that are still buffered. Deferring
+  // the writes until the INSERT is acknowledged is what keeps the
+  // position from running ahead of durability.
+  const checkpoints = new DeferredCheckpointStore(
+    options.checkpoints ??
+      (options.consumer !== undefined
+        ? new InMemoryCheckpointStore()
+        : new PostgresCheckpointStore(db)),
+  );
+
   let connection: TransportConnection | undefined;
   let consumer: PolarisConsumer;
+  let poisonProducer: PolarisProducer | undefined;
   if (options.consumer !== undefined) {
     consumer = options.consumer;
   } else {
     connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: sinkLogger });
+    // Only used to DLQ a message that fails repeatedly; the sink has no
+    // other reason to publish.
+    poisonProducer = createPolarisProducer({
+      connection,
+      logger: sinkLogger,
+      producerName: SINK_SERVICE_NAME,
+    });
+    await poisonProducer.connect();
     consumer = createPolarisConsumer({
       connection,
       logger: sinkLogger,
       consumerName: SINK_SERVICE_NAME,
       consumerVersion: "v1",
       groupName: config.sink.consumerGroup,
-      checkpoints: new PostgresCheckpointStore(db),
+      checkpoints,
+      poison: { component: SINK_COMPONENT, producer: poisonProducer },
     });
   }
 
@@ -117,6 +149,7 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
     metrics,
     batchMaxRows: config.sink.batchMaxRows,
     batchMaxMs: config.sink.batchMaxMs,
+    checkpoints,
     ...(options.isolatedProjects !== undefined
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
@@ -134,8 +167,10 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
   });
   if (connection !== undefined) {
     const owned = connection;
+    const ownedProducer = poisonProducer;
     shutdownTasks.push(async () => {
       try {
+        await ownedProducer?.disconnect();
         await owned.close();
       } catch (err) {
         sinkLogger.warn({ err: errSummary(err) }, "transport close error during shutdown");

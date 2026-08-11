@@ -32,7 +32,8 @@ export type TransportHookEvent =
   | "consumer.partition_assigned"
   | "consumer.partition_released"
   | "consumer.checkpoint_saved"
-  | "consumer.rewound";
+  | "consumer.rewound"
+  | "consumer.poisoned";
 
 /**
  * Free-form payload shape attached to a hook event. Field names are

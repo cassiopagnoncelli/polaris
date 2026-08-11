@@ -155,18 +155,39 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
   // A `basic.return` means the broker could not route the message — a
   // missing binding or a super stream that was never declared. The
   // publish's confirm still succeeds (RabbitMQ acks returned messages),
-  // so the return has to be captured out of band and surfaced on the next
-  // publish rather than silently swallowed.
+  // so the return has to be captured out of band and matched back to the
+  // publish that caused it.
+  //
+  // **Matching is not optional.** A single "last return seen" slot works
+  // only for a producer with one publish in flight, and this producer is
+  // shared across concurrent HTTP requests. With two in flight, the
+  // returned message's failure lands on whichever confirm resolves first:
+  // the dropped event reports success (a silently lost event — the worst
+  // outcome the ingester can produce) and an unrelated healthy publish
+  // gets a spurious 5xx.
+  //
+  // Each publish therefore carries a unique token in `correlationId`, and
+  // the return handler records the token that actually came back.
+  // RabbitMQ guarantees `basic.return` precedes `basic.ack` for the same
+  // message, so the token is always recorded before the publish's confirm
+  // resolves.
   interface UnroutableReturn {
     readonly exchange: string;
     readonly routingKey: string;
   }
-  const returnState: { current: UnroutableReturn | undefined } = { current: undefined };
+  const returnedTokens = new Map<string, UnroutableReturn>();
+  let publishSequence = 0;
 
-  /** Take and clear the pending unroutable return, if any. */
-  function takeReturn(): UnroutableReturn | undefined {
-    const value = returnState.current;
-    returnState.current = undefined;
+  /** Unique per-publish token. Monotonic, so it is stable in tests. */
+  function nextToken(): string {
+    publishSequence += 1;
+    return `${producerName}-${String(publishSequence)}`;
+  }
+
+  /** Take and clear this publish's return, if the broker sent one. */
+  function takeReturn(token: string): UnroutableReturn | undefined {
+    const value = returnedTokens.get(token);
+    if (value !== undefined) returnedTokens.delete(token);
     return value;
   }
 
@@ -183,10 +204,13 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
     opening = (async (): Promise<ConfirmChannel> => {
       const next = await connection.createConfirmChannel();
       next.on("return", (message) => {
-        returnState.current = {
-          exchange: message.fields.exchange,
-          routingKey: message.fields.routingKey,
-        };
+        const token = message.properties?.correlationId;
+        if (typeof token === "string") {
+          returnedTokens.set(token, {
+            exchange: message.fields.exchange,
+            routingKey: message.fields.routingKey,
+          });
+        }
         logger?.error(
           {
             component: "transport.producer",
@@ -199,6 +223,9 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
       });
       next.on("close", () => {
         if (channel === next) channel = undefined;
+        // A return whose publish never confirmed (the connection died in
+        // between) would otherwise sit in the map forever.
+        returnedTokens.clear();
       });
       next.on("error", (err: Error) => {
         logger?.warn(
@@ -234,7 +261,7 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
   ): Promise<void> {
     const active = await openChannel();
     const start = Date.now();
-    takeReturn();
+    const token = nextToken();
     try {
       await new Promise<void>((resolve, reject) => {
         const options: Parameters<ConfirmChannel["publish"]>[3] = {
@@ -243,6 +270,9 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
           contentType: "application/json",
           timestamp: Date.now(),
           appId: producerName,
+          // Correlates a `basic.return` back to this exact publish. Polaris
+          // does not otherwise use the AMQP correlationId slot.
+          correlationId: token,
           headers: toAmqpHeaders(headers),
         };
         if (partitionKey !== null) {
@@ -259,7 +289,7 @@ export function createPolarisProducer(options: CreatePolarisProducerOptions): Po
           resolve();
         });
       });
-      const returned = takeReturn();
+      const returned = takeReturn(token);
       if (returned !== undefined) {
         throw new Error(
           `publish to exchange "${returned.exchange}" with routing key "${returned.routingKey}" was unroutable — the topology is incomplete (run \`pnpm rabbitmq:provision\`)`,
