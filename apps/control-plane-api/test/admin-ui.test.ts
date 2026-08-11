@@ -256,7 +256,7 @@ function makeIdpClient(overrides: Partial<IdpOAuthClient> = {}): IdpOAuthClient 
 }
 
 interface BuildOptions {
-  readonly admin?: AdminConfig | null;
+  readonly admin?: AdminConfig;
   readonly queries?: Partial<AdminQueries>;
   readonly idpAuth?: Partial<IdpAuth>;
   readonly idpClient?: Partial<IdpOAuthClient>;
@@ -265,7 +265,7 @@ interface BuildOptions {
 
 async function buildApp(options: BuildOptions = {}) {
   return buildControlPlaneApp({
-    config: makeConfig(options.admin === undefined ? makeAdminConfig() : options.admin),
+    config: makeConfig(options.admin ?? makeAdminConfig()),
     // The JSON API's own auth is irrelevant here; a stub keeps Postgres out.
     operatorTokenRepository: { findById: async () => null, touchLastUsedAt: async () => undefined },
     adminQueries: makeQueries(options.queries),
