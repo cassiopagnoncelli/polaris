@@ -16,17 +16,21 @@
  * @see docs/implementation/tasks/P8-002b-identity-resolver-behavioral-tests.md
  */
 
+import type { Logger } from "@polaris/shared-logger";
+import {
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
+  type ProcessorActivationGate,
+  type ProcessorMetrics,
+} from "@polaris/shared-processor";
 import {
   type PolarisConsumer,
-  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   STREAM_FAMILY_IDENTITY_EVENTS,
+  type TransportMessageContext,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import type { Logger } from "@polaris/shared-logger";
 import { describe, expect, it } from "vitest";
-
 import { InMemoryIdentityLinkRepository } from "../src/repository.js";
 import { createRuntime } from "../src/runtime.js";
 import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
@@ -135,7 +139,7 @@ function nextEventId(): string {
   return `018f1b9e-7b50-7b12-aaaa-${String(eventIdCounter).padStart(12, "0")}`;
 }
 
-function buildEnv(): BuiltRuntimeEnv {
+function buildEnv(gate?: ProcessorActivationGate): BuiltRuntimeEnv {
   const repo = new InMemoryIdentityLinkRepository({
     now: () => new Date("2026-05-12T12:00:00.500Z"),
     newId: (() => {
@@ -155,6 +159,7 @@ function buildEnv(): BuiltRuntimeEnv {
     now: () => new Date("2026-05-12T12:00:00.500Z"),
     newEventId: nextEventId,
     run_id: "run_test_1",
+    ...(gate !== undefined ? { gate } : {}),
   });
   return { repo, producer, runtime };
 }
@@ -404,3 +409,60 @@ describe("identity-resolver runtime — metrics", () => {
     expect(consumed?.value).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("identity-resolver runtime — activation gate", () => {
+  it("writes no link and emits nothing for a scope an operator disabled", async () => {
+    const { repo, producer, runtime } = buildEnv(
+      gateDisabling({ project_id: "storefront", environment: "production" }),
+    );
+    const envelope = makeRawEnvelope({
+      identity: { customer_id: "cus_1", anonymous_id: "anon-1" },
+    });
+
+    await runtime.handler(makePayload(envelope), CONTEXT);
+
+    expect(producer.publishes).toHaveLength(0);
+    // The identity graph is the thing that must not move: a disabled
+    // processor writing links would outlive the disable.
+    expect(
+      await repo.findActive({
+        project_id: "storefront",
+        environment: "production",
+        identifier: "customer_id:cus_1",
+      }),
+    ).toHaveLength(0);
+    expect(skippedTotal(runtime.metrics)).toBe(1);
+  });
+
+  it("keeps resolving scopes the disable does not name", async () => {
+    const { producer, runtime } = buildEnv(
+      gateDisabling({ project_id: "storefront", environment: "development" }),
+    );
+    const envelope = makeRawEnvelope({
+      identity: { customer_id: "cus_1", anonymous_id: "anon-1" },
+    });
+
+    await runtime.handler(makePayload(envelope), CONTEXT);
+
+    expect(producer.publishes).toHaveLength(1);
+    expect(skippedTotal(runtime.metrics)).toBe(0);
+  });
+});
+
+/** Gate that refuses exactly one (project, environment). */
+function gateDisabling(scope: {
+  project_id: string;
+  environment: string;
+}): ProcessorActivationGate {
+  return {
+    isEnabled: async (asked) =>
+      !(asked.project_id === scope.project_id && asked.environment === scope.environment),
+  };
+}
+
+function skippedTotal(metrics: ProcessorMetrics): number {
+  return metrics
+    .getSamples()
+    .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
+    .reduce((total, sample) => total + sample.value, 0);
+}

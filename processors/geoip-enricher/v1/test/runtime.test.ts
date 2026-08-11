@@ -25,21 +25,25 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
+import { createLogger } from "@polaris/shared-logger";
+import {
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
+  type ProcessorActivationGate,
+  type ProcessorMetrics,
+} from "@polaris/shared-processor";
 import {
   buildRawEventsPartitionKey,
   type PolarisConsumer,
-  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
   STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import { createLogger } from "@polaris/shared-logger";
 import { describe, expect, it, vi } from "vitest";
-
 import {
   createRuntime,
   type GeoResult,
@@ -185,6 +189,8 @@ interface BuildRuntimeOptions {
   readonly logLevel?: "debug" | "info";
   readonly logDestination?: NodeJS.WritableStream;
   readonly newEventId?: () => string;
+  /** Activation gate under test. */
+  readonly gate?: ProcessorActivationGate;
 }
 
 function buildRuntime(producer: PolarisProducer, options: BuildRuntimeOptions = {}) {
@@ -207,6 +213,7 @@ function buildRuntime(producer: PolarisProducer, options: BuildRuntimeOptions = 
     now: () => new Date(RAN_AT_ISO),
     run_id: FIXED_RUN_ID,
     ...(options.newEventId !== undefined ? { newEventId: options.newEventId } : {}),
+    ...(options.gate !== undefined ? { gate: options.gate } : {}),
   });
 }
 
@@ -432,3 +439,49 @@ describe("createRuntime (geoip-enricher v1)", () => {
     await expect(runtime.handler(payload, EMPTY_CONTEXT)).rejects.toThrow("broker down");
   });
 });
+
+describe("createRuntime activation gate (geoip-enricher v1)", () => {
+  it("emits nothing for a scope an operator disabled", async () => {
+    const producer = new RecordingProducer();
+    const runtime = buildRuntime(producer as unknown as PolarisProducer, {
+      gate: gateDisabling({ project_id: "checkout", environment: "production" }),
+    });
+
+    const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
+    await runtime.handler(payload, EMPTY_CONTEXT);
+
+    expect(producer.publishes.length).toBe(0);
+    expect(skippedTotal(runtime.metrics)).toBe(1);
+  });
+
+  it("keeps enriching scopes the disable does not name", async () => {
+    const producer = new RecordingProducer();
+    const runtime = buildRuntime(producer as unknown as PolarisProducer, {
+      gate: gateDisabling({ project_id: "checkout", environment: "development" }),
+    });
+
+    const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
+    await runtime.handler(payload, EMPTY_CONTEXT);
+
+    expect(producer.publishes.length).toBe(1);
+    expect(skippedTotal(runtime.metrics)).toBe(0);
+  });
+});
+
+/** Gate that refuses exactly one (project, environment). */
+function gateDisabling(scope: {
+  project_id: string;
+  environment: string;
+}): ProcessorActivationGate {
+  return {
+    isEnabled: async (asked) =>
+      !(asked.project_id === scope.project_id && asked.environment === scope.environment),
+  };
+}
+
+function skippedTotal(metrics: ProcessorMetrics): number {
+  return metrics
+    .getSamples()
+    .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
+    .reduce((total, sample) => total + sample.value, 0);
+}

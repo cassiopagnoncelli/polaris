@@ -633,9 +633,10 @@ describe("admin UI — processors page", () => {
     // sent an operator digging through the CLI to find out whether it was.
     const res = await fetchPage({});
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("No processor has been activated yet");
-    expect(res.body).toContain("polaris processors enable");
-    // Names the gap between "no rows" and "no processors".
+    expect(res.body).toContain("No activation rows yet");
+    // Says what that MEANS — empty is the permissive state, not a dead page.
+    expect(res.body).toContain("every processor runs for every project");
+    expect(res.body).toContain("polaris processors disable");
     expect(res.body).toContain("not the processors");
   });
 
@@ -666,21 +667,23 @@ describe("admin UI — processors page", () => {
     expect(res.body).toContain("not running");
   });
 
-  it("surfaces a run whose processor was never activated", async () => {
-    // The disagreement that matters most in v1: nothing gates consumption on
-    // an activation row, so a processor can run with no row at all.
+  it("surfaces a run whose processor has no activation row", async () => {
+    // Absence is the permissive state, so a run with no row is normal and
+    // must still be visible.
     const res = await fetchPage({
       listProcessorActivations: async () => [],
       listProcessorRuns: async () => [RUN],
     });
-    expect(res.body).toContain("No processor has been activated yet");
+    expect(res.body).toContain("No activation rows yet");
     expect(res.body).toContain(RUN.run_id);
     expect(res.body).toContain("analytics-projector");
   });
 
-  it("says activation does not gate consumption in v1", async () => {
+  it("states what a disabled row actually does", async () => {
     const res = await fetchPage({ listProcessorActivations: async () => [ACTIVATION] });
-    expect(res.body).toContain("nothing gates consumption");
+    expect(res.body).toContain("stops that processor from acting");
+    // And is explicit that the process itself stays up.
+    expect(res.body).toContain("disabled scope still shows as running");
   });
 });
 

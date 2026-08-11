@@ -109,6 +109,31 @@ PostgreSQL may store runtime operational settings:
 
 PostgreSQL must not store semantic transformation rules.
 
+### Activation
+
+`processor_activations` is read at runtime, per message, once the envelope's
+`project_id` and `environment` are known — processors consume shared streams,
+so scope is a property of the event, not of the process.
+
+- An explicit `disabled` row stops that processor from acting on that scope.
+- Anything else — an `enabled` row, or no row — lets the event through.
+
+Absence means allowed on purpose. Default-deny would make a new project's
+events vanish until someone remembered to insert a row per processor, which is
+silent data loss dressed up as configuration. Disable is the operator action
+that carries intent, so disable is what the runtime enforces; `enable` is the
+audited way to undo one.
+
+A skipped event is acknowledged and counted as
+`polaris_processor_events_skipped_total{reason="processor_disabled"}`. It is
+not retried and not dead-lettered: an operator turning a processor off is a
+decision, not a failure.
+
+Answers are cached for ten seconds, so a disable takes hold within about that
+long without a redeploy. If PostgreSQL is unreachable the gate serves its last
+answer, or allows the event when it has none — losing the control plane must
+not silently stop the pipeline.
+
 If changing a setting can change emitted event meaning, fields, identity links, attribution outcomes, filtering behavior, or output schema, the setting is semantic. Semantic-changing settings must live in versioned processor code/config and require a new processor version.
 
 ## State Stores

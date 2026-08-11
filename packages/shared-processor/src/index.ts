@@ -16,6 +16,7 @@
  *   - processor identity types and structured log context (`./identity`)
  *   - dual-shape metadata stamping (`./metadata`)
  *   - PostgreSQL processor-run registration (`./runs`)
+ *   - per-message activation gating (`./activation-gate`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
@@ -36,6 +37,15 @@
  * @see processors/analytics-projector/v1/src/ — first consumer of the helpers
  */
 
+export {
+  type ActivationStateReader,
+  ALWAYS_ENABLED_GATE,
+  type CreateProcessorActivationGateInput,
+  createProcessorActivationGate,
+  DEFAULT_ACTIVATION_TTL_MS,
+  type ProcessorActivationGate,
+  type ProcessorActivationScope,
+} from "./activation-gate.js";
 export {
   classifyError,
   PROCESSOR_RETRY_REASONS,
@@ -102,13 +112,13 @@ export {
   type StampProcessorMetadataOptions,
   stampProcessorMetadata,
 } from "./metadata.js";
-
 export {
   METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL,
   METRIC_PROCESSOR_EVENTS_DLQ_TOTAL,
   METRIC_PROCESSOR_EVENTS_EMITTED_TOTAL,
   METRIC_PROCESSOR_EVENTS_FAILED_TOTAL,
   METRIC_PROCESSOR_EVENTS_RETRY_TOTAL,
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
   METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST,
   METRIC_PROCESSOR_LAG_MS_LAST,
   type MetricSample,
@@ -117,9 +127,11 @@ export {
   ProcessorMetrics,
 } from "./metrics.js";
 export {
+  DEFAULT_HEARTBEAT_MS,
   type OpenProcessorRunInput,
   openProcessorRun,
   type ProcessorRunHandle,
+  type ProcessorRunScheduler,
   readCounters,
   type StartProcessorRunInput,
   startProcessorRun,

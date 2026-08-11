@@ -262,7 +262,7 @@ export interface DestinationsTable {
 /**
  * Runtime activation state for a versioned processor.
  *
- * `enabled` means the processor runtime (P8-001) treats this
+ * `enabled` means the processor's activation gate treats this
  * `(processor_name, processor_version, project_id, environment)` tuple as
  * runnable. `disabled` keeps the row for audit/state-change history but stops
  * the runtime from picking up traffic.

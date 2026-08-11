@@ -64,7 +64,17 @@ the alert fires on the first partition that lags, not the average.
    retrying without DLQ-ing is blocking partition progress. The
    processor's `polaris_processor_events_retry_total` rate climbs on
    the affected partition while `consumed_total` flatlines.
-6. **Topic isolation cutover in flight.** A `polaris topics isolate`
+6. **The processor is disabled for that project.** Someone ran
+   `polaris processors disable`, so the runtime acknowledges that
+   project's events without acting on them. This looks like lag on
+   the derived topic while the source topic drains normally — the
+   telltale is
+   `polaris_processor_events_skipped_total{reason="processor_disabled"}`
+   climbing at the rate `consumed_total` would have. Confirm with
+   `polaris processors list` or the admin panel's Processors page,
+   and re-enable with `polaris processors enable` if the disable was
+   not intended. Takes effect within ~10s; no redeploy.
+7. **Topic isolation cutover in flight.** A `polaris topics isolate`
    was issued and the resolver cache is mid-cutover; producers may
    still be writing to the shared topic while the consumer cut over
    (or vice versa). See

@@ -41,7 +41,9 @@
 
 import type { Logger } from "@polaris/shared-logger";
 import {
+  ALWAYS_ENABLED_GATE,
   classifyError,
+  type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
   type ProcessorRetryClassification,
@@ -110,6 +112,14 @@ export interface GeoipEnricherRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
+   * Activation gate consulted per message. Defaults to
+   * {@link ALWAYS_ENABLED_GATE} so a runtime built outside `app.ts` (unit
+   * tests, golden fixtures) needs no database. Production passes the
+   * PostgreSQL-backed gate, which is what makes `polaris processors disable`
+   * actually stop this processor for the scopes it names.
+   */
+  readonly gate?: ProcessorActivationGate;
+  /**
    * Per-run identifier (UUIDv7) from `openProcessorRun`. Stamped onto every
    * emitted event in both the nested `processor.run_id` slot and the property
    * `run_id` field. Required: it identifies the `processor_runs` row this
@@ -150,6 +160,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   const isolation = deps.isolation ?? sharedOnlyIsolationLookup;
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
+  const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
   const lookup = deps.lookup ?? new NoOpIPLookup();
   const newEventId = deps.newEventId ?? ((): string => uuidv7());
 
@@ -162,6 +173,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
       logger: deps.logger,
       isolation,
       metrics,
+      gate,
       newEventId,
       run_id: deps.run_id,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -207,6 +219,8 @@ interface HandleMessageInput {
   readonly logger: Logger;
   readonly isolation: SyncIsolationLookup;
   readonly metrics: ProcessorMetrics;
+  /** Activation gate, consulted once the envelope's scope is known. */
+  readonly gate: ProcessorActivationGate;
   readonly newEventId: () => string;
   readonly run_id: string;
   readonly now?: () => Date;
@@ -224,6 +238,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     newEventId,
     run_id,
     now,
+    gate,
   } = input;
   const value = payload.message.value;
   if (value === null || value.length === 0) {
@@ -275,6 +290,29 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     project_id: raw.project_id,
     environment: raw.environment,
   };
+
+  // Activation gate. Consulted here rather than at startup because the scope
+  // only exists once the envelope is decoded — processors read every
+  // project's events off one shared stream. A disabled scope is acknowledged
+  // and counted, never retried or dead-lettered: an operator switching a
+  // processor off is a decision, not a failure. Counted BEFORE
+  // `incrementConsumed` so "consumed" keeps meaning "acted on".
+  if (!(await gate.isEnabled({ project_id: raw.project_id, environment: raw.environment }))) {
+    metrics.incrementSkipped({ ...labels, reason: "processor_disabled" });
+    logger.debug(
+      {
+        component: "geoip-enricher.handler",
+        project_id: raw.project_id,
+        environment: raw.environment,
+        topic: payload.stream,
+        partition: payload.partition,
+        offset: payload.message.offset,
+        reason: "processor_disabled",
+      },
+      "processor disabled for this scope; skipping event",
+    );
+    return;
+  }
 
   metrics.incrementConsumed(labels);
 

@@ -22,7 +22,9 @@ import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import {
+  createProcessorActivationGate,
   openProcessorRun,
+  type ProcessorActivationGate,
   ProcessorMetrics,
   type ProcessorRunHandle,
   type ProcessorRunRepository,
@@ -80,6 +82,12 @@ export interface BuildAppOptions {
    * bootstrap does not reach for a database that is not there.
    */
   readonly recordRun?: boolean;
+  /**
+   * Activation gate override. Defaults to a PostgreSQL-backed gate over the
+   * checkpoint pool, so `polaris processors disable` stops this processor for
+   * the scopes it names. Tests inject `ALWAYS_ENABLED_GATE` or a stub.
+   */
+  readonly gate?: ProcessorActivationGate;
 }
 
 export interface BuiltSessionizerApp {
@@ -152,6 +160,18 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
     }
   }
 
+  // ---- activation gate -------------------------------------------------
+  // Per-message, over the pool the processor already holds. `disabled` rows
+  // are the only thing that closes it; see the gate's module header for why
+  // absence means allowed.
+  const gate =
+    options.gate ??
+    createProcessorActivationGate({
+      identity: PROCESSOR_IDENTITY,
+      db: checkpointDb,
+      logger: processorLogger,
+    });
+
   // ---- processor run ---------------------------------------------------
   // Registered BEFORE the runtime is built: the runtime stamps
   // `processor.run_id` onto every derived event, and the id has to exist by
@@ -186,6 +206,7 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
     producer_name: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producer_version: config.service.serviceVersion,
     run_id: run.run_id,
+    gate,
   });
 
   // ---- shutdown tasks --------------------------------------------------

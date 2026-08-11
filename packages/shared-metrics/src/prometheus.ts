@@ -84,6 +84,10 @@ const HELP_TEXT: Readonly<Record<string, string>> = {
   polaris_processor_events_retry_total:
     "Count of processor events that re-entered the consumer through retry semantics.",
   polaris_processor_events_dlq_total: "Count of processor events routed to the dead-letter queue.",
+  polaris_processor_events_skipped_total:
+    "Count of events a processor acknowledged without acting on, by `reason`. " +
+    "`processor_disabled` is the activation gate refusing a (project, environment) " +
+    "an operator switched off — an operator decision, not a failure.",
   polaris_processor_lag_ms_last:
     "Most recently observed processor lag in milliseconds (per topic partition).",
   polaris_processor_handler_duration_ms_last:

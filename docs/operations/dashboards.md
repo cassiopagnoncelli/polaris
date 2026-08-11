@@ -130,9 +130,17 @@ Panels and the metric each uses:
 | Events emitted (5m) | `sum by (processor_name) (rate(polaris_processor_events_emitted_total[5m]))` |
 | Failures by reason (5m) | `sum by (processor_name, reason) (rate(polaris_processor_events_failed_total[5m]))` |
 | Retry and DLQ rates (5m) | `polaris_processor_events_retry_total`, `polaris_processor_events_dlq_total` |
+| Skipped by reason (5m) | `sum by (processor_name, project_id, reason) (rate(polaris_processor_events_skipped_total[5m]))` |
 | Per-processor lag (ms, last observed) | `max by (processor_name, partition) (polaris_processor_lag_ms_last)` |
 | Per-message handler duration (ms, last observed) | `max by (processor_name) (polaris_processor_handler_duration_ms_last)` |
 | DLQ growth rate by processor (15m) | `sum by (processor_name) (rate(polaris_processor_events_dlq_total[15m]))` |
+
+**Skips are not failures.** `polaris_processor_events_skipped_total` counts
+events a processor acknowledged without acting on.
+`reason="processor_disabled"` means an operator disabled that processor for
+that `(project_id, environment)` — the intended answer to "why did this
+project's derived events stop", and the reason that question is answerable
+without reading logs. Do not alert on it; it is a decision, not an incident.
 
 **Latency.** `polaris_processor_lag_seconds` and
 `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the

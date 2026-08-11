@@ -14,18 +14,23 @@
  *   - output events include processor metadata.
  */
 
+import { createLogger } from "@polaris/shared-logger";
+import {
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
+  type ProcessorActivationGate,
+  type ProcessorMetrics,
+} from "@polaris/shared-processor";
 import {
   decodeEvent,
   type PolarisConsumer,
-  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
   type PublishResult,
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  type TransportMessageContext,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import { createLogger } from "@polaris/shared-logger";
 import { describe, expect, it, vi } from "vitest";
 import { createRuntime } from "../src/runtime.js";
 import { InMemoryTouchpointStore } from "../src/store.js";
@@ -155,6 +160,7 @@ function buildRuntime(
     readonly store?: InMemoryTouchpointStore;
     readonly producer?: RecordingProducer;
     readonly run_id?: string;
+    readonly gate?: ProcessorActivationGate;
   } = {},
 ) {
   const store = opts.store ?? new InMemoryTouchpointStore();
@@ -174,6 +180,7 @@ function buildRuntime(
     now: () => new Date(NOW_ISO),
     newEventId: () => `evt_emitted_${++counter}`,
     run_id: opts.run_id ?? "run_test_1",
+    ...(opts.gate !== undefined ? { gate: opts.gate } : {}),
   });
   return { runtime, producer, store, consumer };
 }
@@ -636,3 +643,56 @@ describe("attribution-engine runtime — partition key + canonical envelope", ()
     expect(decoded["processor_name"]).toBe(PROCESSOR_NAME);
   });
 });
+
+describe("createRuntime activation gate (attribution-engine v1)", () => {
+  it("records no touchpoint for a scope an operator disabled", async () => {
+    const { runtime, producer, store } = buildRuntime({
+      gate: gateDisabling({ project_id: "checkout", environment: "production" }),
+    });
+
+    await runtime.handler(
+      buildPayload(encodeEnvelope({ anonymous_id: "anon_X", campaign: FULL_CAMPAIGN })),
+      buildContext(),
+    );
+
+    expect(producer.publishes.length).toBe(0);
+    // Nothing reached the store either — the skip lands before any work.
+    expect(store.size()).toBe(0);
+    expect(skippedTotal(runtime.metrics)).toBe(1);
+  });
+
+  it("keeps attributing scopes the disable does not name", async () => {
+    const { runtime, producer } = buildRuntime({
+      gate: gateDisabling({ project_id: "checkout", environment: "development" }),
+    });
+
+    // A campaign is what makes this event a touchpoint at all; without one
+    // the processor legitimately emits nothing and the test would pass for
+    // the wrong reason.
+    await runtime.handler(
+      buildPayload(encodeEnvelope({ anonymous_id: "anon_X", campaign: FULL_CAMPAIGN })),
+      buildContext(),
+    );
+
+    expect(producer.publishes.length).toBeGreaterThan(0);
+    expect(skippedTotal(runtime.metrics)).toBe(0);
+  });
+});
+
+/** Gate that refuses exactly one (project, environment). */
+function gateDisabling(scope: {
+  project_id: string;
+  environment: string;
+}): ProcessorActivationGate {
+  return {
+    isEnabled: async (asked) =>
+      !(asked.project_id === scope.project_id && asked.environment === scope.environment),
+  };
+}
+
+function skippedTotal(metrics: ProcessorMetrics): number {
+  return metrics
+    .getSamples()
+    .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
+    .reduce((total, sample) => total + sample.value, 0);
+}

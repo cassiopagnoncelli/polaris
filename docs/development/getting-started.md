@@ -275,6 +275,21 @@ The CLI verifies the manifest exists on disk
 upserts the activation row. Enables are idempotent. See "Versioned-processor
 workflow" below for how to introduce a new version.
 
+Note what this does and does not change. Processors run for every project by
+default, so `enable` on a fresh install is a no-op that records intent. The
+row that changes behaviour is the opposite one:
+
+```bash
+./polaris processors disable analytics-projector \
+  --version v1 --project storefront --env development
+```
+
+Within about ten seconds the processor stops acting on that project's events
+in that environment — it keeps running and skips them, counting each as
+`polaris_processor_events_skipped_total{reason="processor_disabled"}`. See
+[Architecture: Processors and Replay](../architecture/05-processors-and-replay.md)
+"Activation" for why absence means allowed.
+
 ## Catalog workflow
 
 Polaris is **file-heavy, database-light**. Two halves:

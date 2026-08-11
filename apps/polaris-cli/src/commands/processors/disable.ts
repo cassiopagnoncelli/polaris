@@ -85,7 +85,10 @@ export const processorsDisableCommand: CommandDefinition = {
   register: (parent, deps) => {
     const cmd = parent
       .command("disable <name>")
-      .description("Disable a processor for one (project, environment) scope. Idempotent.")
+      .description(
+        "Disable a processor for one (project, environment) scope — its runtime " +
+          "stops acting on that project's events within ~10s. Idempotent.",
+      )
       .requiredOption("--version <version>", "Processor version directory (e.g. v1, v1.2.3).")
       .requiredOption("--project <project_id>", "Project to deactivate this processor for.")
       .requiredOption("--env <environment>", "Environment: development | staging | production.")

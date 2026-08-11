@@ -70,6 +70,21 @@ const TEST_CONFIG: AttributionEngineRuntimeConfig = {
   },
 };
 
+/** Minimal canonical envelope — enough to decode and reach the gate. */
+const RAW_ENVELOPE = {
+  event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+  event: "page.viewed",
+  schema_version: 1,
+  project_id: "checkout",
+  environment: "production",
+  occurred_at: "2026-05-12T12:00:00.000Z",
+  ingested_at: "2026-05-12T12:00:01.000Z",
+  source: { type: "browser", id: "web", sdk: "web", sdk_version: "1.0.0" },
+  identity: { anonymous_id: "anon_X", session_id: null, customer_id: null, device_id: null },
+  context: { ip: null, user_agent: null, locale: null, page: null, campaign: null },
+  properties: {},
+};
+
 function stubConsumer(): PolarisConsumer {
   return {
     disconnect: vi.fn(async () => {}),
@@ -142,5 +157,50 @@ describe("buildAttributionEngineApp run registration", () => {
     const row = await runs.findRun(runId);
     expect(row?.status).toBe("completed");
     expect(row?.finished_at).not.toBeNull();
+  });
+});
+
+describe("buildAttributionEngineApp activation gate", () => {
+  it("threads the gate into the runtime, so a disable reaches the message path", async () => {
+    // Proves the app→runtime wiring, not just that a gate object exists: a
+    // gate the app forgot to pass would never be asked anything.
+    const asked: Array<{ project_id: string; environment: string }> = [];
+    const runs = new InMemoryProcessorRunRepository();
+    const result = await buildAttributionEngineApp({
+      config: TEST_CONFIG,
+      installShutdown: false,
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      runRepository: runs,
+      store: new InMemoryTouchpointStore(),
+      gate: {
+        isEnabled: async (scope) => {
+          asked.push(scope);
+          return false;
+        },
+      },
+    });
+    try {
+      await result.runtime.handler(
+        {
+          stream: "raw.events-0",
+          partition: 0,
+          message: {
+            key: "k",
+            value: Buffer.from(JSON.stringify(RAW_ENVELOPE), "utf8"),
+            offset: "1",
+            headers: {},
+            timestamp: "0",
+            redelivered: false,
+          },
+        } as never,
+        {} as never,
+      );
+    } finally {
+      await result.bootstrap.app.close();
+    }
+
+    expect(asked).toEqual([{ project_id: "checkout", environment: "production" }]);
   });
 });

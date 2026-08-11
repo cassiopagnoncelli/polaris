@@ -26,15 +26,21 @@
  *      its terminal status. Short outages leave a complete record rather than
  *      a hole.
  *
+ *   4. **Counters are flushed on a heartbeat, not per message.** The
+ *      repository contract asks for exactly that cadence. Without it an open
+ *      run reads zero for its whole life, which is indistinguishable from a
+ *      stalled processor. The timer is `unref`'d, so it never keeps a process
+ *      alive, and a missed flush costs freshness only — the terminal write
+ *      reconciles the totals.
+ *
  * What this module deliberately does NOT do:
  *
- *   - No heartbeat. `updateRun` exists and is per-caller; a run row's job here
- *     is "which version is running where, since when". Throughput, lag, and
- *     failure rates are Prometheus/Grafana's, per
+ *   - No live metrics surface. The row's counters are for triage next to a
+ *     run; throughput, lag, and failure RATES are Prometheus/Grafana's, per
  *     `docs/architecture/08-observability-and-operations.md`.
  *   - No gating. A run row records what DID run. Whether a processor SHOULD
- *     run for a `(project, environment)` is `processor_activations`, and
- *     nothing here reads it.
+ *     run for a `(project, environment)` is `processor_activations`, read by
+ *     `./activation-gate.ts` — nothing here consults it.
  *
  * @see docs/architecture/05-processors-and-replay.md "Processor Model"
  * @see db/migrations/20260512000008_create_processor_runs.sql
@@ -127,7 +133,42 @@ export interface StartProcessorRunInput {
   readonly run_id?: string | undefined;
   /** Test seam for `started_at` / `finished_at`. */
   readonly now?: (() => Date) | undefined;
+  /**
+   * How often to flush counters onto the open row, in milliseconds. `0`
+   * disables the heartbeat. Defaults to {@link DEFAULT_HEARTBEAT_MS}.
+   *
+   * The cadence is per the repository contract's own guidance — "once per
+   * heartbeat, not per message" — and a run that never flushed would show
+   * zeroes for its entire life, which reads as a stalled processor.
+   */
+  readonly heartbeatMs?: number | undefined;
+  /**
+   * Timer factory. Defaults to `setInterval`, `unref`'d so the heartbeat
+   * never keeps a process alive on its own. Tests inject a manual ticker.
+   */
+  readonly scheduler?: ProcessorRunScheduler | undefined;
 }
+
+/**
+ * Timer seam. Production is `setInterval`/`clearInterval`; tests drive the
+ * callback by hand rather than waiting on real time.
+ */
+export interface ProcessorRunScheduler {
+  schedule(callback: () => void, intervalMs: number): () => void;
+}
+
+/** Flush counters onto the open row every 15s by default. */
+export const DEFAULT_HEARTBEAT_MS = 15_000;
+
+const defaultScheduler: ProcessorRunScheduler = {
+  schedule(callback, intervalMs) {
+    const timer = setInterval(callback, intervalMs);
+    // A processor should exit when its runtime is done, not linger because a
+    // bookkeeping timer is still registered.
+    timer.unref?.();
+    return () => clearInterval(timer);
+  },
+};
 
 /**
  * Handle returned by {@link startProcessorRun}.
@@ -141,6 +182,12 @@ export interface ProcessorRunHandle {
   readonly run_id: string;
   /** `true` once the row exists in `processor_runs`. */
   readonly registered: boolean;
+  /**
+   * Flush current counters onto the open row. Called on the heartbeat; also
+   * exposed so a caller can force a flush (a test, or a drain before a
+   * planned stop). No-op once the run is terminal.
+   */
+  heartbeat(): Promise<void>;
   complete(): Promise<void>;
   fail(error: unknown): Promise<void>;
 }
@@ -191,9 +238,39 @@ export async function startProcessorRun(
   let registered = await register();
   let terminated = false;
 
+  /**
+   * Push current counters onto the open row.
+   *
+   * Skipped entirely when the run is terminal or was never registered, so a
+   * heartbeat can never resurrect a finished row or race `completeRun`.
+   * Failures log once and are otherwise ignored: a missed heartbeat costs
+   * freshness, and the terminal write reconciles the totals anyway.
+   */
+  const heartbeat = async (): Promise<void> => {
+    if (terminated || !registered || input.repository === undefined) return;
+    try {
+      await input.repository.updateRun({ run_id: runId, ...readCounters(input.metrics) });
+    } catch (err) {
+      input.logger.warn(
+        { component: "processor.run-lifecycle", run_id: runId, err: summarize(err) },
+        "processor run heartbeat failed; counters stay stale until the next one",
+      );
+    }
+  };
+
+  const heartbeatMs = input.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
+  const scheduler = input.scheduler ?? defaultScheduler;
+  const stopHeartbeat =
+    heartbeatMs > 0 && registered
+      ? scheduler.schedule(() => {
+          void heartbeat();
+        }, heartbeatMs)
+      : undefined;
+
   const terminate = async (outcome: { readonly error?: unknown }): Promise<void> => {
     if (terminated) return;
     terminated = true;
+    stopHeartbeat?.();
     if (input.repository === undefined) return;
 
     // The database may have come back since boot. One retry so a short
@@ -234,6 +311,7 @@ export async function startProcessorRun(
     get registered(): boolean {
       return registered;
     },
+    heartbeat,
     complete: () => terminate({}),
     fail: (error: unknown) => terminate({ error }),
   };

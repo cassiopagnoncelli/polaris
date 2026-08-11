@@ -17,19 +17,25 @@
  * KafkaJS and is covered by `@polaris/shared-transport` tests.
  */
 
+import { createLogger } from "@polaris/shared-logger";
+import {
+  METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL,
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
+  type ProcessorActivationGate,
+  ProcessorMetrics,
+} from "@polaris/shared-processor";
 import {
   buildRawEventsPartitionKey,
   type PolarisConsumer,
-  type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
-  type SyncIsolationLookup,
-  sharedOnlyIsolationLookup,
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  sharedOnlyIsolationLookup,
+  type TransportMessageContext,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import { createLogger } from "@polaris/shared-logger";
 import { describe, expect, it, vi } from "vitest";
 
 import { createRuntime } from "../src/runtime.js";
@@ -130,15 +136,33 @@ function buildPayload(value: Buffer | null): TransportMessagePayload {
 
 const EMPTY_CONTEXT: TransportMessageContext = {};
 
-function buildRuntime(producer: PolarisProducer) {
+function buildRuntime(producer: PolarisProducer, gate?: ProcessorActivationGate) {
   const logger = createLogger({ service: "test", version: "0.0.0", env: "local" });
+  const metrics = new ProcessorMetrics();
   return createRuntime({
     consumer: stubConsumer(),
     producer,
     logger,
+    metrics,
     isolation: sharedOnlyIsolationLookup,
     now: () => new Date(RAN_AT_ISO),
+    ...(gate !== undefined ? { gate } : {}),
   });
+}
+
+/** Gate that refuses exactly one (project, environment). */
+function gateDisabling(scope: { project_id: string; environment: string }) {
+  return {
+    isEnabled: async (asked: { project_id: string; environment: string }) =>
+      !(asked.project_id === scope.project_id && asked.environment === scope.environment),
+  };
+}
+
+function counterTotal(runtime: { metrics: ProcessorMetrics }, name: string): number {
+  return runtime.metrics
+    .getSamples()
+    .filter((sample) => sample.name === name)
+    .reduce((total, sample) => total + sample.value, 0);
 }
 
 describe("createRuntime (analytics-projector v1)", () => {
@@ -212,5 +236,49 @@ describe("createRuntime (analytics-projector v1)", () => {
 
     const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
     await expect(runtime.handler(payload, EMPTY_CONTEXT)).rejects.toThrow("broker down");
+  });
+});
+
+describe("createRuntime activation gate (analytics-projector v1)", () => {
+  it("emits nothing for a scope an operator disabled", async () => {
+    // The whole point of `polaris processors disable`: the row now stops the
+    // processor instead of only recording that somebody wanted it stopped.
+    const producer = new RecordingProducer();
+    const runtime = buildRuntime(
+      producer as unknown as PolarisProducer,
+      gateDisabling({ project_id: "checkout", environment: "production" }),
+    );
+
+    const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
+    await runtime.handler(payload, EMPTY_CONTEXT);
+
+    expect(producer.publishes.length).toBe(0);
+    // Acknowledged, not retried or dead-lettered.
+    expect(counterTotal(runtime, METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)).toBe(1);
+    // And not counted as consumed — "consumed" means "acted on".
+    expect(counterTotal(runtime, METRIC_PROCESSOR_EVENTS_CONSUMED_TOTAL)).toBe(0);
+  });
+
+  it("keeps publishing for scopes the disable does not name", async () => {
+    const producer = new RecordingProducer();
+    const runtime = buildRuntime(
+      producer as unknown as PolarisProducer,
+      gateDisabling({ project_id: "checkout", environment: "development" }),
+    );
+
+    const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
+    await runtime.handler(payload, EMPTY_CONTEXT);
+
+    expect(producer.publishes.length).toBe(1);
+    expect(counterTotal(runtime, METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)).toBe(0);
+  });
+
+  it("publishes when no gate is supplied at all", async () => {
+    // A runtime built outside `app.ts` must not need a database.
+    const producer = new RecordingProducer();
+    const runtime = buildRuntime(producer as unknown as PolarisProducer);
+    const payload = buildPayload(Buffer.from(JSON.stringify(SAMPLE_ENVELOPE), "utf8"));
+    await runtime.handler(payload, EMPTY_CONTEXT);
+    expect(producer.publishes.length).toBe(1);
   });
 });

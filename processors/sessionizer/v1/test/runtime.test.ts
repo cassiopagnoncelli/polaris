@@ -18,20 +18,25 @@
  *   - campaign change does not rotate the session.
  */
 
+import { createLogger } from "@polaris/shared-logger";
 import {
+  METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
+  type ProcessorActivationGate,
+  type ProcessorMetrics,
+} from "@polaris/shared-processor";
+import {
+  buildEventHeaders,
   buildRawEventsPartitionKey,
   decodeEvent,
-  type PolarisConsumer,
-  type TransportMessageContext,
-  type TransportMessagePayload,
-  buildEventHeaders,
   encodeEvent,
+  type PolarisConsumer,
   type PolarisProducer,
   type PublishEventInput,
   type PublishResult,
   STREAM_FAMILY_RAW_EVENTS,
+  type TransportMessageContext,
+  type TransportMessagePayload,
 } from "@polaris/shared-transport";
-import { createLogger } from "@polaris/shared-logger";
 import { describe, expect, it, vi } from "vitest";
 import { createRuntime, OUTPUT_STREAM_FAMILY } from "../src/runtime.js";
 import { InMemorySessionStore } from "../src/store.js";
@@ -129,6 +134,8 @@ interface BuildOptions {
   readonly store?: InMemorySessionStore;
   readonly run_id?: string;
   readonly newEventId?: () => string;
+  /** Activation gate under test. */
+  readonly gate?: ProcessorActivationGate;
 }
 
 function buildRuntime(options: BuildOptions) {
@@ -143,6 +150,7 @@ function buildRuntime(options: BuildOptions) {
       now: () => new Date(RAN_AT_ISO),
       run_id: options.run_id ?? "run_test_1",
       newEventId: options.newEventId ?? deterministicEventIds(),
+      ...(options.gate !== undefined ? { gate: options.gate } : {}),
     }),
     store,
   };
@@ -558,3 +566,55 @@ describe("sessionizer runtime", () => {
     await expect(runtime.handler(buildPayload(bad), EMPTY_CONTEXT)).rejects.toThrow();
   });
 });
+
+describe("createRuntime activation gate (sessionizer v1)", () => {
+  it("emits nothing for a scope an operator disabled", async () => {
+    const producer = new RecordingProducer();
+    const { runtime } = buildRuntime({
+      producer,
+      gate: gateDisabling({ project_id: "checkout", environment: "production" }),
+    });
+
+    await runtime.handler(
+      buildPayload(buildRawEnvelopeJson({ identity: { anonymous_id: "anon_X" } })),
+      EMPTY_CONTEXT,
+    );
+
+    expect(producer.publishes.length).toBe(0);
+    expect(skippedTotal(runtime.metrics)).toBe(1);
+  });
+
+  it("keeps sessionizing scopes the disable does not name", async () => {
+    const producer = new RecordingProducer();
+    const { runtime } = buildRuntime({
+      producer,
+      gate: gateDisabling({ project_id: "checkout", environment: "development" }),
+    });
+
+    await runtime.handler(
+      buildPayload(buildRawEnvelopeJson({ identity: { anonymous_id: "anon_X" } })),
+      EMPTY_CONTEXT,
+    );
+
+    expect(producer.publishes.length).toBeGreaterThan(0);
+    expect(skippedTotal(runtime.metrics)).toBe(0);
+  });
+});
+
+/** Gate that refuses exactly one (project, environment). */
+function gateDisabling(scope: {
+  project_id: string;
+  environment: string;
+}): ProcessorActivationGate {
+  return {
+    isEnabled: async (asked) =>
+      !(asked.project_id === scope.project_id && asked.environment === scope.environment),
+  };
+}
+
+function skippedTotal(metrics: ProcessorMetrics): number {
+  return metrics
+    .getSamples()
+    .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
+    .reduce((total, sample) => total + sample.value, 0);
+}

@@ -3,9 +3,11 @@
  *
  * Per `(processor_name, processor_version, project_id, environment)`, this
  * row records whether the processor is enabled in that scope. The CLI
- * (`polaris processors enable` / `disable`) upserts the runtime toggle; the
- * runtime helpers (P8-001) read the row to decide whether to spin up the
- * processor for a given (project, env) tuple.
+ * (`polaris processors enable` / `disable`) upserts the runtime toggle, and
+ * each processor's activation gate
+ * (`@polaris/shared-processor`'s `createProcessorActivationGate`) reads it per
+ * message: a `disabled` row stops that processor from acting on that scope,
+ * anything else lets the event through.
  *
  * Rules baked into this module:
  *

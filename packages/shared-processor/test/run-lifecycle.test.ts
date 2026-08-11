@@ -276,6 +276,132 @@ describe("startProcessorRun", () => {
   });
 });
 
+describe("startProcessorRun heartbeat", () => {
+  /** Manual ticker: the test decides when the interval fires. */
+  function manualScheduler() {
+    const ticks: Array<() => void> = [];
+    let stopped = 0;
+    return {
+      scheduler: {
+        schedule(callback: () => void) {
+          ticks.push(callback);
+          return () => {
+            stopped += 1;
+          };
+        },
+      },
+      tick: async () => {
+        for (const fire of ticks) fire();
+        // The scheduled callback kicks off an async write; let it settle.
+        await new Promise((resolve) => setImmediate(resolve));
+      },
+      get stopped() {
+        return stopped;
+      },
+      get scheduled() {
+        return ticks.length;
+      },
+    };
+  }
+
+  it("flushes counters onto the open row while it is still running", async () => {
+    const repo = new InMemoryProcessorRunRepository();
+    const metrics = new ProcessorMetrics();
+    const labels = { processor_name: IDENTITY.name, processor_version: IDENTITY.version };
+    const clock = manualScheduler();
+
+    const handle = await startProcessorRun({
+      repository: repo,
+      identity: IDENTITY,
+      metrics,
+      logger: fakeLogger() as never,
+      scheduler: clock.scheduler,
+    });
+
+    metrics.incrementConsumed({ ...labels, topic: "raw.events" });
+    metrics.incrementEmitted({ ...labels, topic: "analytics.events" });
+    await clock.tick();
+
+    // The row is still open — an operator watching the panel sees progress
+    // rather than zeroes until shutdown.
+    const row = await repo.findRun(handle.run_id);
+    expect(row?.status).toBe("running");
+    expect(row?.events_consumed).toBe(1);
+    expect(row?.events_emitted).toBe(1);
+  });
+
+  it("stops the timer once the run is terminal", async () => {
+    const repo = new InMemoryProcessorRunRepository();
+    const clock = manualScheduler();
+    const handle = await startProcessorRun({
+      repository: repo,
+      identity: IDENTITY,
+      logger: fakeLogger() as never,
+      scheduler: clock.scheduler,
+    });
+
+    await handle.complete();
+    expect(clock.stopped).toBe(1);
+
+    // Even if a queued tick fires after termination it must not touch the
+    // finished row.
+    await clock.tick();
+    const row = await repo.findRun(handle.run_id);
+    expect(row?.status).toBe("completed");
+  });
+
+  it("does not schedule anything when the heartbeat is disabled", async () => {
+    const clock = manualScheduler();
+    await startProcessorRun({
+      repository: new InMemoryProcessorRunRepository(),
+      identity: IDENTITY,
+      logger: fakeLogger() as never,
+      scheduler: clock.scheduler,
+      heartbeatMs: 0,
+    });
+    expect(clock.scheduled).toBe(0);
+  });
+
+  it("does not schedule anything when registration failed", async () => {
+    // Nothing to update: a heartbeat against a row that does not exist would
+    // just be a warning every 15 seconds.
+    const clock = manualScheduler();
+    const handle = await startProcessorRun({
+      repository: brokenRepository(),
+      identity: IDENTITY,
+      logger: fakeLogger() as never,
+      scheduler: clock.scheduler,
+    });
+    expect(handle.registered).toBe(false);
+    expect(clock.scheduled).toBe(0);
+  });
+
+  it("logs and carries on when a flush fails", async () => {
+    const inner = new InMemoryProcessorRunRepository();
+    const logger = fakeLogger();
+    const repository: ProcessorRunRepository = {
+      ...inner,
+      registerRun: (i) => inner.registerRun(i),
+      updateRun: () => Promise.reject(new Error("connection terminated")),
+      completeRun: (i) => inner.completeRun(i),
+      failRun: (i) => inner.failRun(i),
+      cancelRun: (i) => inner.cancelRun(i),
+      findRun: (id) => inner.findRun(id),
+    };
+    const handle = await startProcessorRun({
+      repository,
+      identity: IDENTITY,
+      logger: logger as never,
+    });
+
+    await expect(handle.heartbeat()).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    // The terminal write still reconciles the totals.
+    await handle.complete();
+    expect((await inner.findRun(handle.run_id))?.status).toBe("completed");
+  });
+});
+
 describe("readCounters", () => {
   it("returns an empty object when no metrics registry is supplied", () => {
     expect(readCounters(undefined)).toEqual({});

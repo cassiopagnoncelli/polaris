@@ -104,7 +104,10 @@ export const processorsEnableCommand: CommandDefinition = {
   register: (parent, deps) => {
     const cmd = parent
       .command("enable <name>")
-      .description("Enable a processor for one (project, environment) scope. Idempotent.")
+      .description(
+        "Enable a processor for one (project, environment) scope, undoing a " +
+          "disable. Processors with no row already run. Idempotent.",
+      )
       .requiredOption("--version <version>", "Processor version directory (e.g. v1, v1.2.3).")
       .requiredOption("--project <project_id>", "Project to activate this processor for.")
       .requiredOption("--env <environment>", "Environment: development | staging | production.")

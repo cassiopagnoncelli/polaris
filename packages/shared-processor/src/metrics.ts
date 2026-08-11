@@ -39,6 +39,17 @@ export const METRIC_PROCESSOR_EVENTS_EMITTED_TOTAL = "polaris_processor_events_e
 export const METRIC_PROCESSOR_EVENTS_FAILED_TOTAL = "polaris_processor_events_failed_total";
 export const METRIC_PROCESSOR_EVENTS_DLQ_TOTAL = "polaris_processor_events_dlq_total";
 export const METRIC_PROCESSOR_EVENTS_RETRY_TOTAL = "polaris_processor_events_retry_total";
+/**
+ * Events a processor deliberately did not act on, by `reason`.
+ *
+ * A skip is a normal outcome, not a failure: the message is acknowledged and
+ * nothing is emitted. `reason="processor_disabled"` is the activation gate
+ * refusing a (project, environment) an operator switched off. Counted rather
+ * than silent so "the pipeline stopped for this project" is answerable from
+ * the dashboards, and deliberately separate from the failure/DLQ counters so
+ * an operator decision never pages anyone.
+ */
+export const METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL = "polaris_processor_events_skipped_total";
 export const METRIC_PROCESSOR_LAG_MS_LAST = "polaris_processor_lag_ms_last";
 export const METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST =
   "polaris_processor_handler_duration_ms_last";
@@ -205,6 +216,11 @@ export class ProcessorMetrics {
 
   incrementRetry(labels: ProcessorFailureLabels): void {
     this.incrementByLabels(METRIC_PROCESSOR_EVENTS_RETRY_TOTAL, toLabelRecord(labels));
+  }
+
+  /** A message acknowledged without being acted on. See the metric's doc. */
+  incrementSkipped(labels: ProcessorFailureLabels): void {
+    this.incrementByLabels(METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL, toLabelRecord(labels));
   }
 
   /**
