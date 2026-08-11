@@ -22,9 +22,9 @@ import {
   type PolarisProducer,
   type PublishEventInput,
   STREAM_FAMILY_IDENTITY_EVENTS,
+  type TransportMessagePayload,
 } from "@polaris/shared-transport";
 import type { Logger } from "@polaris/shared-logger";
-import type { EachMessagePayload } from "kafkajs";
 import { describe, expect, it } from "vitest";
 
 import { InMemoryIdentityLinkRepository } from "../src/repository.js";
@@ -71,22 +71,20 @@ function makeRawEnvelope(overrides: {
   };
 }
 
-function makePayload(envelope: unknown): EachMessagePayload {
+function makePayload(envelope: unknown): TransportMessagePayload {
   return {
-    topic: "raw.events",
+    stream: "raw.events-0",
+    family: "raw.events",
     partition: 0,
     message: {
-      key: null,
+      key: "partition-key",
       value: Buffer.from(JSON.stringify(envelope), "utf8"),
+      offset: "42",
       headers: {},
-      offset: "0",
-      timestamp: "1715515200000",
-      size: 0,
-      attributes: 0,
+      timestamp: "0",
+      redelivered: false,
     },
-    heartbeat: async () => {},
-    pause: () => () => {},
-  } as unknown as EachMessagePayload;
+  };
 }
 
 const CONTEXT: TransportMessageContext = {
@@ -321,7 +319,7 @@ describe("identity-resolver runtime — short-circuit paths", () => {
 });
 
 describe("identity-resolver runtime — error paths", () => {
-  it("throws on malformed payload (non-JSON bytes) so KafkaJS surfaces the failure", async () => {
+  it("throws on malformed payload (non-JSON bytes) so the transport rewinds", async () => {
     const { runtime } = buildEnv();
     const badPayload = {
       ...makePayload(""),
@@ -334,7 +332,7 @@ describe("identity-resolver runtime — error paths", () => {
         size: 0,
         attributes: 0,
       },
-    } as unknown as EachMessagePayload;
+    } as unknown as TransportMessagePayload;
     await expect(runtime.handler(badPayload, CONTEXT)).rejects.toThrow();
   });
 
@@ -355,7 +353,7 @@ describe("identity-resolver runtime — error paths", () => {
       },
       heartbeat: async () => {},
       pause: () => () => {},
-    } as unknown as EachMessagePayload;
+    } as unknown as TransportMessagePayload;
     await expect(runtime.handler(partial, CONTEXT)).rejects.toThrow();
   });
 
@@ -375,7 +373,7 @@ describe("identity-resolver runtime — error paths", () => {
       },
       heartbeat: async () => {},
       pause: () => () => {},
-    } as unknown as EachMessagePayload;
+    } as unknown as TransportMessagePayload;
     await expect(runtime.handler(tombstone, CONTEXT)).resolves.toBeUndefined();
     expect(producer.publishes).toHaveLength(0);
   });

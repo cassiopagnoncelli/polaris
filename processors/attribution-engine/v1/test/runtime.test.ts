@@ -2,7 +2,7 @@
  * Streaming runtime tests for attribution-engine v1.
  *
  * Each test drives the runtime's `handler` directly with synthesised
- * `EachMessagePayload`s. The producer slot is a recording stub so we can
+ * `TransportMessagePayload`s. The producer slot is a recording stub so we can
  * assert which attribution events were emitted, in what order, and with
  * what canonical envelope shape.
  *
@@ -20,11 +20,12 @@ import {
   type TransportMessageContext,
   type PolarisProducer,
   type PublishEventInput,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
+  type PublishResult,
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
+  type TransportMessagePayload,
 } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
-import type { EachMessagePayload, ProducerRecord, RecordMetadata } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
 import { createRuntime } from "../src/runtime.js";
 import { InMemoryTouchpointStore } from "../src/store.js";
@@ -32,22 +33,20 @@ import { PROCESSOR_NAME, PROCESSOR_VERSION } from "../src/transform.js";
 
 const NOW_ISO = "2026-05-14T12:30:00.000Z";
 
-function buildPayload(value: Buffer | null): EachMessagePayload {
+function buildPayload(value: Buffer | null): TransportMessagePayload {
   return {
-    topic: STREAM_FAMILY_ANALYTICS_EVENTS,
+    stream: `${STREAM_FAMILY_RAW_EVENTS}-0`,
+    family: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
-      key: Buffer.from("partition-key"),
+      key: "partition-key",
       value,
       offset: "42",
       headers: {},
       timestamp: "0",
-      attributes: 0,
-      size: value === null ? 0 : value.length,
-    } as EachMessagePayload["message"],
-    heartbeat: async () => {},
-    pause: () => () => {},
-  } as EachMessagePayload;
+      redelivered: false,
+    },
+  };
 }
 
 function buildContext(overrides: Partial<TransportMessageContext> = {}): TransportMessageContext {
@@ -63,12 +62,11 @@ class RecordingProducer {
     payload: Record<string, unknown>;
   }> = [];
   public throwOnPublish: Error | undefined;
-  public readonly raw: unknown = null;
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
 
-  async publishEvent(input: PublishEventInput): Promise<RecordMetadata[]> {
+  async publishEvent(input: PublishEventInput): Promise<PublishResult> {
     if (this.throwOnPublish !== undefined) {
       const err = this.throwOnPublish;
       this.throwOnPublish = undefined;
@@ -78,22 +76,25 @@ class RecordingProducer {
       family: input.family,
       payload: input.event as Record<string, unknown>,
     });
-    return [];
+    return { stream: `${input.family}-0`, partition: 0 };
   }
 
-  async send(_record: ProducerRecord): Promise<RecordMetadata[]> {
-    throw new Error("RecordingProducer.send should not be called by attribution-engine");
+  async publish(): Promise<PublishResult> {
+    throw new Error("RecordingProducer.publish should not be called by attribution-engine");
+  }
+
+  async publishToQueue(): Promise<void> {
+    throw new Error("RecordingProducer.publishToQueue should not be called by attribution-engine");
   }
 }
 
 function stubConsumer(): PolarisConsumer {
   return {
-    connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     subscribe: vi.fn(async () => {}),
     runEach: vi.fn(async () => {}),
-    run: vi.fn(async () => {}),
-    raw: {} as PolarisConsumer["raw"],
+    streams: [],
+    queues: [],
   } as unknown as PolarisConsumer;
 }
 

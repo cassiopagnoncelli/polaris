@@ -38,7 +38,7 @@
  *     goes through an injected adapter (`ReplayExecutorSource`,
  *     `ReplayExecutorProducer`, `ReplayExecutorStore`). This keeps the
  *     module pure, lets tests inject fakes without a real broker, and
- *     keeps the package's dependency surface tiny (no `kafkajs`, no
+ *     keeps the package's dependency surface tiny (no transport client, no
  *     PostgreSQL client).
  *
  *   - **The executor is the only writer of executor-side state.** It
@@ -153,10 +153,10 @@ export class ReplayExecutorError extends Error {
  * shape is intentionally minimal so the source adapter can return any
  * already-decoded envelope without an extra normalisation step.
  *
- * `headers` is the kafkajs `IHeaders` shape stringified to a plain
+ * `headers` is the platform header bag stringified to a plain
  * `Record<string, string>` so the executor module does not depend on
- * `kafkajs`. The producer adapter is responsible for serialising the
- * headers back into kafkajs's format if needed.
+ * the transport. The producer adapter is responsible for serialising the
+ * headers back into the driver's format if needed.
  */
 export interface ReplaySourceEvent {
   /** Platform-issued event id (UUIDv7). */

@@ -3,7 +3,7 @@
  *
  * The runtime is exercised through its `handler` slot — the same
  * `TransportMessageHandler` registered with the KafkaJS consumer. We
- * synthesise a minimal `EachMessagePayload` and assert:
+ * synthesise a minimal `TransportMessagePayload` and assert:
  *
  *   - happy path: producer.publishEvent is called with `family =
  *     analytics.events`, the canonical partition key, and the transformed
@@ -27,9 +27,9 @@ import {
   sharedOnlyIsolationLookup,
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  type TransportMessagePayload,
 } from "@polaris/shared-transport";
 import { createLogger } from "@polaris/shared-logger";
-import type { EachMessagePayload } from "kafkajs";
 import { describe, expect, it, vi } from "vitest";
 
 import { createRuntime } from "../src/runtime.js";
@@ -113,22 +113,20 @@ function stubConsumer(): PolarisConsumer {
   };
 }
 
-function buildPayload(value: Buffer | null): EachMessagePayload {
+function buildPayload(value: Buffer | null): TransportMessagePayload {
   return {
-    topic: STREAM_FAMILY_RAW_EVENTS,
+    stream: `${STREAM_FAMILY_RAW_EVENTS}-0`,
+    family: STREAM_FAMILY_RAW_EVENTS,
     partition: 0,
     message: {
-      key: Buffer.from("partition-key"),
+      key: "partition-key",
       value,
       offset: "42",
       headers: {},
       timestamp: "0",
-      attributes: 0,
-      size: value === null ? 0 : value.length,
-    } as EachMessagePayload["message"],
-    heartbeat: async () => {},
-    pause: () => () => {},
-  } as EachMessagePayload;
+      redelivered: false,
+    },
+  };
 }
 
 const EMPTY_CONTEXT: TransportMessageContext = {};
