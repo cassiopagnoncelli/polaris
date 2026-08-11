@@ -51,6 +51,7 @@ export {
 export type {
   EventDailyCountsReader,
   ProjectionReaders,
+  SessionDailyMetricsReader,
 } from "./projections/index.js";
 export type { OperatorRaw } from "./raw.js";
 export { ESCAPE_HATCH_METRIC } from "./raw.js";
@@ -103,5 +104,7 @@ export type {
   MetricsRecorder,
   RawQueryContext,
   RawQueryResult,
+  SessionDailyMetricRow,
+  SessionDailyMetricsFilter,
   TimeRange,
 } from "./types.js";

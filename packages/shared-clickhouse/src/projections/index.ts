@@ -15,9 +15,15 @@
 
 import type { ClickHouseClient as UnderlyingClickHouseClient } from "@clickhouse/client";
 import { createEventDailyCountsReader, type EventDailyCountsReader } from "./event-daily-counts.js";
+import {
+  createSessionDailyMetricsReader,
+  type SessionDailyMetricsReader,
+} from "./session-daily-metrics.js";
 
 export interface ProjectionReaders {
   readonly eventDailyCounts: EventDailyCountsReader;
+  /** Fed from `analytics_processed`, not `analytics_raw`. */
+  readonly sessionDailyMetrics: SessionDailyMetricsReader;
 }
 
 export function createProjectionReaders(input: {
@@ -25,7 +31,9 @@ export function createProjectionReaders(input: {
 }): ProjectionReaders {
   return {
     eventDailyCounts: createEventDailyCountsReader({ underlying: input.underlying }),
+    sessionDailyMetrics: createSessionDailyMetricsReader({ underlying: input.underlying }),
   };
 }
 
 export type { EventDailyCountsReader } from "./event-daily-counts.js";
+export type { SessionDailyMetricsReader } from "./session-daily-metrics.js";

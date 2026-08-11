@@ -49,8 +49,14 @@
  *   `feederMvFile`      the canonical materialized-view SQL file
  *                       under `sql/clickhouse/materialized-views/`.
  *                       The executor (deferred) replays this MV's
- *                       SELECT against `analytics_raw` to repopulate
- *                       the projection.
+ *                       SELECT against its own source table to
+ *                       repopulate the projection. The source is
+ *                       whichever raw-tier table the SELECT names —
+ *                       `analytics_raw` or `analytics_processed` — so
+ *                       nothing else in the rebuild machinery needs to
+ *                       know which. The planner probes
+ *                       `qualifiedTable`, the projection, not the
+ *                       source.
  *
  *   `rebuildSelectFile` the canonical INSERT-side SELECT, checked in
  *                       next to the projection DDL. The rebuild
@@ -99,6 +105,15 @@ export const REBUILDABLE_CLICKHOUSE_PROJECTIONS: readonly ClickhouseProjectionDe
     rebuildSelectFile: "sql/clickhouse/projections/40_event_daily_counts_rebuild.sql",
     description:
       "Per-day event counts keyed by (project_id, environment, event). SummingMergeTree.",
+  },
+  {
+    name: "session_daily_metrics",
+    qualifiedTable: "polaris.session_daily_metrics",
+    sqlFile: "sql/clickhouse/projections/42_session_daily_metrics.sql",
+    feederMvFile: "sql/clickhouse/materialized-views/43_mv_processed_to_session_daily_metrics.sql",
+    rebuildSelectFile: "sql/clickhouse/projections/42_session_daily_metrics_rebuild.sql",
+    description:
+      "Per-day sessions started/ended keyed by (project_id, environment). SummingMergeTree over analytics_processed.",
   },
 ] as const;
 

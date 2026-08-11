@@ -55,6 +55,10 @@ GRANT ON CLUSTER '{cluster}'
     SELECT ON polaris.event_daily_counts
     TO polaris_service;
 
+GRANT ON CLUSTER '{cluster}'
+    SELECT ON polaris.session_daily_metrics
+    TO polaris_service;
+
 -- Defensive REVOKEs. ClickHouse role grants are additive across
 -- statements; these REVOKEs guarantee that even if a future grant
 -- in this file accidentally widens scope, analytics_raw and the

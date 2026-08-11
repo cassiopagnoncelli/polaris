@@ -230,6 +230,35 @@ export interface EventDailyCountsFilter {
 }
 
 /**
+ * Row shape returned from `projections.sessionDailyMetrics.read`.
+ *
+ * Counts come back as strings for the same reason `event_count` does:
+ * ClickHouse emits UInt64 as JSON strings past 2^53, and coercing here
+ * would be lossy.
+ */
+export interface SessionDailyMetricRow {
+  project_id: string;
+  environment: string;
+  occurred_date: string;
+  sessions_started: number | string;
+  sessions_ended: number | string;
+}
+
+/**
+ * Filter for `projections.sessionDailyMetrics.read`.
+ *
+ * No `event` field, unlike {@link EventDailyCountsFilter}: the event name
+ * is encoded by which counter a row contributes to.
+ */
+export interface SessionDailyMetricsFilter {
+  projectId: string;
+  environment?: string;
+  fromDate: string;
+  toDate?: string;
+  limit?: number;
+}
+
+/**
  * Health-check result. Mirrors the contract used by the workspace's standard
  * `/healthz` and `/readyz` route helpers.
  */
