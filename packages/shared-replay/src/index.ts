@@ -24,6 +24,10 @@
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
 
+export {
+  destinationReachingFamilies,
+  topicFamilyReachesDestinations,
+} from "./destinations.js";
 export type {
   ExecuteReplayInput,
   ExecuteReplayOutcome,

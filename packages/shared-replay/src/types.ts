@@ -118,7 +118,7 @@ export const REPLAY_PLAN_REJECTION_CODES = [
   "window_in_future",
   /** Production replay was issued without `project_id` scope. */
   "production_replay_unscoped",
-  /** Destination-target replay flipped `destinations_enabled=true` without an opt-in note. */
+  /** `destinations_enabled=true` without an opt-in note. */
   "destination_opt_in_requires_note",
 ] as const;
 export type ReplayPlanRejectionCode = (typeof REPLAY_PLAN_REJECTION_CODES)[number];
@@ -296,7 +296,23 @@ export interface ReplayPlan {
   readonly processor_name: string | null;
   /** Processor semantic version when pinned. */
   readonly processor_version: string | null;
-  /** Whether external destination delivery is enabled during the replay. */
+  /**
+   * Topic family the executor will publish to unless overridden.
+   *
+   * Distinct from `source_topic_family`, which is where events are read
+   * from. They happen to be equal in v1, but conflating them is what let a
+   * replay reach vendors unnoticed: reachability is a property of where
+   * events are *written*.
+   */
+  readonly target_topic_family: string;
+  /**
+   * Whether this plan's publish topic can result in vendor delivery.
+   *
+   * Derived from `target_topic_family`, not from `target`. True for
+   * `raw.events` and `analytics.events` — see `destinations.ts`.
+   */
+  readonly reaches_destinations: boolean;
+  /** Whether the operator opted in to external destination delivery. */
   readonly destinations_enabled: boolean;
   /** Opt-in rationale when `destinations_enabled === true`. */
   readonly destination_opt_in_note: string | null;

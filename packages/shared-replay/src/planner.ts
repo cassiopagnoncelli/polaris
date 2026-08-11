@@ -35,6 +35,7 @@
  * @see types.ts for the input / output shapes
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  */
+import { topicFamilyReachesDestinations } from "./destinations.js";
 import {
   type PlanReplayOptions,
   REPLAY_PLAN_ENVIRONMENTS,
@@ -79,6 +80,12 @@ export const DEFAULT_CHUNK_SIZE_DAYS = 1;
  * a heads-up for review.
  */
 export const WIDE_WINDOW_DAYS_THRESHOLD = 7;
+
+/**
+ * The family v1 reads from and republishes to. Derived families are replayed
+ * via processor targets, which re-read raw.events anyway.
+ */
+const SOURCE_TOPIC_FAMILY = "raw.events" as const;
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -142,9 +149,17 @@ export function planReplay(
   }
 
   // ---- destination opt-in -------------------------------------------
-  const destinationsEnabled =
-    target === "destinations" ? Boolean(declaration.destinations_enabled) : false;
+  // Reachability is a property of the topic the executor PUBLISHES to, not
+  // of the operator's stated target: every target republishes to raw.events,
+  // which flows to the destination consumers. Enforcement lives downstream
+  // (P7-004 suppression, see destinations.ts) — what is computed here is the
+  // plan's honesty about blast radius.
+  const targetTopicFamily = SOURCE_TOPIC_FAMILY;
+  const reachesDestinations = topicFamilyReachesDestinations(targetTopicFamily);
+
+  const destinationsEnabled = Boolean(declaration.destinations_enabled);
   const destinationOptInNote = trimToNull(declaration.destination_opt_in_note);
+
   if (destinationsEnabled && destinationOptInNote === null) {
     throw new ReplayPlanError(
       "destination_opt_in_requires_note",
@@ -161,7 +176,11 @@ export function planReplay(
   if (windowDays > WIDE_WINDOW_DAYS_THRESHOLD) {
     riskCodes.add("wide_time_window");
   }
-  if (target === "destinations" && destinationsEnabled) {
+  // Fires on the operator's acknowledgement, for any target — not just
+  // `destinations`. Deliberately NOT on `reachesDestinations` alone: every
+  // v1 replay publishes to raw.events, so that would be on for every plan,
+  // and a risk flag that is always lit is one people learn to skip.
+  if (destinationsEnabled) {
     riskCodes.add("destination_sends_enabled");
   }
   if (target === "processor") {
@@ -194,7 +213,9 @@ export function planReplay(
     mode,
     event_name: trimToNull(declaration.event_name),
     event_id: trimToNull(declaration.event_id),
-    source_topic_family: "raw.events",
+    source_topic_family: SOURCE_TOPIC_FAMILY,
+    target_topic_family: targetTopicFamily,
+    reaches_destinations: reachesDestinations,
     partition_key_strategy: "project_environment_identity",
     window_from: windowFrom.toISOString(),
     window_to: windowTo.toISOString(),

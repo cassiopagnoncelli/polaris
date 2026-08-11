@@ -534,7 +534,7 @@ export async function executeReplay(input: ExecuteReplayInput): Promise<ExecuteR
   // ---- start ---------------------------------------------------------
   const startedAt = nowFn();
   const startedAtIso = startedAt.toISOString();
-  const targetTopic = input.target_topic ?? plan.source_topic_family;
+  const targetTopic = input.target_topic ?? plan.target_topic_family;
   const eventsPlannedHint = input.events_planned_hint ?? 0;
 
   const transition = await input.store.markRunning({

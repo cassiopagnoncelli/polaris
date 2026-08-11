@@ -36,6 +36,7 @@ export function renderPlanHuman(plan: ReplayPlan): string {
   lines.push(`  target                 ${plan.target}`);
   lines.push(`  mode                   ${plan.mode}`);
   lines.push(`  source_topic_family    ${plan.source_topic_family}`);
+  lines.push(`  target_topic_family    ${plan.target_topic_family}`);
   lines.push(`  partition_key_strategy ${plan.partition_key_strategy}`);
   lines.push(`  window_from            ${plan.window_from}`);
   lines.push(`  window_to              ${plan.window_to}`);
@@ -45,9 +46,23 @@ export function renderPlanHuman(plan: ReplayPlan): string {
   lines.push(`  event_id               ${plan.event_id ?? "(all)"}`);
   lines.push(`  processor_name         ${plan.processor_name ?? "(not pinned)"}`);
   lines.push(`  processor_version      ${plan.processor_version ?? "(not pinned)"}`);
+  // The old text here read "false (disabled by default)", which is not what
+  // false means. Delivery is gated per destination row by `replay_opt_in`
+  // (plus the consumer host's allowReplay flag) — this field records only
+  // whether the OPERATOR acknowledged it. Saying "disabled" invited exactly
+  // the wrong conclusion.
   lines.push(
-    `  destinations_enabled   ${plan.destinations_enabled ? "true (opt-in)" : "false (disabled by default)"}`,
+    `  destinations_enabled   ${plan.destinations_enabled ? "true (operator opted in)" : "false (not acknowledged)"}`,
   );
+  if (plan.reaches_destinations) {
+    lines.push(
+      `  reaches_destinations   true — ${plan.target_topic_family} feeds the destination consumers.`,
+    );
+    lines.push(`                         Replayed events carry the polaris-replay header and are`);
+    lines.push(
+      `                         delivered only to destinations whose replay_opt_in is on.`,
+    );
+  }
   if (plan.destination_opt_in_note !== null) {
     lines.push(`  destination_opt_in     ${plan.destination_opt_in_note}`);
   }

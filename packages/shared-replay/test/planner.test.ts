@@ -417,18 +417,47 @@ describe("destinations target", () => {
     expect(plan.destination_opt_in_note).toBeNull();
   });
 
-  it("destinations_enabled defaults to false for non-destination targets even if requested", () => {
-    // Operators set destinations_enabled on a processor target -> ignored.
+  it("honours destinations_enabled on any target, not just `destinations`", () => {
+    // Previously forced to false unless target === "destinations", which
+    // silently discarded the operator's acknowledgement. Every v1 target
+    // republishes to raw.events and is therefore evaluated against each
+    // destination's replay_opt_in gate, so the acknowledgement is meaningful
+    // whatever the stated target.
     const plan = planReplay(
       makeDecl({
         target: "processor",
         processor_name: "geoip-enricher",
         processor_version: "v1",
         destinations_enabled: true,
+        destination_opt_in_note: "incident-2026-05-12: re-run enrichment",
       }),
       { now: NOW },
     );
-    expect(plan.destinations_enabled).toBe(false);
+    expect(plan.destinations_enabled).toBe(true);
+    expect(plan.risks.map((r) => r.code)).toContain("destination_sends_enabled");
+  });
+
+  it("reports that its publish topic reaches destination consumers", () => {
+    // A fact about the topic, not about the target: raw.events flows through
+    // analytics-projector into analytics.events, which every destination
+    // consumer subscribes to. Enforcement is downstream (P7-004 suppression);
+    // this is the plan telling the truth about blast radius.
+    for (const target of ["analytics_raw", "destinations", "processor"] as const) {
+      const plan = planReplay(
+        makeDecl({
+          target,
+          ...(target === "processor"
+            ? { processor_name: "geoip-enricher", processor_version: "v1" }
+            : {}),
+        }),
+        { now: NOW },
+      );
+      expect([target, plan.target_topic_family, plan.reaches_destinations]).toEqual([
+        target,
+        "raw.events",
+        true,
+      ]);
+    }
   });
 
   it("destinations_enabled=true without a note is rejected", () => {
@@ -446,7 +475,7 @@ describe("destinations target", () => {
     }
   });
 
-  it("destinations_enabled=true with a note is accepted; flags destination_sends_enabled risk", () => {
+  it("destinations_enabled=true with a note is accepted and flags the risk", () => {
     const plan = planReplay(
       makeDecl({
         target: "destinations",
@@ -609,7 +638,7 @@ describe("renderPlanHuman", () => {
     expect(rendered).toContain("target                 processor");
     expect(rendered).toContain("processor_name         geoip-enricher");
     expect(rendered).toContain("processor_version      v2");
-    expect(rendered).toContain("destinations_enabled   false (disabled by default)");
+    expect(rendered).toContain("destinations_enabled   false (not acknowledged)");
     expect(rendered).toContain("consumer_group         polaris-replay.");
     expect(rendered).toContain("events_estimated       unknown");
   });
@@ -626,7 +655,7 @@ describe("renderPlanHuman", () => {
     expect(rendered).toContain("[production_scope]");
   });
 
-  it("marks destinations_enabled=true with the opt-in label", () => {
+  it("marks destinations_enabled=true as an operator acknowledgement", () => {
     const plan = planReplay(
       makeDecl({
         target: "destinations",
@@ -636,7 +665,7 @@ describe("renderPlanHuman", () => {
       { now: NOW },
     );
     const rendered = renderPlanHuman(plan);
-    expect(rendered).toContain("destinations_enabled   true (opt-in)");
+    expect(rendered).toContain("destinations_enabled   true (operator opted in)");
     expect(rendered).toContain("destination_opt_in     incident-2026");
   });
 });
@@ -657,6 +686,8 @@ describe("plan shape (contract pin)", () => {
       event_name: null,
       event_id: null,
       source_topic_family: "raw.events",
+      target_topic_family: "raw.events",
+      reaches_destinations: true,
       partition_key_strategy: "project_environment_identity",
       window_from: "2026-05-10T00:00:00.000Z",
       window_to: "2026-05-11T00:00:00.000Z",
