@@ -1,0 +1,258 @@
+#!/usr/bin/env node
+// Polaris local seed step — run by `make setup` after the schema exists.
+//
+// `make setup` gets you infrastructure: roles, databases, migrations, the
+// ClickHouse DDL, the RabbitMQ topology. None of that is data. This script
+// is the data half: the catalog rows and dev-only config a fresh checkout
+// needs before an app can actually send an event.
+//
+// It seeds, in order (the order is a foreign key, not a preference):
+//
+//   1. `projects` — from catalog/projects/**.yaml, via `polaris projects sync`
+//   2. `sources`  — from catalog/sources/**.yaml,  via `polaris sources sync`
+//   3. `source_allowed_origins` — dev browser origins for the web sources
+//      below. `source_allowed_origins` has a FK onto `sources`, so step 2
+//      has to have landed first.
+//
+// Step 3 is the one with no CLI surface yet: the allow-list is not part of
+// the catalog source schema, so there is nothing for `sources sync` to
+// materialize. Until it is, seeding is how a bare-metal dev gets a browser
+// origin past the ingester's CORS check, and this script is the one place
+// that knows the dev defaults.
+//
+// What it deliberately does NOT do: issue API keys. `keys create` prints a
+// token exactly once and stores only its argon2id hash, so running it from
+// a step that re-runs on every `make setup` would leak a trail of orphaned
+// active keys. Keys are on-demand: `make api_key`.
+//
+// Idempotent by construction — the syncs diff against the live tables and
+// the origin inserts are ON CONFLICT DO NOTHING. Safe to re-run.
+//
+// Development only. The guard below refuses to touch a production
+// environment; production allow-list entries are an operator action with an
+// audit trail, not a seed.
+
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const CLI = resolve(REPO_ROOT, "apps/polaris-cli/dist/bin/polaris.js");
+
+/** Seeds target the `development` environment only. See the guard below. */
+const ENVIRONMENT = "development";
+
+const DEFAULT_DATABASE_URL = "postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable";
+
+/**
+ * Dev browser origins, per web source.
+ *
+ * Only `samples/01-web-events` needs an entry: it posts from the browser
+ * straight to the ingester, so the browser sends an `Origin` header the
+ * ingester checks. Samples 02 and 03 reach the ingester server-side — no
+ * `Origin` header, nothing to allow-list.
+ *
+ * `POLARIS_DEV_ORIGINS` (comma-separated) appends to every source here, for
+ * when the dev server is not on its documented port. See `.env.local.example`.
+ */
+const ORIGIN_SEEDS = [
+  {
+    projectId: "storefront",
+    sourceId: "storefront-web",
+    origins: ["http://localhost:3000"],
+  },
+];
+
+// Mirrors `source_allowed_origins_origin_format` in
+// db/migrations/20260512000013_create_source_allowed_origins.sql. Checking
+// here turns a typo in POLARIS_DEV_ORIGINS into a readable error instead of
+// a CHECK constraint violation from Postgres.
+const ORIGIN_PATTERN = /^https?:\/\/[A-Za-z0-9.\-:[\]_]+$/;
+const ORIGIN_MAX_LENGTH = 255;
+
+function main() {
+  const env = process.env;
+
+  const polarisEnv = (env.POLARIS_ENV ?? "").trim().toLowerCase();
+  if (polarisEnv === "production") {
+    fail(
+      "refusing to seed with POLARIS_ENV=production.\n" +
+        "  Seeds are development fixtures. Production projects, sources, and\n" +
+        "  allow-list entries are operator actions and carry an audit row.",
+    );
+  }
+
+  if (!existsSync(CLI)) {
+    fail(
+      `polaris CLI not built at ${rel(CLI)}.\n` +
+        "  Run `make build-cli` (or `pnpm --filter @polaris/polaris-cli run build`) first.",
+    );
+  }
+
+  const databaseUrl =
+    trim(env.POLARIS_DATABASE_URL) ?? trim(env.DATABASE_URL) ?? DEFAULT_DATABASE_URL;
+
+  const extraOrigins = parseExtraOrigins(env.POLARIS_DEV_ORIGINS);
+
+  console.log("Seeding Polaris local development data\n");
+
+  runCli(["projects", "sync"], "projects", databaseUrl);
+  runCli(["sources", "sync"], "sources", databaseUrl);
+  seedOrigins(databaseUrl, extraOrigins);
+
+  console.log("\nSeed complete. Issue a key for an app with:\n");
+  console.log("  make api_key\n");
+}
+
+/**
+ * Run a `polaris` subcommand against the local database.
+ *
+ * The CLI's sync commands are DATABASE_URL-direct (see
+ * apps/polaris-cli/src/db/connect.ts), so they need no control-plane URL or
+ * operator token in development.
+ *
+ * `POLARIS_DATABASE_URL` is passed explicitly rather than left to the
+ * inherited env: this script and the CLI both resolve a connection string,
+ * and if they resolved it from different places the catalog sync and the
+ * allow-list rows could land in different databases. One resolution, handed
+ * to both. It takes priority over `DATABASE_URL` on the CLI side, so the
+ * inherited value cannot win.
+ */
+function runCli(args, label, databaseUrl) {
+  process.stdout.write(`  ${label} sync ... `);
+  const result = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: { ...process.env, POLARIS_DATABASE_URL: databaseUrl },
+  });
+  if (result.error !== undefined) {
+    console.log("failed");
+    fail(`could not run the polaris CLI: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    console.log("failed");
+    fail(
+      `\`polaris ${args.join(" ")}\` exited ${result.status}.\n` +
+        indent(result.stderr || result.stdout || "(no output)"),
+    );
+  }
+  console.log("ok");
+}
+
+/**
+ * Insert the dev allow-list rows.
+ *
+ * Shells out to `psql` rather than opening a `pg` client: `make db-bootstrap`
+ * already requires psql on a bare-metal box (see
+ * scripts/postgres-bootstrap-local.mjs), and the root workspace has no `pg`
+ * dependency of its own.
+ *
+ * Values travel as psql variables interpolated with `:'name'`, which quotes
+ * and escapes them — never as string concatenation into the SQL text.
+ *
+ * The statement arrives on stdin (`-f -`) rather than through `-c`, because
+ * `-c` hands its string straight to the server without running psql's lexer,
+ * and `:'name'` interpolation is a lexer feature — via `-c` the colon form
+ * reaches PostgreSQL verbatim and is a syntax error.
+ */
+function seedOrigins(databaseUrl, extraOrigins) {
+  const sql =
+    "INSERT INTO source_allowed_origins (project_id, source_id, environment, origin) " +
+    "VALUES (:'project', :'source', :'environment', :'origin') " +
+    "ON CONFLICT DO NOTHING;";
+
+  for (const seed of ORIGIN_SEEDS) {
+    const origins = [...new Set([...seed.origins, ...extraOrigins])];
+    for (const origin of origins) {
+      assertValidOrigin(origin);
+      process.stdout.write(`  origin ${seed.sourceId} ${origin} ... `);
+      const result = spawnSync(
+        "psql",
+        [
+          databaseUrl,
+          // -X so a developer's ~/.psqlrc can't alter output or transaction
+          // behaviour; ON_ERROR_STOP so a failed statement is a failed exit.
+          "-X",
+          "-w",
+          "-q",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-v",
+          `project=${seed.projectId}`,
+          "-v",
+          `source=${seed.sourceId}`,
+          "-v",
+          `environment=${ENVIRONMENT}`,
+          "-v",
+          `origin=${origin}`,
+          "-f",
+          "-",
+        ],
+        { encoding: "utf8", input: sql },
+      );
+      if (result.error !== undefined) {
+        console.log("failed");
+        fail(
+          `could not run psql: ${result.error.message}\n` +
+            "  Bare-metal setup expects psql on PATH and PostgreSQL reachable.",
+        );
+      }
+      if (result.status !== 0) {
+        console.log("failed");
+        fail(indent(result.stderr || result.stdout || "(no output)"));
+      }
+      console.log("ok");
+    }
+  }
+}
+
+function parseExtraOrigins(raw) {
+  const value = trim(raw);
+  if (value === undefined) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function assertValidOrigin(origin) {
+  if (origin === "*") {
+    fail("`*` is not a valid origin — the allow-list exists to be a list.");
+  }
+  if (origin.length > ORIGIN_MAX_LENGTH) {
+    fail(`origin "${origin}" exceeds ${ORIGIN_MAX_LENGTH} characters.`);
+  }
+  if (!ORIGIN_PATTERN.test(origin)) {
+    fail(
+      `origin "${origin}" is not a valid browser origin.\n` +
+        "  Expected `<scheme>://<host>[:<port>]` with no path and no trailing\n" +
+        "  slash, e.g. http://localhost:3000 — that is what a browser sends.",
+    );
+  }
+}
+
+function trim(value) {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = String(value).trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+function indent(text) {
+  return text
+    .trimEnd()
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+function rel(absolute) {
+  return absolute.startsWith(`${REPO_ROOT}/`) ? absolute.slice(REPO_ROOT.length + 1) : absolute;
+}
+
+function fail(message) {
+  console.error(`\nbin/setup: ${message}`);
+  process.exit(1);
+}
+
+main();
