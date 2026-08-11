@@ -33,6 +33,7 @@ export type {
 } from "./client.js";
 export { closeDb, createDb, postgresConnectionString } from "./client.js";
 export type {
+  AttributionTouchpointChainsTable,
   DestinationMode,
   DestinationRetryPolicy,
   DestinationStatus,

@@ -12,7 +12,7 @@
  *      `null`; missing fields become `null`. A tuple with every field
  *      `null` is considered EMPTY (no touchpoint).
  *
- *   3. Consult the in-memory touchpoint chain for the
+ *   3. Consult the touchpoint chain for the
  *      `(project_id, environment, primary_identifier)` key.
  *
  *   4. Decide which combination of emissions to produce:
@@ -228,7 +228,7 @@ export function deriveTouchpointId(input: {
 }
 
 /**
- * Touchpoint chain record kept in the in-memory store. The engine reads
+ * Touchpoint chain record kept in the store. The engine reads
  * the prior record before applying the decision rules, then writes the
  * updated record back.
  */

@@ -29,7 +29,7 @@ plan and the semantic-immutability rule.
 - First attribution processor in the Polaris workspace.
 - Consumes `analytics.events` (the analytics-projector's downstream
   stream of canonical envelopes that have already been processor-stamped).
-- Maintains an in-memory touchpoint chain per `(project_id, environment,
+- Maintains a touchpoint chain per `(project_id, environment,
   primary_identifier)` tuple. Primary identifier preference order:
   `customer_id > anonymous_id > session_id`. Events with no usable
   identifier are silently dropped (no chain to attribute to).
@@ -83,7 +83,7 @@ plan and the semantic-immutability rule.
 Per the task card's Acceptance Criteria ("Replay notes describe how v1
 behavior may affect historical outputs"):
 
-1. The in-memory touchpoint chain is rebuilt FROM THE BEGINNING of the
+1. The touchpoint chain is rebuilt FROM THE BEGINNING of the
    replay slice. A replay that starts AFTER an identifier's original
    first touchpoint will emit a NEW `first_touch_assigned` event for
    whichever touchpoint comes first in the slice. Downstream consumers
@@ -109,16 +109,23 @@ behavior may affect historical outputs"):
 
 ### Known v1 limitations
 
-- **In-memory state only.** Process restarts lose touchpoint chains.
-  Acceptable for v1 because (a) the chain depth is bounded by the input
-  slice, (b) the processor is replayable from `analytics.events`, and
-  (c) the deterministic `touchpoint_id` derivation means a replay
-  reproduces the same `touchpoint_captured` events. A Redis-backed v2
-  will externalise the state store.
-- **No background timer / no chain expiry.** A touchpoint chain
-  persists in memory for the lifetime of the process. v2 should consider
-  a TTL or LRU bound so a long-running process doesn't accumulate
-  unbounded identifier state.
+- ~~**In-memory state only.**~~ **Resolved** — touchpoint chains moved to
+  PostgreSQL per ADR 0005 (`attribution_touchpoint_chains`), over the
+  pool the processor already holds for checkpoints. Chains now survive a
+  restart, and they are queryable, which is a capability operators did
+  not have at all.
+- ~~**No background timer / no chain expiry.**~~ **Resolved by the
+  same change**, and it was the more urgent half: an unbounded in-process
+  map is a leak before it is a durability gap. Note the fix is bounding,
+  not expiry — chains have no natural TTL (attribution windows run 30-90
+  days), which is exactly why they went to PostgreSQL while session state
+  went to Redis. Trimming old chains is a retention decision, still open.
+- **A database outage stalls the processor.** With chains external, a
+  Postgres failure fails the message rather than degrading: without the
+  prior chain the engine cannot tell a first observation from a
+  continuation, and guessing would emit `first_touch_assigned` for an
+  identifier that already had one. The checkpoint does not advance and
+  the message is redelivered.
 - **No fallback when no identifier is present.** Events missing all of
   `customer_id`, `anonymous_id`, and `session_id` are silently dropped.
   The engine cannot attribute them to a chain. Producers should ensure

@@ -6,7 +6,7 @@
  *
  *   1. Build the logger and KafkaJS client through `@polaris/shared-transport`.
  *   2. Build the `PolarisProducer` and `PolarisConsumer`.
- *   3. Build the in-memory touchpoint store (v1 has no Redis variant).
+ *   3. Build the PostgreSQL touchpoint store (ADR 0005); tests inject their own.
  *   4. Build the streaming runtime (consumer + producer + store + transform).
  *   5. Hand the runtime's `start`/`stop` and the consumer/producer
  *      lifecycles to `bootstrapService`:
@@ -50,8 +50,9 @@ import {
 } from "@polaris/shared-transport";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
+import { createKyselyTouchpointStore } from "./repository.js";
 import { type AttributionEngineRuntime, createRuntime } from "./runtime.js";
-import { InMemoryTouchpointStore, type TouchpointStore } from "./store.js";
+import type { TouchpointStore } from "./store.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 
 export interface BuildAppOptions {
@@ -124,7 +125,6 @@ export async function buildAttributionEngineApp(
   const processorLogger = logger.child(processorLogContext({ identity: PROCESSOR_IDENTITY }));
 
   const metrics = new ProcessorMetrics();
-  const store = options.store ?? new InMemoryTouchpointStore();
 
   // ---- consumer + producer --------------------------------------------
   // One AMQP connection per process, shared by the producer and the
@@ -137,6 +137,14 @@ export async function buildAttributionEngineApp(
   });
   const checkpointDb = createDb({ postgres: config.postgres });
   const checkpoints = new PostgresCheckpointStore(checkpointDb);
+
+  // Touchpoint chains live in PostgreSQL (ADR 0005), over the pool the
+  // processor already holds for checkpoints — same rationale as the run
+  // repository below: durable chain state costs no extra connection.
+  // Tests inject the in-memory adapter; nothing else may, because a
+  // silent in-memory fallback would look healthy while re-emitting
+  // first_touch_assigned for identifiers that already had one.
+  const store: TouchpointStore = options.store ?? createKyselyTouchpointStore({ db: checkpointDb });
   const { producer, ownsProducer } = buildProducer(
     config,
     options.producer,

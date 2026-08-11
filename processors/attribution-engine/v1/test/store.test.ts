@@ -50,36 +50,35 @@ function makeRecord(overrides: Partial<TouchpointChainRecord> = {}): TouchpointC
 }
 
 describe("InMemoryTouchpointStore", () => {
-  it("set/get round-trips a record", () => {
+  it("set/get round-trips a record", async () => {
     const store = new InMemoryTouchpointStore();
     const rec = makeRecord();
-    store.set("k", rec);
-    expect(store.get("k")).toEqual(rec);
+    await store.set("k", rec);
+    expect(await store.get("k")).toEqual(rec);
   });
 
-  it("delete removes a key", () => {
+  it("delete removes a key", async () => {
     const store = new InMemoryTouchpointStore();
-    store.set("k", makeRecord());
-    store.delete("k");
-    expect(store.get("k")).toBeUndefined();
+    await store.set("k", makeRecord());
+    await store.delete("k");
+    expect(await store.get("k")).toBeUndefined();
   });
 
-  it("size tracks the number of active records", () => {
+  it("size tracks the number of active records", async () => {
     const store = new InMemoryTouchpointStore();
     expect(store.size()).toBe(0);
-    store.set("a", makeRecord());
-    store.set("b", makeRecord({ primary_identifier_value: "anon_Y" }));
+    await store.set("a", makeRecord());
+    await store.set("b", makeRecord({ primary_identifier_value: "anon_Y" }));
     expect(store.size()).toBe(2);
-    store.delete("a");
+    await store.delete("a");
     expect(store.size()).toBe(1);
   });
 
-  it("snapshot returns the active records", () => {
+  it("snapshot returns the active records", async () => {
     const store = new InMemoryTouchpointStore();
-    store.set("a", makeRecord());
-    store.set("b", makeRecord({ primary_identifier_value: "anon_Y" }));
-    const snapshot = store.snapshot();
-    expect(snapshot).toHaveLength(2);
+    await store.set("a", makeRecord());
+    await store.set("b", makeRecord({ primary_identifier_value: "anon_Y" }));
+    expect(store.snapshot()).toHaveLength(2);
   });
 });
 

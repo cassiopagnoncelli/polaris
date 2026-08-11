@@ -1,58 +1,67 @@
 /**
- * In-memory touchpoint-chain store for attribution-engine v1.
+ * Touchpoint-chain store for attribution-engine v1.
  *
  * The store is keyed by the canonical
  * `<project_id>::<environment>::<kind>:<value>` string built by
  * `buildTouchpointStoreKey`. Values are `TouchpointChainRecord`s — the
  * runtime reads-then-writes during each handler call.
  *
- * v1 is intentionally in-memory: crash-induced loss of chains is
- * acceptable because (a) the chain depth is bounded by the input slice,
- * (b) the processor is replayable from `analytics.events`, and (c) the
- * deterministic `touchpoint_id` derivation means a replay reproduces the
- * same `touchpoint_captured` events. A Redis-backed v2 will externalise
- * the state store with a similar contract (see CHANGELOG.md
- * "Known v1 limitations").
+ * State lives in PostgreSQL (ADR 0005). It used to live in a
+ * process-local `Map` that never expired anything, which was two
+ * problems in one: an unbounded map in a long-running service, and state
+ * whose loss silently changes attribution results rather than costing a
+ * bounded window.
  *
- * The store does NOT expire records on its own — every chain persists
- * for the lifetime of the process. A v2 may add LRU bounds or a TTL
- * sweep.
+ * ## Why not Redis, when the sessionizer went to Redis
+ *
+ * Because the two states are shaped differently. A session record must
+ * die at the inactivity window, so Redis expiry is the rule itself. A
+ * touchpoint chain has no natural expiry — attribution windows run 30 to
+ * 90 days — so a TTL store would hold an unbounded hot keyspace for
+ * months. PostgreSQL bounds it, survives restarts, and makes chains
+ * queryable, which is a capability operators did not have at all.
+ *
+ * @see processors/attribution-engine/v1/src/repository.ts
  */
 
 import type { CampaignTuple, PrimaryIdentifierKind, TouchpointChainRecord } from "./transform.js";
 
 /**
  * Contract for the touchpoint store. The runtime depends on this
- * interface so tests inject the in-memory adapter and a future v2 swaps
- * in a Redis-backed implementation.
+ * interface so tests inject the in-memory adapter and production wires
+ * the PostgreSQL-backed one (ADR 0005).
+ *
+ * Asynchronous because the production adapter is a database call.
+ * `size()` stays off the interface — its SQL equivalent is a table scan,
+ * which is not something a hot path should be able to reach for; the
+ * in-memory adapter keeps it as a test affordance.
  */
 export interface TouchpointStore {
   /** Read the active chain record for a key, or `undefined` when none. */
-  get(store_key: string): TouchpointChainRecord | undefined;
+  get(store_key: string): Promise<TouchpointChainRecord | undefined>;
   /** Upsert the record for a key. The caller composes the record. */
-  set(store_key: string, record: TouchpointChainRecord): void;
+  set(store_key: string, record: TouchpointChainRecord): Promise<void>;
   /** Drop the record for a key (no use in v1; reserved for future replay tooling). */
-  delete(store_key: string): void;
-  /** Current size of the store. Used by metrics. */
-  size(): number;
+  delete(store_key: string): Promise<void>;
 }
 
-/** Pure in-memory `TouchpointStore`. */
+/** Pure in-memory `TouchpointStore`. Test adapter. */
 export class InMemoryTouchpointStore implements TouchpointStore {
   readonly #records = new Map<string, TouchpointChainRecord>();
 
-  get(store_key: string): TouchpointChainRecord | undefined {
+  async get(store_key: string): Promise<TouchpointChainRecord | undefined> {
     return this.#records.get(store_key);
   }
 
-  set(store_key: string, record: TouchpointChainRecord): void {
+  async set(store_key: string, record: TouchpointChainRecord): Promise<void> {
     this.#records.set(store_key, record);
   }
 
-  delete(store_key: string): void {
+  async delete(store_key: string): Promise<void> {
     this.#records.delete(store_key);
   }
 
+  /** Record count. Test affordance. */
   size(): number {
     return this.#records.size;
   }

@@ -438,6 +438,60 @@ export type IdentityLinkConfidence = "authoritative" | "candidate";
  * Task reference:
  *   docs/implementation/tasks/P8-002-identity-resolver-v1.md
  */
+/**
+ * Per-identifier campaign touchpoint chain for the attribution engine
+ * (ADR 0005). One row per (project, environment, identifier).
+ *
+ * The `first_*` columns are write-once by convention — first-touch
+ * attribution is anchored to the first observation, so the repository's
+ * UPDATE never names them. The `last_*` columns move on every campaign
+ * delta.
+ *
+ * @see db/migrations/20260811000001_create_attribution_touchpoint_chains.sql
+ */
+export interface AttributionTouchpointChainsTable {
+  /** Project scope. */
+  project_id: string;
+  /** Environment scope. */
+  environment: string;
+  /** Which identifier the chain keys on: customer_id | anonymous_id | session_id. */
+  primary_identifier_kind: string;
+  /** The identifier value itself. */
+  primary_identifier_value: string;
+  /** `touchpoint_id` of the first touchpoint ever seen. Never rewritten. */
+  first_touchpoint_id: string;
+  /**
+   * Campaign tuple of the first touchpoint. `jsonb` rather than six
+   * columns: it is read and written whole, never filtered by component,
+   * and a new click-id vendor would otherwise be a migration.
+   */
+  first_touchpoint_tuple: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  /** Source `event_id` of the first touchpoint. */
+  first_source_event_id: string;
+  /** `occurred_at` of the first touchpoint. */
+  first_observed_at: ColumnType<Date, Date | string, Date | string>;
+  /** `touchpoint_id` of the most recent last-touch assignment. */
+  last_touchpoint_id: string;
+  /** Campaign tuple of the most recent last-touch assignment. */
+  last_touchpoint_tuple: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  /** Source `event_id` of the most recent last-touch assignment. */
+  last_source_event_id: string;
+  /** `occurred_at` of the most recent last-touch assignment. */
+  last_observed_at: ColumnType<Date, Date | string, Date | string>;
+  /** Total observations, including same-tuple repeats. */
+  touchpoint_count: ColumnType<string | number, number | undefined, number>;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 export interface IdentityLinksTable {
   /** UUIDv7 of the link row. Application-generated. */
   link_id: string;
@@ -612,6 +666,7 @@ export interface TransportCheckpointsTable {
 // As migrations land, add a new property here in the same change.
 export interface Database {
   api_keys: ApiKeyTable;
+  attribution_touchpoint_chains: AttributionTouchpointChainsTable;
   destinations: DestinationsTable;
   identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;

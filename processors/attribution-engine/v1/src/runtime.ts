@@ -1,6 +1,6 @@
 /**
  * Streaming runtime: wires KafkaJS consumer → pure transform → KafkaJS
- * producer, with an in-memory touchpoint store layered between.
+ * producer, with the touchpoint store layered between.
  *
  * Shape mirrors `processors/sessionizer/v1/src/runtime.ts` and
  * `processors/identity-resolver/v1/src/runtime.ts` so every Polaris
@@ -33,8 +33,11 @@
  *          failure through its own retry path.
  *
  * The runtime accepts the store as a dependency so tests inject the
- * in-memory adapter and production wires the same adapter. v1 has no
- * Redis variant; a future v2 will swap implementations.
+ * in-memory adapter and production wires the PostgreSQL-backed one
+ * (ADR 0005). The store lookup sits in its own try/catch, separate from
+ * the transform's: a database fault is infrastructure, and labelling it
+ * "decideAttribution failed" would send whoever is on call to the wrong
+ * file.
  *
  * Topic strategy: `attribution.events` is already a canonical topic
  * family in `@polaris/shared-transport`, so the runtime publishes via the
@@ -161,7 +164,7 @@ export interface AttributionEngineRuntime {
   readonly handler: TransportMessageHandler;
   /** Metrics registry the runtime is wired to. */
   readonly metrics: ProcessorMetrics;
-  /** In-memory store the runtime is wired to. Mostly for tests. */
+  /** Store the runtime is wired to. Mostly for tests. */
   readonly store: TouchpointStore;
 }
 
@@ -317,12 +320,29 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   metrics.incrementConsumed(labels);
 
+  // Read the prior chain before deciding, and in its own try: the store
+  // is a database call now (ADR 0005), so a failure here is an
+  // infrastructure fault, not a transform fault. Folding it into the
+  // decision's catch below would label a Postgres outage
+  // "decideAttribution failed" and send whoever is on call to the wrong
+  // file.
+  let prior: Awaited<ReturnType<TouchpointStore["get"]>>;
+  try {
+    prior = await getPrior(store, raw);
+  } catch (err) {
+    handleClassifiedError(err, {
+      payload,
+      context: { ...context, project_id: raw.project_id, environment: raw.environment },
+      metrics,
+      logger,
+      message: "touchpoint chain lookup failed",
+    });
+    throw err;
+  }
+
   let decision: ReturnType<typeof decideAttribution>;
   try {
-    decision = decideAttribution({
-      raw,
-      prior: getPrior(store, raw),
-    });
+    decision = decideAttribution({ raw, prior });
   } catch (err) {
     handleClassifiedError(err, {
       payload,
@@ -369,9 +389,9 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     if (decision.kind === "touchpoint_only") {
       // Same-tuple repeat. Update the store's touchpoint_count and
       // last_observed_at; no further emission.
-      const prior = getPrior(store, raw);
+      const prior = await getPrior(store, raw);
       if (prior !== undefined) {
-        store.set(
+        await store.set(
           decision.store_key,
           buildSameTupleRecord({
             prior,
@@ -442,7 +462,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       });
       metrics.incrementEmitted(labels);
 
-      store.set(
+      await store.set(
         decision.store_key,
         buildFirstObservationRecord({
           project_id: raw.project_id,
@@ -496,9 +516,9 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     });
     metrics.incrementEmitted(labels);
 
-    const prior = getPrior(store, raw);
+    const prior = await getPrior(store, raw);
     if (prior !== undefined) {
-      store.set(
+      await store.set(
         decision.store_key,
         buildDeltaRecord({
           prior,
@@ -587,7 +607,7 @@ export type { AttributionEventEnvelope, AttributionEventName };
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getPrior(
+async function getPrior(
   store: TouchpointStore,
   raw: AnalyticsEventEnvelope,
 ): ReturnType<TouchpointStore["get"]> {
@@ -601,7 +621,7 @@ function getPrior(
     environment: raw.environment,
     primary,
   });
-  return store.get(storeKey);
+  return await store.get(storeKey);
 }
 
 interface ClassifiedErrorContext {
