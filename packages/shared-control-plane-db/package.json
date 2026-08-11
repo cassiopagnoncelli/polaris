@@ -1,0 +1,41 @@
+{
+  "name": "@polaris/shared-control-plane-db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Control-plane data access shared by the polaris CLI and the control-plane API. Owns the audited mutation units of work: the bare writers and insertAuditRecord are internal, so no caller can mutate control-plane state without its audit row.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./unaudited": {
+      "types": "./dist/unaudited.d.ts",
+      "import": "./dist/unaudited.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-control-plane": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "kysely": "^0.29.0",
+    "uuid": "^14.0.0"
+  }
+}

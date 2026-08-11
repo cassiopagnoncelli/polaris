@@ -52,7 +52,7 @@ import {
   type AuditRecordRow,
   findAuditRecordById,
   insertAuditRecord,
-} from "../db/audit-records.js";
+} from "../db/index.js";
 
 /**
  * Input accepted by `recordAudit(...)`.

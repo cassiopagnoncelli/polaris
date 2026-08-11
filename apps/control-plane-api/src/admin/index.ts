@@ -14,6 +14,7 @@ import type { Database } from "@polaris/shared-db";
 import type { FastifyInstance } from "fastify";
 import type { Kysely } from "kysely";
 
+import { type AdminMutations, createKyselyAdminMutations } from "./actions/mutations.js";
 import type { AdminConfig } from "./config.js";
 import { createIdpAuth, type IdpAuth } from "./idp-auth.js";
 import type { IdpOAuthClient } from "./idp-proxy.js";
@@ -36,6 +37,12 @@ export interface RegisterAdminUiOptions {
   readonly idpClient?: IdpOAuthClient | undefined;
   /** Test seam: stubbed refresh-token redemption, no live Idp. */
   readonly refresher?: SessionRefresher | undefined;
+  /**
+   * Audited writes. Built from `db` when absent; pass `null` for an
+   * explicitly read-only panel, in which case the mutation routes are never
+   * registered.
+   */
+  readonly mutations?: AdminMutations | null | undefined;
 }
 
 export async function registerAdminUi(
@@ -44,6 +51,12 @@ export async function registerAdminUi(
 ): Promise<void> {
   const queries = options.queries ?? buildQueries(options.db);
   const idpAuth = options.idpAuth ?? createIdpAuth(options.config.idp);
+  // `undefined` means "build it"; `null` means "read-only, on purpose".
+  const mutations =
+    options.mutations === null
+      ? undefined
+      : (options.mutations ??
+        (options.db !== undefined ? createKyselyAdminMutations(options.db) : undefined));
 
   await app.register(
     createAdminPlugin({
@@ -53,6 +66,7 @@ export async function registerAdminUi(
       environment: options.environment,
       ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
       ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
+      ...(mutations !== undefined ? { mutations } : {}),
     }),
     { prefix: ADMIN_PREFIX },
   );
@@ -67,6 +81,7 @@ function buildQueries(db: Kysely<Database> | undefined): AdminQueries {
   return createKyselyAdminQueries(db);
 }
 
+export type { AdminActor, AdminMutations, MutationOutcome } from "./actions/mutations.js";
 export { type AdminConfig, adminEnvSchema, MINIMUM_PLATFORM_ROLE } from "./config.js";
 export type { AdminContext } from "./guard.js";
 export type { IdpAuth, IdTokenClaims } from "./idp-auth.js";

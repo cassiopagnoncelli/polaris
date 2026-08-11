@@ -1,0 +1,148 @@
+/**
+ * The mutations the admin UI can perform.
+ *
+ * Every one is reversible, already implemented and audited in the CLI, and
+ * routed through `@polaris/shared-control-plane-db`'s `*WithAudit` functions
+ * — so the UI and the CLI write identical SQL, identical audit snapshots, and
+ * identical `action` strings, inside one transaction.
+ *
+ * Nothing irreversible is here, and that is a policy rather than a backlog:
+ *
+ *   - `replay execute` republishes real events to a live topic, fanning out
+ *     to vendor destinations with real end-user effects, and writes no audit
+ *     row today.
+ *   - `dlq retry` republishes a stored envelope to a vendor's redelivery
+ *     queue — again, a real delivery.
+ *   - `clickhouse-rebuild create` issues real INSERT…SELECT into a projection.
+ *   - `keys rotate` kills the old key the instant it commits, with no grace
+ *     period, breaking whatever producer holds it.
+ *
+ * Those stay on the CLI, where an operator has already typed a deliberate
+ * command with flags rather than clicked something.
+ *
+ * `dlq mark-resolved` is absent for a different, duller reason: `dlq_records`
+ * is owned by `@polaris/shared-destinations`, and depending on that package
+ * here would pull the whole destination-delivery stack — RabbitMQ transport
+ * included — into a service that has neither. Duplicating the write instead
+ * would recreate exactly the divergence this package exists to prevent. It
+ * stays CLI-only until the DLQ repository is worth hoisting on its own.
+ */
+
+import {
+  type AuditContext,
+  disableDestinationWithAudit,
+  disableProcessorActivationWithAudit,
+  enableDestinationWithAudit,
+  enableProcessorActivationWithAudit,
+  findActivationByKey,
+  findApiKeyById,
+  findDestinationById,
+  type MutationOutcome,
+  type ProcessorActivationKey,
+  revokeApiKeyWithAudit,
+} from "@polaris/shared-control-plane-db";
+import type { Database } from "@polaris/shared-db";
+import type { Kysely } from "kysely";
+
+export type { MutationOutcome };
+
+/**
+ * Identity and reason for the audit row, as the UI knows it.
+ *
+ * `actorLabel` is the operator's Idp email, taken from the signed,
+ * subject-bound identity cookie. `requestId` is the service's UUIDv7 request
+ * id, which makes the audit row joinable against the structured logs — CLI
+ * rows stamp `request_id = audit_id` because they have no request.
+ */
+export interface AdminActor {
+  readonly auditId: string;
+  readonly actorLabel: string;
+  readonly requestId: string;
+  readonly occurredAt: Date;
+}
+
+export interface AdminMutations {
+  disableDestination(
+    destinationId: string,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  enableDestination(
+    destinationId: string,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  revokeApiKey(apiKeyId: string, reason: string, actor: AdminActor): Promise<MutationOutcome>;
+  enableProcessor(
+    key: ProcessorActivationKey,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  disableProcessor(
+    key: ProcessorActivationKey,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+}
+
+/** Thrown when the target row vanished between the page render and the POST. */
+export class MutationTargetMissing extends Error {
+  constructor(what: string) {
+    super(`${what} no longer exists`);
+    this.name = "MutationTargetMissing";
+  }
+}
+
+export function createKyselyAdminMutations(db: Kysely<Database>): AdminMutations {
+  const context = (actor: AdminActor, reason: string): AuditContext => ({
+    auditId: actor.auditId,
+    // Idp-authenticated operators map to `declared`: `audit_records
+    // .actor_source` is a CHECK-constrained enum with no `idp` member, and
+    // `declared` is what the rest of the platform reads as "an authenticated
+    // human". The email in `actor_label` distinguishes UI writes from CLI
+    // ones without needing a second column.
+    actorSource: "declared",
+    actorLabel: actor.actorLabel,
+    reason,
+    requestId: actor.requestId,
+    occurredAt: actor.occurredAt,
+  });
+
+  return {
+    async disableDestination(destinationId, reason, actor) {
+      const row = await findDestinationById(db, destinationId);
+      if (row === null) throw new MutationTargetMissing("destination");
+      return disableDestinationWithAudit(db, { row, reason }, context(actor, reason));
+    },
+
+    async enableDestination(destinationId, reason, actor) {
+      const row = await findDestinationById(db, destinationId);
+      if (row === null) throw new MutationTargetMissing("destination");
+      return enableDestinationWithAudit(db, { row }, context(actor, reason));
+    },
+
+    async revokeApiKey(apiKeyId, reason, actor) {
+      const row = await findApiKeyById(db, apiKeyId);
+      if (row === null) throw new MutationTargetMissing("api key");
+      return revokeApiKeyWithAudit(db, { row }, context(actor, reason));
+    },
+
+    async enableProcessor(key, reason, actor) {
+      const existing = await findActivationByKey(db, key);
+      return enableProcessorActivationWithAudit(
+        db,
+        { key, existing, changedBy: actor.actorLabel },
+        context(actor, reason),
+      );
+    },
+
+    async disableProcessor(key, reason, actor) {
+      const existing = await findActivationByKey(db, key);
+      return disableProcessorActivationWithAudit(
+        db,
+        { key, existing, changedBy: actor.actorLabel },
+        context(actor, reason),
+      );
+    },
+  };
+}

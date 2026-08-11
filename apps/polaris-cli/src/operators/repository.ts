@@ -27,10 +27,7 @@ import type {
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
 
-import {
-  findOperatorTokenAuthRowById,
-  touchOperatorTokenLastUsedAt,
-} from "../db/operator-tokens.js";
+import { findOperatorTokenAuthRowById, touchOperatorTokenLastUsedAt } from "../db/index.js";
 
 /**
  * Wrap a Kysely client in the resolver's repository contract.

@@ -15,45 +15,21 @@
  */
 
 import type { ResolvedActor } from "@polaris/shared-control-plane";
+import type { AuditRecordsTable } from "@polaris/shared-control-plane-db";
 import type { Database } from "@polaris/shared-db";
-import type { ColumnType, Kysely } from "kysely";
+import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
 /**
  * Typed mirror of the `audit_records` table. Duplicated from
  * `apps/polaris-cli/src/db/audit-records.ts` for the same reason the
- * operator-token augmentation is duplicated in
- * `src/operators/repository.ts`: module augmentation is additive, so
- * both apps may declare the same columns and TypeScript merges
- * without conflict. The migration in
- * `db/migrations/20260512000007_create_audit_records.sql` is the
- * source of truth.
+ * table shape and its `declare module` augmentation now live in
+ * `@polaris/shared-control-plane-db`, which owns them for both this service
+ * and the CLI. They used to be declared here AND in the CLI: module
+ * augmentation is additive, so TypeScript merged the two copies silently —
+ * right up until someone edited one of them.
  */
-export interface AuditRecordsTable {
-  audit_id: string;
-  created_at: ColumnType<Date, string | Date | undefined, never>;
-  actor_source: AuditActorSource;
-  actor_label: string;
-  action: string;
-  target_type: string;
-  target_id: string;
-  project_id: ColumnType<string | null, string | null | undefined, string | null>;
-  environment: ColumnType<
-    AuditEnvironment | null,
-    AuditEnvironment | null | undefined,
-    AuditEnvironment | null
-  >;
-  before: ColumnType<unknown | null, unknown | null | undefined, unknown | null>;
-  after: ColumnType<unknown | null, unknown | null | undefined, unknown | null>;
-  reason: ColumnType<string | null, string | null | undefined, string | null>;
-  request_id: ColumnType<string | null, string | null | undefined, string | null>;
-}
-
-declare module "@polaris/shared-db" {
-  interface Database {
-    audit_records: AuditRecordsTable;
-  }
-}
+export type { AuditRecordsTable };
 
 /**
  * Closed set of audit `actor_source` values, mirroring the

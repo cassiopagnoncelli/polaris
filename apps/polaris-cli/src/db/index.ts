@@ -2,27 +2,66 @@
  * Internal DB surface for the CLI. Re-exported through a small index so the
  * command layer never reaches into `./db/*` directly.
  */
+
+// Moved to @polaris/shared-control-plane-db so the control-plane API and the
+// CLI share one implementation of every control-plane write. Re-exported here
+// unchanged, so no command file had to move with them.
 export {
   type ApiKeyRow,
-  findApiKeyById,
-  type InsertApiKeyInput,
-  insertApiKey,
-  listApiKeysByProjectEnv,
-  revokeApiKey,
-} from "./api-keys.js";
-export {
   AUDIT_ACTOR_SOURCES,
   AUDIT_ENVIRONMENTS,
   type AuditActorSource,
   type AuditEnvironment,
   type AuditRecordRow,
   type AuditRecordsTable,
+  type DestinationRow,
+  findActivationByKey,
+  findApiKeyById,
   findAuditRecordById,
-  type InsertAuditRecordInput,
-  insertAuditRecord,
+  findDestinationById,
+  findOperatorTokenAuthRowById,
+  findOperatorTokenById,
+  type InsertApiKeyInput,
+  type InsertDestinationInput,
+  type InsertOperatorTokenInput,
   type ListAuditRecordsFilter,
+  listActivationsForProcessor,
+  listAllActivations,
+  listAllDestinations,
+  listApiKeysByProjectEnv,
   listAuditRecords,
-} from "./audit-records.js";
+  listDestinationsByProjectEnv,
+  listOperatorTokens,
+  OPERATOR_TOKEN_STATUSES,
+  type OperatorTokenAuthRow,
+  type OperatorTokenRow,
+  type OperatorTokenStatus,
+  type OperatorTokensTable,
+  type ProcessorActivationKey,
+  type ProcessorActivationRow,
+  type UpdateDestinationOpsInput,
+} from "@polaris/shared-control-plane-db";
+// The unaudited writers. CLI commands own their own transactions and write
+// their audit rows inside them; the API cannot reach these at all.
+export {
+  type DisableProcessorActivationInput,
+  disableDestination,
+  disableDestinationReplay,
+  disableProcessorActivation,
+  type EnableProcessorActivationInput,
+  enableDestination,
+  enableDestinationReplay,
+  enableProcessorActivation,
+  type InsertAuditRecordInput,
+  insertApiKey,
+  insertAuditRecord,
+  insertDestination,
+  insertOperatorToken,
+  revokeApiKey,
+  revokeOperatorToken,
+  touchOperatorTokenLastUsedAt,
+  updateDestinationOps,
+} from "@polaris/shared-control-plane-db/unaudited";
 export {
   ABORTABLE_CLICKHOUSE_REBUILD_JOB_STATUSES,
   abortClickhouseRebuildJob,
@@ -43,45 +82,6 @@ export {
   TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
 } from "./clickhouse-rebuild-jobs.js";
 export { type ConnectDbOptions, connectDb, type DbHandle } from "./connect.js";
-export {
-  type DestinationRow,
-  disableDestination,
-  disableDestinationReplay,
-  enableDestination,
-  enableDestinationReplay,
-  findDestinationById,
-  type InsertDestinationInput,
-  insertDestination,
-  listAllDestinations,
-  listDestinationsByProjectEnv,
-  type UpdateDestinationOpsInput,
-  updateDestinationOps,
-} from "./destinations.js";
-export {
-  findOperatorTokenAuthRowById,
-  findOperatorTokenById,
-  type InsertOperatorTokenInput,
-  insertOperatorToken,
-  listOperatorTokens,
-  OPERATOR_TOKEN_STATUSES,
-  type OperatorTokenAuthRow,
-  type OperatorTokenRow,
-  type OperatorTokenStatus,
-  type OperatorTokensTable,
-  revokeOperatorToken,
-  touchOperatorTokenLastUsedAt,
-} from "./operator-tokens.js";
-export {
-  type DisableProcessorActivationInput,
-  disableProcessorActivation,
-  type EnableProcessorActivationInput,
-  enableProcessorActivation,
-  findActivationByKey,
-  listActivationsForProcessor,
-  listAllActivations,
-  type ProcessorActivationKey,
-  type ProcessorActivationRow,
-} from "./processor-activations.js";
 export {
   fetchAllProjects,
   fetchAllSources,

@@ -21,10 +21,23 @@
 import fastifyCookie from "@fastify/cookie";
 import { ProblemError } from "@polaris/shared-service-bootstrap";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { v7 as uuidv7 } from "uuid";
 
+import {
+  checkMutation,
+  describeRefusal,
+  type MutationRefusal,
+  requiredRoleFor,
+} from "./actions/authorize.js";
+import {
+  type AdminActor,
+  type AdminMutations,
+  type MutationOutcome,
+  MutationTargetMissing,
+} from "./actions/mutations.js";
 import { type AdminConfig, MINIMUM_PLATFORM_ROLE } from "./config.js";
 import { createAdminGuard } from "./guard.js";
-import { html, render } from "./html.js";
+import { type Html, html, render } from "./html.js";
 import { AdminIdentityCodec } from "./identity.js";
 import type { IdpAuth } from "./idp-auth.js";
 import {
@@ -36,6 +49,7 @@ import {
 } from "./idp-proxy.js";
 import { type AdminPageContext, barePage, STYLESHEET } from "./layout.js";
 import { verifySameOrigin } from "./origin.js";
+import { actionForm, actionsUnavailable, mutationResultNotice } from "./pages/actions.js";
 import { renderAuditDetailPage, renderAuditPage } from "./pages/audit.js";
 import {
   type LoginReason,
@@ -55,7 +69,7 @@ import {
   platformRoleAtLeast,
   resolvePlatformRole,
 } from "./platform-role.js";
-import type { AdminQueries } from "./queries.js";
+import type { AdminQueries, DestinationRow } from "./queries.js";
 import { createSessionRefresher, type SessionRefresher } from "./refresh.js";
 import {
   ADMIN_PREFIX,
@@ -78,6 +92,12 @@ export interface AdminPluginDeps {
   readonly idpClient?: IdpOAuthClient | undefined;
   /** Test seam: redeems refresh tokens without a live Idp. */
   readonly refresher?: SessionRefresher | undefined;
+  /**
+   * Audited writes. Absent means the panel is read-only — every mutation
+   * route 404s rather than existing and refusing, which is the same posture
+   * the whole plugin takes when the UI is disabled.
+   */
+  readonly mutations?: AdminMutations | undefined;
 }
 
 export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
@@ -344,6 +364,85 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
         };
       };
 
+      /** Audit identity for a mutation, from the guard's resolved context. */
+      const adminActor = (request: FastifyRequest): AdminActor => ({
+        auditId: `polaris_aud_${uuidv7()}`,
+        actorLabel: request.adminContext?.label ?? "unknown",
+        requestId: String(request.id),
+        occurredAt: new Date(),
+      });
+
+      /**
+       * Enable/disable forms for a destination, or an explanation of why the
+       * viewer cannot use them.
+       *
+       * Only the action that would actually change something is offered: a
+       * disabled destination shows "enable" and nothing else, so the form
+       * that would no-op is not there to be submitted.
+       */
+      const destinationActions = (
+        request: FastifyRequest,
+        destination: DestinationRow,
+        options: {
+          refusal?: MutationRefusal;
+          previous?: { confirmation: string; reason: string };
+          only?: "enable" | "disable";
+        } = {},
+      ): Html | undefined => {
+        if (deps.mutations === undefined) return undefined;
+
+        const role = request.adminContext?.role ?? "none";
+        const required = requiredRoleFor(config, destination.environment);
+        if (!platformRoleAtLeast(role, required)) {
+          return html`<h2>Actions</h2>
+            ${actionsUnavailable({ required, actual: role, environment: destination.environment })}`;
+        }
+
+        const base = `${ADMIN_PREFIX}/destinations/${encodeURIComponent(destination.destination_id)}`;
+        const showDisable = destination.status !== "disabled" && options.only !== "enable";
+        const showEnable = destination.status !== "active" && options.only !== "disable";
+
+        return html`<h2>Actions</h2>
+          ${
+            showDisable
+              ? actionForm({
+                  action: `${base}/disable`,
+                  submitLabel: "Disable destination",
+                  expectedConfirmation: destination.instance_label,
+                  description:
+                    "Stops delivery to this destination. Events keep flowing through the pipeline and are not lost; they simply are not sent here until it is enabled again.",
+                  environment: destination.environment,
+                  danger: true,
+                  ...(options.only === "disable" && options.refusal !== undefined
+                    ? { refusal: options.refusal }
+                    : {}),
+                  ...(options.only === "disable" && options.previous !== undefined
+                    ? { previous: options.previous }
+                    : {}),
+                })
+              : null
+          }
+          ${
+            showEnable
+              ? actionForm({
+                  action: `${base}/enable`,
+                  submitLabel: "Enable destination",
+                  expectedConfirmation: destination.instance_label,
+                  description:
+                    "Resumes delivery to this destination and clears its disabled reason.",
+                  environment: destination.environment,
+                  danger: false,
+                  ...(options.only === "enable" && options.refusal !== undefined
+                    ? { refusal: options.refusal }
+                    : {}),
+                  ...(options.only === "enable" && options.previous !== undefined
+                    ? { previous: options.previous }
+                    : {}),
+                })
+              : null
+          }`;
+      };
+
       guarded.get("/", async (request, reply) => {
         const [counts, recentAudit] = await Promise.all([
           deps.queries.counts(),
@@ -422,10 +521,136 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           return sendHtml(
             reply,
             200,
-            renderDestinationDetailPage({ ctx: context(request), destination }),
+            renderDestinationDetailPage({
+              ctx: context(request),
+              destination,
+              actions: destinationActions(request, destination),
+            }),
           );
         },
       );
+
+      // ---- mutations ----------------------------------------------------
+      // Registered only when a mutations implementation is wired, so a
+      // read-only deployment does not carry routes that exist to refuse.
+      if (deps.mutations !== undefined) {
+        const mutations = deps.mutations;
+
+        for (const verb of ["disable", "enable"] as const) {
+          guarded.post<{
+            Params: { destinationId: string };
+            Body: Record<string, unknown>;
+          }>(`/destinations/:destinationId/${verb}`, async (request, reply) => {
+            const origin = verifySameOrigin(request);
+            if (!origin.ok) {
+              request.log.warn({ reason: origin.reason }, "admin mutation refused: cross-origin");
+              return sendHtml(reply, 403, renderOriginRefusedPage());
+            }
+
+            const destination = await deps.queries.findDestination(request.params.destinationId);
+            if (destination === null) {
+              return notFound(reply, `No destination "${request.params.destinationId}".`);
+            }
+
+            const confirmation = formField(request, "confirm");
+            const rawReason = formField(request, "reason");
+
+            // Gate on the ROW's environment, resolved above — a preHandler
+            // would have had to run before the row was known, which is the
+            // hole the service-wide gate falls into. See actions/authorize.ts.
+            const check = checkMutation(config, {
+              rowEnvironment: destination.environment,
+              role: request.adminContext?.role ?? "none",
+              confirmation,
+              expectedConfirmation: destination.instance_label,
+              reason: rawReason,
+            });
+
+            if (!check.ok) {
+              request.log.warn(
+                {
+                  event: "admin.mutation_refused",
+                  action: `destinations.${verb}`,
+                  target: destination.destination_id,
+                  refusal: check.refusal.kind,
+                },
+                describeRefusal(check.refusal),
+              );
+              return sendHtml(
+                reply,
+                check.refusal.kind === "role" ? 403 : 400,
+                renderDestinationDetailPage({
+                  ctx: context(request),
+                  destination,
+                  actions: destinationActions(request, destination, {
+                    refusal: check.refusal,
+                    previous: { confirmation, reason: rawReason },
+                    only: verb,
+                  }),
+                }),
+              );
+            }
+
+            const actor = adminActor(request);
+            let outcome: MutationOutcome;
+            try {
+              outcome =
+                verb === "disable"
+                  ? await mutations.disableDestination(
+                      destination.destination_id,
+                      check.reason,
+                      actor,
+                    )
+                  : await mutations.enableDestination(
+                      destination.destination_id,
+                      check.reason,
+                      actor,
+                    );
+            } catch (err) {
+              if (err instanceof MutationTargetMissing) {
+                return notFound(reply, `No destination "${request.params.destinationId}".`);
+              }
+              throw err;
+            }
+
+            request.log.info(
+              {
+                event: "admin.mutation",
+                action: `destinations.${verb}`,
+                target: destination.destination_id,
+                environment: destination.environment,
+                applied: outcome.applied,
+                audit_id: outcome.auditId,
+                actor: actor.actorLabel,
+              },
+              "admin mutation applied",
+            );
+
+            const fresh =
+              (await deps.queries.findDestination(destination.destination_id)) ?? destination;
+            return sendHtml(
+              reply,
+              200,
+              renderDestinationDetailPage({
+                ctx: context(request),
+                destination: fresh,
+                actions: html`${mutationResultNotice({
+                  applied: outcome.applied,
+                  appliedText:
+                    verb === "disable"
+                      ? `Destination disabled. Delivery has stopped.`
+                      : `Destination enabled. Delivery has resumed.`,
+                  noopText:
+                    verb === "disable"
+                      ? `Already disabled — nothing changed, and no audit record was written.`
+                      : `Already active — nothing changed, and no audit record was written.`,
+                  auditId: outcome.auditId,
+                })}${destinationActions(request, fresh)}`,
+              }),
+            );
+          });
+        }
+      }
 
       guarded.get("/keys", async (request, reply) => {
         const filters = {
@@ -534,6 +759,13 @@ function queryString(request: FastifyRequest, name: string): string {
   if (typeof value === "string") return value.trim();
   if (Array.isArray(value) && typeof value[0] === "string") return value[0].trim();
   return "";
+}
+
+/** Read a urlencoded form field as a string. */
+function formField(request: FastifyRequest, name: string): string {
+  const body = request.body as Record<string, unknown> | undefined;
+  const value = body?.[name];
+  return typeof value === "string" ? value : "";
 }
 
 function blankToUndefined(value: string): string | undefined {

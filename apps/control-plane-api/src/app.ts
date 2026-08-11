@@ -41,6 +41,7 @@ import {
   type ShutdownTask,
 } from "@polaris/shared-service-bootstrap";
 import type { Kysely } from "kysely";
+import type { AdminMutations } from "./admin/actions/mutations.js";
 import type { IdpAuth } from "./admin/idp-auth.js";
 import type { IdpOAuthClient } from "./admin/idp-proxy.js";
 import { registerAdminUi } from "./admin/index.js";
@@ -106,6 +107,11 @@ export interface BuildControlPlaneAppOptions {
    * without a live Idp.
    */
   readonly refresher?: SessionRefresher;
+  /**
+   * Audited admin writes. Built from `db` when omitted; pass `null` for an
+   * explicitly read-only panel.
+   */
+  readonly adminMutations?: AdminMutations | null;
 }
 
 export async function buildControlPlaneApp(
@@ -226,6 +232,7 @@ export async function buildControlPlaneApp(
       ...(options.idpAuth !== undefined ? { idpAuth: options.idpAuth } : {}),
       ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
       ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
+      ...(options.adminMutations !== undefined ? { mutations: options.adminMutations } : {}),
     });
   }
 

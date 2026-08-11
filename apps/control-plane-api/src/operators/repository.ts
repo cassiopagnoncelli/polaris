@@ -17,37 +17,23 @@
  * tail; both stay strictly in the resolver's call frame.
  */
 import type { OperatorTokenRepository, OperatorTokenRow } from "@polaris/shared-control-plane";
+import {
+  OPERATOR_TOKEN_STATUSES,
+  type OperatorTokenStatus,
+  type OperatorTokensTable,
+} from "@polaris/shared-control-plane-db";
 import type { Database } from "@polaris/shared-db";
-import type { ColumnType, Kysely } from "kysely";
+import type { Kysely } from "kysely";
 
+export type { OperatorTokenStatus, OperatorTokensTable };
 /**
- * Typed mirror of the `operator_tokens` table. Duplicated from
- * `apps/polaris-cli/src/db/operator-tokens.ts` for the same reason the
- * CLI declares it: module augmentation is additive, so both apps may
- * declare the augmentation and TypeScript merges them without
- * conflict. The migration in
- * `db/migrations/20260512000009_create_operator_tokens.sql` is the
- * source of truth.
+ * The `operator_tokens` table shape and its `declare module` augmentation
+ * live in `@polaris/shared-control-plane-db`, which owns them for both this
+ * service and the CLI. They used to be declared here AND in the CLI: module
+ * augmentation is additive, so TypeScript merged the two copies silently —
+ * right up until someone edited one of them.
  */
-export const OPERATOR_TOKEN_STATUSES = ["active", "revoked"] as const;
-export type OperatorTokenStatus = (typeof OPERATOR_TOKEN_STATUSES)[number];
-
-export interface OperatorTokensTable {
-  operator_token_id: string;
-  operator_label: string;
-  hash: string;
-  hash_algorithm: ColumnType<string, string | undefined, string>;
-  status: ColumnType<OperatorTokenStatus, OperatorTokenStatus | undefined, OperatorTokenStatus>;
-  created_at: ColumnType<Date, string | Date | undefined, never>;
-  revoked_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null>;
-  last_used_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null>;
-}
-
-declare module "@polaris/shared-db" {
-  interface Database {
-    operator_tokens: OperatorTokensTable;
-  }
-}
+export { OPERATOR_TOKEN_STATUSES };
 
 /**
  * Build a Kysely-backed `OperatorTokenRepository`.
