@@ -36,6 +36,7 @@
     "@polaris/shared-schemas": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
+    "ioredis": "^5.4.2",
     "uuid": "^14.0.0",
     "zod": "^4.4.3"
   }

@@ -8,7 +8,9 @@ import {
   positiveIntSchema,
   postgresEnvSchema,
   type RabbitmqConfig,
+  type RedisConfig,
   rabbitmqEnvSchema,
+  redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -44,22 +46,42 @@ export const sessionizerEnvSchema = z
   .object({
     POLARIS_SESSIONIZER_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-sessionizer-v1"),
     POLARIS_SESSIONIZER_INACTIVITY_SECONDS: positiveIntSchema.default(DEFAULT_INACTIVITY_SECONDS),
+    /**
+     * Redis key namespace for session records. Distinct from the
+     * ingester's dedupe prefix so the two cannot collide in a shared
+     * Redis, and so `SCAN`ing one during an incident does not walk the
+     * other.
+     */
+    POLARIS_SESSIONIZER_REDIS_KEY_PREFIX: nonEmptyStringSchema.default("polaris:session"),
+    /**
+     * Hard deadline per Redis call. Unlike the ingester's dedupe store,
+     * a timeout here fails the message rather than degrading — see the
+     * note in `redis-store.ts` — so this bounds how long a sick Redis
+     * takes to turn into a redelivery instead of a hang.
+     */
+    POLARIS_SESSIONIZER_REDIS_OP_TIMEOUT_MS: positiveIntSchema.default(250),
   })
   .transform(
     (parsed): SessionizerConfig => ({
       consumerGroup: parsed["POLARIS_SESSIONIZER_CONSUMER_GROUP"],
       inactivitySeconds: parsed["POLARIS_SESSIONIZER_INACTIVITY_SECONDS"],
+      redisKeyPrefix: parsed["POLARIS_SESSIONIZER_REDIS_KEY_PREFIX"],
+      redisOpTimeoutMs: parsed["POLARIS_SESSIONIZER_REDIS_OP_TIMEOUT_MS"],
     }),
   );
 
 export interface SessionizerConfig {
   readonly consumerGroup: string;
   readonly inactivitySeconds: number;
+  readonly redisKeyPrefix: string;
+  readonly redisOpTimeoutMs: number;
 }
 
 export const sessionizerEnvKeys = [
   "POLARIS_SESSIONIZER_CONSUMER_GROUP",
   "POLARIS_SESSIONIZER_INACTIVITY_SECONDS",
+  "POLARIS_SESSIONIZER_REDIS_KEY_PREFIX",
+  "POLARIS_SESSIONIZER_REDIS_OP_TIMEOUT_MS",
 ] as const;
 
 /**
@@ -75,6 +97,12 @@ export interface SessionizerRuntimeConfig {
    */
   readonly postgres: PostgresConfig;
   readonly rabbitmq: RabbitmqConfig;
+  /**
+   * Redis connection for the session store. Required since ADR 0005:
+   * session windows live in Redis so they survive a restart and so key
+   * expiry carries the inactivity rule.
+   */
+  readonly redis: RedisConfig;
   readonly sessionizer: SessionizerConfig;
 }
 
@@ -84,6 +112,7 @@ export function sessionizerConfigSchema() {
     http: httpEnvSchema,
     postgres: postgresEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
+    redis: redisEnvSchema,
     sessionizer: sessionizerEnvSchema,
   });
 }

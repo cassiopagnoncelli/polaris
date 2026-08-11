@@ -7,7 +7,7 @@
  *      `identity` block (preference order: customer_id > anonymous_id >
  *      session_id). Events with no usable identifier are dropped.
  *
- *   2. Consult the in-memory session store for an active window keyed
+ *   2. Consult the session store for an active window keyed
  *      on `(project_id, environment, primary_identifier_kind:value)`.
  *
  *   3. Decide between three actions: open a new session, continue an

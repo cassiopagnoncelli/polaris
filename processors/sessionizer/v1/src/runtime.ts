@@ -1,6 +1,6 @@
 /**
  * Streaming runtime: wires KafkaJS consumer → pure transform → KafkaJS
- * producer, with an in-memory session store layered between.
+ * producer, with the session store layered between.
  *
  * Shape mirrors `processors/identity-resolver/v1/src/runtime.ts` so every
  * Polaris processor uses the same per-message contract:
@@ -30,8 +30,9 @@
  *          failure through its own retry path.
  *
  * The runtime accepts the store as a dependency so tests inject the
- * in-memory adapter and production wires the same adapter (v1 has no
- * Redis variant; a future v2 will swap implementations).
+ * in-memory adapter and production wires the Redis-backed one (ADR 0005).
+ * Every write passes the inactivity window as a TTL, so the store forgets
+ * a session at the moment the domain says it is over.
  *
  * Topic strategy: the manifest declares the output family as
  * `session.events`, but `session.events` is NOT in the canonical topic
@@ -367,7 +368,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     environment: raw.environment,
     primary,
   });
-  const prior = store.get(storeKey);
+  const prior = await store.get(storeKey);
 
   let actualDecision: ReturnType<typeof decideSession>;
   try {
@@ -404,7 +405,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         raw_event_id: raw.event_id,
         raw_occurred_at: raw.occurred_at,
       });
-      store.set(storeKey, next);
+      await store.set(storeKey, next, inactivitySeconds);
       // Metric: count the consumed-but-unemitted observation through the
       // emit ledger by NOT incrementing `incrementEmitted`. The
       // `incrementConsumed` above already counted the input.
@@ -458,7 +459,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
         started_at: actualDecision.started_at,
         source_event_id: raw.event_id,
       });
-      store.set(storeKey, opened);
+      await store.set(storeKey, opened, inactivitySeconds);
       metrics.observeHandlerDurationMs(labels, Date.now() - startedAt);
       logger.debug(
         {
@@ -538,7 +539,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       started_at: actualDecision.started.started_at,
       source_event_id: raw.event_id,
     });
-    store.set(storeKey, opened);
+    await store.set(storeKey, opened, inactivitySeconds);
     metrics.observeHandlerDurationMs(labels, Date.now() - startedAt);
     logger.debug(
       {

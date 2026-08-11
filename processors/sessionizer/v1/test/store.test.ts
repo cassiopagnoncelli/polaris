@@ -22,44 +22,66 @@ function makeRecord(overrides: Partial<SessionRecord> = {}): SessionRecord {
   };
 }
 
+const TTL = 1800;
+
 describe("InMemorySessionStore", () => {
-  it("set/get round-trips a record", () => {
+  it("set/get round-trips a record", async () => {
     const store = new InMemorySessionStore();
     const rec = makeRecord();
-    store.set("k", rec);
-    expect(store.get("k")).toEqual(rec);
+    await store.set("k", rec, TTL);
+    expect(await store.get("k")).toEqual(rec);
   });
 
-  it("delete removes a key", () => {
+  it("delete removes a key", async () => {
     const store = new InMemorySessionStore();
-    store.set("k", makeRecord());
-    store.delete("k");
-    expect(store.get("k")).toBeUndefined();
+    await store.set("k", makeRecord(), TTL);
+    await store.delete("k");
+    expect(await store.get("k")).toBeUndefined();
   });
 
-  it("gcExpired returns and removes records older than the inactivity window", () => {
-    const store = new InMemorySessionStore();
-    store.set("fresh", makeRecord({ last_seen_at: "2026-05-12T12:00:00.000Z" }));
-    store.set("stale", makeRecord({ last_seen_at: "2026-05-12T11:00:00.000Z" }));
-    const expired = store.gcExpired({
-      inactivity_seconds: 1800,
-      now: new Date("2026-05-12T12:00:00.000Z"),
-    });
-    expect(expired).toHaveLength(1);
-    expect(expired[0]?.last_seen_at).toBe("2026-05-12T11:00:00.000Z");
-    expect(store.size()).toBe(1);
-    expect(store.get("fresh")).toBeDefined();
-    expect(store.get("stale")).toBeUndefined();
+  it("expires a record once its TTL elapses", async () => {
+    // Redis-equivalent semantics: a key past its TTL reads as absent.
+    // The in-memory adapter must model this or every test passes against
+    // behaviour production does not have.
+    let clock = 1_000_000;
+    const store = new InMemorySessionStore({ now: () => clock });
+    await store.set("k", makeRecord(), TTL);
+
+    clock += TTL * 1000 - 1;
+    expect(await store.get("k")).toBeDefined();
+
+    clock += 1;
+    expect(await store.get("k")).toBeUndefined();
   });
 
-  it("size tracks the number of active records", () => {
-    const store = new InMemorySessionStore();
+  it("re-arms the TTL on every write, so an active session survives", async () => {
+    let clock = 1_000_000;
+    const store = new InMemorySessionStore({ now: () => clock });
+    await store.set("k", makeRecord(), TTL);
+
+    // Write again just before expiry — the window restarts from here.
+    clock += TTL * 1000 - 1;
+    await store.set("k", makeRecord({ event_count: 2 }), TTL);
+
+    clock += TTL * 1000 - 1;
+    expect((await store.get("k"))?.event_count).toBe(2);
+  });
+
+  it("size and snapshot count only live records", async () => {
+    let clock = 1_000_000;
+    const store = new InMemorySessionStore({ now: () => clock });
     expect(store.size()).toBe(0);
-    store.set("a", makeRecord());
-    store.set("b", makeRecord({ session_id: "sess_b" }));
+    await store.set("a", makeRecord(), TTL);
+    await store.set("b", makeRecord({ session_id: "sess_b" }), TTL);
     expect(store.size()).toBe(2);
-    store.delete("a");
+    expect(store.snapshot()).toHaveLength(2);
+
+    await store.delete("a");
     expect(store.size()).toBe(1);
+
+    clock += TTL * 1000 + 1;
+    expect(store.size()).toBe(0);
+    expect(store.snapshot()).toHaveLength(0);
   });
 });
 

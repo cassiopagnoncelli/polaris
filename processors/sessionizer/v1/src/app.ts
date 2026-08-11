@@ -5,7 +5,7 @@
  *
  *   1. Build the logger and KafkaJS client through `@polaris/shared-transport`.
  *   2. Build the `PolarisProducer` and `PolarisConsumer`.
- *   3. Build the in-memory session store (v1 has no Redis variant).
+ *   3. Build the Redis session store (ADR 0005); tests inject their own.
  *   4. Build the streaming runtime (consumer + producer + store + transform).
  *   5. Hand the runtime's `start`/`stop` and the consumer/producer
  *      lifecycles to `bootstrapService`:
@@ -49,8 +49,14 @@ import {
 } from "@polaris/shared-transport";
 
 import type { SessionizerRuntimeConfig } from "./config.js";
+import {
+  buildRedisOptions,
+  createRedisSessionStore,
+  type RedisClientLike,
+  type RedisSessionStore,
+} from "./redis-store.js";
 import { createRuntime, type SessionizerRuntime } from "./runtime.js";
-import { InMemorySessionStore, type SessionStore } from "./store.js";
+import type { SessionStore } from "./store.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
 
 export interface BuildAppOptions {
@@ -121,7 +127,22 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
   const processorLogger = logger.child(processorLogContext({ identity: PROCESSOR_IDENTITY }));
 
   const metrics = new ProcessorMetrics();
-  const store = options.store ?? new InMemorySessionStore();
+
+  // Session state lives in Redis (ADR 0005) so windows survive a restart
+  // and so key expiry carries the inactivity rule. Tests inject an
+  // in-memory store through `options.store`; nothing else may, because a
+  // silent in-memory fallback would look healthy while quietly losing
+  // every session on each deploy — the exact failure this replaced.
+  let ownedStore: RedisSessionStore | undefined;
+  if (options.store === undefined) {
+    ownedStore = createRedisSessionStore({
+      client: await createRedisClient(config, processorLogger),
+      keyPrefix: config.sessionizer.redisKeyPrefix,
+      opTimeoutMs: config.sessionizer.redisOpTimeoutMs,
+      logger: processorLogger,
+    });
+  }
+  const store: SessionStore = options.store ?? (ownedStore as RedisSessionStore);
 
   // ---- consumer + producer --------------------------------------------
   // One AMQP connection per process, shared by the producer and the
@@ -265,8 +286,28 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
     }
     await closeDb(checkpointDb);
   });
+  if (ownedStore !== undefined) {
+    const owned = ownedStore;
+    shutdownTasks.push(async () => {
+      await owned.close();
+    });
+  }
   if (options.shutdownTasks !== undefined) {
     shutdownTasks.push(...options.shutdownTasks);
+  }
+
+  // The session store is on the hot path and its failure mode is a stall,
+  // not a degradation (see redis-store.ts), so an unhealthy Redis must
+  // take the pod out of the ready set rather than let it keep claiming
+  // partitions it cannot serve.
+  const readinessProbes: ReadinessProbe[] = [...(options.readinessProbes ?? [])];
+  if (ownedStore !== undefined) {
+    const owned = ownedStore;
+    readinessProbes.push(async () => ({
+      name: "redis-session-store",
+      status: owned.isHealthy() ? "up" : "down",
+      ...(owned.isHealthy() ? {} : { detail: "redis session store is not connected" }),
+    }));
   }
 
   // ---- Fastify shell ---------------------------------------------------
@@ -286,7 +327,7 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
       bodyLimit: config.http.bodyLimitBytes,
       disableRequestLogging: true,
     },
-    ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
+    ...(readinessProbes.length > 0 ? { readinessProbes } : {}),
     openapi: {
       setup: NOOP_OPENAPI_SETUP,
       metadata: {
@@ -366,6 +407,37 @@ function buildConsumer(
     checkpoints,
   });
   return { consumer, ownsConsumer: true };
+}
+
+/**
+ * Construct the ioredis client for the session store.
+ *
+ * Dynamically imported, mirroring `apps/ingester-api/src/app.ts`, so tests
+ * that inject a store never pull ioredis in. The error handling is the
+ * deliberate opposite of the ingester's: there, a missing ioredis
+ * downgrades to dedupe-disabled, because dedupe is an optimisation. Here
+ * there is no degraded mode — a sessionizer without a store cannot tell a
+ * continuation from a new session, so it must fail to boot rather than
+ * start and be wrong.
+ */
+async function createRedisClient(
+  config: SessionizerRuntimeConfig,
+  logger: Logger,
+): Promise<RedisClientLike> {
+  const ioredisModule = (await import("ioredis")) as unknown as {
+    readonly default?: new (options: ReturnType<typeof buildRedisOptions>) => RedisClientLike;
+  };
+  const IoRedisCtor = ioredisModule.default;
+  if (typeof IoRedisCtor !== "function") {
+    throw new Error(
+      "ioredis does not expose a default-exported constructor; the sessionizer cannot start without its session store (ADR 0005).",
+    );
+  }
+  logger.info(
+    { component: "sessionizer.store", host: config.redis.host, port: config.redis.port },
+    "connecting redis session store",
+  );
+  return new IoRedisCtor(buildRedisOptions(config.redis));
 }
 
 function errSummary(err: unknown): { name?: string; message?: string } {

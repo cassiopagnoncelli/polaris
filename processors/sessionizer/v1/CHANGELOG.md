@@ -23,7 +23,7 @@ the schema convergence plan and the semantic-immutability rule.
 ## v1.0.0 — initial release (P8-003)
 
 - First sessionizer in the Polaris workspace.
-- Consumes `raw.events`, maintains an in-memory inactivity window per
+- Consumes `raw.events`, maintains an inactivity window per
   `(project_id, environment, primary_identifier)`, and emits
   `session.started` / `session.ended` events on `session.events`.
 - Primary-identifier preference order: `customer_id` > `anonymous_id` >
@@ -56,13 +56,17 @@ the schema convergence plan and the semantic-immutability rule.
 
 ### Known v1 limitations
 
-- **In-memory state only.** Process restarts lose active session
-  windows; the next event for a key opens a NEW session rather than
-  resuming the prior window. Acceptable for v1 because (a) the window
-  is short (30 min) so loss is bounded, (b) the processor is replayable
-  from `raw.events`, and (c) the deterministic session_id derivation
-  means a replay reproduces the same output. A Redis-backed v2 will
-  externalize the state store.
+- ~~**In-memory state only.**~~ **Resolved** — session state moved to
+  Redis per ADR 0005. Windows now survive a restart, and key expiry
+  carries the inactivity rule, so `gcExpired()` and the background sweep
+  it anticipated are gone rather than promoted to a timer. The trade is
+  recorded in the ADR: a Redis outage now stalls the sessionizer
+  (messages are redelivered) rather than degrading it, because guessing
+  at a missing prior record would mint a wrong `session_id` for an
+  in-flight session. Note the TTL is wall-clock while `decideSession`
+  compares event time — during replay a record may outlive its
+  event-time window, and the transform still correctly expires it. The
+  TTL bounds storage; the transform owns the decision.
 - **No background timer.** `session.ended` only emits on the next
   observed event for the same key. A key that goes idle and never
   returns will have no `session.ended` emitted in real time. The

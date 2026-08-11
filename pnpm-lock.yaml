@@ -793,6 +793,9 @@ importers:
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../../../packages/shared-transport
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.10.1
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
