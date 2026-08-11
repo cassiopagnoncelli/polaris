@@ -14,7 +14,7 @@
  * keeps the UI's threat model free of plaintext secrets entirely.
  */
 
-import { html } from "../html.js";
+import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ApiKeyRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
@@ -39,7 +39,11 @@ export function renderKeysPage(input: {
       ? emptyRow(8, "No API keys match these filters.")
       : input.keys.map(
           (key) => html`<tr>
-            <td>${mono(key.api_key_id)}</td>
+            <td>
+              <a href="${ADMIN_PREFIX}/keys/${encodeURIComponent(key.api_key_id)}"
+                >${mono(key.api_key_id)}</a
+              >
+            </td>
             <td>${mono(key.project_id)}</td>
             <td>${envBadge(key.environment)}</td>
             <td>${key.source_id}</td>
@@ -100,6 +104,47 @@ export function renderKeysPage(input: {
         transaction commits.
       </p>
       <code class="cli">polaris keys rotate &lt;api_key_id&gt;</code>
+    `,
+  });
+}
+
+export function renderKeyDetailPage(input: {
+  ctx: AdminPageContext;
+  apiKey: ApiKeyRow;
+  actions?: Html | undefined;
+}): string {
+  const key = input.apiKey;
+  return page({
+    ctx: input.ctx,
+    title: `API key · ${key.source_id}`,
+    body: html`
+      <dl class="detail">
+        <dt>Key id</dt>
+        <dd>${mono(key.api_key_id)}</dd>
+        <dt>Project</dt>
+        <dd>
+          <a href="${ADMIN_PREFIX}/projects/${encodeURIComponent(key.project_id)}"
+            >${mono(key.project_id)}</a
+          >
+        </dd>
+        <dt>Environment</dt>
+        <dd>${envBadge(key.environment)}</dd>
+        <dt>Source</dt>
+        <dd>${mono(key.source_id)} <span class="muted">(${key.source_type})</span></dd>
+        <dt>Status</dt>
+        <dd>${statusBadge(key.status)}</dd>
+        <dt>Created</dt>
+        <dd>${formatInstant(key.created_at)}</dd>
+        <dt>Last used</dt>
+        <dd>${formatInstant(key.last_used_at)}</dd>
+        <dt>Revoked</dt>
+        <dd>${formatInstant(key.revoked_at)}</dd>
+      </dl>
+      <p class="muted">
+        Key material is not stored — only an argon2id hash — so it cannot be
+        shown here or anywhere else.
+      </p>
+      ${input.actions ?? null}
     `,
   });
 }

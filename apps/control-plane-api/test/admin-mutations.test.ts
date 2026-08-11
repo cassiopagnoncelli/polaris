@@ -54,6 +54,33 @@ function destination(overrides: Partial<DestinationRow> = {}): DestinationRow {
   };
 }
 
+const API_KEY = {
+  api_key_id: "polaris_ak_1",
+  project_id: "storefront",
+  environment: "production",
+  source_id: "storefront-web",
+  source_type: "web",
+  status: "active",
+  created_at: new Date("2026-01-01T00:00:00Z"),
+  revoked_at: null,
+  last_used_at: null,
+  // Not part of ApiKeyRow. Present so the assertion below is about a real
+  // hash value leaking, not about the page happening to say "argon2id" in
+  // its explanatory copy.
+  hash: "$argon2id$v=19$m=65536$NEVER$RENDER-THIS",
+} as const;
+
+const ACTIVATION = {
+  processor_name: "analytics-projector",
+  processor_version: "v1",
+  project_id: "storefront",
+  environment: "development",
+  enabled_state: "enabled",
+  enabled_at: new Date("2026-01-01T00:00:00Z"),
+  disabled_at: null,
+  last_changed_by: "cli",
+} as const;
+
 function makeAdminConfig(overrides: Partial<AdminConfig> = {}): AdminConfig {
   return {
     enabled: true,
@@ -143,17 +170,14 @@ interface Harness {
   readonly mutations?: AdminMutations | null;
 }
 
-/** Both destination verbs share one spy; everything else must not be called. */
+/** Every mutation shares one spy, so a test asserts on calls, not on which. */
 function stubMutations(spy: ReturnType<typeof vi.fn>): AdminMutations {
-  const notCalled = async (): Promise<MutationOutcome> => {
-    throw new Error("unexpected mutation");
-  };
   return {
     disableDestination: spy as never,
     enableDestination: spy as never,
-    revokeApiKey: notCalled as never,
-    enableProcessor: notCalled as never,
-    disableProcessor: notCalled as never,
+    revokeApiKey: spy as never,
+    enableProcessor: spy as never,
+    disableProcessor: spy as never,
   };
 }
 
@@ -183,8 +207,9 @@ async function buildApp(harness: Harness) {
     listSources: async () => [],
     listDestinations: async () => [],
     findDestination: async (id: string) => (id === harness.row.destination_id ? harness.row : null),
-    listApiKeys: async () => [],
-    listProcessorActivations: async () => [],
+    listApiKeys: async () => [API_KEY],
+    findApiKey: async (id: string) => (id === API_KEY.api_key_id ? API_KEY : null),
+    listProcessorActivations: async () => [ACTIVATION],
     listAudit: async () => [],
     findAudit: async () => null,
     listDlq: async () => [],
@@ -485,6 +510,137 @@ describe("admin mutations — read-only deployment", () => {
     });
     expect(res.body).toContain("Enable destination");
     expect(res.body).not.toContain("Disable destination");
+    await app.app.close();
+  });
+});
+
+describe("admin mutations — API keys", () => {
+  it("revokes a production key for an owner, confirmed by the source id", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/keys/polaris_ak_1/revoke",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({ confirm: "storefront-web", reason: "rotating for the audit" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      "polaris_ak_1",
+      "rotating for the audit",
+      expect.objectContaining({ actorLabel: EMAIL }),
+    );
+    await app.app.close();
+  });
+
+  it("refuses a production key revoke for an admin", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/keys/polaris_ak_1/revoke",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ confirm: "storefront-web", reason: "rotating for the audit" }),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("refuses the key id in place of the source id", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/keys/polaris_ak_1/revoke",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({ confirm: "polaris_ak_1", reason: "rotating for the audit" }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("never renders a hash on the key detail page", async () => {
+    const app = await buildApp({ row: destination(), mutations: null });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/keys/polaris_ak_1",
+      headers: { cookie: sessionCookie("owner") },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("polaris_ak_1");
+    expect(res.body).not.toContain("$argon2id$v=19$m=65536$NEVER$RENDER-THIS");
+    await app.app.close();
+  });
+});
+
+describe("admin mutations — processor activations", () => {
+  it("disables an activation, carrying its four-column key through the form", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/processors/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        name: "analytics-projector",
+        version: "v1",
+        project: "storefront",
+        environment: "development",
+        confirm: "analytics-projector",
+        reason: "investigating a mapping bug",
+      }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(spy).toHaveBeenCalledWith(
+      {
+        processor_name: "analytics-projector",
+        processor_version: "v1",
+        project_id: "storefront",
+        environment: "development",
+      },
+      "investigating a mapping bug",
+      expect.objectContaining({ actorLabel: EMAIL }),
+    );
+    await app.app.close();
+  });
+
+  it("404s an activation key that matches no row", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/processors/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        name: "analytics-projector",
+        version: "v9",
+        project: "storefront",
+        environment: "development",
+        confirm: "analytics-projector",
+        reason: "investigating a mapping bug",
+      }),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("puts the activation key in hidden fields inside the form, not around it", async () => {
+    // A wrapping <form> would be nested markup, which browsers do not submit —
+    // the key would silently never arrive.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/processors/activation?name=analytics-projector&version=v1&project=storefront&environment=development",
+      headers: { cookie: sessionCookie("admin") },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('name="version" value="v1"');
+    // Exactly one <form> in the actions block.
+    expect(res.body.match(/<form method="post" action="\/admin\/processors/g)).toHaveLength(1);
     await app.app.close();
   });
 });

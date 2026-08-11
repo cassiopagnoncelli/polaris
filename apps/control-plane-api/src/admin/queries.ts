@@ -187,6 +187,7 @@ export interface AdminQueries {
   listDestinations(filter: DestinationFilter): Promise<readonly DestinationRow[]>;
   findDestination(destinationId: string): Promise<DestinationRow | null>;
   listApiKeys(filter: ApiKeyFilter): Promise<readonly ApiKeyRow[]>;
+  findApiKey(apiKeyId: string): Promise<ApiKeyRow | null>;
   listProcessorActivations(): Promise<readonly ProcessorActivationRow[]>;
   listAudit(filter: AuditFilter): Promise<readonly AuditRow[]>;
   findAudit(auditId: string): Promise<AuditRow | null>;
@@ -315,6 +316,26 @@ export function createKyselyAdminQueries(db: Kysely<Database>): AdminQueries {
       }
       if (!filter.includeRevoked) query = query.where("status", "=", "active");
       return query.orderBy("created_at", "desc").execute();
+    },
+
+    async findApiKey(apiKeyId: string): Promise<ApiKeyRow | null> {
+      // `hash` is absent here too — see the file header.
+      const row = await db
+        .selectFrom("api_keys")
+        .select([
+          "api_key_id",
+          "project_id",
+          "environment",
+          "source_id",
+          "source_type",
+          "status",
+          "created_at",
+          "revoked_at",
+          "last_used_at",
+        ])
+        .where("api_key_id", "=", apiKeyId)
+        .executeTakeFirst();
+      return row ?? null;
     },
 
     async listProcessorActivations(): Promise<readonly ProcessorActivationRow[]> {

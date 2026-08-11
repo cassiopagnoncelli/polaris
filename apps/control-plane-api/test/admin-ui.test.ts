@@ -212,6 +212,7 @@ function makeQueries(overrides: Partial<AdminQueries> = {}): AdminQueries {
         hash: SECRET_HASH,
       } as never,
     ],
+    findApiKey: async () => null,
     listProcessorActivations: async () => [],
     listAudit: async () => [
       {

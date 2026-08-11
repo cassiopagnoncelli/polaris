@@ -32,6 +32,14 @@ export interface ActionFormInput {
   readonly refusal?: MutationRefusal | undefined;
   /** Values the operator already typed, preserved across a failed attempt. */
   readonly previous?: { confirmation: string; reason: string } | undefined;
+  /**
+   * Extra fields the target needs to identify itself.
+   *
+   * Processor activations are keyed by four columns rather than a single id,
+   * so they ride in the body. They go INSIDE this form — a wrapping form
+   * would be nested markup, which browsers do not submit.
+   */
+  readonly hidden?: Readonly<Record<string, string>> | undefined;
 }
 
 export function actionForm(input: ActionFormInput): Html {
@@ -49,6 +57,13 @@ export function actionForm(input: ActionFormInput): Html {
               This is a <strong>production</strong> resource. The change takes
               effect immediately.
             </p>`
+          : null
+      }
+      ${
+        input.hidden !== undefined
+          ? Object.entries(input.hidden).map(
+              ([name, value]) => html`<input type="hidden" name="${name}" value="${value}" />`,
+            )
           : null
       }
       <p class="muted">${input.description}</p>

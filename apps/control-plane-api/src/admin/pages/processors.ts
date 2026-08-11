@@ -13,9 +13,10 @@
  * dashboard.
  */
 
-import { html } from "../html.js";
+import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ProcessorActivationRow } from "../queries.js";
+import { ADMIN_PREFIX } from "../session.js";
 import { formatInstant } from "./format.js";
 
 export function renderProcessorsPage(input: {
@@ -27,7 +28,9 @@ export function renderProcessorsPage(input: {
       ? emptyRow(7, "No processor activations recorded.")
       : input.activations.map(
           (row) => html`<tr>
-            <td>${mono(row.processor_name)}</td>
+            <td>
+              <a href="${activationHref(row)}">${mono(row.processor_name)}</a>
+            </td>
             <td>${row.processor_version}</td>
             <td>${mono(row.project_id)}</td>
             <td>${envBadge(row.environment)}</td>
@@ -66,6 +69,60 @@ export function renderProcessorsPage(input: {
         <em>polaris-processors</em> dashboard. Processor semantics live in each
         processor's <code>processor.manifest.yaml</code>, not in the database.
       </p>
+    `,
+  });
+}
+
+/** Query-param link to one activation. The key is four fields, not a slug. */
+export function activationHref(row: ProcessorActivationRow): string {
+  const params = new URLSearchParams({
+    name: row.processor_name,
+    version: row.processor_version,
+    project: row.project_id,
+    environment: row.environment,
+  });
+  return `${ADMIN_PREFIX}/processors/activation?${params.toString()}`;
+}
+
+export function renderActivationDetailPage(input: {
+  ctx: AdminPageContext;
+  activation: ProcessorActivationRow;
+  actions?: Html | undefined;
+}): string {
+  const row = input.activation;
+  return page({
+    ctx: input.ctx,
+    title: `${row.processor_name} ${row.processor_version}`,
+    body: html`
+      <dl class="detail">
+        <dt>Processor</dt>
+        <dd>${mono(row.processor_name)}</dd>
+        <dt>Version</dt>
+        <dd>${row.processor_version}</dd>
+        <dt>Project</dt>
+        <dd>
+          <a href="${ADMIN_PREFIX}/projects/${encodeURIComponent(row.project_id)}"
+            >${mono(row.project_id)}</a
+          >
+        </dd>
+        <dt>Environment</dt>
+        <dd>${envBadge(row.environment)}</dd>
+        <dt>State</dt>
+        <dd>${statusBadge(row.enabled_state)}</dd>
+        <dt>Enabled at</dt>
+        <dd>${formatInstant(row.enabled_at)}</dd>
+        <dt>Disabled at</dt>
+        <dd>${formatInstant(row.disabled_at)}</dd>
+        <dt>Last changed by</dt>
+        <dd>${row.last_changed_by}</dd>
+      </dl>
+      <p class="muted">
+        This row is the runtime on/off switch only. What the processor reads,
+        emits, and how it replays live in its
+        <code>processor.manifest.yaml</code> and in code — nothing here can
+        change them.
+      </p>
+      ${input.actions ?? null}
     `,
   });
 }

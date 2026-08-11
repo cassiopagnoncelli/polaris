@@ -60,16 +60,16 @@ import {
 } from "./pages/auth.js";
 import { renderDestinationDetailPage, renderDestinationsPage } from "./pages/destinations.js";
 import { renderDlqDetailPage, renderDlqPage } from "./pages/dlq.js";
-import { renderKeysPage } from "./pages/keys.js";
+import { renderKeyDetailPage, renderKeysPage } from "./pages/keys.js";
 import { renderOverviewPage } from "./pages/overview.js";
-import { renderProcessorsPage } from "./pages/processors.js";
+import { renderActivationDetailPage, renderProcessorsPage } from "./pages/processors.js";
 import { renderProjectDetailPage, renderProjectsPage } from "./pages/projects.js";
 import {
   type PlatformRoleName,
   platformRoleAtLeast,
   resolvePlatformRole,
 } from "./platform-role.js";
-import type { AdminQueries, DestinationRow } from "./queries.js";
+import type { AdminQueries, ApiKeyRow, DestinationRow, ProcessorActivationRow } from "./queries.js";
 import { createSessionRefresher, type SessionRefresher } from "./refresh.js";
 import {
   ADMIN_PREFIX,
@@ -443,6 +443,105 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           }`;
       };
 
+      /** Revoke form for an API key, or why the viewer cannot use it. */
+      const keyActions = (
+        request: FastifyRequest,
+        key: ApiKeyRow,
+        options: {
+          refusal?: MutationRefusal;
+          previous?: { confirmation: string; reason: string };
+        } = {},
+      ): Html | undefined => {
+        if (deps.mutations === undefined) return undefined;
+        if (key.status !== "active") {
+          return html`<h2>Actions</h2>
+            <p class="notice">This key is already revoked.</p>`;
+        }
+
+        const role = request.adminContext?.role ?? "none";
+        const required = requiredRoleFor(config, key.environment);
+        if (!platformRoleAtLeast(role, required)) {
+          return html`<h2>Actions</h2>
+            ${actionsUnavailable({ required, actual: role, environment: key.environment })}`;
+        }
+
+        return html`<h2>Actions</h2>
+          ${actionForm({
+            action: `${ADMIN_PREFIX}/keys/${encodeURIComponent(key.api_key_id)}/revoke`,
+            submitLabel: "Revoke key",
+            expectedConfirmation: key.source_id,
+            description:
+              "Revocation takes effect the moment it commits — there is no grace period, and any producer still using this key stops being able to ingest immediately. Issue its replacement first.",
+            environment: key.environment,
+            danger: true,
+            ...(options.refusal !== undefined ? { refusal: options.refusal } : {}),
+            ...(options.previous !== undefined ? { previous: options.previous } : {}),
+          })}`;
+      };
+
+      /** Resolve one activation from its four-field key in the query string. */
+      const findActivation = async (
+        request: FastifyRequest,
+      ): Promise<ProcessorActivationRow | null> => {
+        const name = queryString(request, "name");
+        const version = queryString(request, "version");
+        const project = queryString(request, "project");
+        const environment = queryString(request, "environment");
+        if (name === "" || version === "" || project === "" || environment === "") return null;
+        const all = await deps.queries.listProcessorActivations();
+        return (
+          all.find(
+            (row) =>
+              row.processor_name === name &&
+              row.processor_version === version &&
+              row.project_id === project &&
+              row.environment === environment,
+          ) ?? null
+        );
+      };
+
+      /** Enable/disable form for an activation, or why the viewer cannot use it. */
+      const activationActions = (
+        request: FastifyRequest,
+        row: ProcessorActivationRow,
+        options: {
+          refusal?: MutationRefusal;
+          previous?: { confirmation: string; reason: string };
+        } = {},
+      ): Html | undefined => {
+        if (deps.mutations === undefined) return undefined;
+
+        const role = request.adminContext?.role ?? "none";
+        const required = requiredRoleFor(config, row.environment);
+        if (!platformRoleAtLeast(role, required)) {
+          return html`<h2>Actions</h2>
+            ${actionsUnavailable({ required, actual: role, environment: row.environment })}`;
+        }
+
+        const enabling = row.enabled_state !== "enabled";
+        const verb = enabling ? "enable" : "disable";
+        return html`<h2>Actions</h2>
+          ${actionForm({
+            action: `${ADMIN_PREFIX}/processors/${verb}`,
+            submitLabel: enabling ? "Enable processor" : "Disable processor",
+            expectedConfirmation: row.processor_name,
+            description: enabling
+              ? "Resumes this processor for this project and environment. Its input stream keeps its checkpoint, so it picks up where it left off rather than dropping what accumulated."
+              : "Stops this processor consuming for this project and environment. The input stream keeps retaining events, so nothing is lost — it simply falls behind until re-enabled.",
+            environment: row.environment,
+            danger: !enabling,
+            // Four columns key an activation, so they ride in the body.
+            hidden: {
+              name: row.processor_name,
+              version: row.processor_version,
+              project: row.project_id,
+              environment: row.environment,
+            },
+            ...(options.refusal !== undefined ? { refusal: options.refusal } : {}),
+            ...(options.previous !== undefined ? { previous: options.previous } : {}),
+          })}`;
+      };
+
       guarded.get("/", async (request, reply) => {
         const [counts, recentAudit] = await Promise.all([
           deps.queries.counts(),
@@ -535,6 +634,209 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       // read-only deployment does not carry routes that exist to refuse.
       if (deps.mutations !== undefined) {
         const mutations = deps.mutations;
+
+        guarded.post<{ Params: { apiKeyId: string }; Body: Record<string, unknown> }>(
+          "/keys/:apiKeyId/revoke",
+          async (request, reply) => {
+            const origin = verifySameOrigin(request);
+            if (!origin.ok) {
+              request.log.warn({ reason: origin.reason }, "admin mutation refused: cross-origin");
+              return sendHtml(reply, 403, renderOriginRefusedPage());
+            }
+
+            const key = await deps.queries.findApiKey(request.params.apiKeyId);
+            if (key === null) return notFound(reply, `No API key "${request.params.apiKeyId}".`);
+
+            const confirmation = formField(request, "confirm");
+            const rawReason = formField(request, "reason");
+            const check = checkMutation(config, {
+              rowEnvironment: key.environment,
+              role: request.adminContext?.role ?? "none",
+              confirmation,
+              // The source id, not the polaris_ak_ identifier: the operator
+              // should be reading which producer they are about to break.
+              expectedConfirmation: key.source_id,
+              reason: rawReason,
+            });
+
+            if (!check.ok) {
+              request.log.warn(
+                {
+                  event: "admin.mutation_refused",
+                  action: "keys.revoke",
+                  target: key.api_key_id,
+                  refusal: check.refusal.kind,
+                },
+                describeRefusal(check.refusal),
+              );
+              return sendHtml(
+                reply,
+                check.refusal.kind === "role" ? 403 : 400,
+                renderKeyDetailPage({
+                  ctx: context(request),
+                  apiKey: key,
+                  actions: keyActions(request, key, {
+                    refusal: check.refusal,
+                    previous: { confirmation, reason: rawReason },
+                  }),
+                }),
+              );
+            }
+
+            const actor = adminActor(request);
+            let outcome: MutationOutcome;
+            try {
+              outcome = await mutations.revokeApiKey(key.api_key_id, check.reason, actor);
+            } catch (err) {
+              if (err instanceof MutationTargetMissing) {
+                return notFound(reply, `No API key "${request.params.apiKeyId}".`);
+              }
+              throw err;
+            }
+
+            request.log.info(
+              {
+                event: "admin.mutation",
+                action: "keys.revoke",
+                target: key.api_key_id,
+                environment: key.environment,
+                applied: outcome.applied,
+                audit_id: outcome.auditId,
+                actor: actor.actorLabel,
+              },
+              "admin mutation applied",
+            );
+
+            const fresh = (await deps.queries.findApiKey(key.api_key_id)) ?? key;
+            return sendHtml(
+              reply,
+              200,
+              renderKeyDetailPage({
+                ctx: context(request),
+                apiKey: fresh,
+                actions: html`${mutationResultNotice({
+                  applied: outcome.applied,
+                  appliedText: "Key revoked. It can no longer authenticate ingest.",
+                  noopText: "Already revoked — nothing changed, and no audit record was written.",
+                  auditId: outcome.auditId,
+                })}${keyActions(request, fresh)}`,
+              }),
+            );
+          },
+        );
+
+        for (const verb of ["enable", "disable"] as const) {
+          guarded.post<{ Body: Record<string, unknown> }>(
+            `/processors/${verb}`,
+            async (request, reply) => {
+              const origin = verifySameOrigin(request);
+              if (!origin.ok) {
+                request.log.warn({ reason: origin.reason }, "admin mutation refused: cross-origin");
+                return sendHtml(reply, 403, renderOriginRefusedPage());
+              }
+
+              const key = {
+                processor_name: formField(request, "name"),
+                processor_version: formField(request, "version"),
+                project_id: formField(request, "project"),
+                environment: formField(request, "environment"),
+              };
+              const all = await deps.queries.listProcessorActivations();
+              const row = all.find(
+                (candidate) =>
+                  candidate.processor_name === key.processor_name &&
+                  candidate.processor_version === key.processor_version &&
+                  candidate.project_id === key.project_id &&
+                  candidate.environment === key.environment,
+              );
+              if (row === undefined) {
+                return notFound(reply, `No processor activation for ${key.processor_name}.`);
+              }
+
+              const confirmation = formField(request, "confirm");
+              const rawReason = formField(request, "reason");
+              const check = checkMutation(config, {
+                rowEnvironment: row.environment,
+                role: request.adminContext?.role ?? "none",
+                confirmation,
+                expectedConfirmation: row.processor_name,
+                reason: rawReason,
+              });
+
+              if (!check.ok) {
+                request.log.warn(
+                  {
+                    event: "admin.mutation_refused",
+                    action: `processors.${verb}`,
+                    target: row.processor_name,
+                    refusal: check.refusal.kind,
+                  },
+                  describeRefusal(check.refusal),
+                );
+                return sendHtml(
+                  reply,
+                  check.refusal.kind === "role" ? 403 : 400,
+                  renderActivationDetailPage({
+                    ctx: context(request),
+                    activation: row,
+                    actions: activationActions(request, row, {
+                      refusal: check.refusal,
+                      previous: { confirmation, reason: rawReason },
+                    }),
+                  }),
+                );
+              }
+
+              const actor = adminActor(request);
+              const outcome =
+                verb === "enable"
+                  ? await mutations.enableProcessor(key, check.reason, actor)
+                  : await mutations.disableProcessor(key, check.reason, actor);
+
+              request.log.info(
+                {
+                  event: "admin.mutation",
+                  action: `processors.${verb}`,
+                  target: row.processor_name,
+                  environment: row.environment,
+                  applied: outcome.applied,
+                  audit_id: outcome.auditId,
+                  actor: actor.actorLabel,
+                },
+                "admin mutation applied",
+              );
+
+              const refreshed = await deps.queries.listProcessorActivations();
+              const fresh =
+                refreshed.find(
+                  (candidate) =>
+                    candidate.processor_name === key.processor_name &&
+                    candidate.processor_version === key.processor_version &&
+                    candidate.project_id === key.project_id &&
+                    candidate.environment === key.environment,
+                ) ?? row;
+
+              return sendHtml(
+                reply,
+                200,
+                renderActivationDetailPage({
+                  ctx: context(request),
+                  activation: fresh,
+                  actions: html`${mutationResultNotice({
+                    applied: outcome.applied,
+                    appliedText:
+                      verb === "enable"
+                        ? "Processor enabled for this project and environment."
+                        : "Processor disabled for this project and environment.",
+                    noopText:
+                      "Already in that state — nothing changed, and no audit record was written.",
+                    auditId: outcome.auditId,
+                  })}${activationActions(request, fresh)}`,
+                }),
+              );
+            },
+          );
+        }
 
         for (const verb of ["disable", "enable"] as const) {
           guarded.post<{
@@ -652,6 +954,20 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
         }
       }
 
+      guarded.get<{ Params: { apiKeyId: string } }>("/keys/:apiKeyId", async (request, reply) => {
+        const key = await deps.queries.findApiKey(request.params.apiKeyId);
+        if (key === null) return notFound(reply, `No API key "${request.params.apiKeyId}".`);
+        return sendHtml(
+          reply,
+          200,
+          renderKeyDetailPage({
+            ctx: context(request),
+            apiKey: key,
+            actions: keyActions(request, key),
+          }),
+        );
+      });
+
       guarded.get("/keys", async (request, reply) => {
         const filters = {
           project: queryString(request, "project"),
@@ -664,6 +980,20 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           includeRevoked: filters.includeRevoked,
         });
         return sendHtml(reply, 200, renderKeysPage({ ctx: context(request), keys, filters }));
+      });
+
+      guarded.get("/processors/activation", async (request, reply) => {
+        const activation = await findActivation(request);
+        if (activation === null) return notFound(reply, "No such processor activation.");
+        return sendHtml(
+          reply,
+          200,
+          renderActivationDetailPage({
+            ctx: context(request),
+            activation,
+            actions: activationActions(request, activation),
+          }),
+        );
       });
 
       guarded.get("/processors", async (request, reply) => {
