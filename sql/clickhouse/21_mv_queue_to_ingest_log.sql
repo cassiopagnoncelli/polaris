@@ -1,5 +1,5 @@
--- Polaris ClickHouse: MV that drains the Kafka Engine queue into the
--- append-only ingest log.
+-- Polaris ClickHouse: MV that drains the ingestion interface table into
+-- the append-only ingest log.
 --
 -- This is one of the two sanctioned readers of
 -- polaris.analytics_events_queue. Application code MUST NOT SELECT
@@ -7,8 +7,9 @@
 --
 -- The MV preserves transport truth verbatim. No filtering, no
 -- deduplication, no transformation beyond stamping diagnostic
--- columns. Duplicate Kafka delivery shows up as duplicate rows here,
--- which is the entire point of the ingest log.
+-- columns. A re-inserted batch (clickhouse-sink retrying after a crash)
+-- shows up as duplicate rows here, which is the entire point of the
+-- ingest log.
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS polaris.analytics_mv_queue_to_ingest_log
 ON CLUSTER '{cluster}'
@@ -30,13 +31,13 @@ SELECT
     properties,
     processor_name,
     processor_version,
-    -- _version defaulting moved here from the queue table: CH 25+ rejects
-    -- DEFAULT on Kafka Engine columns. Producers should populate _version,
-    -- but if they omit it (zero value) we fall back to the ingest timestamp
-    -- so ReplacingMergeTree's collapse logic still sees a monotonic value.
+    -- _version fallback. Producers should populate _version, but if they
+    -- omit it (zero value) we fall back to the ingest timestamp so
+    -- ReplacingMergeTree's collapse logic still sees a monotonic value.
     if(_version = 0, toUnixTimestamp64Milli(ingested_at), _version) AS _version,
-    -- Kafka Engine virtual columns. These are populated by ClickHouse
-    -- for each row pulled from the underlying Kafka consumer.
+    -- Transport lineage, stamped by clickhouse-sink on INSERT. These
+    -- were Kafka Engine virtual columns; the names are unchanged so
+    -- every existing lineage query still resolves.
     now64(3)        AS _consumed_at,
     _topic          AS _topic,
     _partition      AS _partition,

@@ -124,9 +124,10 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  * override via `.env.local` (the Makefile loads it before `make setup`).
  *
  *   POLARIS_CLICKHOUSE_REPLICATED       default '' (local; prod = 'Replicated')
- *   POLARIS_CLICKHOUSE_KAFKA_BROKERS    default 'redpanda:9092' (docker
- *                                       compose hostname); bare-metal
- *                                       sets it to 'localhost:19092'.
+ *
+ * The `kafka_brokers` macro is gone: ClickHouse no longer consumes
+ * anything. `consumers/clickhouse-sink` pushes rows in instead, so the
+ * ingestion interface table has no broker address to substitute.
  *
  * Add new entries to CLIENT_MACROS when introducing a new client-side
  * substitution. Keep the regex `{name}` literal — these are not
@@ -135,7 +136,6 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  */
 const CLIENT_MACROS = [
   { name: "replicated", env: "POLARIS_CLICKHOUSE_REPLICATED", default: "" },
-  { name: "kafka_brokers", env: "POLARIS_CLICKHOUSE_KAFKA_BROKERS", default: "redpanda:9092" },
 ];
 
 export function expandClientMacros(sql) {

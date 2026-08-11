@@ -3,7 +3,7 @@
   "info": {
     "title": "Polaris Ingester API",
     "version": "0.0.1",
-    "description": "Polaris event ingestion API. Authenticates API keys, validates events against the canonical envelope and event catalog, applies the forbidden-field policy, performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`.\n\nThis document is *generated* from Zod sources in the Polaris monorepo. Do not edit by hand — run `pnpm openapi` after changing a Zod schema or a Fastify route.",
+    "description": "Polaris event ingestion API. Authenticates API keys, validates events against the canonical envelope and event catalog, applies the forbidden-field policy, performs short-window dedupe, and publishes accepted events to RabbitMQ `raw.events`.\n\nThis document is *generated* from Zod sources in the Polaris monorepo. Do not edit by hand — run `pnpm openapi` after changing a Zod schema or a Fastify route.",
     "contact": {
       "name": "Polaris Platform",
       "url": "https://github.com/polaris/polaris"
@@ -25,7 +25,7 @@
   "tags": [
     {
       "name": "ingest",
-      "description": "Event ingestion endpoints. The only path that publishes to Redpanda."
+      "description": "Event ingestion endpoints. The only path that publishes to RabbitMQ."
     },
     {
       "name": "operations",
@@ -37,7 +37,7 @@
       "post": {
         "operationId": "ingestEvents",
         "summary": "Ingest a batch of events",
-        "description": "Authenticates the API key, validates each event independently against the canonical envelope and registered `schema_version`, applies the forbidden-field policy (reject vs redact), performs short-window dedupe, and publishes accepted events to Redpanda `raw.events`. Partial acceptance is non-negotiable: one invalid event does not block the rest of the batch — see the `partialAccept` example below.\n\nSee [Ingestion and SDKs](https://github.com/polaris/polaris/blob/main/docs/architecture/04-ingestion-and-sdks.md) for the architectural contract and [SDK handbook](https://github.com/polaris/polaris/blob/main/docs/sdk/README.md) for the client-side perspective.",
+        "description": "Authenticates the API key, validates each event independently against the canonical envelope and registered `schema_version`, applies the forbidden-field policy (reject vs redact), performs short-window dedupe, and publishes accepted events to RabbitMQ `raw.events`. Partial acceptance is non-negotiable: one invalid event does not block the rest of the batch — see the `partialAccept` example below.\n\nSee [Ingestion and SDKs](https://github.com/polaris/polaris/blob/main/docs/architecture/04-ingestion-and-sdks.md) for the architectural contract and [SDK handbook](https://github.com/polaris/polaris/blob/main/docs/sdk/README.md) for the client-side perspective.",
         "tags": [
           "ingest"
         ],
@@ -464,7 +464,7 @@
       "get": {
         "operationId": "getReady",
         "summary": "Readiness probe",
-        "description": "Aggregates registered readiness probes (PostgreSQL, Redis, Redpanda, ...). Returns 200 when every probe reports `up`; returns 503 when any probe is `down` (or `degraded`, by default). Use for container readiness / Kubernetes readiness checks.",
+        "description": "Aggregates registered readiness probes (PostgreSQL, Redis, RabbitMQ, ...). Returns 200 when every probe reports `up`; returns 503 when any probe is `down` (or `degraded`, by default). Use for container readiness / Kubernetes readiness checks.",
         "tags": [
           "operations"
         ],
@@ -789,7 +789,7 @@
           "properties"
         ],
         "additionalProperties": false,
-        "description": "Canonical event envelope. The ingester stamps `project_id`, `environment`, `ingested_at`, and trusted `source.id` from the API key; this is the *post-stamp* shape downstream consumers see in Redpanda `raw.events`.",
+        "description": "Canonical event envelope. The ingester stamps `project_id`, `environment`, `ingested_at`, and trusted `source.id` from the API key; this is the *post-stamp* shape downstream consumers see in RabbitMQ `raw.events`.",
         "example": {
           "event_id": "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
           "event": "payment.approved",

@@ -1,7 +1,8 @@
 -- Polaris ClickHouse: local/dev user bootstrap.
 --
 -- This file is LOCAL ONLY. It creates concrete ClickHouse users tied to
--- the `polaris_service` and `polaris_operator` roles defined in
+-- the `polaris_service`, `polaris_operator`, and `polaris_sink` roles
+-- defined in
 -- sql/clickhouse/roles/00_roles.sql so workspace code (services, the CLI,
 -- the vertical-slice smoke test) can authenticate against the local stack.
 --
@@ -14,8 +15,8 @@
 -- statements below resolve cleanly.
 --
 -- Passwords:
---   The local passwords are deliberately weak ("polaris_service",
---   "polaris_operator"). They are NOT secrets — they exist so that
+--   The local passwords are deliberately weak and equal to the user
+--   name. They are NOT secrets — they exist so that
 --   `@polaris/shared-clickhouse` can connect with a non-default profile in
 --   local/dev. Anything stronger would force a per-developer secret-sharing
 --   step that defeats the "pnpm setup just works" promise.
@@ -45,3 +46,14 @@ CREATE USER IF NOT EXISTS polaris_operator
     DEFAULT ROLE polaris_operator;
 
 GRANT polaris_operator TO polaris_operator;
+
+-- ---------------------------------------------------------------
+-- polaris_sink: the ClickHouse sink's write-only connection.
+-- ---------------------------------------------------------------
+
+CREATE USER IF NOT EXISTS polaris_sink
+    IDENTIFIED WITH plaintext_password BY 'polaris_sink'
+    HOST ANY
+    DEFAULT ROLE polaris_sink;
+
+GRANT polaris_sink TO polaris_sink;

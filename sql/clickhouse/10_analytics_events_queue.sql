@@ -1,27 +1,47 @@
--- Polaris ClickHouse: Kafka Engine ingestion interface
+-- Polaris ClickHouse: ingestion interface table
 --
--- This table is the transport boundary between Redpanda's
--- `analytics.events` topic family and ClickHouse storage. It is a
--- transient ingestion interface only and MUST NOT be queried directly.
--- Materialized views downstream are the only readers.
+-- This table is the transport boundary between the `analytics.events`
+-- stream family and ClickHouse storage. It is a transient ingestion
+-- interface only and MUST NOT be queried directly. Materialized views
+-- downstream are the only readers.
 --
--- Rationale:
---   Kafka Engine reads consume offsets. A direct SELECT from this
---   table would race with the MVs that feed analytics_ingest_log and
---   analytics_raw, leading to lost rows. The architecture docs forbid
---   direct reads (see docs/architecture/07-clickhouse.md, "Query
---   Patterns / What is banned").
+-- ## Why this is a Null engine and not a Kafka engine
 --
--- Format:
---   JSONEachRow is the v1 wire format (see 07-clickhouse.md).
---   Avro/Protobuf + schema registry is honest future work.
+-- Until the RabbitMQ migration this was `ENGINE = Kafka`: ClickHouse
+-- itself held a consumer group against Redpanda and pulled rows. RabbitMQ
+-- streams have no ClickHouse engine, and the AMQP `RabbitMQ` engine that
+-- does exist is a materially weaker thing — it speaks AMQP 0-9-1, has no
+-- offset concept (so no offset-based recovery after a restart), and its
+-- virtual columns are `_channel_id` / `_delivery_tag` rather than the
+-- `_topic` / `_partition` / `_offset` lineage the ingest log records.
 --
--- Topic family:
---   Reads from the shared `analytics.events` topic. Per-project
---   isolation (`analytics.events.<project_id>`) is handled at the
---   shared-kafka resolver layer; if/when a project graduates to a
---   dedicated topic, a sibling Kafka Engine table is created with the
---   same column shape and a project-scoped consumer group.
+-- So Polaris owns the delivery instead: `consumers/clickhouse-sink/v1`
+-- consumes the `analytics.events` partition streams and INSERTs batches
+-- here. The engine is `Null`, which stores nothing and exists purely to
+-- fan INSERTs into the materialized views — the same role the Kafka
+-- engine table played, minus the consuming.
+--
+-- What this changes operationally:
+--
+--   - Lineage columns (`_topic`, `_partition`, `_offset`) are now real
+--     columns stamped by the sink from the stream name, partition index,
+--     and stream offset. Same meaning, same names, explicitly written.
+--   - Recovery is at-least-once via the sink's checkpoint (it advances
+--     only after ClickHouse acknowledges the INSERT), so a crash
+--     re-inserts a batch. `analytics_raw`'s ReplacingMergeTree collapses
+--     it — exactly as it already did for Kafka-engine redelivery.
+--   - Ingestion lag is a Polaris metric
+--     (`polaris_clickhouse_sink_lag_seconds`) rather than a
+--     ClickHouse-internal one.
+--
+-- Format: the sink INSERTs `JSONEachRow`, unchanged from the v1 wire
+-- format (see 07-clickhouse.md). Avro/Protobuf + schema registry remains
+-- honest future work.
+--
+-- Stream family: reads from the shared `analytics.events` family.
+-- Per-project isolation (`analytics.events.<project_id>`) is handled at
+-- the shared-transport resolver layer; an isolated project is an extra
+-- family the sink subscribes to, not a second table here.
 
 CREATE TABLE IF NOT EXISTS polaris.analytics_events_queue ON CLUSTER '{cluster}'
 (
@@ -39,57 +59,38 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_events_queue ON CLUSTER '{cluster}'
     source            String,                  -- JSON object
     identity          String,                  -- JSON object
     context           String,                  -- JSON object
-    -- consent/privacy are informational in v1. ClickHouse 25+ forbids
-    -- DEFAULT/MATERIALIZED/EPHEMERAL on Kafka Engine columns, so omitted
-    -- JSON fields fall back to the type's zero value (empty String) —
-    -- which matches the prior `DEFAULT ''` semantics exactly.
-    consent           String,                  -- JSON object (informational in v1)
-    privacy           String,                  -- JSON object (informational in v1)
-    properties        String,                  -- JSON object
+    -- consent/privacy are informational in v1.
+    consent           String    DEFAULT '',    -- JSON object (informational in v1)
+    privacy           String    DEFAULT '',    -- JSON object (informational in v1)
+    properties        String    DEFAULT '',    -- JSON object
 
     -- Processor metadata stamped by the analytics processor that writes
     -- to `analytics.events`. _version is the monotonic per-event-key
-    -- revision used by ReplacingMergeTree and argMax. Defaulting for
-    -- omitted JSON fields used to live here (`DEFAULT
-    -- toUnixTimestamp64Milli(ingested_at)`); CH 25+ disallows DEFAULT
-    -- on Kafka Engine, so the same fallback now lives in the two MVs
-    -- that read this table (21_mv_queue_to_ingest_log.sql,
-    -- 31_mv_queue_to_raw.sql) — see the `_version` projection there.
+    -- revision used by ReplacingMergeTree and argMax. The Kafka-engine
+    -- era could not carry DEFAULT expressions (CH 25+ forbids them on
+    -- Kafka Engine), so the fallback lived in the two MVs; a Null engine
+    -- has no such restriction, but the MV-side fallback is kept as-is
+    -- rather than moved, because changing where it lives would change
+    -- nothing and risk a silent behaviour difference between the two MVs.
     processor_name    LowCardinality(String),
     processor_version LowCardinality(String),
-    _version          UInt64
+    _version          UInt64    DEFAULT 0,
+
+    -- Transport lineage, stamped by clickhouse-sink. These were Kafka
+    -- Engine virtual columns; they are ordinary columns now.
+    --   _topic      concrete partition stream, e.g. `analytics.events-2`
+    --   _partition  partition index within the super stream
+    --   _offset     RabbitMQ stream offset of the message
+    _topic            LowCardinality(String) DEFAULT '',
+    _partition        UInt16    DEFAULT 0,
+    _offset           UInt64    DEFAULT 0
 )
-ENGINE = Kafka
-SETTINGS
-    -- `{kafka_brokers}` is substituted client-side by the migration
-    -- runner (see scripts/clickhouse-migrate.mjs, expandClientMacros).
-    -- Default is the docker-compose hostname `redpanda:9092`; bare-metal
-    -- setups override via POLARIS_CLICKHOUSE_KAFKA_BROKERS (typically
-    -- `localhost:19092`, matching the host-side port mapping in
-    -- docker-compose.yml). Server-side macro substitution does NOT fire
-    -- inside Kafka Engine SETTINGS values, hence the runner-side
-    -- substitution.
-    kafka_broker_list           = '{kafka_brokers}',
-    kafka_topic_list            = 'analytics.events',
-    kafka_group_name            = 'polaris-clickhouse-analytics',
-    kafka_format                = 'JSONEachRow',
-    kafka_num_consumers         = 1,
-    kafka_max_block_size        = 1048576,
-    kafka_skip_broken_messages  = 0,
-    kafka_thread_per_consumer   = 0,
-    -- Tolerate envelope evolution: skip unknown top-level JSON fields
-    -- rather than failing the whole batch.
-    input_format_skip_unknown_fields = 1,
-    -- The polaris envelope emits ISO-8601 datetimes with a trailing 'Z'
-    -- (`"occurred_at":"2026-05-18T08:14:06.976Z"`). CH 24.x parsed these
-    -- with the `basic` DateTime input format because the parser was lenient
-    -- about the timezone suffix; CH 25+ tightened it and rejects the value
-    -- with `Cannot parse input ... expected '"' before: 'Z'`. `best_effort`
-    -- handles the canonical ISO-8601 shape (and other RFC variants) without
-    -- producer-side changes.
-    date_time_input_format      = 'best_effort';
+-- Null: rows are dropped on write and only reach the materialized views.
+-- Storing them here would double every byte the ingest log already keeps.
+ENGINE = Null;
 
 -- IMPORTANT: do not add SELECT-friendly indexes or run SELECT against
--- this table from application code. The two materialized views below
--- (21_mv_queue_to_ingest_log.sql, 31_mv_queue_to_raw.sql) are the
--- only sanctioned readers.
+-- this table from application code. A Null engine returns nothing on
+-- SELECT by construction; the two materialized views
+-- (21_mv_queue_to_ingest_log.sql, 31_mv_queue_to_raw.sql) are the only
+-- sanctioned readers.

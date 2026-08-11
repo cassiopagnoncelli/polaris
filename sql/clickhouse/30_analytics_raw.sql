@@ -22,7 +22,7 @@
 -- _version:
 --   Monotonic per-event-key revision. Set by the analytics processor
 --   when it writes to `analytics.events`. Defaults to ingestion ms
---   in the Kafka Engine table so out-of-band replays still produce
+--   in the ingestion interface table so out-of-band replays still produce
 --   stable orderings.
 --
 -- TTL:

@@ -349,18 +349,12 @@ describe("end-to-end against the real sql/clickhouse/ tree", () => {
 
 describe("expandClientMacros", () => {
   const originalReplicated = process.env["POLARIS_CLICKHOUSE_REPLICATED"];
-  const originalKafkaBrokers = process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
 
   afterEach(() => {
     if (originalReplicated === undefined) {
       delete process.env["POLARIS_CLICKHOUSE_REPLICATED"];
     } else {
       process.env["POLARIS_CLICKHOUSE_REPLICATED"] = originalReplicated;
-    }
-    if (originalKafkaBrokers === undefined) {
-      delete process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
-    } else {
-      process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = originalKafkaBrokers;
     }
   });
 
@@ -394,29 +388,12 @@ describe("expandClientMacros", () => {
     );
   });
 
-  it("expands {kafka_brokers} to the docker-compose hostname by default", () => {
-    delete process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"];
+  it("no longer substitutes {kafka_brokers} — ClickHouse consumes nothing now", () => {
+    // The Kafka Engine table is gone; consumers/clickhouse-sink pushes
+    // rows in. A leftover macro would silently survive into the DDL, so
+    // the absence is asserted rather than assumed.
     expect(expandClientMacros("kafka_broker_list = '{kafka_brokers}'")).toBe(
-      "kafka_broker_list = 'redpanda:9092'",
-    );
-  });
-
-  it("expands {kafka_brokers} to the bare-metal override when set", () => {
-    process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = "localhost:19092";
-    expect(expandClientMacros("kafka_broker_list = '{kafka_brokers}'")).toBe(
-      "kafka_broker_list = 'localhost:19092'",
-    );
-  });
-
-  it("expands both {replicated} and {kafka_brokers} in the same input", () => {
-    process.env["POLARIS_CLICKHOUSE_REPLICATED"] = "Replicated";
-    process.env["POLARIS_CLICKHOUSE_KAFKA_BROKERS"] = "kafka.prod.svc:9092";
-    const sql =
-      "CREATE TABLE q (x UInt32) ENGINE = Kafka SETTINGS kafka_broker_list = '{kafka_brokers}';\n" +
-      "CREATE TABLE r (x UInt32) ENGINE = {replicated}MergeTree ORDER BY x;";
-    expect(expandClientMacros(sql)).toBe(
-      "CREATE TABLE q (x UInt32) ENGINE = Kafka SETTINGS kafka_broker_list = 'kafka.prod.svc:9092';\n" +
-        "CREATE TABLE r (x UInt32) ENGINE = ReplicatedMergeTree ORDER BY x;",
+      "kafka_broker_list = '{kafka_brokers}'",
     );
   });
 });

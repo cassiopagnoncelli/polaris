@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_ingest_log ON CLUSTER '{cluster}'
     processor_version LowCardinality(String),
     _version          UInt64,
 
-    -- Diagnostic columns: filled by the MV that reads from the Kafka
+    -- Diagnostic columns: filled by the MV that reads from the ingestion
     -- Engine table. These let operators trace a row back to the
     -- transport partition/offset without re-parsing JSON.
     _consumed_at      DateTime64(3, 'UTC') DEFAULT now64(3),

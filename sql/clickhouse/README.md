@@ -15,7 +15,7 @@ configuration that drives environment selection.
 Redpanda analytics.events
     |
     v
-polaris.analytics_events_queue          (Kafka Engine, never queried)
+polaris.analytics_events_queue          (Null engine, never queried)
     |
     +--> MV ----> polaris.analytics_ingest_log   (MergeTree, append-only)
     |
@@ -25,7 +25,7 @@ polaris.analytics_events_queue          (Kafka Engine, never queried)
                   argMax MV ----> projection tables (query surface)
 ```
 
-The Kafka Engine table is **never** queried directly. The two MVs
+The ingestion interface table is **never** queried directly. The two MVs
 that read from it are the only sanctioned consumers. Application
 queries hit projection tables. `analytics_raw` reads only happen
 through the helper-package's `replay` namespace under the
@@ -36,7 +36,7 @@ through the helper-package's `replay` namespace under the
 ```text
 sql/clickhouse/
   00_database.sql                              CREATE DATABASE polaris
-  10_analytics_events_queue.sql                Kafka Engine table
+  10_analytics_events_queue.sql                ingestion interface table
   20_analytics_ingest_log.sql                  append-only ingest log
   21_mv_queue_to_ingest_log.sql                MV: queue -> ingest log
   30_analytics_raw.sql                         ReplacingMergeTree raw facts
@@ -58,7 +58,7 @@ top-down. New objects slot into the appropriate ranges:
 
 ```text
 00-09   database / cluster bootstrap
-10-19   Kafka Engine ingestion tables
+10-19   ingestion interface tables
 20-29   ingest log + its MV
 30-39   analytics_raw + its MV
 40-89   projection tables and their argMax MVs
@@ -105,7 +105,7 @@ The macro files live at
 See [`roles/README.md`](./roles/README.md). The short version:
 
 - `polaris_service`: SELECT on `analytics_ingest_log` and every
-  projection table. No access to `analytics_raw` or the Kafka Engine
+  projection table. No access to `analytics_raw` or the ingestion interface
   table.
 - `polaris_operator`: full read access to `polaris.*` plus
   schema/replay grants.

@@ -12,7 +12,7 @@ database itself refuses unauthorized reads, so there is no
 | `polaris_service` | `analytics_ingest_log`, every projection table | none | ingester, processors, destination consumers, future dashboard API, CLI routine inspection |
 | `polaris_operator` | `polaris.*` (incl. `analytics_raw`), select system tables | `CREATE`, `ALTER`, `DROP`, `INSERT`, `TRUNCATE`, `OPTIMIZE` on `polaris.*` | replay/rebuild jobs, operator investigation, CLI operator commands |
 
-Neither role has direct `SELECT` on the Kafka Engine table
+Neither role has direct `SELECT` on the ingestion interface table
 (`polaris.analytics_events_queue`). The materialized-view pipeline
 is the only sanctioned reader; the architecture forbids application
 or operator code from querying the queue directly.
@@ -88,7 +88,7 @@ This DDL only defines and grants the roles themselves.
 ## What is intentionally NOT granted
 
 - `polaris.analytics_events_queue` — neither role gets `SELECT`. The
-  MV pipeline is the only authorized reader. Querying the Kafka
+  MV pipeline is the only authorized reader. Querying the ingestion interface
   Engine table directly would consume offsets and starve the MVs.
 - `polaris.analytics_raw` for `polaris_service` — the helper's
   `replay` namespace runs `argMax`-based reads against

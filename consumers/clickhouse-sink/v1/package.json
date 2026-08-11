@@ -1,0 +1,41 @@
+{
+  "name": "@polaris/consumer-clickhouse-sink-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris ClickHouse sink v1. Consumes the analytics.events super stream and INSERTs batches into polaris.analytics_events_queue. Replaces the ClickHouse Kafka Engine, which had no RabbitMQ equivalent.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "SPEC.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=clickhouse-sink POLARIS_HTTP_PORT=5010 tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-clickhouse": "workspace:*",
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "kysely": "^0.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {}
+}

@@ -79,6 +79,13 @@ export {
   REBUILDABLE_CLICKHOUSE_PROJECTIONS,
   renderClickhouseRebuildPlanHuman,
 } from "./rebuild/index.js";
+export {
+  ANALYTICS_QUEUE_TABLE,
+  type AnalyticsQueueRow,
+  type AnalyticsSinkWriter,
+  createAnalyticsSinkWriter,
+  type CreateAnalyticsSinkWriterInput,
+} from "./sink.js";
 export type { ReplayReader } from "./replay.js";
 export type {
   AnalyticsIngestLogRow,
