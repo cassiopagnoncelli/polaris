@@ -83,7 +83,6 @@ const ACTIVATION = {
 
 function makeAdminConfig(overrides: Partial<AdminConfig> = {}): AdminConfig {
   return {
-    enabled: true,
     cookieSecure: false,
     sessionSecret: SESSION_SECRET,
     pageSize: 50,
@@ -105,7 +104,7 @@ function makeAdminConfig(overrides: Partial<AdminConfig> = {}): AdminConfig {
   };
 }
 
-function makeConfig(admin: AdminConfig | null): ControlPlaneConfig {
+function makeConfig(admin: AdminConfig): ControlPlaneConfig {
   return {
     service: {
       serviceName: "control-plane-api",

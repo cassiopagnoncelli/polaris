@@ -42,7 +42,6 @@ const SECRET_HASH = "$argon2id$v=19$m=65536,t=3,p=4$NEVER$RENDER-THIS-HASH";
 
 function makeAdminConfig(overrides: Partial<AdminConfig> = {}): AdminConfig {
   return {
-    enabled: true,
     cookieSecure: false,
     sessionSecret: SESSION_SECRET,
     pageSize: 50,
@@ -64,7 +63,7 @@ function makeAdminConfig(overrides: Partial<AdminConfig> = {}): AdminConfig {
   };
 }
 
-function makeConfig(admin: AdminConfig | null): ControlPlaneConfig {
+function makeConfig(admin: AdminConfig): ControlPlaneConfig {
   return {
     service: {
       serviceName: "control-plane-api",
@@ -395,12 +394,14 @@ describe("admin UI — access control", () => {
     await app.app.close();
   });
 
-  it("does not register any admin route when the UI is disabled", async () => {
-    const app = await buildApp({ admin: null });
+  it("is always mounted — there is no flag to forget", async () => {
+    // The panel is the operator surface. An enable flag only ever produces a
+    // deployment where the UI is silently missing and nobody notices until
+    // they need it.
+    const app = await buildApp();
     const res = await app.app.inject({ method: "GET", url: "/admin" });
-    expect(res.statusCode).toBe(404);
-    // The parent scope's Problem handler answers, not the admin HTML one.
-    expect(res.headers["content-type"]).toContain("application/problem+json");
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toContain("/admin/auth/login");
     await app.app.close();
   });
 });

@@ -56,9 +56,27 @@ function makeConfig(
       connectTimeoutMs: 10_000,
       idleTimeoutMs: 30_000,
     },
-    // Admin UI off, which is the deployed default. These cases are about the
-    // JSON API shell; the admin plugin has its own suites.
-    admin: null,
+    // The admin plugin is always mounted; these cases are about the JSON API
+    // shell, and exist partly to prove the two do not interfere.
+    admin: {
+      cookieSecure: false,
+      sessionSecret: "x".repeat(48),
+      pageSize: 50,
+      productionMinRole: "owner",
+      idp: {
+        baseUrl: "http://localhost:3011",
+        issuer: "http://localhost:3011",
+        jwksUrl: "http://localhost:3011/.well-known/jwks.json",
+        clientId: "polaris_test",
+        clientSecret: "secret",
+        redirectUri: "http://localhost:4001/admin/auth/callback",
+        endSessionEndpoint: "http://localhost:3011/oauth/end_session",
+        tokenUrl: "http://localhost:3011/oauth/token",
+        revokeUrl: "http://localhost:3011/oauth/revoke",
+        authorizeUrl: "http://localhost:3011/oauth/authorize",
+        requestTimeoutMs: 10_000,
+      },
+    },
   };
 }
 

@@ -72,13 +72,40 @@ export async function registerAdminUi(
   );
 }
 
+/**
+ * Reads, or a stub that explains itself.
+ *
+ * The panel is always mounted, but `buildControlPlaneApp` only owns a pool
+ * when nothing else was injected — a test that supplies just an
+ * `operatorTokenRepository` to exercise the JSON API has no database, and
+ * should not have to grow an admin fixture to keep compiling.
+ *
+ * Rather than throwing at construction (which would break those tests) or
+ * silently rendering empty pages (which would be worse), the stub fails on
+ * use with a message naming the fix. In a real deployment `db` is always
+ * present, so this is unreachable there.
+ */
 function buildQueries(db: Kysely<Database> | undefined): AdminQueries {
-  if (db === undefined) {
-    throw new Error(
-      "registerAdminUi: pass `db` or `queries`. The admin UI cannot read control-plane state without one.",
-    );
-  }
-  return createKyselyAdminQueries(db);
+  if (db !== undefined) return createKyselyAdminQueries(db);
+
+  const unavailable = async (): Promise<never> => {
+    throw new Error("admin UI has no database: pass `db` or `queries` to buildControlPlaneApp.");
+  };
+  return {
+    counts: unavailable,
+    listProjects: unavailable,
+    findProject: unavailable,
+    listSources: unavailable,
+    listDestinations: unavailable,
+    findDestination: unavailable,
+    listApiKeys: unavailable,
+    findApiKey: unavailable,
+    listProcessorActivations: unavailable,
+    listAudit: unavailable,
+    findAudit: unavailable,
+    listDlq: unavailable,
+    findDlq: unavailable,
+  };
 }
 
 export type { AdminActor, AdminMutations, MutationOutcome } from "./actions/mutations.js";

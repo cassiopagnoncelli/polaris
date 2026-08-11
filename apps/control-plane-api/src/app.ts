@@ -215,26 +215,21 @@ export async function buildControlPlaneApp(
   // ---- routes ----------------------------------------------------------
   registerWhoamiRoute(bootstrap.app);
 
-  // ---- admin UI (opt-in) -----------------------------------------------
-  // Registered last, and only when configured. It mounts as an encapsulated
-  // plugin under /admin, so its cookie parser, form parser, HTML error
-  // handlers, and session guard never reach /v1/* — the JSON API stays
-  // bearer-only and cookie-blind. When `admin` is null the routes are not
-  // registered at all, so /admin/* 404s through the standard Problem handler.
-  // Truthiness rather than `!== null`: a hand-built config fixture that omits
-  // the block entirely should also mean "off", not "on with no settings".
-  if (config.admin) {
-    await registerAdminUi(bootstrap.app, {
-      config: config.admin,
-      environment: config.service.environment,
-      ...(db !== undefined ? { db } : {}),
-      ...(options.adminQueries !== undefined ? { queries: options.adminQueries } : {}),
-      ...(options.idpAuth !== undefined ? { idpAuth: options.idpAuth } : {}),
-      ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
-      ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
-      ...(options.adminMutations !== undefined ? { mutations: options.adminMutations } : {}),
-    });
-  }
+  // ---- admin UI --------------------------------------------------------
+  // Registered last, always. It mounts as an encapsulated plugin under
+  // /admin, so its cookie parser, form parser, HTML error handlers, and
+  // session guard never reach /v1/* — the JSON API stays bearer-only and
+  // cookie-blind, which is why it needs no CSRF story.
+  await registerAdminUi(bootstrap.app, {
+    config: config.admin,
+    environment: config.service.environment,
+    ...(db !== undefined ? { db } : {}),
+    ...(options.adminQueries !== undefined ? { queries: options.adminQueries } : {}),
+    ...(options.idpAuth !== undefined ? { idpAuth: options.idpAuth } : {}),
+    ...(options.idpClient !== undefined ? { idpClient: options.idpClient } : {}),
+    ...(options.refresher !== undefined ? { refresher: options.refresher } : {}),
+    ...(options.adminMutations !== undefined ? { mutations: options.adminMutations } : {}),
+  });
 
   return bootstrap;
 }

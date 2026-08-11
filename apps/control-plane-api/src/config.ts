@@ -25,12 +25,8 @@ export interface ControlPlaneConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
   readonly postgres: PostgresConfig;
-  /**
-   * Admin UI block, or `null` when `POLARIS_ADMIN_UI_ENABLED` is off (the
-   * default). Null means the plugin is never registered, so `/admin/*` does
-   * not exist rather than existing and refusing.
-   */
-  readonly admin: AdminConfig | null;
+  /** Admin UI block. Always present — the panel is not optional. */
+  readonly admin: AdminConfig;
 }
 
 export function controlPlaneConfigSchema() {
