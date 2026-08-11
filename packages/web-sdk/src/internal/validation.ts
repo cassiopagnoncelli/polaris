@@ -21,7 +21,12 @@
  * code into a browser bundle if we shared it.
  */
 
-import { eventNameRegex } from "@polaris/shared-schemas";
+// Imported from the `/envelope` subpath, not the package root: the root
+// barrel re-exports the file-backed catalog loader, which imports `node:fs`,
+// `node:path`, and `yaml`. Bundlers keep those in the module graph and a
+// browser build fails outright ("does not support external modules:
+// node:fs"). The envelope subpath is the SDK-safe surface.
+import { eventNameRegex } from "@polaris/shared-schemas/envelope";
 import type { EventPriority } from "../types.js";
 
 export class ValidationError extends Error {

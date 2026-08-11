@@ -27,6 +27,26 @@ import type { TransportMode } from "../types.js";
 
 export type FlushCallback = (mode: TransportMode) => Promise<unknown>;
 
+/**
+ * Timer defaults, wrapped rather than referenced.
+ *
+ * `window.setTimeout` and friends are native methods that must be invoked
+ * with the global object as their receiver. Storing a bare reference and
+ * calling it as `this.options.setTimeoutFn(...)` hands them the options
+ * object instead, and every browser answers with
+ * `TypeError: Illegal invocation`. The unit suite runs on happy-dom, whose
+ * timers are ordinary functions and never notice.
+ */
+const defaultSetTimeout = (...args: Parameters<typeof setTimeout>): ReturnType<typeof setTimeout> =>
+  setTimeout(...args);
+const defaultClearTimeout = (...args: Parameters<typeof clearTimeout>): void =>
+  clearTimeout(...args);
+const defaultSetInterval = (
+  ...args: Parameters<typeof setInterval>
+): ReturnType<typeof setInterval> => setInterval(...args);
+const defaultClearInterval = (...args: Parameters<typeof clearInterval>): void =>
+  clearInterval(...args);
+
 export interface LifecycleControllerOptions {
   readonly eagerWindowMs: number;
   readonly eagerDebounceMs: number;
@@ -77,10 +97,10 @@ export class LifecycleController {
       window: options.window,
       document: options.document,
       now: options.now ?? (() => Date.now()),
-      setTimeoutFn: options.setTimeoutFn ?? setTimeout,
-      clearTimeoutFn: options.clearTimeoutFn ?? clearTimeout,
-      setIntervalFn: options.setIntervalFn ?? setInterval,
-      clearIntervalFn: options.clearIntervalFn ?? clearInterval,
+      setTimeoutFn: options.setTimeoutFn ?? defaultSetTimeout,
+      clearTimeoutFn: options.clearTimeoutFn ?? defaultClearTimeout,
+      setIntervalFn: options.setIntervalFn ?? defaultSetInterval,
+      clearIntervalFn: options.clearIntervalFn ?? defaultClearInterval,
     };
   }
 

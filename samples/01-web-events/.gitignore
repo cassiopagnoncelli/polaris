@@ -1,0 +1,17 @@
+# Each sample installs its own dependency tree — it is not part of the
+# pnpm workspace, so it carries its own node_modules and lockfile.
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Next.js build output
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Local secrets (the sample reads a real Polaris API key from here)
+.env
+.env.local
+.env.*.local

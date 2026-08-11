@@ -23,6 +23,7 @@ Both are thin transport and identity helpers. They are not analytics engines: th
 - [WebView and Mobile](./webview-and-mobile.md) — best-effort delivery in embedded browsers
 - [Governance](./governance.md) — `schema_version`, deprecation, forbidden fields, consent
 - [Troubleshooting](./troubleshooting.md) — common pitfalls and how to diagnose them
+- [Samples](../../samples/README.md) — three runnable Next.js apps: browser SDK, Node SDK, and a first-party relay
 
 ## Quickstart
 

@@ -104,6 +104,9 @@ const PERMANENT_REJECTION_REASONS = new Set([
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+const defaultFetch = (...args: Parameters<typeof fetch>): ReturnType<typeof fetch> =>
+  fetch(...args);
+
 export class HttpsTransport implements Transport {
   private readonly endpoint: string;
   private readonly apiKey: string;
@@ -123,7 +126,11 @@ export class HttpsTransport implements Transport {
     this.apiKey = options.apiKey;
     this.userAgent = options.userAgent;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const fetchFn = options.fetch ?? (typeof fetch !== "undefined" ? fetch : undefined);
+    // `defaultFetch` wraps rather than references the global: `fetch` is a
+    // native method of the window and throws `TypeError: Illegal invocation`
+    // when called with any other receiver — which is what
+    // `this.fetchFn(...)` would give it.
+    const fetchFn = options.fetch ?? (typeof fetch !== "undefined" ? defaultFetch : undefined);
     if (fetchFn === undefined) {
       throw new Error(
         "HttpsTransport: no fetch implementation available — pass `fetch` in options",
