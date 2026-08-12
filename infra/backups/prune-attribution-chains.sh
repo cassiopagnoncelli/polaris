@@ -30,11 +30,29 @@
 #   POLARIS_PRUNE_ENV          unset           restrict to one environment
 #   POLARIS_PRUNE_IDLE_SECONDS unset           override the window (longer only)
 #   POLARIS_PRUNE_DRY_RUN      unset           set to 1 to count without deleting
+#   POLARIS_OPERATOR_TOKEN     unset           required when POLARIS_PRUNE_ENV
+#                                              is unset or `production`
 #   POLARIS_CLI                default `polaris` on PATH
 #
 # Database connection comes from the CLI's own resolution
 # (`POLARIS_DATABASE_URL` / `DATABASE_URL`, or the POLARIS_POSTGRES_*
 # variables). This script deliberately does not re-implement it.
+#
+# ## The token requirement
+#
+# Leaving POLARIS_PRUNE_ENV unset means "every environment", which
+# includes production — so the CLI treats an unscoped prune as a
+# production mutation and refuses it without an operator token. That is
+# deliberate: an unattended job that can delete production rows should
+# carry a credential naming who authorised it, and the audit row then
+# records `operator_token` rather than a bare `cli`.
+#
+# Two ways to satisfy it, both fine:
+#
+#   - put POLARIS_OPERATOR_TOKEN in the env file (root-owned, 0600), or
+#   - schedule one entry per environment with POLARIS_PRUNE_ENV set, in
+#     which case only the production entry needs the token. That is what
+#     `crontab.example` does.
 #
 # ## Scheduling
 #

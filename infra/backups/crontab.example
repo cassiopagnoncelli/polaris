@@ -53,7 +53,19 @@ MAILTO=""
 # shorter than the version's window. That is deliberate: a retention job that
 # silently succeeds while pruning nothing is worse than one that pages. Do not
 # add `|| true`.
-17 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+# Scoped per environment on purpose. An UNSCOPED prune (no
+# POLARIS_PRUNE_ENV) means every environment including production, so the
+# CLI treats it as a production mutation and refuses it without an
+# operator token. Splitting the entries keeps the credential on the one
+# job that needs it, instead of handing a production token to a job that
+# only ever touches development.
+17 3 * * *  polaris  set -a; . /etc/polaris/retention.env; POLARIS_PRUNE_ENV=development; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+22 3 * * *  polaris  set -a; . /etc/polaris/retention.env; POLARIS_PRUNE_ENV=staging;     set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+
+# Production carries POLARIS_OPERATOR_TOKEN, which is why it sources a
+# second, tighter file. Keep that one root-owned and 0600 — it holds a
+# credential that can delete rows.
+27 3 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; POLARIS_PRUNE_ENV=production; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
 
 # --- Not scheduled here ----------------------------------------------------
 #
