@@ -32,6 +32,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ProcessorRunScope } from "../src/db/index.js";
 import {
+  buildProcessorsChainsPruneRunner,
   buildProcessorsDisableRunner,
   buildProcessorsEnableRunner,
   buildProcessorsListRunner,
@@ -1406,5 +1407,70 @@ describe("loadProcessorManifests / loadProcessorManifest", () => {
       transform: { rule: "smuggled-in" },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("processors chains-prune: production gate on an unscoped prune", () => {
+  function pruneStore(calls: string[]) {
+    return {
+      prune: async (input: { environment?: string | null; dryRun: boolean }) => {
+        calls.push(`prune env=${String(input.environment)} dry=${String(input.dryRun)}`);
+        return {
+          applied: true,
+          rows: 1,
+          idleSeconds: 7776000,
+          cutoff: new Date("2026-05-14T00:00:00.000Z"),
+          dryRun: input.dryRun,
+        };
+      },
+      close: async () => undefined,
+    };
+  }
+
+  it("refuses an unscoped prune when the actor is unauthenticated", async () => {
+    // Found by scheduling the job for real: `--env` on this command is a
+    // SCOPE filter, so omitting it means every environment — production
+    // included — while declaring no environment to the dispatcher's gate.
+    // An unauthenticated caller deleted a production row.
+    const calls: string[] = [];
+    const capture = captureOutput();
+    const run = buildProcessorsChainsPruneRunner({ openStore: () => pruneStore(calls) });
+    await expect(
+      run(
+        { version: "v2" },
+        { ...makeContext(capture.streams), actor: { source: "cli", label: "cli" } },
+      ),
+    ).rejects.toThrow(/production mutation refused/);
+    expect(calls).toEqual([]);
+  });
+
+  it("allows an unscoped prune for an authenticated operator", async () => {
+    const calls: string[] = [];
+    const capture = captureOutput();
+    const run = buildProcessorsChainsPruneRunner({ openStore: () => pruneStore(calls) });
+    await run(
+      { version: "v2" },
+      {
+        ...makeContext(capture.streams),
+        actor: { source: "operator_token", label: "alice@polaris.dev" },
+      },
+    );
+    expect(calls).toEqual(["prune env=null dry=false"]);
+  });
+
+  it("allows a scoped non-production prune without a token", async () => {
+    const calls: string[] = [];
+    const capture = captureOutput();
+    const run = buildProcessorsChainsPruneRunner({ openStore: () => pruneStore(calls) });
+    await run({ version: "v2", env: "development" }, makeContext(capture.streams));
+    expect(calls).toEqual(["prune env=development dry=false"]);
+  });
+
+  it("allows an unscoped DRY RUN without a token, since it deletes nothing", async () => {
+    const calls: string[] = [];
+    const capture = captureOutput();
+    const run = buildProcessorsChainsPruneRunner({ openStore: () => pruneStore(calls) });
+    await run({ version: "v2", dryRun: true }, makeContext(capture.streams));
+    expect(calls).toEqual(["prune env=null dry=true"]);
   });
 });

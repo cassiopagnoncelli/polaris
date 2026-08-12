@@ -297,6 +297,12 @@ export {
   type OperatorsRevokeStore,
 } from "./commands/operators/revoke.js";
 export {
+  buildProcessorsChainsPruneRunner,
+  type ChainsPruneArgs,
+  type ChainsPruneHooks,
+  type ChainsPruneStore,
+} from "./commands/processors/chains-prune.js";
+export {
   buildProcessorsDisableRunner,
   type ProcessorsDisableHooks,
   type ProcessorsDisableStore,

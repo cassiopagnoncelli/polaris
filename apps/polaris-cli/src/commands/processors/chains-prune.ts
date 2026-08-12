@@ -19,6 +19,7 @@
  * `mutates: true`, so P6-007 gates it against production-without-token.
  */
 
+import { type ActorSource, enforceProductionMutationGate } from "@polaris/shared-control-plane";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -45,6 +46,7 @@ export interface ChainsPruneStore {
     environment?: string | null;
     dryRun: boolean;
     actorLabel: string;
+    actorSource: ActorSource;
   }): Promise<{
     applied: boolean;
     rows: number;
@@ -107,6 +109,25 @@ export function buildProcessorsChainsPruneRunner(hooks: ChainsPruneHooks = {}) {
     }
 
     const dryRun = args.dryRun ?? false;
+
+    // An unscoped prune deletes production rows, so it must clear the
+    // production gate — but the dispatcher's gate never fires for it. The
+    // gate reads the environment from `--env`, and on THIS command `--env`
+    // is a scope filter: omitting it means "every environment", including
+    // production. So the run declared no environment while doing the most
+    // far-reaching thing it can do, and an unauthenticated caller deleted
+    // production chains. Found by running the scheduled job for real.
+    //
+    // Re-enforcing here rather than reimplementing the rule: same
+    // function, same refusal, same message. A dry run is exempt — it
+    // reads and deletes nothing.
+    if (!dryRun && args.env === undefined) {
+      enforceProductionMutationGate({
+        command: { id: "processors.chains-prune", mutates: true },
+        environment: "production",
+        actor: ctx.actor,
+      });
+    }
     const store = (hooks.openStore ?? (() => defaultStore(ctx.env)))();
     try {
       const outcome = await store.prune({
@@ -116,6 +137,9 @@ export function buildProcessorsChainsPruneRunner(hooks: ChainsPruneHooks = {}) {
         environment: args.env ?? null,
         dryRun,
         actorLabel: ctx.actor.label,
+        // The real credential, not a hardcoded "cli". An operator token
+        // that authenticated this prune should say so in the audit row.
+        actorSource: ctx.actor.source,
       });
 
       const scope = [
@@ -164,7 +188,7 @@ function defaultStore(env: NodeJS.ProcessEnv): ChainsPruneStore {
         },
         {
           auditId: `polaris_aud_${uuidv7()}`,
-          actorSource: "cli",
+          actorSource: input.actorSource,
           actorLabel: input.actorLabel,
           occurredAt: new Date(),
         },

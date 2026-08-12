@@ -273,7 +273,12 @@ export function renderProcessorsPage(input: {
       <h2>Activations</h2>
       ${filterForm(`${ADMIN_PREFIX}/processors`, [
         textField("project", "Project", input.filters.project),
-        selectField("environment", "Environment", ACTIVATION_ENVIRONMENTS, input.filters.environment),
+        selectField(
+          "environment",
+          "Environment",
+          ACTIVATION_ENVIRONMENTS,
+          input.filters.environment,
+        ),
       ])}
       ${
         omitted > 0
