@@ -4,3 +4,8 @@ packages:
   - "processors/*/*"
   - "consumers/*/*"
   - "tests"
+allowBuilds:
+  # esbuild arrives transitively via tsx and vite/vitest. Its install script only
+  # links the prebuilt @esbuild/<platform> binary that pnpm already fetched as an
+  # optional dep — no network fetch, no codegen — so it is safe to run.
+  esbuild: true
