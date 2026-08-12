@@ -1,8 +1,8 @@
 /**
- * P8-006: cross-processor manifest validation for attribution-engine v1.
+ * Manifest validation for attribution-engine v2.
  *
  * Loads the on-disk `processor.manifest.yaml` and asserts the field set
- * that every released v1 processor MUST carry. See
+ * that every released processor MUST carry. See
  * `docs/development/processor-manifests.md`.
  */
 
@@ -16,16 +16,16 @@ const __filename = fileURLToPath(import.meta.url);
 const PROCESSOR_DIR = resolve(dirname(__filename), "..");
 const REPO_ROOT = resolve(PROCESSOR_DIR, "..", "..", "..");
 
-describe("attribution-engine v1 manifest", () => {
+describe("attribution-engine v2 manifest", () => {
   const loaded = loadProcessorManifest({
     root: REPO_ROOT,
     name: "attribution-engine",
-    version: "v1",
+    version: "v2",
   });
 
   it("carries the expected identity fields", () => {
     expect(loaded.manifest.name).toBe("attribution-engine");
-    expect(loaded.manifest.version).toBe("v1");
+    expect(loaded.manifest.version).toBe("v2");
     expect(loaded.manifest.owner).toBe("platform-data");
   });
 
@@ -65,5 +65,16 @@ describe("attribution-engine v1 manifest", () => {
     });
     expect(validation.issues).toEqual([]);
     expect(validation.resolvedPaths.length).toBe((loaded.manifest.fixtures ?? []).length * 2);
+  });
+  it("declares the attribution window and its unit in the description", () => {
+    // The window is the whole reason v2 exists. If the manifest does not
+    // state it, the semantic definition of this version is incomplete.
+    const d = loaded.manifest.description ?? "";
+    expect(d).toMatch(/90 days/);
+    expect(d).toMatch(/INACTIVITY GAP/);
+  });
+
+  it("names a v2 consumer group, so a cutover does not inherit v1's offsets", () => {
+    expect(loaded.manifest.defaults?.consumer_group).toBe("polaris-attribution-engine-v2");
   });
 });

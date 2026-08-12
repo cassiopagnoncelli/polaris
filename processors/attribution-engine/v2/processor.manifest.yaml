@@ -1,4 +1,4 @@
-# Polaris processor manifest — attribution-engine v1
+# Polaris processor manifest — attribution-engine v2
 #
 # This manifest is the SEMANTIC definition for the attribution-engine
 # processor, version 1. Per docs/architecture/05-processors-and-replay.md
@@ -14,7 +14,7 @@
 # "Processor Configuration".
 
 name: attribution-engine
-version: v1
+version: v2
 owner: platform-data
 # P8-006: closed-set release lifecycle flag. `released` means this version
 # is the production semantics; any output-changing fix is a new version
@@ -22,12 +22,46 @@ owner: platform-data
 # Versioning". See docs/development/processor-manifests.md.
 release_status: released
 description: |
-  First attribution processor in Polaris. Consumes `analytics.events`
-  (the analytics-projector's downstream stream of canonical envelopes
-  that have already been processor-stamped) and maintains an in-memory
-  touchpoint chain per `(project_id, environment, primary_identifier)`
-  tuple. The processor is intentionally CONSERVATIVE and DETERMINISTIC
-  in v1.
+  Attribution processor with a bounded attribution window. Consumes
+  `analytics.events` (the analytics-projector's downstream stream of
+  canonical envelopes that have already been processor-stamped) and
+  maintains a touchpoint chain per `(project_id, environment,
+  primary_identifier)` tuple in PostgreSQL.
+
+  THE ONLY SEMANTIC DIFFERENCE FROM v1: a 90-day inactivity window.
+
+  Attribution window: 7776000 seconds (90 days), measured as an
+  INACTIVITY GAP. A chain resets when the gap between an incoming
+  event's `occurred_at` and the chain's `last_observed_at` exceeds the
+  window; the next touchpoint then opens a new chain and is assigned
+  first touch. v1 had no window — a chain was consulted however old it
+  was, so an identifier's first campaign kept first-touch credit
+  forever.
+
+  Inactivity rather than absolute chain age: an absolute cap resets
+  users mid-journey (weekly touches for a year would produce an
+  arbitrary new first touch every quarter), whereas a gap only fires
+  once the journey has actually gone quiet. It also makes retention and
+  semantics the same number — a row idle longer than the window can
+  never be consulted again, so trimming it is provably free of semantic
+  effect. That property is what v1 lacked and why its chain table could
+  not be trimmed.
+
+  90 days because Polaris holds the superset and each destination
+  narrows to its own vendor window (Meta 7-day click / 1-day view,
+  Google Ads 30-day, GA4 90-day acquisition). A shorter platform window
+  cannot be widened after the fact; a longer one is only storage. It
+  sits inside `analytics_processed`'s 400-day TTL, so replay can rebuild
+  any chain the window dropped.
+
+  The window is a MANIFEST constant with no env override. Per the header
+  above, PostgreSQL and env carry runtime configuration and never
+  semantic transformation rules; a deployment-level knob could silently
+  change which events receive first touch. Changing the window is a v3.
+
+  Everything else — identifier preference, touchpoint detection, the
+  three emitted event kinds, tuple-delta logic — is unchanged from v1.
+  The processor remains CONSERVATIVE and DETERMINISTIC.
 
   Why consume `analytics.events` and not `raw.events`:
   - `analytics.events` already carries processor metadata so attribution
@@ -72,9 +106,13 @@ description: |
   Touchpoint id derivation:
   `touchpoint_id = "tp_" + sha256(source_event_id ++ canonical_campaign_tuple)[0..32]`.
   Replays of the same `analytics.events` slice produce the same
-  `touchpoint_id` byte-for-byte.
+  `touchpoint_id` byte-for-byte. The hash material is version-scoped, so
+  v2 ids differ from v1 ids for the same input — during a dual-run that
+  is the point: which engine emitted a touchpoint is readable from the
+  id itself. Join on the source `event_id` in properties to compare the
+  two versions' output over the same slice.
 
-  v1 deliberately does NOT decide what constitutes a "conversion". The
+  v2 deliberately does NOT decide what constitutes a "conversion". The
   processor only surfaces the touchpoint chain; downstream analytics
   joins last-touch / first-touch events to commerce events on
   `(project_id, environment, primary_identifier, occurred_at)` using
@@ -114,16 +152,13 @@ outputs:
 
 # State stores this processor uses.
 state_stores:
-  # Non-semantic correction: state moved from an in-process map to
-  # PostgreSQL per ADR 0005. Where state lives does not change what
-  # this version emits for a given input, so it is not a v2 trigger.
   - postgres:attribution_touchpoint_chains
 
 # Operational defaults the runtime helpers fall back to when no
 # PostgreSQL activation row overrides them. Non-semantic per the
 # architecture doc ("Processor Configuration").
 defaults:
-  consumer_group: polaris-attribution-engine-v1
+  consumer_group: polaris-attribution-engine-v2
   partitions_consumed_concurrently: 1
 
 # Replay metadata. The engine is replayable from analytics.events. The
