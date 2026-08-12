@@ -105,6 +105,7 @@ export function renderDlqDetailPage(input: {
   return page({
     ctx: input.ctx,
     title: `DLQ · ${row.reason}`,
+    breadcrumb: [{ label: "DLQ", href: `${ADMIN_PREFIX}/dlq` }, { label: row.dlq_id }],
     body: html`
       <dl class="detail">
         <dt>DLQ id</dt>

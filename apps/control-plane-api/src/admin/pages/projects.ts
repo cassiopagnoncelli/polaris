@@ -129,6 +129,10 @@ export function renderProjectDetailPage(input: {
   return page({
     ctx: input.ctx,
     title: project.display_name,
+    breadcrumb: [
+      { label: "Projects", href: `${ADMIN_PREFIX}/projects` },
+      { label: project.project_id },
+    ],
     body: html`
       <dl class="detail">
         <dt>Project id</dt>

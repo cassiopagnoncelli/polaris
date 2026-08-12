@@ -117,6 +117,7 @@ export function renderKeyDetailPage(input: {
   return page({
     ctx: input.ctx,
     title: `API key · ${key.source_id}`,
+    breadcrumb: [{ label: "API keys", href: `${ADMIN_PREFIX}/keys` }, { label: key.api_key_id }],
     body: html`
       <dl class="detail">
         <dt>Key id</dt>

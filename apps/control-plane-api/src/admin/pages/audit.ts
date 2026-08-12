@@ -98,6 +98,10 @@ export function renderAuditDetailPage(input: { ctx: AdminPageContext; record: Au
   return page({
     ctx: input.ctx,
     title: record.action,
+    breadcrumb: [
+      { label: "Audit", href: `${ADMIN_PREFIX}/audit` },
+      { label: record.audit_id },
+    ],
     body: html`
       <dl class="detail">
         <dt>Audit id</dt>
