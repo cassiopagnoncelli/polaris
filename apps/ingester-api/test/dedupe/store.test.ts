@@ -12,7 +12,7 @@ import {
 const SILENT = createLogger({ service: "ingester-api-test", version: "0.0.0", env: "test" });
 
 describe("InMemoryDedupeStore", () => {
-  it("returns claimed on first observation, duplicate on the second", async () => {
+  it("returns claimed first, then in_progress while the lease is unresolved", async () => {
     const store = new InMemoryDedupeStore();
     const input = {
       projectId: "checkout",
@@ -21,7 +21,36 @@ describe("InMemoryDedupeStore", () => {
       ttlSec: 60,
     };
     expect((await store.claim(input)).status).toBe("claimed");
+    // The first caller is still publishing. The platform does not have the
+    // event yet, so a competing request must be told to retry — not that the
+    // event is safely stored.
+    expect((await store.claim(input)).status).toBe("in_progress");
+  });
+
+  it("returns duplicate once the claim is confirmed", async () => {
+    const store = new InMemoryDedupeStore();
+    const input = {
+      projectId: "checkout",
+      environment: "production",
+      eventId: "evt-1",
+      ttlSec: 60,
+    };
+    await store.claim(input);
+    await store.confirm({ ...input, ttlSec: 900 });
     expect((await store.claim(input)).status).toBe("duplicate");
+  });
+
+  it("frees the key for a fresh claim after release", async () => {
+    const store = new InMemoryDedupeStore();
+    const input = {
+      projectId: "checkout",
+      environment: "production",
+      eventId: "evt-1",
+      ttlSec: 60,
+    };
+    await store.claim(input);
+    await store.release(input);
+    expect((await store.claim(input)).status).toBe("claimed");
   });
 
   it("expires entries when the TTL elapses", async () => {
@@ -56,7 +85,7 @@ describe("InMemoryDedupeStore", () => {
     ).toBe("claimed");
     expect(
       (await store.claim({ projectId: "a", environment: "prod", eventId: "x", ttlSec: 60 })).status,
-    ).toBe("duplicate");
+    ).toBe("in_progress");
   });
 });
 
@@ -83,7 +112,10 @@ describe("buildDedupeKey", () => {
 });
 
 describe("createRedisDedupeStore", () => {
-  function makeClient(behavior: "ok" | "duplicate" | "error" | "timeout"): RedisClientLike {
+  function makeClient(
+    behavior: "ok" | "duplicate" | "error" | "timeout",
+    held: string | null = "confirmed",
+  ): RedisClientLike {
     let setCalls = 0;
     return {
       set: vi.fn(async () => {
@@ -93,6 +125,10 @@ describe("createRedisDedupeStore", () => {
         if (behavior === "timeout") return await new Promise(() => undefined);
         throw new Error(`redis test failure #${setCalls}`);
       }),
+      // A null SET NX means an entry exists; its VALUE decides whether the
+      // caller may say `duplicate` or must say `in_progress`.
+      get: vi.fn(async () => held),
+      del: vi.fn(async () => 1),
       quit: vi.fn(async () => undefined),
       on: vi.fn(),
     };
@@ -110,9 +146,9 @@ describe("createRedisDedupeStore", () => {
     ).toBe("claimed");
   });
 
-  it("returns duplicate when SET NX returns null", async () => {
+  it("returns duplicate when SET NX returns null over a confirmed entry", async () => {
     const store = createRedisDedupeStore({
-      client: makeClient("duplicate"),
+      client: makeClient("duplicate", "confirmed"),
       keyPrefix: "p",
       opTimeoutMs: 100,
       logger: SILENT,
@@ -120,6 +156,18 @@ describe("createRedisDedupeStore", () => {
     expect(
       (await store.claim({ projectId: "x", environment: "y", eventId: "z", ttlSec: 60 })).status,
     ).toBe("duplicate");
+  });
+
+  it("returns in_progress when SET NX returns null over a pending lease", async () => {
+    const store = createRedisDedupeStore({
+      client: makeClient("duplicate", "pending"),
+      keyPrefix: "p",
+      opTimeoutMs: 100,
+      logger: SILENT,
+    });
+    expect(
+      (await store.claim({ projectId: "x", environment: "y", eventId: "z", ttlSec: 60 })).status,
+    ).toBe("in_progress");
   });
 
   it("returns skipped (never throws) on backend error", async () => {

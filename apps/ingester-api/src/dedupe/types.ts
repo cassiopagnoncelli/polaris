@@ -70,12 +70,32 @@ export interface DedupeKey {
   readonly eventId: string;
 }
 
+/**
+ * The two things a held entry can mean. Stored as the Redis value, because
+ * the difference decides what a competing request is TOLD, and telling a
+ * client `duplicate` about an event that was never published is exactly how
+ * this layer used to lose events.
+ */
+export const DEDUPE_STATE_PENDING = "pending";
+export const DEDUPE_STATE_CONFIRMED = "confirmed";
+
 /** Outcome of a single dedupe claim attempt. */
 export type DedupeClaimOutcome =
   /** This is the first observation inside the window. Caller publishes the event. */
   | { readonly status: "claimed" }
-  /** A claim for the same key already exists. Caller rejects the event with `duplicate`. */
+  /**
+   * A CONFIRMED entry exists: the event reached `raw.events`. The caller
+   * rejects with `duplicate`, and a producer may stop retrying.
+   */
   | { readonly status: "duplicate" }
+  /**
+   * A PENDING lease exists — another request is mid-publish, or its process
+   * died before resolving. The platform does not yet have the event, so the
+   * caller rejects with `in_progress` and the producer retries after the
+   * lease expires. Saying `duplicate` here would be a lie the producer acts
+   * on by discarding the event.
+   */
+  | { readonly status: "in_progress" }
   /**
    * The dedupe store is unavailable (Redis down, timeout, network error).
    * Per the docs, ingestion continues without dedupe — the caller treats

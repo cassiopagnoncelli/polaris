@@ -2,12 +2,14 @@ import type { RedisConfig } from "@polaris/shared-config";
 import type { Logger } from "@polaris/shared-logger";
 import type { RedisOptions } from "ioredis";
 
-import type {
-  DedupeClaimInput,
-  DedupeClaimOutcome,
-  DedupeConfirmInput,
-  DedupeKey,
-  DedupeStore,
+import {
+  DEDUPE_STATE_CONFIRMED,
+  DEDUPE_STATE_PENDING,
+  type DedupeClaimInput,
+  type DedupeClaimOutcome,
+  type DedupeConfirmInput,
+  type DedupeKey,
+  type DedupeStore,
 } from "./types.js";
 
 /**
@@ -22,10 +24,10 @@ export interface RedisClientLike {
     value: string,
     mode1: "EX",
     ttl: number,
-    mode2: "NX",
+    mode2: "NX" | "XX",
   ): Promise<"OK" | null | string>;
-  /** Promote a lease to the full window. */
-  expire(key: string, seconds: number): Promise<number>;
+  /** Read a held entry to tell a pending lease from a confirmed record. */
+  get(key: string): Promise<string | null>;
   /** Drop a lease whose publish failed. */
   del(key: string): Promise<number>;
   quit?(): Promise<unknown>;
@@ -99,15 +101,17 @@ export function createRedisDedupeStore(options: CreateRedisDedupeStoreOptions): 
     const key = buildDedupeKey(keyPrefix, input);
     try {
       const result = await withTimeout(
-        client.set(key, "1", "EX", input.ttlSec, "NX"),
+        client.set(key, DEDUPE_STATE_PENDING, "EX", input.ttlSec, "NX"),
         opTimeoutMs,
         "redis_setnx_timeout",
       );
       if (result === "OK") {
         return { status: "claimed" };
       }
-      // SETNX returns null when the key already existed.
-      return { status: "duplicate" };
+      // SET NX returned null: an entry exists. WHICH entry decides what the
+      // caller may tell the client, so read it rather than assuming.
+      const held = await withTimeout(client.get(key), opTimeoutMs, "redis_get_timeout");
+      return held === DEDUPE_STATE_CONFIRMED ? { status: "duplicate" } : { status: "in_progress" };
     } catch (err) {
       // We never throw out of the dedupe layer — Redis being down is an
       // operational condition, not an event-rejection condition.
@@ -123,7 +127,13 @@ export function createRedisDedupeStore(options: CreateRedisDedupeStoreOptions): 
   async function confirm(input: DedupeConfirmInput): Promise<void> {
     const key = buildDedupeKey(keyPrefix, input);
     try {
-      await withTimeout(client.expire(key, input.ttlSec), opTimeoutMs, "redis_expire_timeout");
+      // Value and TTL together: the entry becomes a confirmed record for the
+      // full window in one round trip.
+      await withTimeout(
+        client.set(key, DEDUPE_STATE_CONFIRMED, "EX", input.ttlSec, "XX"),
+        opTimeoutMs,
+        "redis_confirm_timeout",
+      );
     } catch (err) {
       // Degradation only: the lease expires on its own and a later duplicate
       // slips through to the broker. Downstream stays idempotent.

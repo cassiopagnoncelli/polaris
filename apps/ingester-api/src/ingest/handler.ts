@@ -10,6 +10,7 @@ import {
 import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
+  BATCH_REASON_IN_PROGRESS,
   BATCH_REASON_INVALID_REQUEST,
   BATCH_REASON_PUBLISH_FAILED,
   type BatchAcceptedResult,
@@ -264,6 +265,27 @@ async function processOneEvent(
   const claim = await deps.dedupe.claim({ ...dedupeKey, ttlSec: DEDUPE_LEASE_TTL_SEC });
   /** Only a real lease can be promoted or dropped; `skipped` took none. */
   const holdsLease = claim.status === "claimed";
+  if (claim.status === "in_progress") {
+    // Another request holds an unresolved lease. The platform does NOT have
+    // the event yet, so this is retryable — answering `duplicate` here is the
+    // lie that used to make producers discard events that were never stored.
+    deps.metrics.incrementRejected({
+      project_id: envelope.project_id,
+      environment: envelope.environment,
+      reason: BATCH_REASON_IN_PROGRESS,
+    });
+    return {
+      kind: "rejected",
+      rejected: buildRejected({
+        eventId: envelope.event_id,
+        code: BATCH_REASON_IN_PROGRESS,
+        detail: {
+          event: envelope.event,
+          message: "another request is publishing this event_id; retry shortly",
+        },
+      }),
+    };
+  }
   if (claim.status === "duplicate") {
     deps.metrics.incrementDedupeHit({
       project_id: envelope.project_id,

@@ -1,9 +1,11 @@
-import type {
-  DedupeClaimInput,
-  DedupeClaimOutcome,
-  DedupeConfirmInput,
-  DedupeKey,
-  DedupeStore,
+import {
+  DEDUPE_STATE_CONFIRMED,
+  DEDUPE_STATE_PENDING,
+  type DedupeClaimInput,
+  type DedupeClaimOutcome,
+  type DedupeConfirmInput,
+  type DedupeKey,
+  type DedupeStore,
 } from "./types.js";
 
 /**
@@ -20,7 +22,7 @@ import type {
  * traffic is flowing.
  */
 export class InMemoryDedupeStore implements DedupeStore {
-  private readonly entries = new Map<string, number>();
+  private readonly entries = new Map<string, { expiresAt: number; state: string }>();
   private readonly now: () => number;
   private lastSweep = 0;
   private readonly sweepIntervalMs: number;
@@ -44,11 +46,17 @@ export class InMemoryDedupeStore implements DedupeStore {
     const now = this.now();
     this.sweep(now);
     const existing = this.entries.get(key);
-    if (existing !== undefined && existing > now) {
-      return { status: "duplicate" };
+    if (existing !== undefined && existing.expiresAt > now) {
+      // A pending lease means the event is not published yet, so the caller
+      // must not be told the platform already has it.
+      return existing.state === DEDUPE_STATE_CONFIRMED
+        ? { status: "duplicate" }
+        : { status: "in_progress" };
     }
-    const expiresAt = now + input.ttlSec * 1000;
-    this.entries.set(key, expiresAt);
+    this.entries.set(key, {
+      expiresAt: now + input.ttlSec * 1000,
+      state: DEDUPE_STATE_PENDING,
+    });
     return { status: "claimed" };
   }
 
@@ -57,8 +65,11 @@ export class InMemoryDedupeStore implements DedupeStore {
     // Only extend a lease we still hold: a key that already expired must not
     // be resurrected by a late confirm.
     const existing = this.entries.get(key);
-    if (existing === undefined || existing <= this.now()) return;
-    this.entries.set(key, this.now() + input.ttlSec * 1000);
+    if (existing === undefined || existing.expiresAt <= this.now()) return;
+    this.entries.set(key, {
+      expiresAt: this.now() + input.ttlSec * 1000,
+      state: DEDUPE_STATE_CONFIRMED,
+    });
   }
 
   async release(input: DedupeKey): Promise<void> {
@@ -79,8 +90,8 @@ export class InMemoryDedupeStore implements DedupeStore {
   private sweep(now: number): void {
     if (now - this.lastSweep < this.sweepIntervalMs) return;
     this.lastSweep = now;
-    for (const [key, expiry] of this.entries) {
-      if (expiry <= now) this.entries.delete(key);
+    for (const [key, entry] of this.entries) {
+      if (entry.expiresAt <= now) this.entries.delete(key);
     }
   }
 }

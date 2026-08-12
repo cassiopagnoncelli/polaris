@@ -72,6 +72,24 @@ export const BATCH_REASON_DUPLICATE = "duplicate";
 export const BATCH_REASON_PUBLISH_FAILED = "publish_failed";
 
 /**
+ * Reason returned when another request holds an unresolved dedupe lease on
+ * the same `event_id` — the first attempt is mid-publish, or its process died
+ * before it could resolve.
+ *
+ * Distinct from `duplicate` on purpose, and the distinction is the whole
+ * point: `duplicate` asserts the platform HAS the event, so a producer that
+ * believes it can stop retrying is right. During a lease that assertion is not
+ * yet true. Answering `duplicate` there is how the pre-lease implementation
+ * turned a broker blip into permanent loss — the client was told the event was
+ * safely stored when it had never been published at all.
+ *
+ * Retryable, with backoff. The lease is short (see `DEDUPE_LEASE_TTL_SEC`), so
+ * a retry either finds the event confirmed (`duplicate`, genuinely) or an
+ * expired lease it may claim itself.
+ */
+export const BATCH_REASON_IN_PROGRESS = "in_progress";
+
+/**
  * Reason returned when the request payload at the batch level is itself
  * malformed (e.g. `events` is missing or not an array). Used for the small
  * envelope around the batch — not for per-event envelope/property errors.
@@ -86,6 +104,7 @@ export const BATCH_REASON_INVALID_REQUEST = "invalid_request";
  * per-event payload that came in below the schema layer).
  */
 export const batchReasonCodeSchema = z.enum([
+  BATCH_REASON_IN_PROGRESS,
   SCHEMA_REASON_UNSUPPORTED_VERSION,
   SCHEMA_REASON_SUNSET,
   SCHEMA_REASON_UNKNOWN_EVENT,

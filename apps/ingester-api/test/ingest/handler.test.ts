@@ -7,6 +7,7 @@ import {
 import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
+  BATCH_REASON_IN_PROGRESS,
   BATCH_REASON_PUBLISH_FAILED,
   envelopeSchema,
   SCHEMA_REASON_INVALID_PROPERTIES,
@@ -446,6 +447,36 @@ describe("ingest handler — dedupe lease", () => {
     if (!("accepted" in late.body)) throw new Error("expected batch body");
     expect(late.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
     expect(producer.publishes).toHaveLength(1);
+  });
+
+  it("tells a competing request `in_progress`, not `duplicate`, while a lease is open", async () => {
+    // The distinction the state field exists for. During the lease the
+    // platform does NOT have the event, so a producer told `duplicate` would
+    // rightly stop retrying and lose it. `in_progress` is retryable.
+    const dedupe = new InMemoryDedupeStore();
+    await dedupe.claim({
+      projectId: "checkout",
+      environment: "production",
+      eventId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      ttlSec: 60,
+    });
+    const { handler, producer } = deps({ dedupe });
+
+    const result = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in result.body)) throw new Error("expected batch body");
+    expect(result.body.rejected[0]?.code).toBe(BATCH_REASON_IN_PROGRESS);
+    expect(producer.publishes).toHaveLength(0);
+  });
+
+  it("tells a competing request `duplicate` once the event is confirmed", async () => {
+    const dedupe = new InMemoryDedupeStore();
+    const { handler } = deps({ dedupe });
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+
+    const again = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in again.body)) throw new Error("expected batch body");
+    // Confirmed: the platform really does have it, so this producer may stop.
+    expect(again.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
   });
 
   it("does not hold a lease when the store skipped the claim", async () => {
