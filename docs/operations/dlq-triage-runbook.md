@@ -442,7 +442,7 @@ rows small and side-effect-free; see
 | `polaris destinations disable-replay <id> --reason "<text>"` | **yes** | **yes (`destinations.disable-replay`)** | [disable-replay.ts](../../apps/polaris-cli/src/commands/destinations/disable-replay.ts) |
 
 Mutating commands honor the P6-007 production gate: against
-`POLARIS_ENV=production` with `actor_source='declared'`, the
+`POLARIS_ENV=production` without an authenticated actor, the
 dispatcher rejects them and requires an operator token.
 
 ## Known gaps

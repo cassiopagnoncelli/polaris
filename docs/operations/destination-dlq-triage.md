@@ -65,7 +65,7 @@ resolved plaintext.
 | `polaris dlq mark-resolved <dlq_id> [--note "..."]` | **yes** | **yes (`dlq.mark-resolved`)** | Mark resolved without republishing. Use when the operator fixed the issue out-of-band. |
 
 Mutating commands honor the P6-007 production gate: against
-`POLARIS_ENV=production` with `actor_source='declared'`, the dispatcher
+`POLARIS_ENV=production` without an authenticated actor, the dispatcher
 rejects them and requires an operator token.
 
 ## Triage workflow

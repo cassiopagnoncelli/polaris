@@ -114,21 +114,38 @@ Polaris's operator gate is intentionally minimal: one property per command, one 
 ### Actor sources
 
 ```text
-cli_oidc    authenticated through Keycloak (org IdP)   (P11+ stretch goal, not v1)
-cli_token   long-lived operator token, scoped per environment   (v1 authenticated source)
-declared    --actor flag, env var, OS user, git identity   (display only)
+operator_token  CLI verified an operator token against its argon2id hash
+declared        control-plane API authenticated a bearer token or an IdP-backed admin session
+cli             no credential — the CLI's fallback when a token is absent, malformed,
+                revoked, or fails verification
+migration       written by a schema migration
+system          written by the platform rather than a person
 ```
+
+The names carry history worth knowing. An earlier draft of this design
+used `cli_token` / `cli_oidc` / `declared`, where `declared` meant a
+self-asserted `--actor` name. The implementation kept the *word* and
+inverted the *meaning*: nothing in Polaris ever accepted an unverified
+actor name, so `declared` came to mean "authenticated by the API" and
+`cli` became the unauthenticated fallback. `operator_token` was split out
+of `declared` later so an incident review can tell a CLI mutation from an
+admin-panel one.
 
 ### The rule
 
 Each CLI command declares `mutates: boolean` as part of its definition. The dispatcher applies one rule before executing:
 
 ```text
-if command.mutates && environment === 'production' && actorSource === 'declared':
+if command.mutates && environment === 'production'
+   && actorSource not in { 'operator_token', 'declared' }:
     reject with "production mutation requires an authenticated operator"
 else:
     allow
 ```
+
+The gate lists what it ALLOWS rather than excluding `cli`, so a future
+actor source has to be admitted deliberately instead of clearing a
+production gate by merely existing.
 
 That is the entire gate. No risk tiers, no per-command lists, no separate gate-decision records.
 
@@ -136,10 +153,11 @@ Read-only commands (list, inspect, plan, dry-run) carry `mutates: false` and byp
 
 ### v1 implementation
 
-- `cli_token` is the only authenticated source in v1.
+- `operator_token` is the CLI's authenticated source; `declared` is the
+  control-plane API's.
 - Each operator has a personal token, bound to environment and actor identity. Tokens are hashed in PostgreSQL alongside API keys, never stored plaintext.
 - Tokens can be issued and revoked through the CLI. Rotation issues a new token and immediately revokes the old one with no grace period. If overlap is needed, the operator issues a second token first, uses it, then revokes the original later.
-- `--actor` is a display label only. When the source is `cli_token`, `--actor` overrides `actor_display` in the audit record but cannot change `actor_id`. When the source is `declared`, `--actor` sets the display name but does not upgrade the source.
+- There is no `--actor` flag that sets an actor. The design above allowed one as a display label; the implementation does not, and `--actor` exists only as a filter on `polaris audit list` / `polaris export audit`. An actor label always comes from the verified credential, so it cannot be forged into someone else's name.
 
 ### Audit record contents
 

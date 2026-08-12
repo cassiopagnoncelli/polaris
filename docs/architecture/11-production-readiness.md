@@ -50,14 +50,14 @@ v1 uses a minimal trusted-operator model. One property per command, one rule.
 
 Rules:
 
-- Operator identity sources are `cli_oidc`, `cli_token`, and `declared`. See [Control Plane / Operator Identity and Audit Actor](./02-control-plane.md) for the full definitions.
-- `cli_token` is the only authenticated source in v1. Personal operator tokens are scoped per environment and stored as hashes in PostgreSQL.
+- Operator identity sources are `operator_token`, `declared`, `cli`, `migration`, and `system`. See [Control Plane / Operator Identity and Audit Actor](./02-control-plane.md) for the full definitions, including why `declared` means the opposite of what an earlier draft of this design intended.
+- `operator_token` is the CLI's authenticated source and `declared` the control-plane API's; `cli` is the unauthenticated fallback and cannot clear the production gate. Personal operator tokens are scoped per environment and stored as argon2id hashes in PostgreSQL.
 - Each CLI command carries a `mutates: boolean` property. The dispatcher rejects any command where `mutates && environment === 'production' && actorSource === 'declared'`. Everything else is allowed.
 - Mutating commands in non-production environments bypass the gate (dev and staging stay friction-free).
 - Every mutating CLI command writes one audit record. Gate denials land on the same record (`result = denied`, `denied_reason` set).
 - `--actor` survives only as a display label. It cannot upgrade a `declared` source.
 - Token rotation issues a new token and immediately revokes the old one. No grace period.
-- RBAC is deferred. `cli_oidc` is a P11+ stretch goal.
+- RBAC is deferred. A dedicated IdP-backed CLI source is a P11+ stretch goal; today an IdP-authenticated admin session reaches the audit trail as `declared`.
 
 Future RBAC should not require rewriting the control-plane data model.
 
@@ -306,6 +306,6 @@ These are not single decisions — they are processes that produce decisions per
 - ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
 - Identity graph schema: file-flexible (see [P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)).
 - Regional posture: single-region in v1; PII residency not a v1 constraint.
-- OIDC IdP for `cli_oidc`: Keycloak when implemented (P11+ stretch).
+- OIDC IdP for a dedicated CLI actor source: Keycloak when implemented (P11+ stretch).
 - GeoIP backend: MaxMind GeoLite2 with operator-provided files.
 - CLI access model: thin client + control-plane API service, env-var auth.

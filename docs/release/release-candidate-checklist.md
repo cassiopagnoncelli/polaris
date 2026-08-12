@@ -146,7 +146,7 @@ captain reviews this section every RC cycle and prunes / extends it.
   `identity_links`. Reference:
   [Coverage Matrix / Customer deletion](../implementation/coverage-matrix.md#architecture-coverage).
 - **RBAC deferred.** v1 ships a single trusted-operator model; the
-  `cli_oidc` actor source is a P11+ stretch goal. Reference:
+  a dedicated IdP-backed CLI actor source is a P11+ stretch goal. Reference:
   [Production Readiness / Control-Plane Permissions](../architecture/11-production-readiness.md#control-plane-permissions).
 - **No object-storage raw archive.** Replay is bounded by the 90-day
   RabbitMQ retention window. Tiered storage or out-of-cluster archive

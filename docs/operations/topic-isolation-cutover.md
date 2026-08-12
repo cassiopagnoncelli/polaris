@@ -63,7 +63,7 @@ All four required dashboards live under
 | `polaris topics deisolate --project <id> --env <env> --family <name> [--reason "..."]` | **yes** | **yes (`topics.deisolate`)** | Deactivate isolation. Stamps `deactivated_at` on the active row + writes an `audit_records` row. Preserves history (no DELETE). |
 
 Mutating commands honor the P6-007 production gate: against
-`POLARIS_ENV=production` with `actor_source='declared'`, the
+`POLARIS_ENV=production` without an authenticated actor, the
 dispatcher rejects them and requires an operator token. Set
 `POLARIS_OPERATOR_TOKEN=<token>` issued via
 `polaris operators create` before running the mutation.
