@@ -398,11 +398,11 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       });
 
       /**
-       * The slots a destination detail page fills from its mutation state:
-       * the button beside the title, and anything that has to be said in
-       * prose above the page.
+       * The slots a detail page fills from its mutation state: the button
+       * beside the title, and anything that has to be said in prose above the
+       * page. Shared by every page whose one action is a folded confirmation.
        */
-      interface DestinationActionSlots {
+      interface DetailActionSlots {
         readonly titleAction?: Html;
         readonly notice?: Html;
       }
@@ -428,7 +428,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           previous?: { confirmation: string; reason: string };
           only?: "enable" | "disable";
         } = {},
-      ): DestinationActionSlots => {
+      ): DetailActionSlots => {
         if (deps.mutations === undefined) return {};
 
         const role = request.adminContext?.role ?? "none";
@@ -547,7 +547,14 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
         );
       };
 
-      /** Enable/disable form for an activation, or why the viewer cannot use it. */
+      /**
+       * Enable/disable for an activation, or why the viewer cannot run it.
+       *
+       * The same folded button a destination gets: only one transition is ever
+       * on offer here — the row is either enabled or disabled — so the button
+       * beside the title names it, and the confirmation it demands stays
+       * behind the fold until somebody asks for it.
+       */
       const activationActions = (
         request: FastifyRequest,
         row: ProcessorActivationRow,
@@ -555,20 +562,21 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           refusal?: MutationRefusal;
           previous?: { confirmation: string; reason: string };
         } = {},
-      ): Html | undefined => {
-        if (deps.mutations === undefined) return undefined;
+      ): DetailActionSlots => {
+        if (deps.mutations === undefined) return {};
 
         const role = request.adminContext?.role ?? "none";
         const required = requiredRoleFor(config, row.environment);
         if (!platformRoleAtLeast(role, required)) {
-          return html`<h2>Actions</h2>
-            ${actionsUnavailable({ required, actual: role, environment: row.environment })}`;
+          return {
+            notice: actionsUnavailable({ required, actual: role, environment: row.environment }),
+          };
         }
 
         const enabling = row.enabled_state !== "enabled";
         const verb = enabling ? "enable" : "disable";
-        return html`<h2>Actions</h2>
-          ${actionForm({
+        return {
+          titleAction: confirmAction({
             action: `${ADMIN_PREFIX}/processors/${verb}`,
             submitLabel: enabling ? "Enable processor" : "Disable processor",
             expectedConfirmation: row.processor_name,
@@ -586,7 +594,8 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             },
             ...(options.refusal !== undefined ? { refusal: options.refusal } : {}),
             ...(options.previous !== undefined ? { previous: options.previous } : {}),
-          })}`;
+          }),
+        };
       };
 
       /** Mark-resolved form for a DLQ row, or why the viewer cannot use it. */
@@ -979,7 +988,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                   renderActivationDetailPage({
                     ctx: context(request),
                     activation: row,
-                    actions: activationActions(request, row, {
+                    ...activationActions(request, row, {
                       refusal: check.refusal,
                       previous: { confirmation, reason: rawReason },
                     }),
@@ -1016,13 +1025,17 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                     candidate.environment === key.environment,
                 ) ?? row;
 
+              const slots = activationActions(request, fresh);
               return sendHtml(
                 reply,
                 200,
                 renderActivationDetailPage({
                   ctx: context(request),
                   activation: fresh,
-                  actions: html`${mutationResultNotice({
+                  ...slots,
+                  // The result leads; anything the slots had to say about what
+                  // may be done next follows it.
+                  notice: html`${mutationResultNotice({
                     applied: outcome.applied,
                     appliedText:
                       verb === "enable"
@@ -1031,7 +1044,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                     noopText:
                       "Already in that state — nothing changed, and no audit record was written.",
                     auditId: outcome.auditId,
-                  })}${activationActions(request, fresh)}`,
+                  })}${slots.notice ?? null}`,
                 }),
               );
             },
@@ -1202,7 +1215,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           renderActivationDetailPage({
             ctx: context(request),
             activation,
-            actions: activationActions(request, activation),
+            ...activationActions(request, activation),
           }),
         );
       });

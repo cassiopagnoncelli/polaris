@@ -715,6 +715,88 @@ describe("admin mutations — processor activations", () => {
     expect(res.body.match(/<form method="post" action="\/admin\/processors/g)).toHaveLength(1);
     await app.app.close();
   });
+
+  it("puts the button beside the title and keeps its confirmation folded", async () => {
+    // The same fold as a destination's: an activation page opens on the state
+    // of the row, not on a form asking to change it.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/processors/activation?name=analytics-projector&version=v1&project=storefront&environment=development",
+      headers: { cookie: sessionCookie("admin") },
+    });
+    expect(res.statusCode).toBe(200);
+    const head = res.body.slice(
+      res.body.indexOf('<div class="page-title">'),
+      res.body.indexOf('<dl class="detail">'),
+    );
+    expect(head).toContain("Disable processor");
+    expect(res.body).toContain('<details class="confirm">');
+    expect(res.body).not.toContain('<details class="confirm" open>');
+    await app.app.close();
+  });
+
+  it("re-opens the fold when the submission came back refused", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/processors/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        name: "analytics-projector",
+        version: "v1",
+        project: "storefront",
+        environment: "development",
+        confirm: "analytics-projecter",
+        reason: "investigating a mapping bug",
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('<details class="confirm" open>');
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("reports the result above the page rather than at the foot of it", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/processors/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        name: "analytics-projector",
+        version: "v1",
+        project: "storefront",
+        environment: "development",
+        confirm: "analytics-projector",
+        reason: "investigating a mapping bug",
+      }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.indexOf("Processor disabled for this project")).toBeLessThan(
+      res.body.indexOf('<dl class="detail">'),
+    );
+    await app.app.close();
+  });
+
+  it("explains rather than offering a button when the role is too low", async () => {
+    // A production combination nobody has decided about: synthesized, and an
+    // admin may not act on it. The explanation replaces the button entirely.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/processors/activation?name=analytics-projector&version=v1&project=storefront&environment=production",
+      headers: { cookie: sessionCookie("admin") },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain("Disable processor");
+    expect(res.body).toContain("requires the");
+    await app.app.close();
+  });
 });
 
 describe("admin mutations — DLQ triage", () => {

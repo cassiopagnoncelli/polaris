@@ -374,13 +374,27 @@ export function activationHref(row: {
 export function renderActivationDetailPage(input: {
   ctx: AdminPageContext;
   activation: ProcessorActivationRow;
-  actions?: Html | undefined;
+  /**
+   * Button-and-confirmation for the state change on offer, beside the title —
+   * the same fold a destination's enable/disable sits behind. Absent when the
+   * viewer may not run one.
+   */
+  titleAction?: Html | undefined;
+  /**
+   * What just happened, or why nothing may be done here — at the top of the
+   * page, because after a POST this page re-renders from the top and a result
+   * reported below the field list is a result nobody sees.
+   */
+  notice?: Html | undefined;
 }): string {
   const row = input.activation;
   return page({
     ctx: input.ctx,
     title: `${row.processor_name} ${row.processor_version}`,
+    ...(input.titleAction !== undefined ? { titleAction: input.titleAction } : {}),
     body: html`
+      ${input.notice ?? null}
+
       <dl class="detail">
         <dt>Processor</dt>
         <dd>${mono(row.processor_name)}</dd>
@@ -409,7 +423,6 @@ export function renderActivationDetailPage(input: {
         <code>processor.manifest.yaml</code> and in code — nothing here can
         change them.
       </p>
-      ${input.actions ?? null}
     `,
   });
 }
