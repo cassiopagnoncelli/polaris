@@ -27,6 +27,7 @@ import {
   createKyselyProcessorDlqRecordRepository,
   createLagReporter,
   createProcessorActivationGate,
+  createProcessorTransportHooks,
   openProcessorRun,
   type ProcessorActivationGate,
   ProcessorMetrics,
@@ -51,6 +52,7 @@ import {
   PostgresCheckpointStore,
   type SyncIsolationLookup,
   type TransportConnection,
+  type TransportHooks,
 } from "@polaris/shared-transport";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
@@ -130,6 +132,16 @@ export async function buildAttributionEngineApp(
 
   const metrics = new ProcessorMetrics();
 
+  // Transport lifecycle -> this processor's log and metrics. Nothing passed
+  // `hooks` before, so `consumer.poisoned`, `consumer.rewound` and nine other
+  // events were emitted into `undefined` — and `incrementDlq` /
+  // `incrementRetry`, which the dashboard plots, had no caller at all.
+  const transportHooks = createProcessorTransportHooks({
+    logger: processorLogger,
+    metrics,
+    identity: PROCESSOR_IDENTITY,
+  });
+
   // ---- consumer + producer --------------------------------------------
   // One AMQP connection per process, shared by the producer and the
   // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
@@ -153,12 +165,14 @@ export async function buildAttributionEngineApp(
     config,
     options.producer,
     processorLogger,
+    transportHooks,
     connection,
   );
   const { consumer, ownsConsumer } = buildConsumer(
     config,
     options.consumer,
     processorLogger,
+    transportHooks,
     connection,
     checkpoints,
     producer,
@@ -375,6 +389,7 @@ function buildProducer(
   config: AttributionEngineRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
@@ -383,6 +398,7 @@ function buildProducer(
   const producer = createPolarisProducer({
     connection,
     logger,
+    hooks,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
   });
@@ -393,6 +409,7 @@ function buildConsumer(
   config: AttributionEngineRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
   producer: PolarisProducer,
@@ -405,6 +422,7 @@ function buildConsumer(
   const consumer = createPolarisConsumer({
     connection,
     logger,
+    hooks,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
     poison: {

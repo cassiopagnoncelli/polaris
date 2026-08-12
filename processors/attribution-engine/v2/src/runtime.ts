@@ -53,6 +53,9 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  createLagReporter,
+  deriveEventId,
+  type LagReporter,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -71,7 +74,6 @@ import {
   type TransportMessageContext,
   type TransportMessageHandler,
 } from "@polaris/shared-transport";
-import { v7 as uuidv7 } from "uuid";
 
 import {
   type AttributionEventEnvelope,
@@ -130,6 +132,11 @@ export interface AttributionEngineRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
+   * Lag reporter. Defaults to one owned by this runtime; `app.ts` passes its
+   * own so it can stop the timer on shutdown.
+   */
+  readonly lag?: LagReporter;
+  /**
    * Activation gate consulted per message. Defaults to
    * {@link ALWAYS_ENABLED_GATE} so a runtime built outside `app.ts` (unit
    * tests, golden fixtures) needs no database. Production passes the
@@ -146,8 +153,9 @@ export interface AttributionEngineRuntimeDeps {
    */
   readonly run_id: string;
   /**
-   * UUIDv7 allocator. Tests inject a deterministic counter; production
-   * uses the real `uuidv7()`.
+   * Event-id allocator override. Tests inject a deterministic counter;
+   * production leaves it unset and gets ids derived from the source event
+   * (see `derivedEventId` below), NOT random ones.
    */
   readonly newEventId?: () => string;
   /**
@@ -192,7 +200,10 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
-  const newEventId = deps.newEventId ?? ((): string => uuidv7());
+  const lag =
+    deps.lag ??
+    createLagReporter({ metrics, identity: { name: PROCESSOR_NAME, version: PROCESSOR_VERSION } });
+  const newEventId = deps.newEventId;
   const windowSeconds = deps.window_seconds ?? DEFAULT_ATTRIBUTION_WINDOW_SECONDS;
 
   const handler: TransportMessageHandler = async (payload, context) => {
@@ -205,7 +216,8 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
       isolation,
       metrics,
       gate,
-      newEventId,
+      lag,
+      ...(newEventId !== undefined ? { newEventId } : {}),
       windowSeconds,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
       run_id: deps.run_id,
@@ -252,7 +264,9 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
-  readonly newEventId: () => string;
+  /** Records when this partition last delivered, for the lag timer. */
+  readonly lag: LagReporter;
+  readonly newEventId?: (() => string) | undefined;
   readonly windowSeconds: number;
   readonly now?: () => Date;
   /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
@@ -260,7 +274,7 @@ interface HandleMessageInput {
 }
 
 async function handleMessage(input: HandleMessageInput): Promise<void> {
-  const { payload, context, store, logger, metrics, gate, newEventId } = input;
+  const { payload, context, store, logger, metrics, gate, newEventId, lag } = input;
   const value = payload.message.value;
   if (value === null || value.length === 0) {
     // Tombstone-style empty payload. Drop with a warn — mirrors the
@@ -336,7 +350,30 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     return;
   }
 
+  // Records WHEN, not lag itself: the timer computes `now - this`, so the
+  // reading keeps climbing when messages stop arriving.
+  lag.observe({
+    family: payload.family,
+    partition: payload.partition,
+    project_id: raw.project_id,
+    environment: raw.environment,
+    ingestedAt: raw.ingested_at,
+  });
   metrics.incrementConsumed(labels);
+
+  /**
+   * Deterministic id for a derived event.
+   *
+   * Keyed on the SOURCE event id and an emission slot, never on the attempt:
+   * a redelivery or a replay of the same input reproduces the same id, so
+   * `analytics_processed`'s ReplacingMergeTree collapses the duplicate instead
+   * of accumulating it as a second fact. `newEventId` remains injectable for
+   * tests that need a counter, and overrides this when supplied.
+   */
+  const derivedEventId = (slot: string): string =>
+    newEventId !== undefined
+      ? newEventId()
+      : deriveEventId({ processor: PROCESSOR_NAME, sourceEventId: raw.event_id, slot });
 
   // Read the prior chain before deciding, and in its own try: the store
   // is a database call now (ADR 0005), so a failure here is an
@@ -392,7 +429,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     };
     const touchpointEnvelope = buildTouchpointCapturedEnvelope({
       raw,
-      eventId: newEventId(),
+      eventId: derivedEventId("touchpoint"),
       now: nowFn,
       run_id: runId,
       properties: touchpointProps,
@@ -444,7 +481,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       };
       const firstEnvelope = buildFirstTouchAssignedEnvelope({
         raw,
-        eventId: newEventId(),
+        eventId: derivedEventId("first_touch"),
         now: nowFn,
         run_id: runId,
         properties: firstProps,
@@ -468,7 +505,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       };
       const lastEnvelope = buildLastTouchAssignedEnvelope({
         raw,
-        eventId: newEventId(),
+        eventId: derivedEventId("last_touch"),
         now: nowFn,
         run_id: runId,
         properties: lastProps,
@@ -527,7 +564,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     };
     const lastEnvelope = buildLastTouchAssignedEnvelope({
       raw,
-      eventId: newEventId(),
+      eventId: derivedEventId("last_touch"),
       now: nowFn,
       run_id: runId,
       properties: lastProps,

@@ -31,6 +31,7 @@
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
+  createDestinationTransportHooks,
   createKyselyDeliveryRecordRepository,
   createKyselyDestinationInstanceReader,
   createKyselyDlqRecordRepository,
@@ -59,6 +60,7 @@ import {
   type PolarisProducer,
   PostgresCheckpointStore,
   type TransportConnection,
+  type TransportHooks,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
@@ -174,6 +176,19 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
       },
     });
 
+  // ---- metrics + transport hooks ------------------------------------
+  // Built before the transport because the hooks need the registry: until
+  // now `TransportHooks` was passed by nobody, so every lifecycle event the
+  // consumer emitted — poisoned, rewound, partition_assigned — went into
+  // `undefined`.
+  const metrics = new DestinationMetrics();
+  const transportHooks = createDestinationTransportHooks({
+    logger: consumerLogger,
+    metrics,
+    vendor: CONSUMER_VENDOR,
+    consumerVersion: CONSUMER_VERSION,
+  });
+
   // ---- consumer + producer ------------------------------------------
   // One AMQP connection per process, shared by the DLQ producer and the
   // analytics.events consumer. Checkpoints live in PostgreSQL because
@@ -188,6 +203,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     options.producer,
     consumerLogger,
     connection,
+    transportHooks,
   );
   const { consumer, ownsConsumer } = buildConsumer(
     config,
@@ -196,6 +212,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     connection,
     checkpoints,
     producer,
+    transportHooks,
   );
   if (ownsProducer) {
     try {
@@ -213,7 +230,6 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     });
   const records = options.records ?? createKyselyDeliveryRecordRepository({ db });
   const dlqRecords = options.dlqRecords ?? createKyselyDlqRecordRepository({ db });
-  const metrics = new DestinationMetrics();
 
   const descriptor = createWebhookSinkDescriptor({
     requestTimeoutMs: config.sink.requestTimeoutMs,
@@ -373,6 +389,7 @@ function buildProducer(
   override: PolarisProducer | undefined,
   logger: Logger,
   connection: TransportConnection,
+  hooks: TransportHooks,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
     return { producer: override, ownsProducer: false };
@@ -380,6 +397,7 @@ function buildProducer(
   const producer = createPolarisProducer({
     connection,
     logger,
+    hooks,
     producerName: `${CONSUMER_VENDOR}-${CONSUMER_VERSION}`,
     producerVersion: config.service.serviceVersion,
   });
@@ -393,6 +411,7 @@ function buildConsumer(
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
   producer: PolarisProducer,
+  hooks: TransportHooks,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
@@ -400,6 +419,7 @@ function buildConsumer(
   const consumer = createPolarisConsumer({
     connection,
     logger,
+    hooks,
     consumerName: CONSUMER_VENDOR,
     consumerVersion: CONSUMER_VERSION,
     poison: { component: "webhook-sink", producer },

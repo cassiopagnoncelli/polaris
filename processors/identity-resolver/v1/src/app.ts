@@ -27,6 +27,7 @@ import {
   createKyselyProcessorDlqRecordRepository,
   createLagReporter,
   createProcessorActivationGate,
+  createProcessorTransportHooks,
   openProcessorRun,
   type ProcessorActivationGate,
   ProcessorMetrics,
@@ -51,6 +52,7 @@ import {
   PostgresCheckpointStore,
   type SyncIsolationLookup,
   type TransportConnection,
+  type TransportHooks,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
@@ -132,6 +134,16 @@ export async function buildIdentityResolverApp(
 
   const metrics = new ProcessorMetrics();
 
+  // Transport lifecycle -> this processor's log and metrics. Nothing passed
+  // `hooks` before, so `consumer.poisoned`, `consumer.rewound` and nine other
+  // events were emitted into `undefined` — and `incrementDlq` /
+  // `incrementRetry`, which the dashboard plots, had no caller at all.
+  const transportHooks = createProcessorTransportHooks({
+    logger: processorLogger,
+    metrics,
+    identity: PROCESSOR_IDENTITY,
+  });
+
   // ---- PostgreSQL + repository ----------------------------------------
   const { db, ownsDb } = buildDb(config, options.db);
   const repository = options.repository ?? createKyselyIdentityLinkRepository({ db });
@@ -151,12 +163,14 @@ export async function buildIdentityResolverApp(
     config,
     options.producer,
     processorLogger,
+    transportHooks,
     connection,
   );
   const { consumer, ownsConsumer } = buildConsumer(
     config,
     options.consumer,
     processorLogger,
+    transportHooks,
     connection,
     checkpoints,
     producer,
@@ -397,6 +411,7 @@ function buildProducer(
   config: IdentityResolverRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
@@ -405,6 +420,7 @@ function buildProducer(
   const producer = createPolarisProducer({
     connection,
     logger,
+    hooks,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
   });
@@ -415,6 +431,7 @@ function buildConsumer(
   config: IdentityResolverRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
   producer: PolarisProducer,
@@ -427,6 +444,7 @@ function buildConsumer(
   const consumer = createPolarisConsumer({
     connection,
     logger,
+    hooks,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
     poison: {

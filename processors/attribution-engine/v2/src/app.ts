@@ -23,7 +23,11 @@ import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import {
+  createDlqLedgerRecorder,
+  createKyselyProcessorDlqRecordRepository,
+  createLagReporter,
   createProcessorActivationGate,
+  createProcessorTransportHooks,
   openProcessorRun,
   type ProcessorActivationGate,
   ProcessorMetrics,
@@ -42,11 +46,13 @@ import {
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  type PoisonRecord,
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
   type SyncIsolationLookup,
   type TransportConnection,
+  type TransportHooks,
 } from "@polaris/shared-transport";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
@@ -126,6 +132,16 @@ export async function buildAttributionEngineApp(
 
   const metrics = new ProcessorMetrics();
 
+  // Transport lifecycle -> this processor's log and metrics. Nothing passed
+  // `hooks` before, so `consumer.poisoned`, `consumer.rewound` and nine other
+  // events were emitted into `undefined` — and `incrementDlq` /
+  // `incrementRetry`, which the dashboard plots, had no caller at all.
+  const transportHooks = createProcessorTransportHooks({
+    logger: processorLogger,
+    metrics,
+    identity: PROCESSOR_IDENTITY,
+  });
+
   // ---- consumer + producer --------------------------------------------
   // One AMQP connection per process, shared by the producer and the
   // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
@@ -149,15 +165,21 @@ export async function buildAttributionEngineApp(
     config,
     options.producer,
     processorLogger,
+    transportHooks,
     connection,
   );
   const { consumer, ownsConsumer } = buildConsumer(
     config,
     options.consumer,
     processorLogger,
+    transportHooks,
     connection,
     checkpoints,
     producer,
+    createDlqLedgerRecorder({
+      repository: createKyselyProcessorDlqRecordRepository({ db: checkpointDb }),
+      identity: PROCESSOR_IDENTITY,
+    }),
   );
 
   if (ownsProducer) {
@@ -182,6 +204,11 @@ export async function buildAttributionEngineApp(
       db: checkpointDb,
       logger: processorLogger,
     });
+
+  // ---- lag reporting ---------------------------------------------------
+  // Owned here rather than by the runtime so the timer stops on shutdown
+  // alongside everything else with a lifecycle.
+  const lag = createLagReporter({ metrics, identity: PROCESSOR_IDENTITY });
 
   // ---- processor run ---------------------------------------------------
   // Registered BEFORE the runtime is built: the runtime stamps
@@ -215,6 +242,7 @@ export async function buildAttributionEngineApp(
     ...(options.now !== undefined ? { now: options.now } : {}),
     run_id: run.run_id,
     gate,
+    lag,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -234,6 +262,7 @@ export async function buildAttributionEngineApp(
   // close out while that pool is still open. Counters are read from the metrics
   // registry once the runtime is quiet. A no-op when nothing was registered.
   shutdownTasks.push(async () => {
+    lag.stop();
     await run.complete();
   });
   if (ownsConsumer) {
@@ -278,6 +307,22 @@ export async function buildAttributionEngineApp(
   }
 
   // ---- Fastify shell ---------------------------------------------------
+  // ---- readiness -------------------------------------------------------
+  // `/ready` answered an unconditional 200: no probe was ever registered,
+  // here or by `main.ts`, so a pod with a dead transport reported itself
+  // ready and kept claiming partitions it could not serve.
+  const readinessProbes: ReadinessProbe[] = [...(options.readinessProbes ?? [])];
+  if (ownsProducer) {
+    readinessProbes.push(async () => {
+      const healthy = connection.connected;
+      return {
+        name: "rabbitmq",
+        status: healthy ? ("up" as const) : ("down" as const),
+        ...(healthy ? {} : { detail: "transport connection is down" }),
+      };
+    });
+  }
+
   const bootstrap = await bootstrapService({
     info: {
       serviceName: config.service.serviceName,
@@ -294,7 +339,7 @@ export async function buildAttributionEngineApp(
       bodyLimit: config.http.bodyLimitBytes,
       disableRequestLogging: true,
     },
-    ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
+    ...(readinessProbes.length > 0 ? { readinessProbes } : {}),
     openapi: {
       setup: NOOP_OPENAPI_SETUP,
       metadata: {
@@ -339,6 +384,7 @@ function buildProducer(
   config: AttributionEngineRuntimeConfig,
   override: PolarisProducer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
 ): { producer: PolarisProducer; ownsProducer: boolean } {
   if (override !== undefined) {
@@ -347,6 +393,7 @@ function buildProducer(
   const producer = createPolarisProducer({
     connection,
     logger,
+    hooks,
     producerName: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producerVersion: config.service.serviceVersion,
   });
@@ -357,9 +404,12 @@ function buildConsumer(
   config: AttributionEngineRuntimeConfig,
   override: PolarisConsumer | undefined,
   logger: Logger,
+  hooks: TransportHooks,
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
   producer: PolarisProducer,
+  /** Ledger write for a dead-lettered message; see the poison handle below. */
+  recordDlq: (record: PoisonRecord) => Promise<void>,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
@@ -367,9 +417,17 @@ function buildConsumer(
   const consumer = createPolarisConsumer({
     connection,
     logger,
+    hooks,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
-    poison: { component: "attribution-engine", producer },
+    poison: {
+      component: "attribution-engine",
+      producer,
+      // Without this the dead-lettered bytes reach `attribution-engine.dlq`
+      // and nothing else knows: `polaris processors dlq list` reads a table
+      // nobody writes.
+      record: recordDlq,
+    },
     groupName: config.attributionEngine.consumerGroup,
     checkpoints,
   });

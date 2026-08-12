@@ -16,6 +16,7 @@
 
 import { createLogger } from "@polaris/shared-logger";
 import {
+  deriveEventId,
   METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
   type ProcessorActivationGate,
   type ProcessorMetrics,
@@ -763,5 +764,60 @@ describe("expired chain writes through startChain, not set", () => {
     // First touch stays anchored to the original observation.
     const chain = await store.get("checkout::production::anonymous_id:anon_reset");
     expect(chain?.first_observed_at).toBe("2026-01-01T00:00:00.000Z");
+  });
+});
+
+describe("attribution-engine v2 derived event ids", () => {
+  it("emits derived ids, not random ones, when no allocator is injected", async () => {
+    // The production path: `newEventId` unset. At-least-once means the same
+    // source event arrives twice routinely — a rewind, a crash replay, a
+    // checkpoint that did not land — and each attempt used to mint a fresh
+    // uuidv7. `analytics_processed` is a ReplacingMergeTree keyed on
+    // event_id, so those retries accumulated as separate facts rather than
+    // collapsing into one.
+    async function emitOnce(): Promise<ReadonlyArray<string>> {
+      const producer = new RecordingProducer();
+      // createRuntime directly, NOT buildRuntime: the helper always injects a
+      // counter, which would pass this test without exercising derivation.
+      const runtime = createRuntime({
+        consumer: stubConsumer(),
+        producer: producer as unknown as PolarisProducer,
+        store: new InMemoryTouchpointStore(),
+        logger: createLogger({ service: "test", env: "test", version: "0.0.0" }),
+        now: () => new Date(NOW_ISO),
+        run_id: "run_test_1",
+      });
+      await runtime.handler(
+        buildPayload(
+          encodeEnvelope({
+            event_id: "evt_first",
+            anonymous_id: "anon_X",
+            campaign: FULL_CAMPAIGN,
+          }),
+        ),
+        buildContext(),
+      );
+      return producer.publishes.map((pub) =>
+        String((pub.payload as { event_id: string }).event_id),
+      );
+    }
+
+    const first = await emitOnce();
+    // Fail loudly rather than comparing two empty lists.
+    expect(first).toHaveLength(3);
+    for (const id of first) {
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    }
+    expect(await emitOnce()).toEqual(first);
+  });
+
+  it("gives each emission slot its own id, so three events are three facts", async () => {
+    // Same source event, same derivation — the slot is what keeps the
+    // touchpoint, first-touch and last-touch rows from collapsing into one.
+    const sourceEventId = "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551";
+    const ids = ["touchpoint", "first_touch", "last_touch"].map((slot) =>
+      deriveEventId({ processor: PROCESSOR_NAME, sourceEventId, slot }),
+    );
+    expect(new Set(ids).size).toBe(3);
   });
 });

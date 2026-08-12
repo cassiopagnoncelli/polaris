@@ -28,8 +28,10 @@
 --   It was NOT true when this file was written: every processor minted a
 --   uuidv7 per emission attempt, so redeliveries accumulated as distinct
 --   facts and this comment described an intention. Rows written before that
---   fix keep their random ids and will not collapse against re-derived ones;
---   a partition rebuild is the way to normalise them.
+--   fix keep their random ids and will not collapse against re-derived ones.
+--   Normalising them is delete-then-replay, per window, and the procedure —
+--   including the projections that a delete does NOT propagate to — is
+--   docs/operations/runbook-derived-id-normalisation.md.
 --
 -- TTL:
 --   400 days, matching analytics_raw. Derived facts are only meaningful

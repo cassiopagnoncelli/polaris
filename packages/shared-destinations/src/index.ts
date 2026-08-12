@@ -125,6 +125,10 @@ export {
   type HandleEventFn,
   type HandleEventInput,
 } from "./runtime.js";
+export {
+  type CreateDestinationTransportHooksInput,
+  createDestinationTransportHooks,
+} from "./transport-hooks.js";
 export type {
   ConsumerIdentity,
   Deliverer,

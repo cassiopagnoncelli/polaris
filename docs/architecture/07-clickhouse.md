@@ -230,6 +230,14 @@ read as "no IPs observed" rather than "IPs are not on this table".
 
 `ReplacingMergeTree` deduplication is merge-time behavior. Queries and projections that require strict dedupe must be designed around stable event keys. Do not use `FINAL` broadly by default because it can be expensive. The query patterns below define how dedupe is handled in practice.
 
+"Stable event keys" is a requirement on the writer, not a property the engine
+supplies. Derived facts satisfy it because processors mint `event_id` as a
+UUIDv5 over `(processor_name, source_event_id, emission slot)` — see
+[`derived-id.ts`](../../packages/shared-processor/src/derived-id.ts) — so a
+redelivery reproduces the id and collapses. Rows written before that was true
+carry a random UUIDv7 per attempt and never collapse; normalising them is
+[Derived ID Normalisation](../operations/runbook-derived-id-normalisation.md).
+
 ## Query Patterns
 
 `ReplacingMergeTree` dedupe runs at merge time, not insert time and not query time. Between merges, duplicate rows are both in the table. The patterns below are how each query path handles that.

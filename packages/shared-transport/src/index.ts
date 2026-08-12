@@ -141,6 +141,10 @@ export {
   type StreamIsolationCacheOptions,
 } from "./isolation-cache.js";
 export {
+  type CreateTransportLogHooksInput,
+  createTransportLogHooks,
+} from "./log-hooks.js";
+export {
   buildRawEventsPartitionKey,
   type PartitionKeyIdentity,
   type PartitionKeyIdentitySource,

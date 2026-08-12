@@ -35,6 +35,7 @@ import {
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  createTransportLogHooks,
   DeferredCheckpointStore,
   InMemoryCheckpointStore,
   type PolarisConsumer,
@@ -112,17 +113,24 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
     consumer = options.consumer;
   } else {
     connection = createTransportConnection({ rabbitmq: config.rabbitmq, logger: sinkLogger });
+    // The sink keeps no metrics registry of its own, so the transport's
+    // lifecycle events go to the log only. Before this they went nowhere at
+    // all: `hooks` was passed by no service, so a rewind storm and a healthy
+    // consumer were indistinguishable from outside the process.
+    const hooks = createTransportLogHooks({ logger: sinkLogger, component: SINK_COMPONENT });
     // Only used to DLQ a message that fails repeatedly; the sink has no
     // other reason to publish.
     poisonProducer = createPolarisProducer({
       connection,
       logger: sinkLogger,
+      hooks,
       producerName: SINK_SERVICE_NAME,
     });
     await poisonProducer.connect();
     consumer = createPolarisConsumer({
       connection,
       logger: sinkLogger,
+      hooks,
       consumerName: SINK_SERVICE_NAME,
       consumerVersion: "v1",
       groupName: config.sink.consumerGroup,

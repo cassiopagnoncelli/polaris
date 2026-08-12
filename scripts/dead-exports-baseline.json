@@ -285,7 +285,6 @@
     "packages/shared-transport/src/headers.ts::readHeaderNumber",
     "packages/shared-transport/src/headers.ts::readHeaderString",
     "packages/shared-transport/src/headers.ts::toAmqpHeaders",
-    "packages/shared-transport/src/hooks.ts::composeHooks",
     "packages/shared-transport/src/hooks.ts::emitHook",
     "packages/shared-transport/src/isolation-cache.ts::InMemoryScopedIsolationLookup",
     "packages/shared-transport/src/partition-key.ts::partitionForKey",

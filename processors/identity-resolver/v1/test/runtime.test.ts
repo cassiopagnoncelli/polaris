@@ -466,3 +466,42 @@ function skippedTotal(metrics: ProcessorMetrics): number {
     .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
     .reduce((total, sample) => total + sample.value, 0);
 }
+
+describe("identity-resolver derived event ids", () => {
+  it("emits a derived id, not a random one, when no allocator is injected", async () => {
+    // The production path: `newEventId` unset. At-least-once means the same
+    // source event arrives twice routinely — a rewind, a crash replay, a
+    // checkpoint that did not land — and each attempt used to mint a fresh
+    // uuidv7. `analytics_processed` is a ReplacingMergeTree keyed on
+    // event_id, so those retries accumulated as separate facts rather than
+    // collapsing into one.
+    async function emitOnce(): Promise<string> {
+      const producer = new RecordingProducer();
+      // createRuntime directly, NOT buildEnv: the helper always injects a
+      // counter, which would pass this test without exercising derivation.
+      const runtime = createRuntime({
+        consumer: makeConsumer(),
+        producer: producer as unknown as PolarisProducer,
+        repository: new InMemoryIdentityLinkRepository({
+          now: () => new Date("2026-05-12T12:00:00.500Z"),
+        }),
+        logger: noopLogger,
+        now: () => new Date("2026-05-12T12:00:00.500Z"),
+        run_id: "run_test_1",
+      });
+      await runtime.handler(
+        makePayload(
+          makeRawEnvelope({ identity: { customer_id: "cus_1", anonymous_id: "anon-1" } }),
+        ),
+        CONTEXT,
+      );
+      return String((producer.publishes[0]?.event as { event_id: string }).event_id);
+    }
+
+    const first = await emitOnce();
+    // A UUIDv5 carries `5` in the version nibble; the old uuidv7 default
+    // carried `7`. Assert the version, not just the shape.
+    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(await emitOnce()).toBe(first);
+  });
+});

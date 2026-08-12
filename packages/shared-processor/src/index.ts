@@ -20,6 +20,7 @@
  *   - deterministic derived event ids (`./derived-id`)
  *   - timer-driven per-partition lag (`./lag-reporter`)
  *   - DLQ ledger adapter for the transport's poison path (`./dlq-ledger`)
+ *   - transport lifecycle hooks -> logs + metrics (`./transport-hooks`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
@@ -171,3 +172,7 @@ export {
   type RegisterRunInput,
   type UpdateRunInput,
 } from "./runs.js";
+export {
+  type CreateProcessorTransportHooksInput,
+  createProcessorTransportHooks,
+} from "./transport-hooks.js";

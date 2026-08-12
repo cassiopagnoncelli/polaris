@@ -13,6 +13,7 @@ import {
 import {
   createPolarisProducer,
   createTransportConnection,
+  createTransportLogHooks,
   type PolarisProducer,
   type TransportConnection,
 } from "@polaris/shared-transport";
@@ -454,6 +455,11 @@ function buildProducer(
   const producer = createPolarisProducer({
     connection,
     logger,
+    // The API publishes but never consumes, so only the producer half of the
+    // hook surface can fire here — `producer.send_failed` at error level is
+    // the one that matters, and it previously went into `undefined` like
+    // every other lifecycle event on the platform.
+    hooks: createTransportLogHooks({ logger, component: "ingester-api" }),
     producerName: config.service.serviceName,
     producerVersion: config.service.serviceVersion,
   });
