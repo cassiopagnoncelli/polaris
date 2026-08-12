@@ -1,7 +1,8 @@
 -- Polaris ClickHouse: argMax-based MV that feeds event_daily_counts.
 --
 -- Reads insert blocks landing in polaris.analytics_raw and emits
--- already-deduped per-day event counts into the projection table.
+-- per-day event counts into the projection table. Deduped WITHIN an insert
+-- block only — see the note below.
 --
 -- The dedupe pattern (docs/architecture/07-clickhouse.md "Query
 -- Patterns / Pattern 1") is:
@@ -14,17 +15,32 @@
 -- equivalent to what ReplacingMergeTree would emit after a merge
 -- and is the project-wide replacement for FINAL.
 --
--- Important: a ClickHouse MV "sees" only the newly inserted block,
--- not the full state of the source table. The argMax over event_id
--- here collapses duplicates that arrive in the same insert block;
--- duplicates across blocks are folded by SummingMergeTree on the
--- projection side (rows with the same (project_id, environment,
--- event, occurred_date) get their event_count summed at merge time).
+-- IMPORTANT — these counters are APPROXIMATE, and upward-biased.
 --
--- If the projection ever needs strict at-most-once-per-event-id
--- guarantees across blocks, the rebuild path (P7-005) re-derives
--- this projection by reading analytics_raw with the argMax pattern
--- in a single pass — not by adding FINAL here.
+-- A materialized view sees only the rows of the INSERT it is attached to.
+-- The GROUP BY below therefore collapses duplicates that arrive in the SAME
+-- block, and nothing else. A duplicate arriving in a LATER block — which is
+-- what every redelivery, rewind and crash-replay produces, by construction —
+-- forms its own group and emits another +1.
+--
+-- SummingMergeTree then SUMS those rows, because `event_id` is not part of
+-- the projection's ORDER BY: it was aggregated away here. Summing two +1s for
+-- one logical event gives 2. It cannot do otherwise; it has no way to know
+-- the two rows describe the same event.
+--
+-- The base table's ReplacingMergeTree collapse does NOT propagate here
+-- either: an MV fires on insert, not on merge.
+--
+-- So this projection over-counts by exactly the number of cross-block
+-- duplicates, and the platform is at-least-once by design. The exact figure
+-- comes from the rebuild path (projections/*_rebuild.sql), which re-derives
+-- the projection from a full partition scan in one pass and therefore sees
+-- every duplicate at once.
+--
+-- An earlier version of this comment asserted the opposite, and described the
+-- summing mechanism in its own next breath without noticing the two could not
+-- both be true. It survived review because a comment in that register reads
+-- like an audit that already happened.
 
 -- SQL SECURITY NONE: the MV's SELECT is not privilege-checked.
 --
@@ -53,7 +69,7 @@ SELECT
     environment,
     event,
     toDate(argMax(occurred_at, _version)) AS occurred_date,
-    -- One distinct event_id contributes exactly one to event_count.
+    -- One distinct event_id contributes exactly one PER INSERT BLOCK.
     -- The argMax over occurred_at picks the latest revision's date,
     -- so late-arriving corrections that change occurred_at are
     -- handled by SummingMergeTree's merge-time collapse.

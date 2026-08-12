@@ -894,6 +894,7 @@ components:
         code:
           type: "string"
           enum:
+            - "in_progress"
             - "unsupported_schema_version"
             - "schema_version_sunset"
             - "unknown_event"
@@ -903,6 +904,8 @@ components:
             - "duplicate"
             - "publish_failed"
             - "invalid_request"
+        retryable:
+          type: "boolean"
         detail:
           type: "object"
           properties:
@@ -937,6 +940,7 @@ components:
         - "event_id"
         - "status"
         - "code"
+        - "retryable"
       additionalProperties: false
       description: "Per-event entry in the `rejected` array of a `BatchResponse`. `code` is one of the stable reason codes in `BatchReasonCode`. `detail.path` carries field paths but never the rejected or redacted value."
     BatchResponse:
@@ -977,6 +981,7 @@ components:
               code:
                 type: "string"
                 enum:
+                  - "in_progress"
                   - "unsupported_schema_version"
                   - "schema_version_sunset"
                   - "unknown_event"
@@ -986,6 +991,8 @@ components:
                   - "duplicate"
                   - "publish_failed"
                   - "invalid_request"
+              retryable:
+                type: "boolean"
               detail:
                 type: "object"
                 properties:
@@ -1020,6 +1027,7 @@ components:
               - "event_id"
               - "status"
               - "code"
+              - "retryable"
             additionalProperties: false
       required:
         - "accepted"
@@ -1071,6 +1079,7 @@ components:
     BatchReasonCode:
       type: "string"
       enum:
+        - "in_progress"
         - "unsupported_schema_version"
         - "schema_version_sunset"
         - "unknown_event"

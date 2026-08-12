@@ -1196,6 +1196,7 @@
           "code": {
             "type": "string",
             "enum": [
+              "in_progress",
               "unsupported_schema_version",
               "schema_version_sunset",
               "unknown_event",
@@ -1206,6 +1207,9 @@
               "publish_failed",
               "invalid_request"
             ]
+          },
+          "retryable": {
+            "type": "boolean"
           },
           "detail": {
             "type": "object",
@@ -1257,7 +1261,8 @@
         "required": [
           "event_id",
           "status",
-          "code"
+          "code",
+          "retryable"
         ],
         "additionalProperties": false,
         "description": "Per-event entry in the `rejected` array of a `BatchResponse`. `code` is one of the stable reason codes in `BatchReasonCode`. `detail.path` carries field paths but never the rejected or redacted value."
@@ -1311,6 +1316,7 @@
                 "code": {
                   "type": "string",
                   "enum": [
+                    "in_progress",
                     "unsupported_schema_version",
                     "schema_version_sunset",
                     "unknown_event",
@@ -1321,6 +1327,9 @@
                     "publish_failed",
                     "invalid_request"
                   ]
+                },
+                "retryable": {
+                  "type": "boolean"
                 },
                 "detail": {
                   "type": "object",
@@ -1372,7 +1381,8 @@
               "required": [
                 "event_id",
                 "status",
-                "code"
+                "code",
+                "retryable"
               ],
               "additionalProperties": false
             }
@@ -1455,6 +1465,7 @@
       "BatchReasonCode": {
         "type": "string",
         "enum": [
+          "in_progress",
           "unsupported_schema_version",
           "schema_version_sunset",
           "unknown_event",
