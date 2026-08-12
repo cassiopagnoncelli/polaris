@@ -53,7 +53,9 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  createLagReporter,
   deriveEventId,
+  type LagReporter,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -129,6 +131,11 @@ export interface AttributionEngineRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
+   * Lag reporter. Defaults to one owned by this runtime; `app.ts` passes its
+   * own so it can stop the timer on shutdown.
+   */
+  readonly lag?: LagReporter;
+  /**
    * Activation gate consulted per message. Defaults to
    * {@link ALWAYS_ENABLED_GATE} so a runtime built outside `app.ts` (unit
    * tests, golden fixtures) needs no database. Production passes the
@@ -177,6 +184,12 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
+  const lag =
+    deps.lag ??
+    createLagReporter({
+      metrics,
+      identity: { name: PROCESSOR_NAME, version: PROCESSOR_VERSION },
+    });
   // No uuidv7 fallback: absence means "derive the id from the cause",
   // which is the production path. Tests inject a counter.
   const newEventId = deps.newEventId;
@@ -191,6 +204,7 @@ export function createRuntime(deps: AttributionEngineRuntimeDeps): AttributionEn
       isolation,
       metrics,
       gate,
+      lag,
       ...(newEventId !== undefined ? { newEventId } : {}),
       ...(deps.now !== undefined ? { now: deps.now } : {}),
       run_id: deps.run_id,
@@ -237,6 +251,8 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
+  /** Records when this partition last delivered, for the lag timer. */
+  readonly lag: LagReporter;
   readonly newEventId?: (() => string) | undefined;
   readonly now?: () => Date;
   /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
@@ -244,7 +260,7 @@ interface HandleMessageInput {
 }
 
 async function handleMessage(input: HandleMessageInput): Promise<void> {
-  const { payload, context, store, logger, metrics, gate, newEventId } = input;
+  const { payload, context, store, logger, metrics, gate, lag, newEventId } = input;
   const value = payload.message.value;
   if (value === null || value.length === 0) {
     // Tombstone-style empty payload. Drop with a warn — mirrors the
@@ -320,6 +336,15 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     return;
   }
 
+  // Records WHEN, not lag itself: the timer computes `now - this`, so the
+  // reading keeps climbing when messages stop arriving.
+  lag.observe({
+    family: payload.family,
+    partition: payload.partition,
+    project_id: raw.project_id,
+    environment: raw.environment,
+    ingestedAt: raw.ingested_at,
+  });
   metrics.incrementConsumed(labels);
 
   /**

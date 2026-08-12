@@ -22,12 +22,17 @@
  *      rebuild-job declaration (projection, optional range, reason,
  *      requester, status, outcome).
  *
- *   3. The executor that actually re-derives the projection is
- *      DEFERRED to a follow-up task. `polaris clickhouse-rebuild
- *      create` without --dry-run persists a `pending` row + audit
- *      trail but exits non-zero with reason code
- *      `clickhouse_rebuild_executor_not_implemented` so an operator
- *      cannot believe a rebuild already ran.
+ *   3. The executor re-derives the projection from a full partition
+ *      scan and drives the row pending -> running -> completed (or
+ *      failed). `create` without --dry-run invokes it and exits
+ *      non-zero on failure, so an operator can neither believe a
+ *      rebuild ran when it did not, nor miss one that broke.
+ *
+ *      This is the repair path for the incremental projections, which
+ *      over-count cross-block duplicates by construction — see
+ *      sql/clickhouse/materialized-views/41_*.sql. A full-partition
+ *      scan sees every duplicate at once, which is exactly what a
+ *      per-insert-block materialized view cannot do.
  *
  * @see docs/architecture/07-clickhouse.md "Replay and Rebuild"
  * @see docs/development/clickhouse-rebuilds.md

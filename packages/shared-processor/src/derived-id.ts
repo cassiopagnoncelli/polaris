@@ -47,10 +47,14 @@ import { v5 as uuidv5 } from "uuid";
 /**
  * Namespace for every Polaris derived event id.
  *
+ * Module-private: no caller outside this package has a reason to reference it,
+ * and `pnpm lint:dead-exports` flagged the export within an hour of it being
+ * written. Its value is pinned by the key-material test instead.
+ *
  * A fixed UUIDv4, generated once and frozen. Changing it re-mints every
  * derived id in existence, so it is effectively part of the storage format.
  */
-export const POLARIS_DERIVED_EVENT_NAMESPACE = "6f2a1c84-9c1e-4f7b-8a30-1d5c6b0e9f42";
+const POLARIS_DERIVED_EVENT_NAMESPACE = "6f2a1c84-9c1e-4f7b-8a30-1d5c6b0e9f42";
 
 export interface DeriveEventIdInput {
   /**

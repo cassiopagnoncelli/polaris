@@ -23,6 +23,7 @@ import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import {
+  createLagReporter,
   createProcessorActivationGate,
   openProcessorRun,
   type ProcessorActivationGate,
@@ -183,6 +184,11 @@ export async function buildAttributionEngineApp(
       logger: processorLogger,
     });
 
+  // ---- lag reporting ---------------------------------------------------
+  // Owned here rather than by the runtime so the timer is stopped on
+  // shutdown alongside everything else with a lifecycle.
+  const lag = createLagReporter({ metrics, identity: PROCESSOR_IDENTITY });
+
   // ---- processor run ---------------------------------------------------
   // Registered BEFORE the runtime is built: the runtime stamps
   // `processor.run_id` onto every derived event, and the id has to exist by
@@ -215,6 +221,7 @@ export async function buildAttributionEngineApp(
     ...(options.now !== undefined ? { now: options.now } : {}),
     run_id: run.run_id,
     gate,
+    lag,
   });
 
   // ---- shutdown tasks --------------------------------------------------
@@ -234,6 +241,7 @@ export async function buildAttributionEngineApp(
   // close out while that pool is still open. Counters are read from the metrics
   // registry once the runtime is quiet. A no-op when nothing was registered.
   shutdownTasks.push(async () => {
+    lag.stop();
     await run.complete();
   });
   if (ownsConsumer) {

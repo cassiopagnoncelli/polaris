@@ -124,6 +124,17 @@ export interface ProcessorMetricLabels {
    */
   readonly topic_family?: string | undefined;
   /**
+   * Partition index, for metrics that are meaningfully per-partition — lag
+   * above all, since one stalled partition is the failure mode the alerts
+   * exist for.
+   *
+   * It was absent, so every partition wrote to the same gauge series and the
+   * last writer won. The `polaris-processors` dashboard has meanwhile queried
+   * `max by (processor_name, partition) (polaris_processor_lag_ms_last)`
+   * against a label that could not exist.
+   */
+  readonly partition?: number | undefined;
+  /**
    * Concrete RabbitMQ topic name resolved at emission time (the shared
    * family topic when the project is not isolated, or the dedicated
    * topic when it is). Required alongside `topic_family` so isolation

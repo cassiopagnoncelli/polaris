@@ -43,7 +43,9 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  createLagReporter,
   deriveEventId,
+  type LagReporter,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -112,6 +114,11 @@ export interface GeoipEnricherRuntimeDeps {
    */
   readonly metrics?: ProcessorMetrics;
   /**
+   * Lag reporter. Defaults to one owned by this runtime; `app.ts` passes its
+   * own so it can stop the timer on shutdown.
+   */
+  readonly lag?: LagReporter;
+  /**
    * Activation gate consulted per message. Defaults to
    * {@link ALWAYS_ENABLED_GATE} so a runtime built outside `app.ts` (unit
    * tests, golden fixtures) needs no database. Production passes the
@@ -161,6 +168,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
+  const lag = deps.lag ?? createLagReporter({ metrics, identity: PROCESSOR_IDENTITY });
   const lookup = deps.lookup ?? new NoOpIPLookup();
   // No uuidv7 fallback: absence means "derive the id from the cause",
   // which is the production path. Tests inject a counter.
@@ -176,6 +184,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
       isolation,
       metrics,
       gate,
+      lag,
       ...(newEventId !== undefined ? { newEventId } : {}),
       run_id: deps.run_id,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -223,6 +232,8 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
+  /** Records when this partition last delivered, for the lag timer. */
+  readonly lag: LagReporter;
   readonly newEventId?: (() => string) | undefined;
   readonly run_id: string;
   readonly now?: () => Date;
@@ -241,6 +252,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     run_id,
     now,
     gate,
+    lag,
   } = input;
   const value = payload.message.value;
   if (value === null || value.length === 0) {
@@ -316,6 +328,15 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     return;
   }
 
+  // Records WHEN, not lag itself: the timer computes `now - this`, so the
+  // reading keeps climbing when messages stop arriving.
+  lag.observe({
+    family: payload.family,
+    partition: payload.partition,
+    project_id: raw.project_id,
+    environment: raw.environment,
+    ingestedAt: raw.ingested_at,
+  });
   metrics.incrementConsumed(labels);
 
   /**

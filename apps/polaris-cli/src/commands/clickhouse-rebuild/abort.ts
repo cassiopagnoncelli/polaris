@@ -7,7 +7,7 @@
  * `aborted`) are idempotent — the runner prints "already terminal"
  * and exits 0 so scripts can re-run without try/catch bracketing.
  *
- * The deferred executor (P7-005-followup) honors the aborted status
+ * The executor honors the aborted status
  * by stopping mid-stream the next time it picks the job up.
  *
  * Writes the matching `audit_records` row in the SAME transaction.

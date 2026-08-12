@@ -25,7 +25,6 @@
  *   - The output format honors `--output human` and `--output json`.
  */
 import {
-  CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
   dedicatedStreamFamily,
   STREAM_FAMILY_ANALYTICS_EVENTS,
@@ -44,7 +43,6 @@ import {
   type OutputStreams,
   type PackageMeta,
   run,
-  TOPIC_ISOLATION_ID_PREFIX,
   type TopicIsolationRow,
   type TopicsDeisolateStore,
   type TopicsIsolateStore,
@@ -289,7 +287,7 @@ function jsonContext(streams: OutputStreams): CommandContext {
   return { ...base, config: { ...base.config, output: "json" } };
 }
 
-const ISOLATE_BASE_ARGS = {
+const _ISOLATE_BASE_ARGS = {
   project: "storefront",
   env: "production",
   family: STREAM_FAMILY_RAW_EVENTS,

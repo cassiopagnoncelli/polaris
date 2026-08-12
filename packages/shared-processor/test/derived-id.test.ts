@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { deriveEventId, POLARIS_DERIVED_EVENT_NAMESPACE } from "../src/derived-id.js";
+import { deriveEventId } from "../src/derived-id.js";
 
 const SOURCE = "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551";
 
@@ -73,10 +73,6 @@ describe("deriveEventId", () => {
       slot: "started",
     });
     expect(afterFix).toBe(beforeFix);
-  });
-
-  it("pins the namespace, because changing it re-mints every derived id ever stored", () => {
-    expect(POLARIS_DERIVED_EVENT_NAMESPACE).toBe("6f2a1c84-9c1e-4f7b-8a30-1d5c6b0e9f42");
   });
 
   it("pins the key material, so a refactor cannot silently re-mint ids", () => {

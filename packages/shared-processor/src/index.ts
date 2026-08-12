@@ -18,6 +18,7 @@
  *   - PostgreSQL processor-run registration (`./runs`)
  *   - per-message activation gating (`./activation-gate`)
  *   - deterministic derived event ids (`./derived-id`)
+ *   - timer-driven per-partition lag (`./lag-reporter`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
@@ -70,7 +71,6 @@ export {
 export {
   type DeriveEventIdInput,
   deriveEventId,
-  POLARIS_DERIVED_EVENT_NAMESPACE,
 } from "./derived-id.js";
 export {
   type ProcessorDlqEnvelopeMetadata,
@@ -82,6 +82,13 @@ export {
   type ProcessorLogContextInput,
   processorLogContext,
 } from "./identity.js";
+export {
+  type CreateLagReporterInput,
+  createLagReporter,
+  type LagReporter,
+  type LagScheduler,
+  type ObserveLagInput,
+} from "./lag-reporter.js";
 export {
   type LoadedProcessorManifest,
   type LoadProcessorManifestOptions,
