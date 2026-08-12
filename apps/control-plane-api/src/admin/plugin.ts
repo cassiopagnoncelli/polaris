@@ -1240,6 +1240,10 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             runs,
             projects: projects.map((p) => p.project_id),
             environments: ACTIVATION_ENVIRONMENTS,
+            filters: {
+              project: queryString(request, "project"),
+              environment: queryString(request, "environment"),
+            },
           }),
         );
       });

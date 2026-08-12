@@ -28,6 +28,7 @@ import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ProcessorActivationRow, ProcessorRunRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
+import { filterForm, selectField, textField } from "./filters.js";
 import { formatInstant } from "./format.js";
 
 /**
@@ -158,20 +159,47 @@ const NO_RUNS =
   "No processor has started since run recording landed. A row appears here " +
   "when a processor boots and reaches PostgreSQL.";
 
+/** Filter values the processors page reads from the query string. */
+export interface ProcessorFilterValues {
+  readonly project: string;
+  readonly environment: string;
+}
+
+/**
+ * Narrow the matrix before the cap applies.
+ *
+ * Order matters: filtering after capping would show "500 of 1800" and then
+ * hide most of what the operator filtered FOR. Filtering first means a
+ * scoped view is complete, which is the whole reason the filter exists —
+ * a large install cannot see its own matrix otherwise.
+ */
+export function applyActivationFilters(
+  cells: readonly ActivationCell[],
+  filters: ProcessorFilterValues,
+): readonly ActivationCell[] {
+  return cells.filter((cell) => {
+    if (filters.project.length > 0 && cell.project_id !== filters.project) return false;
+    if (filters.environment.length > 0 && cell.environment !== filters.environment) return false;
+    return true;
+  });
+}
+
 export function renderProcessorsPage(input: {
   ctx: AdminPageContext;
   activations: readonly ProcessorActivationRow[];
   runs: readonly ProcessorRunRow[];
   projects: readonly string[];
   environments: readonly string[];
+  filters: ProcessorFilterValues;
 }): string {
   const running = countRunningByProcessor(input.runs);
-  const cells = buildActivationMatrix({
+  const allCells = buildActivationMatrix({
     activations: input.activations,
     runs: input.runs,
     projects: input.projects,
     environments: input.environments,
   });
+  const cells = applyActivationFilters(allCells, input.filters);
 
   // The matrix is versions x projects x environments, so it grows fast:
   // 6 processors at 2 versions across 50 projects is 1800 rows. Cap it and
@@ -243,6 +271,10 @@ export function renderProcessorsPage(input: {
       </p>
 
       <h2>Activations</h2>
+      ${filterForm(`${ADMIN_PREFIX}/processors`, [
+        textField("project", "Project", input.filters.project),
+        selectField("environment", "Environment", ACTIVATION_ENVIRONMENTS, input.filters.environment),
+      ])}
       ${
         omitted > 0
           ? html`<p class="notice">

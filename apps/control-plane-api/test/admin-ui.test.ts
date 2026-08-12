@@ -886,6 +886,40 @@ describe("admin UI — processors page", () => {
     expect(res.body).toContain("no activation row");
   });
 
+  it("filters the matrix by project and environment", async () => {
+    const res = await fetchPage({
+      listProjects: async () => [
+        { project_id: "storefront" } as never,
+        { project_id: "acme" } as never,
+      ],
+      listProcessorRuns: async () => [RUN],
+    });
+    expect(res.body).toContain("acme");
+
+    const filtered = await app0Fetch("project=acme&environment=staging");
+    expect(filtered.body).toContain("acme");
+    expect(filtered.body).not.toContain(">storefront<");
+  });
+
+  async function app0Fetch(query: string) {
+    const app = await buildApp({
+      queries: makeQueries({
+        listProjects: async () => [
+          { project_id: "storefront" } as never,
+          { project_id: "acme" } as never,
+        ],
+        listProcessorRuns: async () => [RUN],
+      }),
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: `/admin/processors?${query}`,
+      headers: { cookie: sessionCookie("admin-token") },
+    });
+    await app.app.close();
+    return res;
+  }
+
   it("states what a disabled row actually does, and what a default means", async () => {
     const res = await fetchPage({ listProcessorActivations: async () => [ACTIVATION] });
     expect(res.body).toContain("stops that processor from acting");
