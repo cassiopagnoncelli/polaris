@@ -17,6 +17,7 @@
  *   - dual-shape metadata stamping (`./metadata`)
  *   - PostgreSQL processor-run registration (`./runs`)
  *   - per-message activation gating (`./activation-gate`)
+ *   - deterministic derived event ids (`./derived-id`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
@@ -66,6 +67,11 @@ export {
   type ProcessorDlqRecordsTable,
   type RecordProcessorDlqInput,
 } from "./db/processor-dlq-records.js";
+export {
+  type DeriveEventIdInput,
+  deriveEventId,
+  POLARIS_DERIVED_EVENT_NAMESPACE,
+} from "./derived-id.js";
 export {
   type ProcessorDlqEnvelopeMetadata,
   type PublishToDlqInput,

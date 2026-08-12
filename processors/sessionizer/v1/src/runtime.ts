@@ -53,6 +53,7 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  deriveEventId,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -73,7 +74,6 @@ import {
   type TransportMessageContext,
   type TransportMessageHandler,
 } from "@polaris/shared-transport";
-import { v7 as uuidv7 } from "uuid";
 
 import {
   buildSessionEndedEnvelope,
@@ -203,7 +203,9 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
-  const newEventId = deps.newEventId ?? ((): string => uuidv7());
+  // No uuidv7 fallback: absence means "derive the id from the cause",
+  // which is the production path. Tests inject a counter.
+  const newEventId = deps.newEventId;
   const inactivitySeconds = deps.inactivity_seconds ?? DEFAULT_INACTIVITY_SECONDS;
   const producerName = deps.producer_name ?? `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`;
 
@@ -216,7 +218,7 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
       logger: deps.logger,
       metrics,
       gate,
-      newEventId,
+      ...(newEventId !== undefined ? { newEventId } : {}),
       inactivitySeconds,
       producerName,
       isolation,
@@ -266,7 +268,7 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
-  readonly newEventId: () => string;
+  readonly newEventId?: (() => string) | undefined;
   readonly inactivitySeconds: number;
   readonly producerName: string;
   readonly producerVersion?: string;
@@ -351,6 +353,20 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   }
 
   metrics.incrementConsumed(labels);
+
+  /**
+   * Identity of each derived event, as a pure function of its cause.
+   *
+   * Keyed on the SOURCE event id and an emission slot, never on the attempt:
+   * a redelivery or a replay of the same input reproduces the same id, so
+   * `analytics_processed`'s ReplacingMergeTree collapses the duplicate instead
+   * of accumulating it as a second fact. `newEventId` remains injectable for
+   * tests that need a counter, and overrides this when supplied.
+   */
+  const derivedEventId = (slot: string): string =>
+    newEventId !== undefined
+      ? newEventId()
+      : deriveEventId({ processor: PROCESSOR_NAME, sourceEventId: raw.event_id, slot });
 
   // Resolve the primary identifier first so the runtime can look up the
   // store record before running the pure transform. The transform takes
@@ -443,7 +459,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       };
       const envelope = buildSessionStartedEnvelope({
         raw,
-        eventId: newEventId(),
+        eventId: derivedEventId("started"),
         now: nowFn,
         run_id: runId,
         properties,
@@ -499,7 +515,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     };
     const endedEnvelope = buildSessionEndedEnvelope({
       raw,
-      eventId: newEventId(),
+      eventId: derivedEventId("ended"),
       now: nowFn,
       run_id: runId,
       properties: endedProperties,
@@ -523,7 +539,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
     };
     const startedEnvelope = buildSessionStartedEnvelope({
       raw,
-      eventId: newEventId(),
+      eventId: derivedEventId("started"),
       now: nowFn,
       run_id: runId,
       properties: startedProperties,

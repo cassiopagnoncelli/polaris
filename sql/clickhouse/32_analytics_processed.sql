@@ -18,10 +18,18 @@
 --
 -- Dedup key: ORDER BY (project_id, environment, event, event_id) —
 --   identical to analytics_raw, so the same query patterns apply
---   verbatim. Derived events carry deterministic event_ids (a replay of
---   the same input reproduces the same id), which is what makes
---   ReplacingMergeTree the right engine here and not just an inherited
---   default.
+--   verbatim. Derived events carry deterministic event_ids — UUIDv5 over
+--   (processor_name, source_event_id, emission slot), see
+--   packages/shared-processor/src/derived-id.ts — so a replay of the same
+--   input reproduces the same id and this engine collapses the duplicate.
+--   That is what makes ReplacingMergeTree right here rather than an
+--   inherited default.
+--
+--   It was NOT true when this file was written: every processor minted a
+--   uuidv7 per emission attempt, so redeliveries accumulated as distinct
+--   facts and this comment described an intention. Rows written before that
+--   fix keep their random ids and will not collapse against re-derived ones;
+--   a partition rebuild is the way to normalise them.
 --
 -- TTL:
 --   400 days, matching analytics_raw. Derived facts are only meaningful

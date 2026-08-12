@@ -40,6 +40,7 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  deriveEventId,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -58,7 +59,6 @@ import {
   type TransportMessageContext,
   type TransportMessageHandler,
 } from "@polaris/shared-transport";
-import { v7 as uuidv7 } from "uuid";
 import {
   buildIdentityEventEnvelope,
   type IdentityEventEmission,
@@ -152,7 +152,9 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
   const isolatedProjects = deps.isolatedProjects ?? [];
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
-  const newEventId = deps.newEventId ?? ((): string => uuidv7());
+  // No uuidv7 fallback: absence means "derive the id from the cause",
+  // which is the production path. Tests inject a counter.
+  const newEventId = deps.newEventId;
 
   const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
@@ -164,7 +166,7 @@ export function createRuntime(deps: IdentityResolverRuntimeDeps): IdentityResolv
       isolation,
       metrics,
       gate,
-      newEventId,
+      ...(newEventId !== undefined ? { newEventId } : {}),
       ...(deps.now !== undefined ? { now: deps.now } : {}),
       run_id: deps.run_id,
     });
@@ -210,7 +212,7 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
-  readonly newEventId: () => string;
+  readonly newEventId?: (() => string) | undefined;
   readonly now?: () => Date;
   /** Run emitting these events. Threaded down from `createRuntime`'s deps. */
   readonly run_id: string;
@@ -307,6 +309,20 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   metrics.incrementConsumed(labels);
 
+  /**
+   * Identity of each derived event, as a pure function of its cause.
+   *
+   * Keyed on the SOURCE event id and an emission slot, never on the attempt:
+   * a redelivery or a replay of the same input reproduces the same id, so
+   * `analytics_processed`'s ReplacingMergeTree collapses the duplicate instead
+   * of accumulating it as a second fact. `newEventId` remains injectable for
+   * tests that need a counter, and overrides this when supplied.
+   */
+  const derivedEventId = (slot: string): string =>
+    newEventId !== undefined
+      ? newEventId()
+      : deriveEventId({ processor: PROCESSOR_NAME, sourceEventId: raw.event_id, slot });
+
   // v1's only rule: explicit overlap. The transform returns `none` when
   // no two strong identifiers are present in the canonical identity block.
   const candidate = resolveIdentityCandidate(raw);
@@ -349,7 +365,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   const envelope = buildIdentityEventEnvelope({
     raw,
     emission,
-    eventId: newEventId(),
+    eventId: derivedEventId("identity"),
     now: now ?? ((): Date => new Date()),
     run_id: input.run_id,
   });

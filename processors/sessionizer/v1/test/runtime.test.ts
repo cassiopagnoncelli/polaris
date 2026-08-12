@@ -20,6 +20,7 @@
 
 import { createLogger } from "@polaris/shared-logger";
 import {
+  deriveEventId,
   METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
   type ProcessorActivationGate,
   type ProcessorMetrics,
@@ -618,3 +619,56 @@ function skippedTotal(metrics: ProcessorMetrics): number {
     .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
     .reduce((total, sample) => total + sample.value, 0);
 }
+
+describe("createRuntime derived event ids (sessionizer v1)", () => {
+  it("reproduces the same event_id when the same source event is redelivered", () => {
+    // At-least-once means this happens routinely: a rewind, a crash replay, a
+    // checkpoint that did not land. Each attempt used to mint a fresh uuidv7,
+    // so `analytics_processed` — ReplacingMergeTree keyed on event_id —
+    // accumulated the retries as separate facts instead of collapsing them.
+    const first = deriveEventId({
+      processor: PROCESSOR_NAME,
+      sourceEventId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      slot: "started",
+    });
+    const second = deriveEventId({
+      processor: PROCESSOR_NAME,
+      sourceEventId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      slot: "started",
+    });
+    expect(second).toBe(first);
+  });
+
+  it("emits a derived id, not a random one, when no allocator is injected", async () => {
+    // The production path: `newEventId` unset. Two runs over the same input
+    // must agree, which a uuidv7 default could never do.
+    async function emitOnce(): Promise<string> {
+      const producer = new RecordingProducer();
+      // createRuntime directly, NOT buildRuntime: the helper always injects a
+      // deterministic counter, which would make this pass without exercising
+      // the derivation at all.
+      const runtime = createRuntime({
+        consumer: stubConsumer(),
+        producer: producer as unknown as PolarisProducer,
+        store: new InMemorySessionStore(),
+        logger: createLogger({ service: "test", version: "0.0.0", env: "local" }),
+        now: () => new Date(RAN_AT_ISO),
+        run_id: "run_test_1",
+        inactivity_seconds: 1800,
+      });
+      await runtime.handler(
+        buildPayload(buildRawEnvelopeJson({ identity: { anonymous_id: "anon_X" } })),
+        EMPTY_CONTEXT,
+      );
+      // The recorder keeps the encoded envelope, and the id is also on the
+      // header the transport stamps — read the headers, which is what a
+      // consumer would key on.
+      const headers = producer.publishes[0]?.headers ?? {};
+      return String(headers["polaris-event-id"] ?? headers["x-polaris-event-id"] ?? "");
+    }
+    const first = await emitOnce();
+    // Fail loudly rather than comparing two empty strings.
+    expect(first).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(await emitOnce()).toBe(first);
+  });
+});

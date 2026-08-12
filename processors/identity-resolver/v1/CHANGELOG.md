@@ -7,6 +7,27 @@ meaning, fields, identity links, attribution outcomes, filtering behavior, or
 output schema requires a new version directory (v2/) — see
 `docs/architecture/05-processors-and-replay.md` "Processor Versioning".
 
+## Unreleased — derived event ids are now a function of their cause
+
+Emitted `event_id`s were `uuidv7()` per attempt, so a redelivery or a replay
+of the same input produced a NEW derived event every time.
+`analytics_processed` is `ReplacingMergeTree` keyed on `event_id`, so those
+duplicates never collapsed — they accumulated as distinct facts — and
+`sql/clickhouse/32_analytics_processed.sql` justified that engine choice by
+claiming derived ids were already deterministic.
+
+Ids now come from `deriveEventId({ processor, sourceEventId, slot })`
+(UUIDv5), where `slot` names which emission this is and is a pure function of
+the source event. `processor_version` is deliberately excluded from the key:
+including it would mint a fresh id generation on every fix, which is exactly
+when you replay, and the replay would then collide with nothing.
+
+Classified as a non-semantic correctness fix rather than a new version. The
+envelope shape is unchanged, the field stays a UUID, and no mapping, identity,
+attribution or filtering rule moved. What changes is that a value which was
+never meaningful becomes meaningful. Consumers keying on `event_id` for
+identity see stable values where they previously saw noise.
+
 ## v1 — manifest standardisation (P8-006, 2026-05-15)
 
 Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised

@@ -43,6 +43,7 @@ import type { Logger } from "@polaris/shared-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
+  deriveEventId,
   type ProcessorActivationGate,
   type ProcessorMetricLabels,
   ProcessorMetrics,
@@ -61,7 +62,6 @@ import {
   type TransportMessageContext,
   type TransportMessageHandler,
 } from "@polaris/shared-transport";
-import { v7 as uuidv7 } from "uuid";
 
 import { buildGeoipEnvelope, type GeoipEnvelope } from "./emit.js";
 import type { IPLookup } from "./lookup.js";
@@ -162,7 +162,9 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
   const metrics = deps.metrics ?? new ProcessorMetrics();
   const gate = deps.gate ?? ALWAYS_ENABLED_GATE;
   const lookup = deps.lookup ?? new NoOpIPLookup();
-  const newEventId = deps.newEventId ?? ((): string => uuidv7());
+  // No uuidv7 fallback: absence means "derive the id from the cause",
+  // which is the production path. Tests inject a counter.
+  const newEventId = deps.newEventId;
 
   const handler: TransportMessageHandler = async (payload, context) => {
     await handleMessage({
@@ -174,7 +176,7 @@ export function createRuntime(deps: GeoipEnricherRuntimeDeps): GeoipEnricherRunt
       isolation,
       metrics,
       gate,
-      newEventId,
+      ...(newEventId !== undefined ? { newEventId } : {}),
       run_id: deps.run_id,
       ...(deps.now !== undefined ? { now: deps.now } : {}),
     });
@@ -221,7 +223,7 @@ interface HandleMessageInput {
   readonly metrics: ProcessorMetrics;
   /** Activation gate, consulted once the envelope's scope is known. */
   readonly gate: ProcessorActivationGate;
-  readonly newEventId: () => string;
+  readonly newEventId?: (() => string) | undefined;
   readonly run_id: string;
   readonly now?: () => Date;
 }
@@ -316,6 +318,20 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
 
   metrics.incrementConsumed(labels);
 
+  /**
+   * Identity of each derived event, as a pure function of its cause.
+   *
+   * Keyed on the SOURCE event id and an emission slot, never on the attempt:
+   * a redelivery or a replay of the same input reproduces the same id, so
+   * `analytics_processed`'s ReplacingMergeTree collapses the duplicate instead
+   * of accumulating it as a second fact. `newEventId` remains injectable for
+   * tests that need a counter, and overrides this when supplied.
+   */
+  const derivedEventId = (slot: string): string =>
+    newEventId !== undefined
+      ? newEventId()
+      : deriveEventId({ processor: PROCESSOR_NAME, sourceEventId: raw.event_id, slot });
+
   const startedAt = Date.now();
   const decision = decideEnrichment({ ip: raw.context.ip, lookup });
   const properties = decisionToProperties(decision, {
@@ -326,7 +342,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   const envelope: GeoipEnvelope = buildGeoipEnvelope({
     raw,
     properties,
-    eventId: newEventId(),
+    eventId: derivedEventId("enriched"),
     now: now ?? ((): Date => new Date()),
     run_id,
   });
