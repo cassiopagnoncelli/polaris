@@ -53,6 +53,7 @@ MAILTO=""
 # shorter than the version's window. That is deliberate: a retention job that
 # silently succeeds while pruning nothing is worse than one that pages. Do not
 # add `|| true`.
+#
 # Scoped per environment on purpose. An UNSCOPED prune (no
 # POLARIS_PRUNE_ENV) means every environment including production, so the
 # CLI treats it as a production mutation and refuses it without an
@@ -65,6 +66,11 @@ MAILTO=""
 # Production carries POLARIS_OPERATOR_TOKEN, which is why it sources a
 # second, tighter file. Keep that one root-owned and 0600 — it holds a
 # credential that can delete rows.
+#
+# No token provisioned yet? Comment this line out and install the file
+# anyway. The two entries above need nothing but a host, the CLI and
+# database reachability, so they start working immediately; uncommenting
+# this one later is the whole of the remaining change.
 27 3 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; POLARIS_PRUNE_ENV=production; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
 
 # --- Not scheduled here ----------------------------------------------------

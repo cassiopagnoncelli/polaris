@@ -594,6 +594,35 @@ crontab itself is checked in.
 Daily is ample — the window is 90 days, so eligibility does not change
 quickly, and the delete is a bounded index scan.
 
+#### One entry per environment, and only one of them needs a credential
+
+The file ships three prune entries rather than one:
+
+| Entry | Sources | Needs a token |
+| --- | --- | --- |
+| `POLARIS_PRUNE_ENV=development` | `retention.env` | no |
+| `POLARIS_PRUNE_ENV=staging` | `retention.env` | no |
+| `POLARIS_PRUNE_ENV=production` | `retention.env` + `retention-production.env` | **yes** |
+
+An *unscoped* prune — `POLARIS_PRUNE_ENV` unset — means every environment
+including production, so the CLI treats it as a production mutation and
+refuses it without `POLARIS_OPERATOR_TOKEN`. Splitting the entries keeps
+that credential on the one job that needs it instead of handing a
+production token to a job that only ever touches development.
+
+**You do not need production to start using this.** The development and
+staging entries need nothing but a host, the `polaris` CLI, and database
+reachability. If the production operator token is not provisioned yet,
+install the file and comment out the production line — the other two
+begin doing useful work immediately, and uncommenting later is the whole
+of the remaining change. Only that third line is production-gated; the
+schedule as a whole is deployment-gated.
+
+Keep `retention-production.env` root-owned and `0600`. It holds a
+credential that can delete rows, and the audit row for a run that used it
+records `operator_token` plus the operator's label rather than a bare
+`cli` — which is the point of putting it there.
+
 Unlike its sibling scripts here, this one is not dependency-free: it
 shells out to the `polaris` CLI rather than issuing SQL. That is the
 point. A bare `DELETE ... WHERE last_observed_at < now() - interval '90
@@ -604,8 +633,9 @@ know how to delete anything itself.
 A refusal exits non-zero so the cron entry fails loudly rather than
 reading as a quiet success. Configuration is by environment
 (`POLARIS_PRUNE_VERSION`, `POLARIS_PRUNE_PROJECT`, `POLARIS_PRUNE_ENV`,
-`POLARIS_PRUNE_IDLE_SECONDS`, `POLARIS_PRUNE_DRY_RUN`); defaults are
-documented at the top of the script.
+`POLARIS_PRUNE_IDLE_SECONDS`, `POLARIS_PRUNE_DRY_RUN`,
+`POLARIS_OPERATOR_TOKEN`); defaults are documented at the top of the
+script.
 
 There is no locking. Two overlapping runs both issue the same bounded
 DELETE; the second finds nothing and writes no audit row.
