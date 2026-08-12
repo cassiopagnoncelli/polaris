@@ -29,6 +29,8 @@ import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import {
+  createDlqLedgerRecorder,
+  createKyselyProcessorDlqRecordRepository,
   createLagReporter,
   createProcessorActivationGate,
   openProcessorRun,
@@ -49,6 +51,7 @@ import {
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  type PoisonRecord,
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
@@ -273,6 +276,10 @@ export async function buildAnalyticsProjectorApp(
     connection,
     checkpoints,
     producer,
+    createDlqLedgerRecorder({
+      repository: createKyselyProcessorDlqRecordRepository({ db: checkpointDb }),
+      identity: PROCESSOR_IDENTITY,
+    }),
   );
 
   if (ownsProducer) {
@@ -516,6 +523,8 @@ function buildConsumer(
   connection: TransportConnection,
   checkpoints: PostgresCheckpointStore,
   producer: PolarisProducer,
+  /** Ledger write for a dead-lettered message; see the poison handle below. */
+  recordDlq: (record: PoisonRecord) => Promise<void>,
 ): { consumer: PolarisConsumer; ownsConsumer: boolean } {
   if (override !== undefined) {
     return { consumer: override, ownsConsumer: false };
@@ -525,7 +534,14 @@ function buildConsumer(
     logger,
     consumerName: PROCESSOR_NAME,
     consumerVersion: PROCESSOR_VERSION,
-    poison: { component: "analytics-projector", producer },
+    poison: {
+      component: "analytics-projector",
+      producer,
+      // Without this the dead-lettered bytes reach `analytics-projector.dlq` and
+      // nothing else knows: `polaris processors dlq list` reads a table
+      // nobody writes.
+      record: recordDlq,
+    },
     groupName: config.projector.consumerGroup,
     checkpoints,
   });

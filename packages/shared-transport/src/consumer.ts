@@ -131,6 +131,35 @@ export interface PoisonHandle {
   readonly component: string;
   /** Connected producer used for the DLQ publish. */
   readonly producer: PolarisProducer;
+  /**
+   * Optional ledger write, called after the DLQ publish succeeds.
+   *
+   * Without it a dead-lettered message exists only as bytes on a queue, and
+   * `polaris processors dlq list/show/retry` reads a permanently empty table —
+   * an operator surface for an incident it cannot see. A callback rather than
+   * a repository because the ledger lives in `@polaris/shared-processor`,
+   * which depends on this package; taking the dependency the other way would
+   * close a cycle.
+   *
+   * Must not throw: it is bookkeeping, and losing it may not stop the
+   * partition from draining past a message it has already dead-lettered.
+   */
+  readonly record?: (input: PoisonRecord) => Promise<void>;
+}
+
+/** What the ledger is told about a dead-lettered message. */
+export interface PoisonRecord {
+  readonly component: string;
+  readonly sourceTopic: string;
+  readonly sourcePartition: number;
+  readonly sourceOffset: string;
+  readonly attempts: number;
+  readonly reason: string;
+  readonly errorClass: string;
+  readonly errorMessage: string;
+  /** Header values coerced to strings; the ledger column is text. */
+  readonly headers: Readonly<Record<string, string>>;
+  readonly value: Buffer | undefined;
 }
 
 /** Streams to read, expressed as families plus a partition assignment. */
@@ -496,6 +525,39 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
         errorMessage: error.message,
         failedAt: new Date().toISOString(),
       });
+      // Bytes are on the queue; now make the incident visible to the operator
+      // surface. Failures here are logged and swallowed — the message is
+      // already dead-lettered, and refusing to advance would stall the
+      // partition over bookkeeping.
+      if (poison.record !== undefined) {
+        try {
+          await poison.record({
+            component: poison.component,
+            sourceTopic: reader.source,
+            sourcePartition: reader.partition,
+            sourceOffset: payload.message.offset,
+            attempts: reader.poisonAttempts,
+            reason: "poison_message",
+            errorClass: error.name,
+            errorMessage: error.message,
+            headers: stringifyHeaders(payload.message.headers),
+            value: payload.message.value ?? undefined,
+          });
+        } catch (recordErr) {
+          const recordError = recordErr as Error;
+          logger?.error(
+            {
+              component: "transport.consumer",
+              consumer: consumerName,
+              source: reader.source,
+              partition: reader.partition,
+              offset: payload.message.offset,
+              err: { name: recordError.name, message: recordError.message },
+            },
+            "dead-lettered message could not be recorded in the DLQ ledger; the bytes are on the queue but `processors dlq list` will not show it",
+          );
+        }
+      }
     } catch (dlqErr) {
       const dlqError = dlqErr as Error;
       logger?.error(
@@ -743,6 +805,24 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Coerce transport headers to the text shape the ledger column stores.
+ *
+ * Buffers become utf8, arrays take their first element, absent values are
+ * dropped — the ledger is for an operator reading a triage page, not a
+ * faithful byte record. The payload column keeps the original bytes.
+ */
+function stringifyHeaders(headers: Readonly<Record<string, unknown>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined || value === null) continue;
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first === undefined || first === null) continue;
+    out[key] = Buffer.isBuffer(first) ? first.toString("utf8") : String(first);
+  }
+  return out;
+}
 
 function newReader(
   source: string,

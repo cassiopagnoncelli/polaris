@@ -19,6 +19,7 @@
  *   - per-message activation gating (`./activation-gate`)
  *   - deterministic derived event ids (`./derived-id`)
  *   - timer-driven per-partition lag (`./lag-reporter`)
+ *   - DLQ ledger adapter for the transport's poison path (`./dlq-ledger`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
  *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
@@ -77,6 +78,10 @@ export {
   type PublishToDlqInput,
   publishToDlq,
 } from "./dlq.js";
+export {
+  type CreateDlqLedgerRecorderInput,
+  createDlqLedgerRecorder,
+} from "./dlq-ledger.js";
 export {
   type ProcessorIdentity,
   type ProcessorLogContextInput,

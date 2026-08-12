@@ -80,6 +80,7 @@ export {
   createPolarisConsumer,
   offsetSpec,
   type PoisonHandle,
+  type PoisonRecord,
   type PolarisConsumer,
   QUEUE_PARTITION,
   type StreamStartPosition,
