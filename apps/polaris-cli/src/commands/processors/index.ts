@@ -1,7 +1,7 @@
 /**
  * `polaris processors` command group.
  *
- * Surfaces six commands:
+ * Surfaces seven commands:
  *
  *   - `polaris processors list`                                       mutates: false
  *   - `polaris processors show <name> --version <v>`                  mutates: false
@@ -11,6 +11,7 @@
  *                                                                     mutates: true
  *   - `polaris processors disable <name> --version <v> --project <id> --env <env>`
  *                                                                     mutates: true
+ *   - `polaris processors chains-prune --version <v>`                 mutates: true
  *
  * Central architectural rule baked into this group:
  *
@@ -38,6 +39,7 @@
  * @see docs/implementation/tasks/P6-005-processor-runtime-cli.md
  */
 import type { CommandDefinition } from "../../command.js";
+import { processorsChainsPruneCommand } from "./chains-prune.js";
 import { processorsDisableCommand } from "./disable.js";
 import { processorsDlqCommand } from "./dlq/index.js";
 import { processorsEnableCommand } from "./enable.js";
@@ -52,6 +54,7 @@ const CHILDREN: readonly CommandDefinition[] = [
   processorsDlqCommand,
   processorsEnableCommand,
   processorsDisableCommand,
+  processorsChainsPruneCommand,
 ];
 
 export const processorsCommand: CommandDefinition = {

@@ -537,6 +537,52 @@ DLQ records carry no plaintext secrets. The destination consumer
 runtime ([P9-001](../../agents/pm/kanban/done/P9-001-destination-consumer-runtime.md))
 is responsible for redacting secret material before any DLQ write.
 
+## Attribution chain retention
+
+`attribution_touchpoint_chains` rows for **attribution-engine v2** are
+prunable once idle for longer than the processor's 90-day attribution
+window. v1 rows are **not** prunable at all.
+
+The asymmetry is semantic, not a policy preference:
+
+- v2 resets a chain after a 90-day inactivity gap, so a row idle beyond
+  the window can never be consulted again — the next event for that
+  identifier is guaranteed to open a new chain whether or not the old
+  row exists. Deleting it is provably free of semantic effect.
+- v1 has no window. A v1 chain is consulted however old it is, so
+  deleting one CHANGES OUTPUT: the next touchpoint would emit a
+  `first_touch_assigned` it otherwise would not. That is a new processor
+  version, not a retention decision.
+
+Unlike the audit and DLQ policies above, this one has an implementation:
+
+```bash
+# Count first. Writes no audit row.
+polaris processors chains-prune --version v2 --dry-run
+
+# Prune. Writes one audit row for the operation.
+polaris processors chains-prune --version v2
+
+# Narrow by scope, or be more conservative than the window.
+polaris processors chains-prune --version v2 --project storefront --env production
+polaris processors chains-prune --version v2 --idle 15552000   # 180 days
+```
+
+The command refuses `--version v1` and refuses an `--idle` shorter than
+the version's own window — both would delete rows the engine can still
+read. The guard lives in the mutation
+(`@polaris/shared-control-plane-db`), so a future scheduled job or the
+control-plane API inherits it rather than reimplementing it.
+
+There is **no** background job in v1; this is an operator-run command.
+Chains are small relative to event data and the window bounds their
+growth on its own, so a nightly schedule is a convenience rather than a
+requirement. When one lands it should call the same mutation.
+
+Note the interaction with a version cutover: v1's chains must survive
+until rollback is off the table. See
+[Processor Version Cutover](./processor-version-cutover.md) step 8.
+
 ## Audit retention policy
 
 `audit_records` retention is **2 years**, matching

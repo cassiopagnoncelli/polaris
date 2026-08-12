@@ -102,6 +102,7 @@ export {
   type ProjectFile,
   type ProjectRow,
   pauseReplayJobWithAudit,
+  pruneAttributionChainsWithAudit,
   REPLAY_JOB_MODES,
   REPLAY_JOB_STATUSES,
   REPLAY_JOB_TARGETS,

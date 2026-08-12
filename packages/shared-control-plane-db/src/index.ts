@@ -142,6 +142,15 @@ export {
   revokeApiKeyWithAudit,
   toApiKeySnapshot,
 } from "./mutations/api-keys.js";
+export {
+  IdleWindowTooShortError,
+  PRUNABLE_ATTRIBUTION_VERSIONS,
+  type PruneAttributionChainsInput,
+  type PruneAttributionChainsResult,
+  pruneAttributionChainsWithAudit,
+  resolvePruneCutoff,
+  UnprunableAttributionVersionError,
+} from "./mutations/attribution-chains.js";
 export type { AuditContext, AuditTarget, MutationOutcome } from "./mutations/audited.js";
 export {
   type CatalogSyncOutcome,
