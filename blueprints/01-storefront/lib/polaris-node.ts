@@ -28,7 +28,7 @@ export function getPolaris(): PolarisNodeSdk {
     if (apiKey === undefined || apiKey === "") {
       throw new Error(
         "POLARIS_BACKEND_API_KEY is not set — run `make setup`, which issues it into " +
-          ".env.development.local",
+          "the generated .env.<mode>.local files",
       );
     }
     globalForPolaris.__polaris = new PolarisNodeSdk({

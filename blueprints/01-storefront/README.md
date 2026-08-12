@@ -34,8 +34,10 @@ cp .env.example .env.local
 
 No keys to paste, now or after the next `make setup`: this app produces from
 two sources, and the installer issued one for each into
-`.env.development.local` — a file Next loads ahead of your `.env.local`, so
-the freshly issued token always wins over anything you could paste.
+`.env.development.local` and `.env.production.local` — files Next loads ahead
+of your `.env.local`, so the freshly issued token always wins over anything
+you could paste. One per mode, so `pnpm dev` and `pnpm build && pnpm start`
+are both wired.
 
 One line to uncomment, if you want to watch direct mode:
 

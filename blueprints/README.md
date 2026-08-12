@@ -43,9 +43,10 @@ destroying anything. Reach for it after changing something under `catalog/`.
 
 **2. Nothing.** `make setup` already issued the blueprint's two keys — a web
 key sending as `storefront-web`, a backend key sending as `payments-api` — and
-wrote them to `01-storefront/.env.development.local`, which Next loads ahead
-of your `.env.local`. There is nothing to copy, and nothing to copy again
-after the next `make setup`.
+wrote them to `01-storefront/.env.development.local` and its
+`.env.production.local` companion, which Next loads ahead of your
+`.env.local`. There is nothing to copy, and nothing to copy again after the
+next `make setup`.
 
 That ordering is the whole design. Reissued keys have to beat pasted ones,
 because `make setup` drops the old keys as it issues new ones — so a token you

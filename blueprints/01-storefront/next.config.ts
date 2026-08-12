@@ -17,12 +17,15 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 /**
  * There is deliberately no API-key handling here.
  *
- * `make setup` writes the tokens it issues to `.env.development.local`, which
- * Next loads ahead of `.env.local` on its own. A freshly issued token
- * therefore outranks a hand-pasted one by the framework's documented
- * precedence, which is what we want — `make setup` drops the old keys as it
- * issues new ones, so a pasted copy goes stale and a stale token does not
- * announce itself, it just 401s.
+ * `make setup` writes the tokens it issues to `.env.development.local` and
+ * `.env.production.local`, which Next loads ahead of `.env.local` on its own.
+ * A freshly issued token therefore outranks a hand-pasted one by the
+ * framework's documented precedence, which is what we want — `make setup`
+ * drops the old keys as it issues new ones, so a pasted copy goes stale and a
+ * stale token does not announce itself, it just 401s.
+ *
+ * Both modes, because that precedence is mode-scoped and this app runs both
+ * ways: `pnpm dev`, and `pnpm build && pnpm start`.
  *
  * This file used to parse `blueprints/api-key` and assign into `process.env`
  * to force that outcome, warning whenever it overwrote something. It worked,

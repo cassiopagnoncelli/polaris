@@ -120,13 +120,14 @@ has no surface for. Reach for it after editing `catalog/`.
 ## 5. Create an API Key
 
 `make setup` issues two — a web key for `storefront-web` and a backend key for
-`payments-api` — and writes them to two generated files: `blueprints/api-key`,
-the record of what was issued, and
-`blueprints/01-storefront/.env.development.local`, which the storefront
-blueprint picks up because Next loads it ahead of `.env.local`. A fresh
-install needs no copying.
+`payments-api` — and writes them to generated files: `blueprints/api-key`, the
+record of what was issued, and the `.env.development.local` /
+`.env.production.local` pair in `blueprints/01-storefront/`, which the
+storefront blueprint picks up because Next loads them ahead of `.env.local`.
+One per mode, so both `pnpm dev` and `pnpm start` are wired. A fresh install
+needs no copying.
 
-Both are regenerated on every `make setup`, because the run that writes them
+All are regenerated on every `make setup`, because the run that writes them
 also drops the keys from the previous one. A token pasted somewhere by hand
 goes stale then, and a stale token does not announce itself — it just makes
 every request 401. Which is why the generated file is the one Next ranks
