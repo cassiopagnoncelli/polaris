@@ -696,3 +696,72 @@ function skippedTotal(metrics: ProcessorMetrics): number {
     .filter((sample) => sample.name === METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL)
     .reduce((total, sample) => total + sample.value, 0);
 }
+
+describe("expired chain writes through startChain, not set", () => {
+  function spyStore() {
+    const store = new InMemoryTouchpointStore();
+    const calls: string[] = [];
+    const spy = {
+      get: (k: string) => store.get(k),
+      set: async (k: string, r: Parameters<InMemoryTouchpointStore["set"]>[1]) => {
+        calls.push("set");
+        await store.set(k, r);
+      },
+      startChain: async (k: string, r: Parameters<InMemoryTouchpointStore["startChain"]>[1]) => {
+        calls.push("startChain");
+        await store.startChain(k, r);
+      },
+      delete: (k: string) => store.delete(k),
+    };
+    return { store, calls, spy: spy as unknown as InMemoryTouchpointStore };
+  }
+
+  async function feed(runtime: ReturnType<typeof buildRuntime>["runtime"], id: string, at: string) {
+    await runtime.handler(
+      buildPayload(
+        encodeEnvelope({
+          event_id: id,
+          anonymous_id: "anon_reset",
+          occurred_at: at,
+          campaign: FULL_CAMPAIGN,
+        }),
+      ),
+      buildContext(),
+    );
+  }
+
+  it("uses startChain when the window resets a chain", async () => {
+    // Found by running v1 and v2 side by side against a real PostgreSQL.
+    // `set` is an upsert whose UPDATE branch deliberately never rewrites
+    // the first_* columns — correct for a continuing chain. v2 made a
+    // first observation possible on a row that ALREADY EXISTS (the window
+    // expired it), and routing that through `set` left the row anchored to
+    // the expired chain's first touch while its count said it restarted.
+    // The in-memory store cannot reproduce the SQL refusal, so the
+    // assertion is on which method the runtime reaches for.
+    const { store, calls, spy } = spyStore();
+    const { runtime } = buildRuntime({ store: spy });
+
+    await feed(runtime, "evt_a", "2026-01-01T00:00:00.000Z");
+    await feed(runtime, "evt_b", "2026-05-01T00:00:00.000Z"); // 120 days later
+
+    expect(calls).toEqual(["startChain", "startChain"]);
+
+    const chain = await store.get("checkout::production::anonymous_id:anon_reset");
+    expect(chain?.first_observed_at).toBe("2026-05-01T00:00:00.000Z");
+    expect(chain?.touchpoint_count).toBe(1);
+  });
+
+  it("uses set while the chain is still inside the window", async () => {
+    const { store, calls, spy } = spyStore();
+    const { runtime } = buildRuntime({ store: spy });
+
+    await feed(runtime, "evt_a", "2026-01-01T00:00:00.000Z");
+    await feed(runtime, "evt_b", "2026-01-02T00:00:00.000Z");
+
+    expect(calls).toEqual(["startChain", "set"]);
+    // First touch stays anchored to the original observation.
+    const chain = await store.get("checkout::production::anonymous_id:anon_reset");
+    expect(chain?.first_observed_at).toBe("2026-01-01T00:00:00.000Z");
+  });
+});

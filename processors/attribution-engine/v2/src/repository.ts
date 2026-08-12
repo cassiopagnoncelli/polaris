@@ -174,6 +174,59 @@ export function createKyselyTouchpointStore(
         .execute();
     },
 
+    async startChain(store_key, record) {
+      // Every column, first_* included. This is the reset path: the prior
+      // chain expired, so its first touch is not this chain's first touch.
+      const parts = parseTouchpointStoreKey(store_key);
+      if (parts === undefined) {
+        throw new Error(
+          `attribution repository: store key "${store_key}" is not <project>::<env>::<kind>:<value>`,
+        );
+      }
+      const values = {
+        processor_version: PROCESSOR_VERSION,
+        project_id: parts.project_id,
+        environment: parts.environment,
+        primary_identifier_kind: parts.primary_identifier_kind,
+        primary_identifier_value: parts.primary_identifier_value,
+        first_touchpoint_id: record.first_touchpoint_id,
+        first_touchpoint_tuple: toJson(record.first_touchpoint_tuple),
+        first_source_event_id: record.first_source_event_id,
+        first_observed_at: record.first_observed_at,
+        last_touchpoint_id: record.last_touchpoint_id,
+        last_touchpoint_tuple: toJson(record.last_touchpoint_tuple),
+        last_source_event_id: record.last_source_event_id,
+        last_observed_at: record.last_observed_at,
+        touchpoint_count: record.touchpoint_count,
+      };
+      await db
+        .insertInto("attribution_touchpoint_chains")
+        .values(values)
+        .onConflict((oc) =>
+          oc
+            .columns([
+              "processor_version",
+              "project_id",
+              "environment",
+              "primary_identifier_kind",
+              "primary_identifier_value",
+            ])
+            .doUpdateSet({
+              first_touchpoint_id: record.first_touchpoint_id,
+              first_touchpoint_tuple: toJson(record.first_touchpoint_tuple),
+              first_source_event_id: record.first_source_event_id,
+              first_observed_at: record.first_observed_at,
+              last_touchpoint_id: record.last_touchpoint_id,
+              last_touchpoint_tuple: toJson(record.last_touchpoint_tuple),
+              last_source_event_id: record.last_source_event_id,
+              last_observed_at: record.last_observed_at,
+              touchpoint_count: record.touchpoint_count,
+              updated_at: new Date(),
+            }),
+        )
+        .execute();
+    },
+
     async delete(store_key) {
       const parts = parseTouchpointStoreKey(store_key);
       if (parts === undefined) return;

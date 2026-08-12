@@ -480,7 +480,12 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       });
       metrics.incrementEmitted(labels);
 
-      await store.set(
+      // startChain, not set: this branch fires both for a genuinely new
+      // identifier AND for one whose chain the window just expired. In the
+      // second case `set` would refuse to rewrite the first-touch slot —
+      // correct for a continuing chain, wrong for a restarted one — and
+      // leave the row anchored to the expired chain's first touch.
+      await store.startChain(
         decision.store_key,
         buildFirstObservationRecord({
           project_id: raw.project_id,

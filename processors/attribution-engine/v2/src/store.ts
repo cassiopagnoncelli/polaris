@@ -39,8 +39,23 @@ import type { CampaignTuple, PrimaryIdentifierKind, TouchpointChainRecord } from
 export interface TouchpointStore {
   /** Read the active chain record for a key, or `undefined` when none. */
   get(store_key: string): Promise<TouchpointChainRecord | undefined>;
-  /** Upsert the record for a key. The caller composes the record. */
+  /**
+   * Update an EXISTING chain: advances the last-touch slot and the count,
+   * and never rewrites the first-touch slot.
+   */
   set(store_key: string, record: TouchpointChainRecord): Promise<void>;
+  /**
+   * Write a NEW chain, replacing any prior one for the key.
+   *
+   * Distinct from `set` because of the window. In v1 a first observation
+   * could only happen when no row existed, so one upsert served both
+   * cases and refusing to rewrite `first_*` was free. v2 resets a chain
+   * after a 90-day gap, so a first observation can now land on a row that
+   * already exists — and the same refusal would leave the row claiming a
+   * first touch from the chain that just expired while its count says it
+   * restarted.
+   */
+  startChain(store_key: string, record: TouchpointChainRecord): Promise<void>;
   /** Drop the record for a key (no use in v1; reserved for future replay tooling). */
   delete(store_key: string): Promise<void>;
 }
@@ -54,6 +69,13 @@ export class InMemoryTouchpointStore implements TouchpointStore {
   }
 
   async set(store_key: string, record: TouchpointChainRecord): Promise<void> {
+    this.#records.set(store_key, record);
+  }
+
+  async startChain(store_key: string, record: TouchpointChainRecord): Promise<void> {
+    // Replacing wholesale is what the SQL adapter does; the in-memory one
+    // must not be more forgiving, or a test would pass against behaviour
+    // production does not have.
     this.#records.set(store_key, record);
   }
 

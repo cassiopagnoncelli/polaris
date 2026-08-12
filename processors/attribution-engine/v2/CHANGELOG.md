@@ -53,10 +53,29 @@ deployment-level knob could silently change which events receive first touch,
 which is the drift processor versioning exists to prevent. Changing the
 window means a v3.
 
-Note this diverges from the sessionizer, whose config comment claims the
-runtime "ignores attempts to widen" its inactivity window while the code
-passes the configured value straight through. Rather than copy a documented
-rule that is not enforced, v2 does not offer the knob.
+This was written while the sessionizer's config comment claimed the runtime
+"ignores attempts to widen" its inactivity window even though the code passed
+the configured value straight through. Rather than copy a documented rule that
+was not enforced, v2 declined to offer the knob at all — and the sessionizer
+has since been fixed to actually pin its window to the manifest.
+
+### Chain resets replace the first-touch slot
+
+A first observation now writes through `startChain` rather than `set`.
+
+`set` is an upsert whose UPDATE branch never rewrites the `first_*`
+columns — first-touch attribution is anchored to the first observation, so
+a continuing chain must not move it. In v1 that was free: a first
+observation could only happen when no row existed, so the refusal never
+fired. The window changed that. v2 resets a chain after a 90-day gap, and
+a reset IS a first observation on a row that already exists — routing it
+through `set` left the row claiming the expired chain's first touch while
+its count said it had restarted.
+
+Found by running v1 and v2 side by side against a real PostgreSQL, which
+is the only place it shows: the in-memory adapter cannot reproduce the
+SQL refusal. The regression test asserts which store method the runtime
+calls, since that is what the assertion can reach.
 
 ### Behaviour differences an operator should expect
 
@@ -92,5 +111,8 @@ the decision is made on EVENT time and never on wall-clock.
   differently (Meta: 1-day view, 7-day click). Polaris treats every
   campaign-tagged observation identically; destinations that care apply
   their own rule downstream.
-- **Retention is now possible but not implemented.** Rows idle beyond the
-  window are safe to delete; no job does it yet.
+- ~~**Retention is now possible but not implemented.**~~ **Resolved** —
+  `polaris processors chains-prune --version v2` deletes rows idle beyond the
+  window, and `infra/backups/prune-attribution-chains.sh` schedules it. The
+  command refuses v1, which has no window and whose chains therefore cannot be
+  pruned without changing output.

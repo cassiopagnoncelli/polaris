@@ -198,16 +198,30 @@ never coming back for this data.
 
 ## What this procedure has been exercised against
 
-Steps 1, 2, 4, 6, 6b and the rollback have been run end-to-end against a
-live control plane (`storefront` / `development`), including the audit
-assertions. Two runbook errors were found and fixed that way: `processors
-show` did not print `release_status`, and this document did not say that
-a version with no activation row is running rather than stopped.
+All of it, including the data path.
 
-Steps 3 and 5 — deploying the v2 service and comparing the two versions'
-output in ClickHouse — need the running data path and have not been
-rehearsed. Treat the expected-divergence table in step 5 as reasoning
-from the semantics, not as observed output.
+Steps 1, 2, 4, 6, 6b and the rollback were run against a live control
+plane (`storefront` / `development`) with the audit assertions. Two
+runbook errors surfaced that way: `processors show` did not print
+`release_status`, and this document did not say that a version with no
+activation row is running rather than stopped.
+
+Steps 3 and 5 were then run as a real dual-run: both versions consuming
+`analytics.events` from the same broker, each on its own consumer group,
+against one PostgreSQL. Two touchpoints for one identifier 120 days
+apart produced exactly the divergence step 5 predicts — v1 continued the
+chain (`touchpoint_count` 2, first touch still January), v2 reset it
+(count back to 1, first touch moved to May) and emitted three events to
+v1's one for the second touchpoint.
+
+That dual-run found a bug no unit test had: v2's reset wrote through the
+same upsert as a continuation, whose UPDATE branch deliberately never
+rewrites the `first_*` columns. The reset chain came out anchored to the
+touchpoint that had just expired while its count said it had restarted.
+Fixed in v2 (`startChain` vs `set`), with a regression test on which
+method the runtime reaches for. If you are cutting over a different
+processor that keeps state, that is the class of bug worth looking for:
+a write path that was only ever exercised on an empty row.
 
 ## Rollback procedure
 
