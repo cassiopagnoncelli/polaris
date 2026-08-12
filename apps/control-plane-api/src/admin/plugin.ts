@@ -67,7 +67,11 @@ import { renderDestinationDetailPage, renderDestinationsPage } from "./pages/des
 import { renderDlqDetailPage, renderDlqPage } from "./pages/dlq.js";
 import { renderKeyDetailPage, renderKeysPage } from "./pages/keys.js";
 import { renderOverviewPage } from "./pages/overview.js";
-import { renderActivationDetailPage, renderProcessorsPage } from "./pages/processors.js";
+import {
+  ACTIVATION_ENVIRONMENTS,
+  renderActivationDetailPage,
+  renderProcessorsPage,
+} from "./pages/processors.js";
 import { renderProjectDetailPage, renderProjectsPage } from "./pages/projects.js";
 import {
   type PlatformRoleName,
@@ -1183,7 +1187,14 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       });
 
       guarded.get("/processors/activation", async (request, reply) => {
-        const activation = await findActivation(request);
+        // A combination with no row is RUNNING (the gate only closes on an
+        // explicit `disabled` row), so 404ing here made exactly the
+        // combinations an operator most needs to act on unreachable: the
+        // ones nobody has decided about. Synthesize the implicit state
+        // instead, so the enable/disable form is available for every
+        // combination the matrix lists. The mutations upsert, so acting on
+        // a synthesized row creates the real one.
+        const activation = (await findActivation(request)) ?? synthesizeActivation(request);
         if (activation === null) return notFound(reply, "No such processor activation.");
         return sendHtml(
           reply,
@@ -1197,14 +1208,26 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       });
 
       guarded.get("/processors", async (request, reply) => {
-        const [activations, runs] = await Promise.all([
+        // Projects join the query so the page can show every
+        // (processor, version, project, environment) combination rather
+        // than only the ones somebody already decided about. A combination
+        // with no row is running, and that is precisely what an operator
+        // must not have to infer.
+        const [activations, runs, projects] = await Promise.all([
           deps.queries.listProcessorActivations(),
           deps.queries.listProcessorRuns(config.pageSize),
+          deps.queries.listProjects(),
         ]);
         return sendHtml(
           reply,
           200,
-          renderProcessorsPage({ ctx: context(request), activations, runs }),
+          renderProcessorsPage({
+            ctx: context(request),
+            activations,
+            runs,
+            projects: projects.map((p) => p.project_id),
+            environments: ACTIVATION_ENVIRONMENTS,
+          }),
         );
       });
 
@@ -1341,4 +1364,40 @@ function safeNext(value: string): string | null {
   if (!value.startsWith(ADMIN_PREFIX)) return null;
   if (value.startsWith("//")) return null;
   return value;
+}
+
+/**
+ * Build the implicit activation for a combination that has no row.
+ *
+ * `enabled_state: "enabled"` because that is what the runtime does — the
+ * gate lets an event through unless an explicit `disabled` row says
+ * otherwise. The null timestamps and the `(default)` author are what
+ * distinguish it from a decision somebody actually made.
+ *
+ * Returns null when the four-field key is incomplete, which is the one
+ * case that really is a bad URL rather than an undecided combination.
+ */
+function synthesizeActivation(request: FastifyRequest): ProcessorActivationRow | null {
+  const processor_name = queryString(request, "name");
+  const processor_version = queryString(request, "version");
+  const project_id = queryString(request, "project");
+  const environment = queryString(request, "environment");
+  if (
+    processor_name === "" ||
+    processor_version === "" ||
+    project_id === "" ||
+    environment === ""
+  ) {
+    return null;
+  }
+  return {
+    processor_name,
+    processor_version,
+    project_id,
+    environment,
+    enabled_state: "enabled",
+    enabled_at: null,
+    disabled_at: null,
+    last_changed_by: "(default — no activation row)",
+  };
 }

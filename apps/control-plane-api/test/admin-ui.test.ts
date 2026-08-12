@@ -804,16 +804,14 @@ describe("admin UI — processors page", () => {
     return res;
   }
 
-  it("explains an empty activations table instead of just saying zero rows", async () => {
-    // A fresh install lands here, and this page reading as broken is what
-    // sent an operator digging through the CLI to find out whether it was.
-    const res = await fetchPage({});
+  it("explains a genuinely empty matrix instead of just saying zero rows", async () => {
+    // With no projects and no runs there is no combination to decide
+    // about, so the table really is empty. A fresh install lands here and
+    // must not read as a broken page.
+    const res = await fetchPage({ listProjects: async () => [] });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("No activation rows yet");
-    // Says what that MEANS — empty is the permissive state, not a dead page.
-    expect(res.body).toContain("every processor runs for every project");
-    expect(res.body).toContain("polaris processors disable");
-    expect(res.body).toContain("not the processors");
+    expect(res.body).toContain("Nothing to activate yet");
+    expect(res.body).toContain("no project");
   });
 
   it("shows an activated processor that is not running", async () => {
@@ -843,23 +841,59 @@ describe("admin UI — processors page", () => {
     expect(res.body).toContain("not running");
   });
 
-  it("surfaces a run whose processor has no activation row", async () => {
-    // Absence is the permissive state, so a run with no row is normal and
-    // must still be visible.
+  it("shows a processor with NO activation row as enabled (default), not as absent", async () => {
+    // The whole point of the matrix. Absence is the permissive state, so a
+    // combination nobody has decided about is RUNNING — and the operator
+    // must be able to see that without knowing the gate's rule. The old
+    // page listed only existing rows and explained absence in a footnote,
+    // which left the running-but-undecided combinations invisible.
     const res = await fetchPage({
       listProcessorActivations: async () => [],
       listProcessorRuns: async () => [RUN],
     });
-    expect(res.body).toContain("No activation rows yet");
-    expect(res.body).toContain(RUN.run_id);
     expect(res.body).toContain("analytics-projector");
+    expect(res.body).toContain("(default)");
+    // Still reachable, so the operator can turn it off from here.
+    expect(res.body).toContain("/admin/processors/activation?name=analytics-projector");
+    // And the run itself is still listed.
+    expect(res.body).toContain(RUN.run_id);
   });
 
-  it("states what a disabled row actually does", async () => {
+  it("distinguishes an explicit decision from the default", async () => {
+    const res = await fetchPage({
+      listProcessorActivations: async () => [ACTIVATION],
+      listProcessorRuns: async () => [RUN],
+    });
+    // storefront/development was decided explicitly, so no "(default)"
+    // marker on that row; the other environments still carry one.
+    expect(res.body).toContain("(default)");
+    expect(res.body).toContain("cli");
+  });
+
+  it("offers the enable/disable form for a combination that has no row", async () => {
+    // Previously this 404'd, which made exactly the combinations an
+    // operator most needs to act on unreachable.
+    const app = await buildApp({
+      queries: makeQueries({ listProcessorActivations: async () => [] }),
+    });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/processors/activation?name=analytics-projector&version=v1&project=storefront&environment=development",
+      headers: { cookie: sessionCookie("admin-token") },
+    });
+    await app.app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("no activation row");
+  });
+
+  it("states what a disabled row actually does, and what a default means", async () => {
     const res = await fetchPage({ listProcessorActivations: async () => [ACTIVATION] });
     expect(res.body).toContain("stops that processor from acting");
     // And is explicit that the process itself stays up.
     expect(res.body).toContain("disabled scope still shows as running");
+    // And that the default state is RUNNING, which is the rule an operator
+    // previously had to know rather than read.
+    expect(res.body).toContain("no activation row exists");
   });
 });
 

@@ -38,11 +38,121 @@ import { formatInstant } from "./format.js";
  * in it — processors that exist but were never activated are simply absent.
  */
 const NO_ACTIVATIONS =
-  "No activation rows yet — every processor runs for every project. This " +
-  "table lists activation decisions, one per (processor, version, project, " +
-  "environment), not the processors that exist. To stop one for a scope: " +
-  "polaris processors disable <name> --version v1 --project <id> " +
-  "--env <environment>.";
+  "Nothing to activate yet — no processor has started and no project " +
+  "exists, so there is no (processor, version, project, environment) " +
+  "combination to decide about. A row appears here as soon as a processor " +
+  "boots or an activation is recorded.";
+
+/**
+ * Effective activation state for one combination.
+ *
+ * `default_enabled` is the case this table exists to stop hiding. The
+ * runtime gate lets an event through unless an explicit `disabled` row
+ * says otherwise (see `@polaris/shared-processor`'s activation gate), so
+ * a combination with no row is RUNNING. The previous version of this page
+ * listed only the rows that existed and explained the rule in a footnote,
+ * which left the operator to infer the state of everything absent —
+ * exactly backwards, since the absent combinations are the ones running
+ * without anyone having decided they should.
+ */
+type EffectiveState = "enabled" | "disabled" | "default_enabled";
+
+/**
+ * Environments a combination can exist in. Matches the closed set the
+ * keys / audit / destinations pages already declare; exported here
+ * because the route needs the same list to build the matrix.
+ */
+export const ACTIVATION_ENVIRONMENTS = ["development", "staging", "production"] as const;
+
+/**
+ * Most combinations this page will render at once.
+ *
+ * Chosen to keep the page readable rather than to protect the query —
+ * the data is already in memory. When it trips, the page says how many
+ * rows it left out; see the note where it is applied.
+ */
+export const ACTIVATION_MATRIX_LIMIT = 500;
+
+interface ActivationCell {
+  readonly processor_name: string;
+  readonly processor_version: string;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly state: EffectiveState;
+  readonly changed_at: Date | null;
+  readonly last_changed_by: string | null;
+}
+
+/**
+ * Build one cell per (processor version × project × environment).
+ *
+ * Processor versions come from what the control plane has seen — existing
+ * activations plus recorded runs — rather than from a filesystem walk of
+ * `processors/`, which the API does not have. A version that has never
+ * booted and never been activated is genuinely unknown here, and inventing
+ * a row for it would be a guess of a different kind.
+ */
+export function buildActivationMatrix(input: {
+  activations: readonly ProcessorActivationRow[];
+  runs: readonly ProcessorRunRow[];
+  projects: readonly string[];
+  environments: readonly string[];
+}): readonly ActivationCell[] {
+  const versions = new Map<string, { name: string; version: string }>();
+  for (const row of input.activations) {
+    versions.set(`${row.processor_name}:${row.processor_version}`, {
+      name: row.processor_name,
+      version: row.processor_version,
+    });
+  }
+  for (const row of input.runs) {
+    versions.set(`${row.processor_name}:${row.processor_version}`, {
+      name: row.processor_name,
+      version: row.processor_version,
+    });
+  }
+
+  const explicit = new Map<string, ProcessorActivationRow>();
+  for (const row of input.activations) {
+    explicit.set(
+      `${row.processor_name}:${row.processor_version}:${row.project_id}:${row.environment}`,
+      row,
+    );
+  }
+
+  const cells: ActivationCell[] = [];
+  for (const { name, version } of [...versions.values()].sort((a, b) =>
+    `${a.name}${a.version}`.localeCompare(`${b.name}${b.version}`),
+  )) {
+    for (const project of [...input.projects].sort()) {
+      for (const environment of input.environments) {
+        const row = explicit.get(`${name}:${version}:${project}:${environment}`);
+        if (row === undefined) {
+          cells.push({
+            processor_name: name,
+            processor_version: version,
+            project_id: project,
+            environment,
+            state: "default_enabled",
+            changed_at: null,
+            last_changed_by: null,
+          });
+          continue;
+        }
+        cells.push({
+          processor_name: name,
+          processor_version: version,
+          project_id: project,
+          environment,
+          state: row.enabled_state === "disabled" ? "disabled" : "enabled",
+          changed_at: row.enabled_state === "enabled" ? row.enabled_at : row.disabled_at,
+          last_changed_by: row.last_changed_by,
+        });
+      }
+    }
+  }
+  return cells;
+}
 
 const NO_RUNS =
   "No processor has started since run recording landed. A row appears here " +
@@ -52,13 +162,35 @@ export function renderProcessorsPage(input: {
   ctx: AdminPageContext;
   activations: readonly ProcessorActivationRow[];
   runs: readonly ProcessorRunRow[];
+  projects: readonly string[];
+  environments: readonly string[];
 }): string {
   const running = countRunningByProcessor(input.runs);
+  const cells = buildActivationMatrix({
+    activations: input.activations,
+    runs: input.runs,
+    projects: input.projects,
+    environments: input.environments,
+  });
+
+  // The matrix is versions x projects x environments, so it grows fast:
+  // 6 processors at 2 versions across 50 projects is 1800 rows. Cap it and
+  // SAY the cap — a page that silently shows the first N reads as "this is
+  // everything", which is the failure this whole change exists to stop.
+  // Explicit decisions sort first so a truncation drops defaults, never a
+  // decision somebody made.
+  const ordered = [...cells].sort((a, b) => {
+    const aExplicit = a.state === "default_enabled" ? 1 : 0;
+    const bExplicit = b.state === "default_enabled" ? 1 : 0;
+    return aExplicit - bExplicit;
+  });
+  const shown = ordered.slice(0, ACTIVATION_MATRIX_LIMIT);
+  const omitted = ordered.length - shown.length;
 
   const activationRows =
-    input.activations.length === 0
+    cells.length === 0
       ? emptyRow(8, NO_ACTIVATIONS)
-      : input.activations.map(
+      : shown.map(
           (row) => html`<tr>
             <td>
               <a href="${activationHref(row)}">${mono(row.processor_name)}</a>
@@ -66,12 +198,10 @@ export function renderProcessorsPage(input: {
             <td>${row.processor_version}</td>
             <td>${mono(row.project_id)}</td>
             <td>${envBadge(row.environment)}</td>
-            <td>${statusBadge(row.enabled_state)}</td>
+            <td>${activationStateBadge(row.state)}</td>
             <td>${runningCell(running.get(processorKey(row)) ?? 0)}</td>
-            <td>
-              ${formatInstant(row.enabled_state === "enabled" ? row.enabled_at : row.disabled_at)}
-            </td>
-            <td>${row.last_changed_by}</td>
+            <td>${formatInstant(row.changed_at)}</td>
+            <td>${row.last_changed_by ?? "—"}</td>
           </tr>`,
         );
 
@@ -100,15 +230,29 @@ export function renderProcessorsPage(input: {
     title: "Processors",
     body: html`
       <p class="muted">
+        Every (processor, version, project, environment) combination has a
+        state here, whether or not anyone has decided one.
+        <strong>enabled (default)</strong> means no activation row exists —
+        which is RUNNING, because the gate only closes on an explicit
+        disable.
         A <strong>disabled</strong> row stops that processor from acting on
-        that project's events, within about ten seconds. A processor with no
-        row runs — activation rows record decisions, and only a disable is a
-        decision to stop. <strong>Running</strong> is the process itself: a
+        that project's events, within about ten seconds.
+        <strong>Running</strong> is the process itself: a
         disabled scope still shows as running, because the process stays up
         and skips those events rather than exiting.
       </p>
 
       <h2>Activations</h2>
+      ${
+        omitted > 0
+          ? html`<p class="notice">
+              Showing ${String(shown.length)} of ${String(ordered.length)}
+              combinations — ${String(omitted)} omitted. Every explicit
+              decision is shown; the omitted rows are all
+              <strong>enabled (default)</strong>.
+            </p>`
+          : html``
+      }
       <div class="table-wrap">
         <table>
           <thead>
@@ -212,7 +356,12 @@ function runningCell(count: number): Html {
 }
 
 /** Query-param link to one activation. The key is four fields, not a slug. */
-export function activationHref(row: ProcessorActivationRow): string {
+export function activationHref(row: {
+  readonly processor_name: string;
+  readonly processor_version: string;
+  readonly project_id: string;
+  readonly environment: string;
+}): string {
   const params = new URLSearchParams({
     name: row.processor_name,
     version: row.processor_version,
@@ -263,4 +412,18 @@ export function renderActivationDetailPage(input: {
       ${input.actions ?? null}
     `,
   });
+}
+
+/**
+ * Badge for an effective state.
+ *
+ * `default_enabled` renders as "enabled (default)" rather than as a
+ * separate colour: it IS enabled, and an operator scanning for what is
+ * running must not have to learn a third status word to see it. The
+ * parenthetical is what says nobody decided it.
+ */
+function activationStateBadge(state: EffectiveState): Html {
+  if (state === "disabled") return statusBadge("disabled");
+  if (state === "enabled") return statusBadge("enabled");
+  return html`${statusBadge("enabled")} <span class="muted">(default)</span>`;
 }
