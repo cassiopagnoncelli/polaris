@@ -579,9 +579,17 @@ control-plane API inherits it rather than reimplementing it.
 [`infra/backups/prune-attribution-chains.sh`](../../infra/backups/prune-attribution-chains.sh)
 wraps the command for cron:
 
-```cron
-17 3 * * *  /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+[`infra/backups/crontab.example`](../../infra/backups/crontab.example) is a
+ready-to-install `/etc/cron.d` schedule carrying this job alongside the
+backups:
+
+```bash
+sudo install -m 0644 -o root -g root infra/backups/crontab.example /etc/cron.d/polaris
 ```
+
+Connection settings come from an operator-owned `/etc/polaris/retention.env`
+that each entry sources, because cron runs with almost no environment and the
+crontab itself is checked in.
 
 Daily is ample — the window is 90 days, so eligibility does not change
 quickly, and the delete is a bounded index scan.

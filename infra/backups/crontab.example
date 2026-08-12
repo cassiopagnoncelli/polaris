@@ -1,0 +1,66 @@
+# Polaris backup and retention schedule — example crontab.
+#
+# Install on the host that owns backups and retention:
+#
+#   sudo install -m 0644 -o root -g root \
+#     /opt/polaris/infra/backups/crontab.example /etc/cron.d/polaris
+#
+# `/etc/cron.d` entries carry a user field (the sixth column) — that is the
+# difference from a `crontab -e` file, and pasting one into the other is the
+# usual way these end up silently not running.
+#
+# Every job writes to its own log. Cron mails stdout to the crontab owner by
+# default, which on an unattended host means the output goes nowhere; the
+# redirects make the record land somewhere an operator can read it. Rotate
+# these with logrotate like any other service log.
+#
+# Environment
+# -----------
+# Cron runs with a nearly empty environment: no PATH beyond /usr/bin:/bin, no
+# shell profile, no `.env`. Every job below therefore sources a file the
+# operator owns. Put connection settings there, not in this file — this one is
+# checked into the repository.
+#
+#   /etc/polaris/retention.env   POLARIS_DATABASE_URL, PGHOST/PGUSER/PGPASSFILE,
+#                                POLARIS_CLI, POLARIS_BACKUP_DIR, ...
+#
+# Times are deliberately staggered. The PostgreSQL dump and the ClickHouse
+# backup both touch storage hard, and the prune takes a row lock on chains
+# that the dump would otherwise wait behind.
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# --- Backups ---------------------------------------------------------------
+
+# PostgreSQL control-plane snapshot. Daily at 02:10.
+10 2 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; /opt/polaris/infra/backups/pg-dump.sh >> /var/log/polaris/pg-dump.log 2>&1
+
+# ClickHouse analytical tables. Daily at 02:40, after the Postgres dump has
+# finished rather than alongside it.
+40 2 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; /opt/polaris/infra/backups/clickhouse-backup.sh >> /var/log/polaris/clickhouse-backup.log 2>&1
+
+# --- Retention -------------------------------------------------------------
+
+# Attribution touchpoint chains idle beyond the processor's attribution
+# window. Daily at 03:17.
+#
+# Daily is ample: the window is 90 days, so a row's eligibility does not
+# change quickly, and the delete is a bounded index scan.
+#
+# This one exits non-zero on a refusal — an unprunable version, or an --idle
+# shorter than the version's window. That is deliberate: a retention job that
+# silently succeeds while pruning nothing is worse than one that pages. Do not
+# add `|| true`.
+17 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+
+# --- Not scheduled here ----------------------------------------------------
+#
+# `pg-restore.sh` is a drill and an incident tool. It refuses to restore over
+# an active primary, and scheduling a restore is not a thing anyone wants to
+# do by accident.
+#
+# Audit retention (2 years) has no purge job yet — see
+# docs/operations/backup-and-retention.md "Audit retention policy". When one
+# lands it belongs here.
