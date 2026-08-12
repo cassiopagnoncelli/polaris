@@ -599,6 +599,21 @@ a:focus-visible {
   text-align: center;
 }
 
+.drawer-key {
+  flex: none;
+  min-width: 1.3rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.15rem;
+  text-align: center;
+}
+
 /* Collapsed, the bar still shows the newest line — so it stays useful shut. */
 .drawer-peek {
   display: flex;

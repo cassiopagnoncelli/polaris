@@ -77,9 +77,10 @@ explained twice.
 
 ## The activity drawer
 
-Pinned to the bottom of every page, collapsible, exactly 40% of the viewport
-when open. It carries three kinds of line, and the difference between them is
-the point:
+Pinned to the bottom of every page, exactly 40% of the viewport when open.
+Press `a` anywhere outside a text field to collapse or expand it — the bar
+still shows the newest line while shut. It carries three kinds of line, and
+the difference between them is the point:
 
 | Tag      | Means                                                                          |
 | -------- | ------------------------------------------------------------------------------ |
