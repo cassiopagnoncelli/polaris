@@ -170,9 +170,9 @@ describe("startProcessorRun", () => {
   it("completes the run with counters summed across label tuples", async () => {
     const metrics = new ProcessorMetrics();
     const labels = { processor_name: IDENTITY.name, processor_version: IDENTITY.version };
-    metrics.incrementConsumed({ ...labels, topic: "raw.events" });
-    metrics.incrementConsumed({ ...labels, topic: "raw.events.storefront" });
-    metrics.incrementEmitted({ ...labels, topic: "analytics.events" });
+    metrics.incrementConsumed({ ...labels, concrete_topic: "raw.events" });
+    metrics.incrementConsumed({ ...labels, concrete_topic: "raw.events.storefront" });
+    metrics.incrementEmitted({ ...labels, concrete_topic: "analytics.events" });
 
     const { repository, handle } = start({ metrics });
     const resolved = await handle;
@@ -318,8 +318,8 @@ describe("startProcessorRun heartbeat", () => {
       scheduler: clock.scheduler,
     });
 
-    metrics.incrementConsumed({ ...labels, topic: "raw.events" });
-    metrics.incrementEmitted({ ...labels, topic: "analytics.events" });
+    metrics.incrementConsumed({ ...labels, concrete_topic: "raw.events" });
+    metrics.incrementEmitted({ ...labels, concrete_topic: "analytics.events" });
     await clock.tick();
 
     // The row is still open — an operator watching the panel sees progress
@@ -418,8 +418,12 @@ describe("readCounters", () => {
   it("ignores metrics that are not the three run counters", () => {
     const metrics = new ProcessorMetrics();
     const labels = { processor_name: IDENTITY.name, processor_version: IDENTITY.version };
-    metrics.incrementDlq({ ...labels, topic: "raw.events", reason: "invalid_payload" });
-    metrics.incrementRetry({ ...labels, topic: "raw.events", reason: "broker_unavailable" });
+    metrics.incrementDlq({ ...labels, concrete_topic: "raw.events", reason: "invalid_payload" });
+    metrics.incrementRetry({
+      ...labels,
+      concrete_topic: "raw.events",
+      reason: "broker_unavailable",
+    });
     expect(readCounters(metrics)).toEqual({
       events_consumed: 0,
       events_emitted: 0,

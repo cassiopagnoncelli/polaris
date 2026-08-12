@@ -148,8 +148,17 @@ function stateNotices(dest: DestinationRow): readonly Html[] {
 export function renderDestinationDetailPage(input: {
   ctx: AdminPageContext;
   destination: DestinationRow;
-  /** Mutation forms, when the viewer may run them. Empty otherwise. */
-  actions?: Html | undefined;
+  /**
+   * Button-and-confirmation for the state change on offer, beside the title.
+   * Absent when the viewer may not run one, or none would change anything.
+   */
+  titleAction?: Html | undefined;
+  /**
+   * What just happened, or why nothing may be done here — above the state
+   * banners, because after a POST this page re-renders from the top and a
+   * result reported at the bottom is a result nobody sees.
+   */
+  notice?: Html | undefined;
 }): string {
   const dest = input.destination;
   const destinationId = encodeURIComponent(dest.destination_id);
@@ -170,8 +179,9 @@ export function renderDestinationDetailPage(input: {
     lede: html`${envBadge(dest.environment)} ${statusBadge(dest.status)}
     ${valueBadge(`${dest.mode} mode`)}
     <span><strong>${dest.vendor}</strong> destination</span>`,
+    ...(input.titleAction !== undefined ? { titleAction: input.titleAction } : {}),
     body: html`
-      ${stateNotices(dest)}
+      ${input.notice ?? null} ${stateNotices(dest)}
 
       <h2>Delivery limits</h2>
       <div class="cards compact">
@@ -241,8 +251,6 @@ export function renderDestinationDetailPage(input: {
           description: "Every change made to this destination, and who made it.",
         })}
       </div>
-
-      ${input.actions ?? null}
 
       <p class="provenance">
         <span>Created ${formatInstant(dest.created_at)}</span>

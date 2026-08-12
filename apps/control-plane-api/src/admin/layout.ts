@@ -227,6 +227,14 @@ export interface PageInput {
   readonly heading?: string | undefined;
   /** One line under the `h1`: what this row is, and what state it is in. */
   readonly lede?: Html | undefined;
+  /**
+   * Controls acting on the thing the `h1` names, on the line beside it.
+   *
+   * A page's one destructive action belongs where its subject is named. Below
+   * the configuration, the limits and the related links, it is out of sight on
+   * a page an operator opened precisely to use it.
+   */
+  readonly titleAction?: Html | undefined;
 }
 
 /** Full HTML document. */
@@ -265,7 +273,10 @@ export function page(input: PageInput): string {
     <main>
       <div class="page-head">
         ${crumbs(input.breadcrumb)}
-        <h1>${input.heading ?? input.title}</h1>
+        <div class="page-title">
+          <h1>${input.heading ?? input.title}</h1>
+          ${input.titleAction ?? null}
+        </div>
         ${input.lede !== undefined ? html`<div class="page-lede">${input.lede}</div>` : null}
       </div>
       ${input.body}
@@ -470,6 +481,10 @@ h2 { font-size: 15px; margin: 26px 0 10px; font-weight: 650; color: var(--muted)
    bare h1 leave the same space before the body. */
 .page-head { margin-bottom: 18px; }
 .page-head h1 { margin-bottom: 0; }
+/* The title and whatever acts on it share a line. \`baseline\` rather than
+   \`center\` so the button sits on the heading's own line rather than floating
+   against the ascenders of a heading that wrapped. */
+.page-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
           margin-bottom: 7px; font-size: 12px; color: var(--muted); }
 .crumbs a { color: var(--muted); }
@@ -546,6 +561,32 @@ form.filters label { display: flex; flex-direction: column; gap: 4px;
 .action-form label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
 .action-form input { width: 100%; min-width: 0; }
 .action-form button { justify-self: start; }
+/* A gate folded behind the button that opens it. Same no-JavaScript
+   \`<details>\` as the account menu, and the same one trade: it closes by
+   clicking the trigger again, not by clicking away. */
+.confirm { position: relative; display: inline-block; }
+.confirm-trigger {
+  display: inline-block; cursor: pointer; list-style: none; user-select: none;
+  padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+}
+/* Safari draws its own disclosure triangle unless this is turned off. */
+.confirm-trigger::-webkit-details-marker { display: none; }
+.confirm-trigger:hover { border-color: var(--muted); }
+.confirm-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.confirm-trigger.danger { color: var(--bad); border-color: var(--bad-line); }
+.confirm-trigger.danger:hover { background: var(--bad); color: #fff; border-color: var(--bad); }
+/* The form itself is the box: lifted out of flow so opening it does not shove
+   the page down, and given the shadow that says it is over the page. */
+.confirm .action-form {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 20;
+  width: 420px; max-width: calc(100vw - 40px); margin: 0; box-shadow: var(--shadow);
+}
+/* Anchored to the right edge instead where the trigger sits close enough to
+   the viewport's right that a left-aligned box would run off it. */
+@media (max-width: 520px) {
+  .confirm .action-form { left: auto; right: 0; }
+}
 input, select, textarea {
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px;

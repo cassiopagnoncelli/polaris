@@ -49,7 +49,12 @@ import {
 } from "./idp-proxy.js";
 import { type AdminPageContext, barePage, STYLESHEET } from "./layout.js";
 import { verifySameOrigin } from "./origin.js";
-import { actionForm, actionsUnavailable, mutationResultNotice } from "./pages/actions.js";
+import {
+  actionForm,
+  actionsUnavailable,
+  confirmAction,
+  mutationResultNotice,
+} from "./pages/actions.js";
 import { renderAuditDetailPage, renderAuditPage } from "./pages/audit.js";
 import {
   type LoginReason,
@@ -389,12 +394,27 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
       });
 
       /**
-       * Enable/disable forms for a destination, or an explanation of why the
+       * The slots a destination detail page fills from its mutation state:
+       * the button beside the title, and anything that has to be said in
+       * prose above the page.
+       */
+      interface DestinationActionSlots {
+        readonly titleAction?: Html;
+        readonly notice?: Html;
+      }
+
+      /**
+       * Enable/disable buttons for a destination, or an explanation of why the
        * viewer cannot use them.
        *
        * Only the action that would actually change something is offered: a
        * disabled destination shows "enable" and nothing else, so the form
-       * that would no-op is not there to be submitted.
+       * that would no-op is not there to be submitted. A `paused` row is
+       * neither, and gets both.
+       *
+       * Each is a button that opens its own confirmation rather than a form
+       * standing open — see `confirmAction`. The refusal, when there is one,
+       * goes to the form it came from, which is what forces that one open.
        */
       const destinationActions = (
         request: FastifyRequest,
@@ -404,24 +424,30 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           previous?: { confirmation: string; reason: string };
           only?: "enable" | "disable";
         } = {},
-      ): Html | undefined => {
-        if (deps.mutations === undefined) return undefined;
+      ): DestinationActionSlots => {
+        if (deps.mutations === undefined) return {};
 
         const role = request.adminContext?.role ?? "none";
         const required = requiredRoleFor(config, destination.environment);
         if (!platformRoleAtLeast(role, required)) {
-          return html`<h2>Actions</h2>
-            ${actionsUnavailable({ required, actual: role, environment: destination.environment })}`;
+          return {
+            notice: actionsUnavailable({
+              required,
+              actual: role,
+              environment: destination.environment,
+            }),
+          };
         }
 
         const base = `${ADMIN_PREFIX}/destinations/${encodeURIComponent(destination.destination_id)}`;
         const showDisable = destination.status !== "disabled" && options.only !== "enable";
         const showEnable = destination.status !== "active" && options.only !== "disable";
+        if (!showDisable && !showEnable) return {};
 
-        return html`<h2>Actions</h2>
-          ${
+        return {
+          titleAction: html`${
             showDisable
-              ? actionForm({
+              ? confirmAction({
                   action: `${base}/disable`,
                   submitLabel: "Disable destination",
                   expectedConfirmation: destination.instance_label,
@@ -440,7 +466,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           }
           ${
             showEnable
-              ? actionForm({
+              ? confirmAction({
                   action: `${base}/enable`,
                   submitLabel: "Enable destination",
                   expectedConfirmation: destination.instance_label,
@@ -456,7 +482,8 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                     : {}),
                 })
               : null
-          }`;
+          }`,
+        };
       };
 
       /** Revoke form for an API key, or why the viewer cannot use it. */
@@ -700,7 +727,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             renderDestinationDetailPage({
               ctx: context(request),
               destination,
-              actions: destinationActions(request, destination),
+              ...destinationActions(request, destination),
             }),
           );
         },
@@ -1053,7 +1080,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                 renderDestinationDetailPage({
                   ctx: context(request),
                   destination,
-                  actions: destinationActions(request, destination, {
+                  ...destinationActions(request, destination, {
                     refusal: check.refusal,
                     previous: { confirmation, reason: rawReason },
                     only: verb,
@@ -1099,13 +1126,17 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
 
             const fresh =
               (await deps.queries.findDestination(destination.destination_id)) ?? destination;
+            const slots = destinationActions(request, fresh);
             return sendHtml(
               reply,
               200,
               renderDestinationDetailPage({
                 ctx: context(request),
                 destination: fresh,
-                actions: html`${mutationResultNotice({
+                ...slots,
+                // The result leads; anything the slots had to say about what
+                // may be done next follows it.
+                notice: html`${mutationResultNotice({
                   applied: outcome.applied,
                   appliedText:
                     verb === "disable"
@@ -1116,7 +1147,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                       ? `Already disabled — nothing changed, and no audit record was written.`
                       : `Already active — nothing changed, and no audit record was written.`,
                   auditId: outcome.auditId,
-                })}${destinationActions(request, fresh)}`,
+                })}${slots.notice ?? null}`,
               }),
             );
           });

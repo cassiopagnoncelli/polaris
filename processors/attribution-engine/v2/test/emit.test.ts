@@ -186,8 +186,8 @@ describe("buildLastTouchAssignedEnvelope", () => {
       properties: LAST_PROPS,
     });
     expect(env.event).toBe("attribution.last_touch_assigned");
-    const props = env.properties as Record<string, unknown>;
-    expect(props["previous_touchpoint_id"]).toBeNull();
+    const props = env.properties as LastTouchAssignedProperties;
+    expect(props.previous_touchpoint_id).toBeNull();
   });
 
   it("preserves a non-null previous_touchpoint_id when supplied", () => {
@@ -198,8 +198,8 @@ describe("buildLastTouchAssignedEnvelope", () => {
       run_id: "run_test_1",
       properties: { ...LAST_PROPS, previous_touchpoint_id: "tp_prior" },
     });
-    const props = env.properties as Record<string, unknown>;
-    expect(props["previous_touchpoint_id"]).toBe("tp_prior");
+    const props = env.properties as LastTouchAssignedProperties;
+    expect(props.previous_touchpoint_id).toBe("tp_prior");
   });
 });
 
