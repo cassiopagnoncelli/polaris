@@ -1026,3 +1026,71 @@ describe("destination runtime — closed-set coverage", () => {
     expect(cache).toBeDefined();
   });
 });
+
+describe("destination runtime — subscription naming", () => {
+  /**
+   * Capture what `start()` asks the transport to subscribe to.
+   *
+   * The rest of this file drives `handleEvent` directly and never starts the
+   * runtime, which is why the bug below survived: the subscribe call was
+   * untested, and the shared harness gives every descriptor `vendor ===
+   * component`, so it could not have distinguished the two anyway.
+   */
+  function captureSubscription(identity: DestinationDescriptor<TestPayload>["identity"]) {
+    const subscriptions: Array<{ families: string[]; queues: string[] }> = [];
+    const env = makeEnv();
+    const consumer = createDestinationConsumer({
+      descriptor: { ...env.descriptor, identity },
+      consumer: {
+        subscribe: async (input: { families: string[]; queues: string[] }) => {
+          subscriptions.push({ families: [...input.families], queues: [...input.queues] });
+        },
+        runEach: async () => {},
+        disconnect: async () => {},
+      } as unknown as Parameters<typeof createDestinationConsumer>[0]["consumer"],
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      secrets: env.secrets,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+    });
+    return { consumer, subscriptions };
+  }
+
+  const webhookSinkIdentity = {
+    // webhook-sink is the only consumer whose vendor and topology component
+    // differ, which is exactly why it was the only one this broke.
+    vendor: "webhook",
+    component: "webhook-sink",
+    consumerVersion: "v1",
+    normalizeVersion: "v1",
+    mapperVersion: "v1",
+    delivererVersion: "v1",
+  } as const;
+
+  it("subscribes to the redeliver queue named for the component, not the vendor", async () => {
+    const { consumer, subscriptions } = captureSubscription(webhookSinkIdentity);
+
+    await consumer.start();
+
+    expect(subscriptions).toHaveLength(1);
+    // `pnpm rabbitmq:provision` declares queues from POLARIS_COMPONENTS, so
+    // `webhook-sink.redeliver` is what exists. Asking for `webhook.redeliver`
+    // took the whole consumer down on boot with a 404 NOT_FOUND.
+    expect(subscriptions[0]?.queues).toEqual(["webhook-sink.redeliver"]);
+    expect(subscriptions[0]?.queues).not.toContain("webhook.redeliver");
+  });
+
+  it("is unchanged for consumers whose vendor and component match", async () => {
+    const { consumer, subscriptions } = captureSubscription({
+      ...webhookSinkIdentity,
+      vendor: "braze",
+      component: "braze",
+    });
+
+    await consumer.start();
+
+    expect(subscriptions[0]?.queues).toEqual(["braze.redeliver"]);
+  });
+});

@@ -472,12 +472,19 @@ export function createDestinationConsumer<Payload>(
     // what makes the retry path close: under Kafka the consumer had to
     // sleep the backoff itself, which burned a consumer slot and made the
     // delay invisible to operators.
-    const redeliver = redeliverQueueName(options.descriptor.identity.vendor);
+    // `component`, not `vendor`. The topology is declared from
+    // POLARIS_COMPONENTS, so the queue is named for the component — and the
+    // two strings are equal for every consumer except webhook-sink, whose
+    // vendor is `webhook`. That one asked the broker for `webhook.redeliver`,
+    // a queue provisioning has never declared, and died on boot with
+    // NOT_FOUND while the other five worked by coincidence.
+    const redeliver = redeliverQueueName(options.descriptor.identity.component);
     await options.consumer.subscribe({ families: [...families], queues: [redeliver] });
     options.logger.info(
       {
         component: "destination.runtime",
         vendor: options.descriptor.identity.vendor,
+        topology_component: options.descriptor.identity.component,
         consumer_version: options.descriptor.identity.consumerVersion,
         families,
         redeliver_queue: redeliver,

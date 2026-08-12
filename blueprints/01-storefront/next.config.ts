@@ -16,38 +16,66 @@ import type { NextConfig } from "next";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
- * Read the tokens `bin/setup` issued, for any that `.env.local` leaves unset.
+ * Take the API tokens from the file `bin/setup` generates.
  *
- * `make setup` drops the database and reissues these on every run, so a
- * token pasted into `.env.local` by hand goes stale the next time anyone
- * runs it — and a stale token does not announce itself, it just makes every
- * request 401. Reading the generated file instead means a fresh install
- * needs no copying: restart the blueprint and it has working keys.
+ * The split is value versus choice. `blueprints/api-key` owns the *value* of
+ * a token, because the command that writes it is the same command that
+ * invalidated every older one. `.env.local` owns the *choices* — which
+ * transport a fresh browser starts on, and whether direct mode is enabled at
+ * all — and nothing here touches those.
  *
- * `.env.local` still wins where it sets a value. It holds the developer's
- * choices — which transport to start on, whether direct mode is on at all —
- * and a generated file has no business overruling those.
+ * This file therefore wins over `.env.local` for the two token variables,
+ * which is the opposite of the usual precedence and is deliberate. The first
+ * cut had `.env.local` win where it set a value, and that reproduced the
+ * exact failure the generated file exists to prevent: `make setup` reissues
+ * the keys, the token someone once pasted into `.env.local` keeps winning,
+ * and every request 401s with `unknown_key` until they think to look. A
+ * stale credential is not a preference worth honouring.
  *
- * `NEXT_PUBLIC_POLARIS_API_KEY` is deliberately NOT filled in from here.
- * Setting it inlines a key into the JS bundle, which is a decision about
- * what is publishable, and it is the decision this blueprint exists to
- * teach. Wiring it automatically would make that choice silently, on
- * everyone's behalf, which is the opposite of the lesson. See `.env.example`.
+ * `NEXT_PUBLIC_POLARIS_API_KEY` is the careful case. Setting it inlines a
+ * token into the JS bundle, which is a decision about what is publishable —
+ * the decision this blueprint exists to teach — so an empty value stays
+ * empty and the app runs relay-only. But once a developer has put something
+ * there they have already made that call, and refreshing it to the current
+ * web token keeps their choice working rather than making a new one.
  */
 function loadIssuedKeys(): void {
   const keyFile = resolve(repoRoot, "blueprints/api-key");
   if (!existsSync(keyFile)) return;
 
+  const issued = new Map<string, string>();
   for (const line of readFileSync(keyFile, "utf8").split("\n")) {
     const trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("#")) continue;
     const separator = trimmed.indexOf("=");
     if (separator <= 0) continue;
-    const name = trimmed.slice(0, separator).trim();
-    if (process.env[name] === undefined || process.env[name] === "") {
-      process.env[name] = trimmed.slice(separator + 1).trim();
-    }
+    issued.set(trimmed.slice(0, separator).trim(), trimmed.slice(separator + 1).trim());
   }
+
+  for (const [name, token] of issued) {
+    apply(name, token);
+  }
+
+  // Direct mode only: refresh a token the developer opted into, never
+  // introduce one they did not.
+  const webToken = issued.get("POLARIS_WEB_API_KEY");
+  if (webToken !== undefined && (process.env["NEXT_PUBLIC_POLARIS_API_KEY"] ?? "") !== "") {
+    apply("NEXT_PUBLIC_POLARIS_API_KEY", webToken);
+  }
+}
+
+/** Set `name`, saying so when it replaces a different non-empty value. */
+function apply(name: string, token: string): void {
+  const current = process.env[name] ?? "";
+  if (current === token) return;
+  if (current !== "") {
+    console.warn(
+      `[polaris] ${name} in .env.local is not the token blueprints/api-key holds — ` +
+        "using the issued one. `make setup` reissues keys, which makes any pasted " +
+        "copy stale; delete the line from .env.local to silence this.",
+    );
+  }
+  process.env[name] = token;
 }
 
 loadIssuedKeys();
