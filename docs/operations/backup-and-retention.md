@@ -574,10 +574,33 @@ read. The guard lives in the mutation
 (`@polaris/shared-control-plane-db`), so a future scheduled job or the
 control-plane API inherits it rather than reimplementing it.
 
-There is **no** background job in v1; this is an operator-run command.
-Chains are small relative to event data and the window bounds their
-growth on its own, so a nightly schedule is a convenience rather than a
-requirement. When one lands it should call the same mutation.
+### Scheduling it
+
+[`infra/backups/prune-attribution-chains.sh`](../../infra/backups/prune-attribution-chains.sh)
+wraps the command for cron:
+
+```cron
+17 3 * * *  /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
+```
+
+Daily is ample — the window is 90 days, so eligibility does not change
+quickly, and the delete is a bounded index scan.
+
+Unlike its sibling scripts here, this one is not dependency-free: it
+shells out to the `polaris` CLI rather than issuing SQL. That is the
+point. A bare `DELETE ... WHERE last_observed_at < now() - interval '90
+days'` in a cron entry would bypass both refusals and leave no audit row.
+The script cannot be talked into an unsafe delete because it does not
+know how to delete anything itself.
+
+A refusal exits non-zero so the cron entry fails loudly rather than
+reading as a quiet success. Configuration is by environment
+(`POLARIS_PRUNE_VERSION`, `POLARIS_PRUNE_PROJECT`, `POLARIS_PRUNE_ENV`,
+`POLARIS_PRUNE_IDLE_SECONDS`, `POLARIS_PRUNE_DRY_RUN`); defaults are
+documented at the top of the script.
+
+There is no locking. Two overlapping runs both issue the same bounded
+DELETE; the second finds nothing and writes no audit row.
 
 Note the interaction with a version cutover: v1's chains must survive
 until rollback is off the table. See
