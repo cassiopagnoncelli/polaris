@@ -39,8 +39,12 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 const ESCAPE_FORM = `${String.fromCharCode(92)}u0000`;
 
 // Directories holding text we read with grep. Broader than the ClickHouse
-// import lint's list, because a NUL is just as damaging in a migration or a
-// design doc as in a .ts file.
+// import lint's list, because a NUL is just as damaging in a migration, a
+// design doc, or an agent brief as in a .ts file.
+//
+// Root-level files (README.md, AGENTS.md, Makefile) are scanned too — see
+// `iterateSourceFiles`. The success message claims the repo is clean, so the
+// scan has to cover everything that claim implies.
 const SCAN_DIRS = [
   "apps",
   "packages",
@@ -52,6 +56,8 @@ const SCAN_DIRS = [
   "db",
   "docs",
   "tests",
+  "agents",
+  "bin",
 ];
 
 // An allow-list, not a deny-list. Every extension here is text by definition,
@@ -81,6 +87,9 @@ const SCANNED_EXTENSIONS = new Set([
   ".txt",
 ]);
 
+// Root-level text files that carry no extension.
+const EXTENSIONLESS_TEXT_FILES = new Set(["Makefile", "Dockerfile", "LICENSE", "CODEOWNERS"]);
+
 const IGNORED_DIR_NAMES = new Set([
   "node_modules",
   "dist",
@@ -91,6 +100,25 @@ const IGNORED_DIR_NAMES = new Set([
 ]);
 
 function* iterateSourceFiles(rootDir) {
+  // Files sitting at the repository root, without descending — the trees below
+  // are listed explicitly so `node_modules` and `dist` never get walked.
+  let rootEntries;
+  try {
+    rootEntries = readdirSync(rootDir, { withFileTypes: true });
+  } catch {
+    rootEntries = [];
+  }
+  for (const entry of rootEntries) {
+    if (!entry.isFile() || entry.name.startsWith(".")) continue;
+    const idx = entry.name.lastIndexOf(".");
+    // Extensionless root files that are still text — Makefile, Dockerfile.
+    const ext = idx === -1 ? "" : entry.name.slice(idx);
+    if (ext === "" ? !EXTENSIONLESS_TEXT_FILES.has(entry.name) : !SCANNED_EXTENSIONS.has(ext)) {
+      continue;
+    }
+    yield join(rootDir, entry.name);
+  }
+
   for (const top of SCAN_DIRS) {
     const start = join(rootDir, top);
     try {

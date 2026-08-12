@@ -100,4 +100,24 @@ describe("lintWorkspace", () => {
     expect(violations).toHaveLength(2);
     expect(violations.map((v) => v.line)).toEqual([1, 2]);
   });
+
+  it("scans agent briefs, which are as greppable as code", () => {
+    seedFile("agents/AGENTS.md", `policy${NUL}\n`);
+    expect(lintWorkspace(root).map((v) => v.file)).toEqual(["agents/AGENTS.md"]);
+  });
+
+  it("scans root-level files, so the clean-repo claim covers them", () => {
+    seedFile("README.md", `intro${NUL}\n`);
+    expect(lintWorkspace(root).map((v) => v.file)).toEqual(["README.md"]);
+  });
+
+  it("scans root-level text files that carry no extension", () => {
+    seedFile("Makefile", `build:${NUL}\n`);
+    expect(lintWorkspace(root).map((v) => v.file)).toEqual(["Makefile"]);
+  });
+
+  it("does not descend from the root into ignored trees", () => {
+    seedFile("node_modules/dep/index.js", `const k = "${NUL}";\n`);
+    expect(lintWorkspace(root)).toEqual([]);
+  });
 });
