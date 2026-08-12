@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Polaris blueprint: browser, relayed, and backend events from one Next.js app, sharing one visitor identity.",
   "scripts": {
-    "dev": "node ../preflight-watch-capacity.mjs && next dev --port 3641",
+    "dev": "WATCHPACK_POLLING=true next dev --port 3641",
     "build": "next build",
     "start": "next start --port 3641",
     "typecheck": "tsc --noEmit"

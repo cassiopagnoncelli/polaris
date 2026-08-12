@@ -61,12 +61,19 @@ make dev-ingester
 It listens on **4000**, which is what `.env.example` points at.
 
 Prefer `make dev-ingester` over `make dev-all` while you are working in a
-blueprint. `dev-all` starts one `tsx watch` supervisor per service, and
-fourteen of those hold enough of the machine's file-watch capacity that `next
-dev` has none left — it fails with `EMFILE`, reads the dead watcher as a
-deleted `.next/dev`, and restarts forever. The blueprint checks for this
-before starting and says so, so you get a message rather than the loop. `make
-dev-stop` clears it.
+blueprint — `dev-all` starts one `tsx watch` supervisor per service, and
+fourteen of those hold a large share of the machine's file-watch capacity for
+nothing you need here. `make dev-stop` clears a stack you left running.
+
+The blueprint does not depend on that going well, though. Next.js watches its
+config files and `.next/dev` through Watchpack, which on macOS means FSEvents;
+on a machine short of watch capacity that watcher fails with `EMFILE`, and
+Watchpack reports a failed watcher as a *deleted* directory. Next.js concludes
+`.next/dev` was removed, restarts to recover, and lands in the same failure —
+forever, with nothing in the loop naming the real cause. `WATCHPACK_POLLING=true`
+in the `dev` script polls those few paths rather than watching them, so the
+loop has nothing to start from. Turbopack watches the source tree itself and is
+unaffected, so hot reload is unchanged.
 
 ### Running on a different port
 

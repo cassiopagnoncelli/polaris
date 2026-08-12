@@ -109,12 +109,10 @@ typecheck: ## Run tsc --noEmit across the workspace
 # `tsx watch` supervising it does not — it stays up waiting for a file change
 # that will never come. So a second bare-metal stack leaves behind a full set
 # of supervisors that run nothing and hold ~1k descriptors and their kqueue
-# watches each. Enough of those and the machine runs out of watch capacity,
-# which shows up somewhere else entirely: `next dev` in `blueprints/` fails
-# with EMFILE, Watchpack reports the failed watcher as a deleted directory,
-# and the blueprint restarts forever. Refuse the second stack rather than
-# debug that. `blueprints/preflight-watch-capacity.mjs` catches the same
-# shortage from the other side, for the stacks this guard cannot see.
+# watches each — wasted, since they supervise nothing. Refuse the second stack
+# rather than debug that. The blueprints used to be where this surfaced, as an
+# EMFILE restart loop in `next dev`; they now poll instead of watch (see
+# `blueprints/README.md`) and no longer care how much capacity is left.
 #
 # The bracketed characters below keep `pgrep -f` from matching the very recipe
 # that runs it.

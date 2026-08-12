@@ -30,4 +30,7 @@ agents/
 
 # Blueprints
 blueprints/api-key
+# The blueprint pins Turbopack's root at the repo root (see its next.config.ts),
+# so running it writes a trace here as well as in its own .next/.
+.next/
 
