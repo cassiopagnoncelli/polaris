@@ -24,7 +24,7 @@ include .env.local
 export
 endif
 
-.PHONY: help setup seed install lint style format check typecheck \
+.PHONY: help setup destroy seed install lint style format check typecheck \
         dev build build-packages build-cli test tests ci stats \
         docker-up docker-down docker-ps docker-logs docker-nuke \
         cli api_key clean \
@@ -78,13 +78,28 @@ help: ## Show this help
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: install build-packages db-bootstrap db-migrate clickhouse-bootstrap rabbitmq-bootstrap rabbitmq-provision seed ## Bare-metal bootstrap (install + build shared packages + postgres role/db + postgres migrations + clickhouse bootstrap + rabbitmq user + rabbitmq topology + dev seeds). Assumes infra is running at default endpoints.
+# The whole local install story is `bin/setup`, and these two aliases are all
+# of the Makefile's share of it — the same split `make dev` has with
+# `bin/dev`. It used to be a chain of seven prerequisites here, each of them
+# additive, which is how `make setup` came to produce a machine that depended
+# on its own history: a source deleted from the catalog kept routing, an
+# edited migration never applied. The script destroys the four Polaris stores
+# and rebuilds them, so what you get is a function of the repo. See its header.
+#
+# DESTRUCTIVE, and deliberately so. Nothing else may take `setup` as a
+# prerequisite — the day something does, that target silently becomes a wipe.
+# `make db-migrate` is the verb for picking up new migrations after a pull.
+setup: ## Install locally from scratch: drop every Polaris store, then rebuild, seed, and issue keys
+	@./bin/setup
 
-# Runs last in `setup`: seeding writes rows, so it needs the schema migrated
-# and the CLI built. Split out as its own target because re-seeding after a
-# catalog change is a normal thing to do on its own.
-seed: build-cli ## Seed dev data — catalog projects/sources + the browser origin allow-list
-	./bin/setup
+destroy: ## Drop every Polaris store (postgres, clickhouse, rabbitmq, redis) without rebuilding
+	@./bin/setup --destroy
+
+# Kept as its own target because re-seeding after a catalog change is a normal
+# thing to do on its own — it is the one phase of `setup` that destroys
+# nothing, and so the one that is safe against a machine you do not want reset.
+seed: build-cli ## Re-run the catalog syncs and the browser origin allow-list (destroys nothing)
+	@./bin/setup --seed
 
 install: ## Install pnpm workspace dependencies
 	pnpm install

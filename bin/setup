@@ -1,74 +1,115 @@
 #!/usr/bin/env node
-// Polaris local seed step — run by `make setup` after the schema exists.
+// Polaris local install — `make setup` is this script, and this script is the
+// whole of bringing a machine to the state the repo describes.
 //
-// `make setup` gets you infrastructure: roles, databases, migrations, the
-// ClickHouse DDL, the RabbitMQ topology. None of that is data. This script
-// is the data half: the catalog rows and dev-only config a fresh checkout
-// needs before an app can actually send an event.
+// It destroys before it builds, every time. That is the point, not a mode.
 //
-// It seeds, in order (the order is a foreign key, not a preference):
+// The script it replaced seeded catalog rows and stopped there, and `make
+// setup` was a chain of seven Make prerequisites around it. Every step in
+// that chain was additive: `dbmate up` only rolls forward, the catalog syncs
+// treat absence as "leave it alone" on purpose, the origin inserts are ON
+// CONFLICT DO NOTHING, and every ClickHouse file is CREATE IF NOT EXISTS. Run
+// twice you got the same answer — but the answer was a function of the
+// machine's history, not of the repo. A source deleted from the catalog kept
+// routing. An edited migration never applied. An edited ClickHouse table
+// definition never landed. None of that is fixable by making the steps
+// smarter: the syncs refuse to delete for good production reasons, and
+// teaching them otherwise would put that gun back on the table. So the
+// freshness comes from dropping the stores instead.
 //
-//   1. `projects` — from catalog/projects/**.yaml, via `polaris projects sync`
-//   2. `sources`  — from catalog/sources/**.yaml,  via `polaris sources sync`
-//   3. `source_allowed_origins` — dev browser origins for the web sources
-//      below. `source_allowed_origins` has a FK onto `sources`, so step 2
-//      has to have landed first.
+// `bin/dev` made the same move first: it kills whatever is running before it
+// starts, unconditionally, which is exactly why starting is always safe.
+// Setting up is safe here for the same reason.
 //
-// Step 3 is the one with no CLI surface yet: the allow-list is not part of
-// the catalog source schema, so there is nothing for `sources sync` to
-// materialize. Until it is, seeding is how a bare-metal dev gets a browser
-// origin past the ingester's CORS check, and this script is the one place
-// that knows the dev defaults.
+// Phases, in this order:
 //
-// What it deliberately does NOT do: issue API keys. `keys create` prints a
-// token exactly once and stores only its argon2id hash, so running it from
-// a step that re-runs on every `make setup` would leak a trail of orphaned
-// active keys. Keys are on-demand: `make api_key`.
+//   1. Guard        — refuse anything that is not a local dev machine.
+//   2. Preflight    — all four services reachable, before anything is touched.
+//   3. Stop         — kill any dev stack running from this checkout.
+//   4. Install      — pnpm install, build packages, build the CLI.
+//   5. Destroy      — drop PostgreSQL, ClickHouse, RabbitMQ, Redis state.
+//   6. Provision    — role/db, migrations, ClickHouse schema, broker topology.
+//   7. Seed         — catalog projects and sources, dev browser origins.
+//   8. Keys         — issue the blueprint's API keys into blueprints/api-key.
+//   9. Receipt      — print the state produced, and the two next commands.
 //
-// Idempotent by construction — the syncs diff against the live tables and
-// the origin inserts are ON CONFLICT DO NOTHING. Safe to re-run.
+// The order of 4 and 5 is deliberate and was got wrong on the first pass.
+// Install is the only phase that can fail for reasons outside this machine —
+// a registry hiccup, a network drop, a full disk. Everything after it fails
+// only for reasons in this repo. Running install *before* destroy means a
+// registry flake leaves the old data intact instead of leaving the machine
+// with no schema until the network comes back. Nothing is destroyed until
+// every fallible-for-external-reasons phase has already succeeded.
 //
-// Development only. The guard below refuses to touch a production
-// environment; production allow-list entries are an operator action with an
-// audit trail, not a seed.
+// Two flags address subsets of that list, and there are deliberately only
+// two — a mode is a thing someone has to know about before they can use this
+// safely, so each one has to earn its place:
+//
+//   --destroy   phases 1, 2, 3, 5. A teardown with no rebuild. It still
+//               installs the shared packages first, because the RabbitMQ
+//               teardown imports the topology definitions from
+//               `@polaris/shared-transport` — the names it deletes are the
+//               names that package declares, and deriving them anywhere else
+//               is how a teardown silently stops matching.
+//   --seed      phase 7 alone, and the only entry point here that destroys
+//               nothing. Re-running the catalog syncs after editing
+//               `catalog/` is a normal thing to want, and it should not cost
+//               a wipe. This is what `make seed` runs.
+//
+// What re-running costs you: the dev data in those four stores, with no
+// prompt. That is intended — a prompt breaks the non-tty case and trains
+// people to hit `y` — but it is why `make db-migrate` stays the verb for
+// "pick up new migrations after a pull". This is the verb for "give me the
+// machine the repo describes".
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { loadEnvLocal, REPO_ROOT, stopRunningStack } from "./lib/local-stack.mjs";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLI = resolve(REPO_ROOT, "apps/polaris-cli/dist/bin/polaris.js");
 
-/** Seeds target the `development` environment only. See the guard below. */
+/** Seeds and keys target the `development` environment only. */
 const ENVIRONMENT = "development";
 
 const DEFAULT_DATABASE_URL = "postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable";
+const DEFAULT_CLICKHOUSE_URL = "http://localhost:8123";
+const DEFAULT_RABBITMQ_URL = "amqp://polaris:polaris@localhost:5672";
+const DEFAULT_REDIS_HOST = "localhost";
+const DEFAULT_REDIS_PORT = "6379";
+
+/** How long a preflight TCP probe waits before calling a service down. */
+const PROBE_TIMEOUT_MS = 3_000;
 
 /**
- * Dev browser origins, per web source.
+ * The blueprint whose dev browser origin has to be allow-listed, and whose
+ * API keys this script issues.
  *
- * Only `blueprints/01-storefront` needs an entry, and only for its `direct`
- * transport: that one posts from the browser straight to the ingester, so
- * the browser sends an `Origin` header the ingester checks. Its `relay`
- * transport and its backend events reach the ingester server-side — no
- * `Origin` header, nothing to allow-list.
+ * `port` is deliberately absent: it is read from the blueprint's own `dev`
+ * script at run time by `blueprintPort()`. It used to be a literal here, and
+ * the two drifted the first time the app moved off port 3000 — a fresh
+ * checkout then seeded an origin no browser would ever send, and every
+ * direct-mode batch was denied.
  *
- * The port below must match the blueprint's `dev` script. They have drifted
- * apart once already: the app moved 3000 -> 3641 and this list did not, so a
- * fresh checkout seeded an origin no browser would ever send and every
- * direct-mode batch was denied. If you move the port, move it here too.
- *
- * `POLARIS_DEV_ORIGINS` (comma-separated) appends to every source here, for
- * when the dev server is not on its documented port. See `.env.local.example`.
+ * `POLARIS_DEV_ORIGINS` (comma-separated) appends to this, for when the dev
+ * server is not on its documented port. See `.env.local.example`.
  */
-const ORIGIN_SEEDS = [
-  {
-    projectId: "storefront",
-    sourceId: "storefront-web",
-    origins: ["http://localhost:3641"],
-  },
-];
+const BLUEPRINT = {
+  dir: "blueprints/01-storefront",
+  projectId: "storefront",
+  /** Both keys the blueprint reads, and the sources they send as. */
+  keys: [
+    { envVar: "POLARIS_WEB_API_KEY", sourceId: "storefront-web", type: "web" },
+    { envVar: "POLARIS_BACKEND_API_KEY", sourceId: "payments-api", type: "backend" },
+  ],
+  /** Only the web source posts from a browser, so only it needs an origin. */
+  originSourceId: "storefront-web",
+};
+
+/** Where issued tokens land. Generated, gitignored, owned by this script. */
+const KEY_FILE = resolve(REPO_ROOT, "blueprints/api-key");
 
 // Mirrors `source_allowed_origins_origin_format` in
 // db/migrations/20260512000013_create_source_allowed_origins.sql. Checking
@@ -77,149 +118,410 @@ const ORIGIN_SEEDS = [
 const ORIGIN_PATTERN = /^https?:\/\/[A-Za-z0-9.\-:[\]_]+$/;
 const ORIGIN_MAX_LENGTH = 255;
 
-function main() {
-  const env = process.env;
-
-  const polarisEnv = (env.POLARIS_ENV ?? "").trim().toLowerCase();
-  if (polarisEnv === "production") {
-    fail(
-      "refusing to seed with POLARIS_ENV=production.\n" +
-        "  Seeds are development fixtures. Production projects, sources, and\n" +
-        "  allow-list entries are operator actions and carry an audit row.",
-    );
+async function main() {
+  const destroyOnly = process.argv.includes("--destroy");
+  const seedOnly = process.argv.includes("--seed");
+  if (destroyOnly && seedOnly) {
+    fail("--destroy and --seed do opposite things; pass one or neither.");
   }
 
+  try {
+    loadEnvLocal();
+  } catch (err) {
+    fail(err.message);
+  }
+
+  const endpoints = resolveEndpoints();
+  // One guard for every mode. `--seed` destroys nothing, but this is a local
+  // install script in all three of its shapes, and two guards would be two
+  // things to keep in step.
+  assertLocalDevOnly(endpoints);
+
+  const lock = takeLock();
+  try {
+    if (seedOnly) {
+      requireCli();
+      seed(endpoints);
+      console.log("Seeded. `make setup` if you also want a clean database.");
+      return;
+    }
+
+    await preflight(endpoints);
+
+    const stopped = stopRunningStack();
+    if (stopped > 0) {
+      console.log(`Stopped a dev stack that was running (${stopped} processes).\n`);
+    }
+
+    install(destroyOnly);
+    destroy(endpoints);
+
+    if (destroyOnly) {
+      console.log("\nDestroyed. `make setup` rebuilds.");
+      return;
+    }
+
+    provision(endpoints);
+    seed(endpoints);
+    const keys = issueKeys(endpoints);
+    await printReceipt(endpoints, keys);
+  } finally {
+    releaseLock(lock);
+  }
+}
+
+/**
+ * `--seed` skips the install phase, so the CLI it shells out to has to
+ * already be there. Saying so beats a MODULE_NOT_FOUND from node.
+ */
+function requireCli() {
   if (!existsSync(CLI)) {
     fail(
-      `polaris CLI not built at ${rel(CLI)}.\n` +
-        "  Run `make build-cli` (or `pnpm --filter @polaris/polaris-cli run build`) first.",
+      `the polaris CLI is not built at ${rel(CLI)}.\n` +
+        "  Run `make build-cli` first, or `make setup` for the whole install.",
     );
   }
+}
 
+// ---------------------------------------------------------------------------
+// Phase 1 — guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve every endpoint once, here, and hand the results to every child
+ * process explicitly.
+ *
+ * One resolution, handed to all of them. If this script and its children
+ * each resolved their own connection strings they could disagree, and the
+ * consequence of disagreeing is no longer a seed landing in the wrong
+ * database — it is a drop landing in the wrong database.
+ *
+ * `CLICKHOUSE_URL` is the name the ClickHouse scripts read and
+ * `POLARIS_CLICKHOUSE_URL` is the name the services read; both are honoured
+ * and the resolved value is passed down under the name the child expects.
+ */
+function resolveEndpoints() {
   const databaseUrl =
-    trim(env.POLARIS_DATABASE_URL) ?? trim(env.DATABASE_URL) ?? DEFAULT_DATABASE_URL;
+    trim(process.env.POLARIS_DATABASE_URL) ??
+    trim(process.env.DATABASE_URL) ??
+    DEFAULT_DATABASE_URL;
+  const clickhouseUrl = (
+    trim(process.env.CLICKHOUSE_URL) ??
+    trim(process.env.POLARIS_CLICKHOUSE_URL) ??
+    DEFAULT_CLICKHOUSE_URL
+  ).replace(/\/+$/, "");
+  const rabbitmqUrl = trim(process.env.POLARIS_RABBITMQ_URL) ?? DEFAULT_RABBITMQ_URL;
+  const redisHost = trim(process.env.POLARIS_REDIS_HOST) ?? DEFAULT_REDIS_HOST;
+  const redisPort = trim(process.env.POLARIS_REDIS_PORT) ?? DEFAULT_REDIS_PORT;
 
-  const extraOrigins = parseExtraOrigins(env.POLARIS_DEV_ORIGINS);
+  return {
+    postgres: { url: databaseUrl, ...hostPortOf(databaseUrl, 5432) },
+    clickhouse: { url: clickhouseUrl, ...hostPortOf(clickhouseUrl, 8123) },
+    rabbitmq: { url: rabbitmqUrl, ...hostPortOf(rabbitmqUrl, 5672) },
+    redis: { host: redisHost, port: Number(redisPort) },
+  };
+}
 
-  console.log("Seeding Polaris local development data\n");
-
-  runCli(["projects", "sync"], "projects", databaseUrl);
-  runCli(["sources", "sync"], "sources", databaseUrl);
-  seedOrigins(databaseUrl, extraOrigins);
-
-  console.log("\nSeed complete. Issue a key for an app with:\n");
-  console.log("  make api_key\n");
+function hostPortOf(url, defaultPort) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    fail(`could not parse "${redact(url)}" as a URL.`);
+  }
+  return {
+    host: parsed.hostname.replace(/^\[|\]$/g, ""),
+    port: parsed.port === "" ? defaultPort : Number(parsed.port),
+  };
 }
 
 /**
- * Run a `polaris` subcommand against the local database.
+ * Refuse to destroy anything that is not a local development machine.
  *
- * The CLI's sync commands are DATABASE_URL-direct (see
- * apps/polaris-cli/src/db/connect.ts), so they need no control-plane URL or
- * operator token in development.
+ * Three layers, each catching what the others cannot, and all three are
+ * load-bearing now that there is no non-destructive mode to fall back on:
  *
- * `POLARIS_DATABASE_URL` is passed explicitly rather than left to the
- * inherited env: this script and the CLI both resolve a connection string,
- * and if they resolved it from different places the catalog sync and the
- * allow-list rows could land in different databases. One resolution, handed
- * to both. It takes priority over `DATABASE_URL` on the CLI side, so the
- * inherited value cannot win.
+ *   1. `POLARIS_ENV` catches intent — someone with a production environment
+ *      selected who ran the wrong command.
+ *   2. The loopback check catches typos — a hostname pointing somewhere real.
+ *   3. Dev-default credentials catch tunnels, and this is the layer that
+ *      actually matters. `localhost` is a name, not a place: an `ssh -L
+ *      5432:staging-db:5432` left up from a debugging session passes any
+ *      hostname test ever written. What a tunnelled staging instance will
+ *      not do is accept `polaris/polaris`, or a passwordless local
+ *      superuser, or the `polaris` vhost login — so every destroy step
+ *      authenticates with dev defaults and fails closed when they are
+ *      refused. (If someone provisioned staging with dev-default
+ *      credentials, the environment label is the least of their problems.)
+ *
+ * Do not "fix" a failing destroy by adding password fallbacks to the steps
+ * below. That removes layer 3, which is the only one that survives a tunnel.
  */
-function runCli(args, label, databaseUrl) {
-  process.stdout.write(`  ${label} sync ... `);
-  const result = spawnSync(process.execPath, [CLI, ...args], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    env: { ...process.env, POLARIS_DATABASE_URL: databaseUrl },
-  });
-  if (result.error !== undefined) {
-    console.log("failed");
-    fail(`could not run the polaris CLI: ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    console.log("failed");
+function assertLocalDevOnly(endpoints) {
+  const polarisEnv = (process.env.POLARIS_ENV ?? "").trim().toLowerCase();
+  if (polarisEnv === "production" || polarisEnv === "staging") {
     fail(
-      `\`polaris ${args.join(" ")}\` exited ${result.status}.\n` +
-        indent(result.stderr || result.stdout || "(no output)"),
+      `refusing to run with POLARIS_ENV=${polarisEnv}.\n` +
+        "  This command drops every Polaris database. It is for local\n" +
+        "  development machines only.",
     );
   }
-  console.log("ok");
+
+  const remote = [
+    ["PostgreSQL", endpoints.postgres.host],
+    ["ClickHouse", endpoints.clickhouse.host],
+    ["RabbitMQ", endpoints.rabbitmq.host],
+    ["Redis", endpoints.redis.host],
+  ].filter(([, host]) => !isLoopback(host));
+
+  if (remote.length > 0) {
+    fail(
+      "refusing to run against a non-local endpoint.\n" +
+        remote.map(([name, host]) => `    ${name} resolves to ${host}`).join("\n") +
+        "\n  This command drops every Polaris database. Point it at localhost,\n" +
+        "  or unset the override in `.env.local`.",
+    );
+  }
 }
 
+function isLoopback(host) {
+  return host === "localhost" || host === "::1" || /^127\./.test(host);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — preflight
+// ---------------------------------------------------------------------------
+
 /**
- * Insert the dev allow-list rows.
+ * Prove all four services are reachable before anything is destroyed.
  *
- * Shells out to `psql` rather than opening a `pg` client: `make db-bootstrap`
- * already requires psql on a bare-metal box (see
- * scripts/postgres-bootstrap-local.mjs), and the root workspace has no `pg`
- * dependency of its own.
+ * Order matters more than it looks. Without this, an unreachable RabbitMQ is
+ * discovered *after* ClickHouse has been dropped, leaving a half-erased
+ * machine and a confusing error. One probe of each, up front, turns that
+ * into a message naming exactly which services are down.
  *
- * Values travel as psql variables interpolated with `:'name'`, which quotes
- * and escapes them — never as string concatenation into the SQL text.
- *
- * The statement arrives on stdin (`-f -`) rather than through `-c`, because
- * `-c` hands its string straight to the server without running psql's lexer,
- * and `:'name'` interpolation is a lexer feature — via `-c` the colon form
- * reaches PostgreSQL verbatim and is a syntax error.
+ * TCP reachability only — it deliberately does not authenticate. Wrong
+ * credentials are the guard's third layer doing its job, and they surface in
+ * the phase that needs them with that phase's error message attached.
  */
-function seedOrigins(databaseUrl, extraOrigins) {
+async function preflight(endpoints) {
+  const targets = [
+    ["PostgreSQL", endpoints.postgres.host, endpoints.postgres.port],
+    ["ClickHouse", endpoints.clickhouse.host, endpoints.clickhouse.port],
+    ["RabbitMQ", endpoints.rabbitmq.host, endpoints.rabbitmq.port],
+    ["Redis", endpoints.redis.host, endpoints.redis.port],
+  ];
+
+  const results = await Promise.all(
+    targets.map(async ([name, host, port]) => ({
+      name,
+      host,
+      port,
+      up: await probeTcp(host, port),
+    })),
+  );
+
+  const down = results.filter((result) => !result.up);
+  if (down.length > 0) {
+    fail(
+      "these services are not reachable:\n" +
+        down.map((d) => `    ${d.name.padEnd(11)} ${d.host}:${d.port}`).join("\n") +
+        "\n  Start them with `make docker-up`, or run them natively.\n" +
+        "  Nothing has been changed.",
+    );
+  }
+}
+
+function probeTcp(host, port) {
+  return new Promise((done) => {
+    // Imported lazily: this is the only place in the script that needs a
+    // socket, and the module is otherwise dead weight in `--destroy` runs.
+    import("node:net").then(({ createConnection }) => {
+      const socket = createConnection({ host, port });
+      const settle = (up) => {
+        socket.destroy();
+        done(up);
+      };
+      socket.setTimeout(PROBE_TIMEOUT_MS);
+      socket.once("connect", () => settle(true));
+      socket.once("timeout", () => settle(false));
+      socket.once("error", () => settle(false));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — install
+// ---------------------------------------------------------------------------
+
+/**
+ * Dependencies and builds — everything that can fail for reasons outside
+ * this machine, done while the old data is still there to fall back on.
+ *
+ * The CLI build is skipped for `--destroy`, which has nothing to run it
+ * for. The shared packages are not: the RabbitMQ teardown imports its
+ * object names from `@polaris/shared-transport`.
+ */
+function install(destroyOnly) {
+  // CI must not be able to rewrite the lockfile as a side effect of running
+  // the installer. Locally the plain form is right — a `package.json` edit
+  // should just work rather than fail with a lockfile mismatch.
+  step("install", "pnpm", process.env.CI ? ["install", "--frozen-lockfile"] : ["install"]);
+  step("build packages", "pnpm", ["-r", "--filter", "./packages/*", "run", "build"]);
+  if (!destroyOnly) {
+    step("build cli", "pnpm", ["--filter", "@polaris/polaris-cli", "run", "build"]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — destroy
+// ---------------------------------------------------------------------------
+
+/**
+ * Drop every Polaris store, by name.
+ *
+ * Nothing here destroys anything it cannot name. PostgreSQL and ClickHouse
+ * drop a named database, RabbitMQ deletes the named queues and exchanges the
+ * topology module declares, Redis deletes named key prefixes. There is no
+ * `FLUSHDB`, no `docker compose down -v`, no dropped vhost — each of those
+ * reaches past Polaris into infrastructure it does not own. (`make
+ * docker-nuke` is still there for when wiping the containers is what you
+ * actually want.)
+ */
+function destroy(endpoints) {
+  step("destroy postgres", "node", ["scripts/postgres-bootstrap-local.mjs", "--destroy"], {
+    POLARIS_DATABASE_URL: endpoints.postgres.url,
+    PGHOST: endpoints.postgres.host,
+    PGPORT: String(endpoints.postgres.port),
+  });
+  step("destroy clickhouse", "node", ["scripts/clickhouse-bootstrap-local.mjs", "--destroy"], {
+    CLICKHOUSE_URL: endpoints.clickhouse.url,
+  });
+  step("destroy rabbitmq", "node", ["scripts/rabbitmq-provision.mjs", "--destroy"], {
+    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  });
+  step("destroy redis", "node", ["scripts/redis-destroy-local.mjs"], {
+    POLARIS_REDIS_HOST: endpoints.redis.host,
+    POLARIS_REDIS_PORT: String(endpoints.redis.port),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — provision
+// ---------------------------------------------------------------------------
+
+function provision(endpoints) {
+  step("postgres role + database", "node", ["scripts/postgres-bootstrap-local.mjs"], {
+    POLARIS_DATABASE_URL: endpoints.postgres.url,
+    PGHOST: endpoints.postgres.host,
+    PGPORT: String(endpoints.postgres.port),
+  });
+  step("postgres migrations", "pnpm", ["--filter", "@polaris/shared-db", "db:migrate"], {
+    DATABASE_URL: endpoints.postgres.url,
+  });
+  step("clickhouse schema", "node", ["scripts/clickhouse-bootstrap-local.mjs"], {
+    CLICKHOUSE_URL: endpoints.clickhouse.url,
+  });
+  step("rabbitmq user", "node", ["scripts/rabbitmq-bootstrap-local.mjs"], {
+    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  });
+  step("rabbitmq topology", "node", ["scripts/rabbitmq-provision.mjs"], {
+    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — seed
+// ---------------------------------------------------------------------------
+
+/**
+ * The data half: catalog rows and the dev-only config a fresh checkout needs
+ * before an app can send an event.
+ *
+ * In order, because the order is a foreign key and not a preference:
+ * projects, then sources, then the browser origin allow-list — which has an
+ * FK onto `sources`.
+ *
+ * The allow-list is the one with no CLI surface: it is not part of the
+ * catalog source schema, so there is nothing for `sources sync` to
+ * materialize. Until there is, this is how a bare-metal dev gets a browser
+ * origin past the ingester's CORS check.
+ */
+function seed(endpoints) {
+  step("projects sync", "node", [CLI, "projects", "sync"], {
+    POLARIS_DATABASE_URL: endpoints.postgres.url,
+  });
+  step("sources sync", "node", [CLI, "sources", "sync"], {
+    POLARIS_DATABASE_URL: endpoints.postgres.url,
+  });
+
   const sql =
     "INSERT INTO source_allowed_origins (project_id, source_id, environment, origin) " +
     "VALUES (:'project', :'source', :'environment', :'origin') " +
     "ON CONFLICT DO NOTHING;";
 
-  for (const seed of ORIGIN_SEEDS) {
-    const origins = [...new Set([...seed.origins, ...extraOrigins])];
-    for (const origin of origins) {
-      assertValidOrigin(origin);
-      process.stdout.write(`  origin ${seed.sourceId} ${origin} ... `);
-      const result = spawnSync(
-        "psql",
-        [
-          databaseUrl,
-          // -X so a developer's ~/.psqlrc can't alter output or transaction
-          // behaviour; ON_ERROR_STOP so a failed statement is a failed exit.
-          "-X",
-          "-w",
-          "-q",
-          "-v",
-          "ON_ERROR_STOP=1",
-          "-v",
-          `project=${seed.projectId}`,
-          "-v",
-          `source=${seed.sourceId}`,
-          "-v",
-          `environment=${ENVIRONMENT}`,
-          "-v",
-          `origin=${origin}`,
-          "-f",
-          "-",
-        ],
-        { encoding: "utf8", input: sql },
-      );
-      if (result.error !== undefined) {
-        console.log("failed");
-        fail(
-          `could not run psql: ${result.error.message}\n` +
-            "  Bare-metal setup expects psql on PATH and PostgreSQL reachable.",
-        );
-      }
-      if (result.status !== 0) {
-        console.log("failed");
-        fail(indent(result.stderr || result.stdout || "(no output)"));
-      }
-      console.log("ok");
-    }
+  for (const origin of devOrigins()) {
+    assertValidOrigin(origin);
+    // Values travel as psql variables interpolated with `:'name'`, which
+    // quotes and escapes them — never as string concatenation into the SQL.
+    //
+    // The statement arrives on stdin (`-f -`) rather than through `-c`,
+    // because `-c` hands its string straight to the server without running
+    // psql's lexer, and `:'name'` interpolation is a lexer feature — via
+    // `-c` the colon form reaches PostgreSQL verbatim and is a syntax error.
+    stepWithInput(`origin ${origin}`, "psql", [
+      endpoints.postgres.url,
+      "-X",
+      "-w",
+      "-q",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-v",
+      `project=${BLUEPRINT.projectId}`,
+      "-v",
+      `source=${BLUEPRINT.originSourceId}`,
+      "-v",
+      `environment=${ENVIRONMENT}`,
+      "-v",
+      `origin=${origin}`,
+      "-f",
+      "-",
+    ], sql);
   }
 }
 
-function parseExtraOrigins(raw) {
-  const value = trim(raw);
-  if (value === undefined) return [];
-  return value
+/** The blueprint's own dev origin, plus any `POLARIS_DEV_ORIGINS` overrides. */
+function devOrigins() {
+  const extra = (trim(process.env.POLARIS_DEV_ORIGINS) ?? "")
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+  return [...new Set([`http://localhost:${blueprintPort()}`, ...extra])];
+}
+
+/**
+ * The port the blueprint's `dev` script actually binds.
+ *
+ * Read from its package.json rather than duplicated here — the seeded origin
+ * has to be derived from the blueprint, not kept in step with it by comment.
+ */
+function blueprintPort() {
+  const manifestPath = resolve(REPO_ROOT, BLUEPRINT.dir, "package.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (err) {
+    fail(`could not read ${BLUEPRINT.dir}/package.json: ${err.message}`);
+  }
+  const port = /--port\s+(\d+)/.exec(manifest.scripts?.dev ?? "")?.[1];
+  if (port === undefined) {
+    fail(
+      `could not find \`--port <n>\` in ${BLUEPRINT.dir}'s dev script.\n` +
+        "  The seeded browser origin is derived from it; add the flag back, or\n" +
+        "  set POLARIS_DEV_ORIGINS and re-run.",
+    );
+  }
+  return port;
 }
 
 function assertValidOrigin(origin) {
@@ -238,10 +540,318 @@ function assertValidOrigin(origin) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 8 — keys
+// ---------------------------------------------------------------------------
+
+/**
+ * Issue the blueprint's API keys and write them where the blueprint reads
+ * them.
+ *
+ * The old script deliberately did not do this, and its reasoning was right
+ * for the script it was: `keys create` prints a token exactly once and
+ * stores only its argon2id hash, so issuing on every additive re-run left a
+ * trail of orphaned active keys behind. That reasoning does not survive
+ * destroy-first — the table is empty, so there is nothing to orphan.
+ *
+ * It is also the step that makes the rest of the install true. Without it a
+ * fresh machine has a correct schema and a blueprint that answers every
+ * request with 401, because the token in `blueprints/api-key` names a row
+ * that was just dropped — and nothing says "your key is stale", it just
+ * fails to authenticate.
+ *
+ * This script owns `blueprints/api-key` outright and overwrites it: the file
+ * is generated and gitignored, which is what makes that safe. It does *not*
+ * write the blueprint's `.env.local`, which holds the developer's own
+ * choices — which transport to start on, whether direct mode is enabled at
+ * all. `next.config.ts` reads the tokens from here instead.
+ */
+function issueKeys(endpoints) {
+  const issued = [];
+  for (const key of BLUEPRINT.keys) {
+    const stdout = capture(
+      `key ${key.sourceId}`,
+      "node",
+      [
+        CLI,
+        "keys",
+        "create",
+        "--output",
+        "json",
+        "--project",
+        BLUEPRINT.projectId,
+        "--env",
+        ENVIRONMENT,
+        "--source",
+        key.sourceId,
+        "--type",
+        key.type,
+      ],
+      { POLARIS_DATABASE_URL: endpoints.postgres.url },
+    );
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stdout);
+    } catch (err) {
+      fail(`could not read the token \`keys create\` printed: ${err.message}`);
+    }
+    if (typeof parsed.token !== "string" || parsed.token.length === 0) {
+      fail("`keys create --output json` returned no token.");
+    }
+    issued.push({ ...key, token: parsed.token, apiKeyId: parsed.api_key_id });
+  }
+
+  writeFileSync(KEY_FILE, renderKeyFile(issued), { mode: 0o600 });
+  // `mode` on writeFileSync only applies when the file is created, and this
+  // one is overwritten on every run — so an existing file would keep whatever
+  // permissions it had. These are live credentials; set it explicitly.
+  chmodSync(KEY_FILE, 0o600);
+  return issued;
+}
+
+function renderKeyFile(issued) {
+  const header = [
+    `# Tokens issued for ${BLUEPRINT.dir} against the local stack.`,
+    "#",
+    "# Generated by bin/setup — overwritten on every run, gitignored, never",
+    "# committed. Each token is printed by `polaris keys create` exactly once;",
+    "# only its argon2id hash is stored, so a lost token is reissued, never",
+    "# recovered. Reissue the pair by re-running `make setup`, or issue one by",
+    "# hand with `make api_key`.",
+    "#",
+    `# ${BLUEPRINT.dir}/next.config.ts reads this file, so a fresh install needs`,
+    "# no copying — restart the blueprint and it picks the new tokens up.",
+    "#",
+    `# Issued ${new Date().toISOString()}, project ${BLUEPRINT.projectId} / env ${ENVIRONMENT}.`,
+    "",
+  ];
+  const lines = issued.map((key) => `${key.envVar}=${key.token}`);
+  return `${[...header, ...lines].join("\n")}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — receipt
+// ---------------------------------------------------------------------------
+
+/**
+ * Print the state this run produced, not just an exit code.
+ *
+ * Every phase already knows what it made; reading it back is the difference
+ * between "exited 0" and knowing what is on the machine. The counts are
+ * queried fresh rather than accumulated from the phases above, so the
+ * receipt reports what is actually there.
+ */
+async function printReceipt(endpoints, keys) {
+  const pg = pgCounts(endpoints);
+  const tables = await clickhouseTableCount(endpoints);
+  const topology = await topologySize();
+
+  const rows = [
+    ["postgres", `${endpoints.postgres.host}:${endpoints.postgres.port}/polaris`, pg],
+    ["clickhouse", `${endpoints.clickhouse.host}:${endpoints.clickhouse.port}/polaris`, tables],
+    ["rabbitmq", `${endpoints.rabbitmq.host}:${endpoints.rabbitmq.port}`, topology],
+    ["redis", `${endpoints.redis.host}:${endpoints.redis.port}`, "polaris:* cleared"],
+    ["keys", rel(KEY_FILE), keys.map((k) => `${k.sourceId} (${k.type})`).join(", ")],
+  ];
+
+  const width = Math.max(...rows.map(([name]) => name.length));
+  const endpointWidth = Math.max(...rows.map(([, endpoint]) => endpoint.length));
+
+  console.log("\nPolaris local install complete.\n");
+  for (const [name, endpoint, detail] of rows) {
+    console.log(`  ${name.padEnd(width)}  ${endpoint.padEnd(endpointWidth)}  ${detail}`);
+  }
+  console.log("\nNext:\n");
+  console.log("  make dev                    # run the platform");
+  console.log("  pnpm smoke:vertical-slice   # prove the wire path end to end\n");
+}
+
+/** Migrations, catalog rows, and allow-list entries, in one round trip. */
+function pgCounts(endpoints) {
+  const result = spawnSync(
+    "psql",
+    [
+      endpoints.postgres.url,
+      "-X",
+      "-w",
+      "-tAc",
+      "SELECT (SELECT count(*) FROM schema_migrations), (SELECT count(*) FROM projects), " +
+        "(SELECT count(*) FROM sources), (SELECT count(*) FROM source_allowed_origins)",
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) return "(counts unavailable)";
+  const [migrations, projects, sources, origins] = result.stdout.trim().split("|");
+  return (
+    `${migrations} migrations, ${projects} project(s), ` +
+    `${sources} source(s), ${origins} origin(s)`
+  );
+}
+
+async function clickhouseTableCount(endpoints) {
+  const sql = "SELECT count() FROM system.tables WHERE database = 'polaris'";
+  try {
+    const resp = await fetch(`${endpoints.clickhouse.url}/?query=${encodeURIComponent(sql)}`, {
+      headers: { Authorization: `Basic ${Buffer.from("polaris:polaris").toString("base64")}` },
+    });
+    if (!resp.ok) return "(count unavailable)";
+    return `${(await resp.text()).trim()} tables`;
+  } catch {
+    return "(count unavailable)";
+  }
+}
+
+/**
+ * Ask the topology module how much it declared, rather than counting
+ * objects on the broker — same source of truth the provisioning step used.
+ */
+async function topologySize() {
+  try {
+    const { buildPlan } = await import("../scripts/rabbitmq-provision.mjs");
+    const plan = buildPlan();
+    const streams = plan.superStreams.reduce((sum, spec) => sum + spec.partitions, 0);
+    return (
+      `${plan.superStreams.length} super streams (${streams} partitions), ` +
+      `${plan.components.length} component queue sets`
+    );
+  } catch {
+    return "topology declared";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Concurrency
+// ---------------------------------------------------------------------------
+
+/**
+ * Refuse a second concurrent run.
+ *
+ * Two installs interleaving their destroy and provision phases is the one
+ * remaining way to end up in a state neither of them describes — one
+ * dropping the database the other has just migrated. The lock lives in the
+ * system temp directory rather than the repo because it has to work before
+ * `pnpm install` has created anything, and it carries the owning pid so a
+ * run killed with SIGKILL does not lock the repo out forever.
+ */
+function takeLock() {
+  const id = createHash("sha1").update(REPO_ROOT).digest("hex").slice(0, 12);
+  const path = resolve(tmpdir(), `polaris-setup-${id}.lock`);
+
+  if (existsSync(path)) {
+    const owner = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
+    if (Number.isInteger(owner) && owner > 1 && processIsAlive(owner)) {
+      fail(
+        `another \`bin/setup\` is already running (pid ${owner}).\n` +
+          "  Wait for it to finish — two runs would interleave their destroy and\n" +
+          "  provision phases.  Nothing has been changed.",
+      );
+    }
+  }
+
+  writeFileSync(path, `${process.pid}\n`);
+  return path;
+}
+
+function releaseLock(path) {
+  try {
+    unlinkSync(path);
+  } catch {
+    // Already gone, or never taken: nothing to release.
+  }
+}
+
+function processIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Running things
+// ---------------------------------------------------------------------------
+
+/**
+ * Run one step, streaming its output, and stop the whole install if it
+ * fails.
+ *
+ * `env` is merged over the inherited environment so each child sees the
+ * endpoints this script resolved, under the names that child reads.
+ */
+function step(label, command, args, env = {}) {
+  console.log(`==> ${label}`);
+  const result = spawnSync(command, args, {
+    cwd: REPO_ROOT,
+    stdio: ["ignore", "inherit", "inherit"],
+    env: { ...process.env, ...env },
+  });
+  assertStepOk(label, command, args, result);
+  console.log("");
+}
+
+/** As {@link step}, but feeds `input` on stdin and stays quiet when it works. */
+function stepWithInput(label, command, args, input) {
+  console.log(`==> ${label}`);
+  const result = spawnSync(command, args, {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    input,
+    env: process.env,
+  });
+  assertStepOk(label, command, args, result);
+  console.log("");
+}
+
+/** As {@link step}, but returns stdout instead of streaming it. */
+function capture(label, command, args, env = {}) {
+  console.log(`==> ${label}`);
+  const result = spawnSync(command, args, {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  assertStepOk(label, command, args, result);
+  console.log("");
+  return result.stdout;
+}
+
+function assertStepOk(label, command, args, result) {
+  if (result.error !== undefined) {
+    fail(`could not run \`${command}\`: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+    fail(
+      `step "${label}" failed (exit ${result.status}).\n` +
+        `  ${command} ${args.map(rel).join(" ")}\n` +
+        (output === "" ? "" : `${indent(output)}\n`) +
+        "\n  This machine is part-way through an install. Re-run `make setup`\n" +
+        "  once the cause is fixed — it starts from a clean slate every time.",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+
 function trim(value) {
   if (value === undefined || value === null) return undefined;
   const trimmed = String(value).trim();
   return trimmed.length === 0 ? undefined : trimmed;
+}
+
+function redact(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password !== "") parsed.password = "***";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 function indent(text) {
@@ -253,7 +863,9 @@ function indent(text) {
 }
 
 function rel(absolute) {
-  return absolute.startsWith(`${REPO_ROOT}/`) ? absolute.slice(REPO_ROOT.length + 1) : absolute;
+  return typeof absolute === "string" && absolute.startsWith(`${REPO_ROOT}/`)
+    ? absolute.slice(REPO_ROOT.length + 1)
+    : absolute;
 }
 
 function fail(message) {
@@ -261,4 +873,4 @@ function fail(message) {
   process.exit(1);
 }
 
-main();
+await main();

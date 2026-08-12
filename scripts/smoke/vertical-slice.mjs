@@ -47,8 +47,10 @@
 // Env vars (see runbook for full table):
 //
 //   POLARIS_INGESTER_URL          default http://localhost:8080
-//   POLARIS_SMOKE_API_KEY         override the api key string; default is
-//                                 to mint one via direct PostgreSQL insert
+//   POLARIS_SMOKE_API_KEY         override the api key string. Unset, the
+//                                 backend token in blueprints/api-key is used
+//                                 when `bin/setup` has issued one; failing
+//                                 that, one is minted by direct PG insert
 //   POLARIS_SMOKE_PROJECT_ID      default "storefront"
 //   POLARIS_SMOKE_ENVIRONMENT     default "development"
 //   POLARIS_SMOKE_SOURCE_ID       default "payments-api"
@@ -65,6 +67,7 @@
 //   POLARIS_SMOKE_POLL_INTERVAL_MS  default 1000
 
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -80,6 +83,30 @@ import {
 } from "./harness.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
+
+/** Where `bin/setup` writes the tokens it issues. */
+const ISSUED_KEY_FILE = resolve(__filename, "../../../blueprints/api-key");
+
+/**
+ * The backend token `bin/setup` issued, if there is one.
+ *
+ * The smoke test's default source (`payments-api`, backend) is the same one
+ * the install issues a backend key for, so on a machine that has run `make
+ * setup` there is already a real key for exactly this path — no reason to
+ * mint a second. Returns "" when the file is absent, which is the CI case
+ * and any stack brought up without `bin/setup`; the mint path below still
+ * covers those.
+ */
+function readIssuedBackendKey() {
+  if (!existsSync(ISSUED_KEY_FILE)) return "";
+  for (const line of readFileSync(ISSUED_KEY_FILE, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("POLARIS_BACKEND_API_KEY=")) {
+      return trimmed.slice("POLARIS_BACKEND_API_KEY=".length).trim();
+    }
+  }
+  return "";
+}
 
 /**
  * Run the smoke test. Exits the process with a non-zero status on
@@ -122,7 +149,8 @@ export async function runVerticalSliceSmoke({
   // Allow operators to bypass the seed step entirely by exporting the
   // API key directly — useful when the local stack has already been
   // bootstrapped and PostgreSQL credentials live elsewhere.
-  const providedApiKey = smoke.apiKey ?? envOr("POLARIS_SMOKE_API_KEY", "");
+  const providedApiKey = smoke.apiKey ?? envOr("POLARIS_SMOKE_API_KEY", "") ?? "";
+  const issuedApiKey = providedApiKey === "" ? readIssuedBackendKey() : "";
 
   logger.info(`[polaris-smoke] start`);
   logger.info(`[polaris-smoke] ingester=${ingesterUrl}`);
@@ -136,6 +164,15 @@ export async function runVerticalSliceSmoke({
     logger.info(`[polaris-smoke] step=seed mode=provided`);
     apiKey = providedApiKey;
     seededInfo = { apiKeyId: providedApiKey.split(".")[0] ?? "<provided>", seeded: false };
+  } else if (issuedApiKey !== "") {
+    // `bin/setup` already issued a backend key for this exact source. Using
+    // it means the smoke run proves the key the install produced actually
+    // works, instead of proving that a key this script minted for itself
+    // does — which is the more useful assertion, and one less place that
+    // knows how to create catalog rows.
+    logger.info(`[polaris-smoke] step=seed mode=issued source=blueprints/api-key`);
+    apiKey = issuedApiKey;
+    seededInfo = { apiKeyId: issuedApiKey.split(".")[0] ?? "<issued>", seeded: false };
   } else {
     if (databaseUrl === "") {
       throw new SmokeError(

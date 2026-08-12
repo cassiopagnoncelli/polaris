@@ -12,13 +12,32 @@
 // Production never applies this. Production provisions the polaris role and
 // database out-of-band (RDS bootstrap, secret-managed credentials).
 //
-// Auth strategy: shells out to `psql` against `postgres` on the default
-// endpoint, trying these superuser candidates in order:
-//   1. $PGUSER          (explicit override)
-//   2. $USER            (Postgres.app on macOS makes the OS user superuser)
-//   3. "postgres"       (most Linux distros)
+// Usage:
+//   node scripts/postgres-bootstrap-local.mjs             # create role + db
+//   node scripts/postgres-bootstrap-local.mjs --destroy   # drop the database
 //
-// `-w` is passed so psql never prompts. If none can connect, the script
+// `--destroy` drops the `polaris` database and leaves the role alone. It
+// exists for `bin/setup`, which drops every Polaris store before rebuilding.
+// The role is not data, and dropping it would strand the docker path, where
+// compose creates it from POSTGRES_USER and nothing on the host can put it
+// back.
+//
+// Auth strategy, in order — the first that works wins:
+//   1. polaris -> `polaris`   already usable, nothing to do
+//   2. polaris -> `postgres`  the role exists and can manage its own
+//                             database: it owns it (bare-metal CREATEDB, or
+//                             docker where POSTGRES_USER made it superuser),
+//                             and an owner can both create and drop it. This
+//                             is the only path that works on docker, where
+//                             no host-side superuser can log in at all.
+//   3. a host superuser       first run bare-metal, when the role itself
+//                             does not exist yet. Candidates in order:
+//                               a. $PGUSER  (explicit override)
+//                               b. $USER    (Postgres.app makes the OS user
+//                                            a superuser on macOS)
+//                               c. "postgres" (most Linux distros)
+//
+// `-w` is passed so psql never prompts. If nothing can connect, the script
 // fails with a connection-style error and a hint about the bare-metal
 // assumption.
 
@@ -31,8 +50,21 @@ const TARGET_PASSWORD = "polaris";
 const TARGET_DB = "polaris";
 
 function runPsql(user, sql) {
+  return runPsqlOn(user, "postgres", sql);
+}
+
+/**
+ * Run one statement as `user` against `database`.
+ *
+ * `PGPASSWORD` is set to the canonical dev password only for the target
+ * role; a host superuser connects over local trust/peer auth and must not
+ * inherit it.
+ */
+function runPsqlOn(user, database, sql) {
   // -X (no psqlrc) so the user's local psql config — \timing, \pset, etc. —
   // can't pollute the output we parse. -tA gives unaligned tuples-only.
+  const env = { ...process.env };
+  if (user === TARGET_ROLE) env.PGPASSWORD = TARGET_PASSWORD;
   return spawnSync(
     "psql",
     [
@@ -44,15 +76,37 @@ function runPsql(user, sql) {
       "-U",
       user,
       "-d",
-      "postgres",
+      database,
       "-w",
       "-v",
       "ON_ERROR_STOP=1",
       "-tAc",
       sql,
     ],
-    { encoding: "utf8" },
+    { encoding: "utf8", env },
   );
+}
+
+/**
+ * Can the `polaris` role reach the `postgres` maintenance database?
+ *
+ * That is the question that decides whether a host superuser is needed at
+ * all. When the answer is yes the role can create and drop its own
+ * database, which covers every case except a bare-metal first run.
+ */
+function polarisCanManageDatabases() {
+  const res = runPsqlOn(TARGET_ROLE, "postgres", "SELECT 1");
+  return res.status === 0 && res.stdout.trim() === "1";
+}
+
+function execOn(user, database, sql) {
+  const res = runPsqlOn(user, database, sql);
+  if (res.status !== 0) {
+    throw new Error(
+      `[postgres-bootstrap-local] psql failed (exit ${res.status}):\n${res.stderr.trim() || res.stdout.trim()}`,
+    );
+  }
+  return res.stdout.trim();
 }
 
 function superuserCandidates() {
@@ -119,11 +173,66 @@ function polarisAlreadyUsable() {
   return res.status === 0 && res.stdout.trim() === "1";
 }
 
+/**
+ * Drop the `polaris` database. The role survives — see the header.
+ *
+ * Runs as the `polaris` role, which owns the database in both layouts and
+ * can therefore drop it without a host superuser. If that role cannot log
+ * in there is nothing this script created, so there is nothing to drop.
+ *
+ * Open connections have to go first: PostgreSQL refuses to drop a database
+ * that anyone is connected to. `bin/setup` stops the dev stack before
+ * calling this, which covers the services; this covers the psql session or
+ * GUI client someone left open in another window. A non-superuser may
+ * always terminate backends belonging to its own role, which is all of
+ * them here.
+ */
+function destroyLocal() {
+  if (!polarisCanManageDatabases()) {
+    console.log(
+      `[postgres-bootstrap-local] role ${TARGET_ROLE} cannot log in at ${HOST}:${PORT} — nothing to drop`,
+    );
+    return;
+  }
+
+  execOn(
+    TARGET_ROLE,
+    "postgres",
+    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity ` +
+      `WHERE datname = '${TARGET_DB}' AND pid <> pg_backend_pid()`,
+  );
+  execOn(TARGET_ROLE, "postgres", `DROP DATABASE IF EXISTS "${TARGET_DB}"`);
+  console.log(`[postgres-bootstrap-local] dropped database ${TARGET_DB}`);
+}
+
 function main() {
+  if (process.argv.includes("--destroy")) {
+    destroyLocal();
+    return;
+  }
+
   if (polarisAlreadyUsable()) {
     console.log(
       `[postgres-bootstrap-local] role ${TARGET_ROLE} + database ${TARGET_DB} already usable at ${HOST}:${PORT} — nothing to do`,
     );
+    return;
+  }
+
+  // The role exists and can reach `postgres`, so it can recreate its own
+  // database — the state a `--destroy` run leaves behind, and the only path
+  // available on docker, where no host superuser can authenticate.
+  if (polarisCanManageDatabases()) {
+    const hasDb = execOn(
+      TARGET_ROLE,
+      "postgres",
+      `SELECT 1 FROM pg_database WHERE datname = '${TARGET_DB}'`,
+    );
+    if (hasDb === "") {
+      execOn(TARGET_ROLE, "postgres", `CREATE DATABASE "${TARGET_DB}" OWNER "${TARGET_ROLE}"`);
+      console.log(
+        `[postgres-bootstrap-local] created database ${TARGET_DB} as ${TARGET_ROLE} (no superuser needed)`,
+      );
+    }
     return;
   }
 

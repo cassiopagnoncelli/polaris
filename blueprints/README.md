@@ -20,7 +20,7 @@ PostgreSQL, RabbitMQ, Redis, and ClickHouse are expected at their default
 localhost endpoints. If you would rather run those in containers, `make
 docker-up` brings them up and the rest is unchanged.
 
-**1. Bootstrap and seed** (see
+**1. Install** (see
 [getting-started](../docs/development/getting-started.md) for the long
 version):
 
@@ -29,17 +29,31 @@ make setup
 ```
 
 That installs the workspace, builds the packages the blueprint links against,
-creates the `polaris` role and database, applies the PostgreSQL and ClickHouse
-migrations, declares the RabbitMQ topology, and then seeds — the `storefront`
-project, its `storefront-web` / `payments-api` sources, and the browser origin
-allow-list entry the direct transport needs.
+drops every Polaris store, and rebuilds: the `polaris` role and database, the
+PostgreSQL and ClickHouse migrations, the RabbitMQ topology, the seeds — the
+`storefront` project, its `storefront-web` / `payments-api` sources, and the
+browser origin allow-list entry the direct transport needs — and both API keys.
 
-Seeding is `bin/setup`, and it is idempotent. Re-run just that part with
-`make seed` after changing anything under `catalog/`.
+Dropping first is what makes the result depend on the repo rather than on this
+machine's history. It also means the keys are reissued every run, which is why
+step 2 below is not a step you have to do.
 
-**2. Issue both keys.** The blueprint produces from two sources, so it wants
-one of each. Each command prints its token exactly once — only an argon2id
-hash is stored, so a lost token is reissued, never recovered:
+`make seed` re-runs the catalog syncs and the allow-list on their own, without
+destroying anything. Reach for it after changing something under `catalog/`.
+
+**2. Nothing.** `make setup` already issued the blueprint's two keys — a web
+key sending as `storefront-web`, a backend key sending as `payments-api` — and
+wrote them to `blueprints/api-key`. `next.config.ts` reads that file for any
+value `.env.local` leaves unset, so there is nothing to copy.
+
+The one exception is `NEXT_PUBLIC_POLARIS_API_KEY`, which direct mode needs
+and which is deliberately left to you: setting it inlines a token into the JS
+bundle, and deciding that is the point of the web-vs-backend split below. Paste
+the web token from `blueprints/api-key` into `.env.local` when you want to see
+direct mode; leave it empty to run relay-only.
+
+To reissue by hand — each command prints its token exactly once, and only an
+argon2id hash is stored, so a lost token is reissued and never recovered:
 
 ```bash
 make api_key
@@ -48,9 +62,6 @@ make api_key
 ```bash
 make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
 ```
-
-The first is the web key, used by the browser paths; the second is the backend
-key, used by the Node SDK. `KEY_PROJECT` and `KEY_ENV` override the rest.
 
 **3. Start the platform** and leave it running:
 
@@ -82,9 +93,10 @@ per-source allow-list and denies anything it does not know. That applies to
 the **direct** transport only — the relay and the backend paths reach the
 ingester server-side, with no `Origin` header to check.
 
-`bin/setup` seeds the blueprint's documented port. If you move it, seed yours
-too — and move it in `bin/setup` as well, or the next fresh checkout will
-seed the old one:
+`bin/setup` reads the port out of this blueprint's own `dev` script and seeds
+that, so moving the port in `package.json` is enough — there is no second copy
+to keep in step. To allow-list an additional origin without moving the
+documented one: 
 
 ```bash
 echo 'POLARIS_DEV_ORIGINS=http://localhost:3000' >> .env.local && make seed

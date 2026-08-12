@@ -16,11 +16,35 @@ From the repo root:
 make setup
 ```
 
-`make setup` installs dependencies, builds the shared packages, and brings the
-schema up: the PostgreSQL role and database, its migrations, the ClickHouse
-schema, the RabbitMQ user and topology, and the dev seeds. It expects those
-four services to be reachable on their default localhost ports — `make
-docker-up` starts them in containers if you are not running them natively.
+`make setup` brings this machine to the state the repo describes. It installs
+dependencies, builds the shared packages, **drops every Polaris store**, and
+rebuilds: the PostgreSQL role and database, its migrations, the ClickHouse
+schema, the RabbitMQ user and topology, the dev seeds, and the two API keys
+the storefront blueprint uses. It expects the four services to be reachable on
+their default localhost ports — `make docker-up` starts them in containers if
+you are not running them natively.
+
+The drop is the point, not a mode. Every step used to be additive, so a source
+deleted from the catalog kept routing and an edited migration never applied —
+what you got depended on the machine's history rather than the repo. Dropping
+first is what makes the result reproducible.
+
+It is therefore **not** the command for picking up new migrations after a
+`git pull`. That is:
+
+```bash
+make db-migrate
+```
+
+Two narrower forms, when you want one half of it:
+
+```bash
+make destroy   # drop every Polaris store, rebuild nothing
+make seed      # re-run the catalog syncs and origin allow-list; destroys nothing
+```
+
+`make setup` refuses to run unless every endpoint is on localhost and
+`POLARIS_ENV` is not a deployed environment.
 
 Check service health:
 
@@ -68,6 +92,9 @@ command uses it, so leave them unset unless you are exercising that path.
 
 ## 4. Seed the Catalog
 
+`make setup` already did this — the steps here are what it runs, for when you
+want one of them on its own.
+
 The repo ships a sample `storefront` project and two sources:
 
 - `storefront-web`
@@ -87,7 +114,21 @@ Materialize them into PostgreSQL:
 ./polaris sources sync
 ```
 
+`make seed` runs both, plus the browser origin allow-list that `sources sync`
+has no surface for. Reach for it after editing `catalog/`.
+
 ## 5. Create an API Key
+
+`make setup` issues two — a web key for `storefront-web` and a backend key for
+`payments-api` — and writes them to `blueprints/api-key`, which the storefront
+blueprint reads directly. A fresh install needs no copying.
+
+That file is regenerated on every `make setup`, because the run that writes it
+also drops the keys from the previous one. A token pasted somewhere by hand
+goes stale then, and a stale token does not announce itself — it just makes
+every request 401.
+
+To issue one by hand:
 
 ```bash
 ./polaris keys create \
@@ -223,19 +264,19 @@ POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=
 
 ## ClickHouse Note
 
-`make setup` does not run ClickHouse schema bootstrap. The documented command is:
+`make setup` runs the ClickHouse schema bootstrap as one of its steps. To
+re-run just that step:
 
 ```bash
 pnpm clickhouse:bootstrap-local
 ```
 
-At the time this usage note was written, local bootstrap can fail because the
-ClickHouse DDL uses `ON CLUSTER '{cluster}'` while the local container does not
-run Keeper/ZooKeeper. The ingester, CLI, PostgreSQL, Redis, and RabbitMQ path is
-usable without that ClickHouse bootstrap; analytics queries need the local DDL
-bootstrap issue fixed first.
+The DDL uses `ON CLUSTER '{cluster}'`, which needs macros, a cluster
+definition, and Keeper on the server. The bootstrap script detects when those
+are missing on a bare-metal ClickHouse and writes the `polaris-*.xml` config
+files itself before applying the schema, so a plain local install works.
 
-Useful ClickHouse smoke commands after bootstrap is fixed:
+Useful ClickHouse smoke commands after bootstrap:
 
 ```bash
 pnpm clickhouse:query ping

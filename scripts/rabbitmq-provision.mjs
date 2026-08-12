@@ -27,6 +27,17 @@
 //   node scripts/rabbitmq-provision.mjs                # declare everything
 //   node scripts/rabbitmq-provision.mjs --dry-run      # print the plan
 //   node scripts/rabbitmq-provision.mjs --print-only   # alias for --dry-run
+//   node scripts/rabbitmq-provision.mjs --destroy      # delete everything above
+//
+// `--destroy` is the inverse of a declare run and exists for one caller:
+// `bin/setup`, which drops every Polaris store before rebuilding so a local
+// install is a function of the repo rather than of its history. It deletes
+// by name — the same names `buildPlan()` declares — so it can only ever
+// remove objects this script created. It never deletes the vhost: the vhost
+// is created by docker-compose on the container path, and
+// `scripts/rabbitmq-bootstrap-local.mjs` can only recreate it bare-metal
+// (it drives `rabbitmqctl` over Erlang distribution), so a deleted vhost
+// would strand the docker path with no way back short of `make docker-nuke`.
 //
 // Env vars (same names the services use, so a working service config is a
 // working provisioning config):
@@ -40,6 +51,8 @@ import {
   DEFAULT_STREAM_MAX_BYTES,
   declareComponentQueues,
   declareSuperStream,
+  deleteComponentQueues,
+  deleteSuperStream,
   POLARIS_COMPONENTS,
   RETRY_BACKOFF_TIERS_MS,
 } from "@polaris/shared-transport";
@@ -120,9 +133,15 @@ function printPlan(plan) {
   }
 }
 
-export async function provision(plan, { logger = console } = {}) {
+/**
+ * Open a channel against the plan's broker, run `body`, always clean up.
+ *
+ * Shared by `provision` and `destroy` so both reach the broker the same
+ * way — same URL resolution, same connection name, same teardown.
+ */
+async function withChannel(plan, connectionName, logger, body) {
   const connection = await connect(plan.url, {
-    clientProperties: { connection_name: "polaris-provision" },
+    clientProperties: { connection_name: connectionName },
   });
   const channel = await connection.createChannel();
   // A failed assert kills the channel, so surface the reason rather than
@@ -132,6 +151,15 @@ export async function provision(plan, { logger = console } = {}) {
   });
 
   try {
+    await body(channel);
+  } finally {
+    await channel.close().catch(() => undefined);
+    await connection.close().catch(() => undefined);
+  }
+}
+
+export async function provision(plan, { logger = console } = {}) {
+  await withChannel(plan, "polaris-provision", logger, async (channel) => {
     for (const spec of plan.superStreams) {
       await declareSuperStream(channel, spec);
       logger.info(`  ok  super stream ${spec.family} (${spec.partitions} partitions)`);
@@ -140,19 +168,56 @@ export async function provision(plan, { logger = console } = {}) {
       await declareComponentQueues(channel, component);
       logger.info(`  ok  queues ${component}.retry.* / .redeliver / .dlq`);
     }
-  } finally {
-    await channel.close().catch(() => undefined);
-    await connection.close().catch(() => undefined);
-  }
+  });
+}
+
+/**
+ * Delete everything {@link provision} declares, by name.
+ *
+ * Component queues first, then super streams: consumers drain into the
+ * retry/DLQ objects, so removing those first means the streams are not
+ * dead-lettering into queues that have just disappeared.
+ *
+ * Deleting an object that is not there is not an error — RabbitMQ answers
+ * `queue.delete` and `exchange.delete` for a missing object with success,
+ * unlike the AMQP 0-9-1 spec. That is what makes this safe to run against
+ * an empty broker, which is both the CI case and the re-run-after-a-crash
+ * case.
+ */
+export async function destroy(plan, { logger = console } = {}) {
+  await withChannel(plan, "polaris-destroy", logger, async (channel) => {
+    for (const { component } of plan.components) {
+      await deleteComponentQueues(channel, component);
+      logger.info(`  gone  queues ${component}.retry.* / .redeliver / .dlq`);
+    }
+    for (const spec of plan.superStreams) {
+      await deleteSuperStream(channel, spec);
+      logger.info(`  gone  super stream ${spec.family} (${spec.partitions} partitions)`);
+    }
+  });
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run") || args.includes("--print-only");
+  const destroying = args.includes("--destroy");
   const plan = buildPlan();
 
   if (dryRun) {
     printPlan(plan);
+    return;
+  }
+
+  if (destroying) {
+    console.log(`deleting RabbitMQ topology at ${redactUrl(plan.url)}`);
+    try {
+      await destroy(plan);
+    } catch (err) {
+      console.error(`\nteardown failed: ${err.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log("topology deleted");
     return;
   }
 

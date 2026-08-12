@@ -37,27 +37,39 @@ is the minimum bootstrap once Node 22 is selected.
 From the repo root:
 
 ```bash
-# 1. Install workspace dependencies.
-pnpm install
+# 1. Bring up the local data-path stack (RabbitMQ, Postgres, Redis, ClickHouse).
+#    Skip if you run them natively — setup assumes the default localhost ports
+#    either way.
+make docker-up
 
-# 2. Bring up the local data-path stack (RabbitMQ, Postgres, Redis, ClickHouse).
-docker compose up -d --wait
-# or: make docker-up
-
-# 3. Apply PostgreSQL migrations.
-pnpm db:migrate
-
-# 4. Apply the ClickHouse schema AND provision local users for the
-#    polaris_service / polaris_operator roles (see "Querying ClickHouse" below).
-pnpm clickhouse:bootstrap-local
+# 2. Install Polaris.
+make setup
 ```
 
-`make setup` is the same sequence in one command, plus the ClickHouse
-bootstrap, the RabbitMQ user and topology, and the dev seeds — see `make help`
-for what each step is. It assumes bare-metal infra at the default endpoints;
-run `make docker-up` first if you would rather have those in containers.
+`make setup` is the whole thing: dependencies, package and CLI builds, the
+PostgreSQL role and database, migrations, the ClickHouse schema and local
+users, the RabbitMQ user and topology, the catalog seeds, and the storefront
+blueprint's two API keys. It prints what it produced when it finishes.
 
-Verify each service is healthy:
+It **drops every Polaris store first**, every time, so what you end up with is
+a function of the repo rather than of this machine's history. That makes it
+the wrong command for picking up new migrations after a `git pull` — use
+`pnpm db:migrate` (or `make db-migrate`) for that. `make destroy` is the
+teardown on its own; `make seed` re-runs the catalog syncs without destroying
+anything.
+
+Setup refuses to run unless every endpoint is on localhost and `POLARIS_ENV`
+is not a deployed environment. See `bin/setup`'s header for the reasoning, and
+`make help` for the individual steps.
+
+Verify:
+
+```bash
+make dev                                 # run the platform, Ctrl-C stops it
+pnpm smoke:vertical-slice                # event -> ingester -> RabbitMQ -> ClickHouse
+```
+
+Or inspect each service directly:
 
 ```bash
 docker compose ps                        # all four services in "healthy" state

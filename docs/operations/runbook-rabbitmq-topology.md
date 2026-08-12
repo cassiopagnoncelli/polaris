@@ -41,6 +41,12 @@ credentials already work. `make setup` runs it before provisioning.
 Local development only — production provisions its broker user
 out-of-band with least-privilege permissions.
 
+Note that it cannot recreate a *deleted* vhost on the docker path: with the
+broker in a container there is no host-side `rabbitmqctl`, and the credentials
+probe short-circuits before one would be consulted. That is why
+`bin/setup --destroy` deletes the topology objects by name and leaves the vhost
+alone; deleting the vhost would strand the docker path at `make docker-nuke`.
+
 ## Declare or repair the topology
 
 ```bash
@@ -56,6 +62,21 @@ Preview without touching the broker:
 ```bash
 pnpm rabbitmq:provision:dry-run
 ```
+
+## Delete the topology (local only)
+
+```bash
+pnpm rabbitmq:destroy
+```
+
+The inverse of a provision run, deleting the same objects by the same names —
+component queues first, then super streams, so nothing is dead-lettering into
+an object that has just gone. Deleting something that is not there is not an
+error; RabbitMQ answers `queue.delete` for a missing queue with success.
+
+**This deletes events.** It exists for `bin/setup`, which drops every Polaris
+store before rebuilding a local machine, and it is not an answer to a
+production topology problem — see the next section for that.
 
 ## PRECONDITION_FAILED: an object exists with different arguments
 

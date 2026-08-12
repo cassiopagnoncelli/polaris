@@ -220,6 +220,8 @@ export {
   declareTopology,
   declareTopologyOnChannel,
   defaultSuperStreams,
+  deleteComponentQueues,
+  deleteSuperStream,
   diagnosticsSuperStream,
   POLARIS_COMPONENTS,
   type SuperStreamSpec,

@@ -21,7 +21,8 @@ the thing three separate apps could not show.
 ## Run it
 
 Finish the [one-time setup](../README.md#one-time-setup) first — `make setup`
-seeds the origin allow-list entry the `direct` transport needs.
+seeds the origin allow-list entry the `direct` transport needs, and issues the
+two keys this app sends with.
 
 ```bash
 pnpm install --ignore-workspace
@@ -31,15 +32,13 @@ pnpm install --ignore-workspace
 cp .env.example .env.local
 ```
 
-Fill in **two** keys. This app produces from two sources, so it needs one of
-each:
+No keys to paste: this app produces from two sources, and `make setup` issued
+one for each into `blueprints/api-key`. `next.config.ts` reads them from there
+for anything `.env.local` leaves empty. To reissue by hand:
 
 ```bash
-make api_key
-```
-
-```bash
-make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
+make api_key                                           # web  -> storefront-web
+make api_key KEY_SOURCE=payments-api KEY_TYPE=backend  # backend -> payments-api
 ```
 
 ```bash

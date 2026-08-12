@@ -26,6 +26,14 @@
 // Usage:
 //   node scripts/clickhouse-bootstrap-local.mjs                 # apply all
 //   node scripts/clickhouse-bootstrap-local.mjs --dry-run       # plan only
+//   node scripts/clickhouse-bootstrap-local.mjs --destroy       # drop the db
+//
+// `--destroy` drops the `polaris` database and returns; it applies nothing.
+// It exists for `bin/setup`, which drops every Polaris store before
+// rebuilding — and for ClickHouse that is the only way an edited table
+// definition ever takes effect, since every file under sql/clickhouse/ is
+// `CREATE ... IF NOT EXISTS` and therefore a no-op against an existing
+// table. See the phase-2 note above.
 //
 // Env vars same as scripts/clickhouse-migrate.mjs, plus:
 //   CLICKHOUSE_ADMIN_USER       default 'default'  (phases 0 and 1)
@@ -470,9 +478,40 @@ async function ensurePolarisUser({ url, user, password, adminUser, adminPassword
   );
 }
 
+/**
+ * Drop the `polaris` database, and only that.
+ *
+ * `SYNC` matters: without it the drop is lazily asynchronous, and the
+ * `CREATE DATABASE` that follows in the same `bin/setup` run can race the
+ * detach and fail. With it, the statement returns once the database is
+ * really gone.
+ *
+ * No `ON CLUSTER '{cluster}'`, unlike `sql/clickhouse/00_database.sql`.
+ * Destroy is local-only — one node, one replica — so a plain drop is
+ * already complete, and the clustered form would fail outright on a server
+ * that has not been through phase 0 yet and has no `{cluster}` macro.
+ *
+ * Authenticating as `polaris` is the guard, not a convenience: on a machine
+ * where that user does not exist there is nothing this script created, so
+ * there is nothing for it to drop.
+ */
+async function destroyLocal(client) {
+  const reachable = await probe(client.url, client.user, client.password);
+  if (!reachable.ok) {
+    logger.info(
+      `[clickhouse-bootstrap-local] user ${client.user} cannot authenticate at ${client.url} ` +
+        `(${reachable.error}) — nothing to drop`,
+    );
+    return;
+  }
+  await execAs(client.url, client.user, client.password, "DROP DATABASE IF EXISTS polaris SYNC");
+  logger.info("[clickhouse-bootstrap-local] dropped database polaris");
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const dryRun = Boolean(args["dry-run"]);
+  const destroying = Boolean(args["destroy"]);
 
   const client = {
     url: envOr("CLICKHOUSE_URL", "http://localhost:8123").replace(/\/+$/, ""),
@@ -483,8 +522,18 @@ async function main() {
   const adminPassword = envOr("CLICKHOUSE_ADMIN_PASSWORD", "");
 
   logger.info(
-    `[clickhouse-bootstrap-local] url=${client.url} user=${client.user}${dryRun ? " (dry-run)" : ""}`,
+    `[clickhouse-bootstrap-local] url=${client.url} user=${client.user}${dryRun ? " (dry-run)" : ""}${destroying ? " (destroy)" : ""}`,
   );
+
+  if (destroying) {
+    try {
+      await destroyLocal(client);
+    } catch (err) {
+      logger.error(err.message);
+      process.exitCode = 1;
+    }
+    return;
+  }
 
   try {
     await ensureLocalServerConfig({

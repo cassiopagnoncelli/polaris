@@ -92,15 +92,16 @@ jobs:
       - name: Start local stack
         run: docker compose up -d --wait
 
-      # Declare the streams, exchanges, and retry/DLQ queues. Idempotent.
-      - name: Declare RabbitMQ topology
-        run: pnpm rabbitmq:provision
-
-      - name: Apply PostgreSQL migrations
-        run: pnpm db:migrate
-
-      - name: Apply ClickHouse schema (incl. local users)
-        run: pnpm clickhouse:bootstrap-local
+      # One command, the same one a developer runs — RabbitMQ topology,
+      # PostgreSQL migrations, ClickHouse schema, catalog seeds, API keys.
+      # CI running the real bootstrap rather than its own copy of the recipe
+      # is the point: an unexercised bootstrap script is one that rots.
+      #
+      # Its destroy phase is very nearly a no-op against these fresh
+      # containers, which is itself worth having — it proves destroy is safe
+      # on empty stores, the case a re-run after a mid-install crash hits.
+      - name: Install Polaris (bin/setup)
+        run: ./bin/setup
 
       # The ingester + analytics-projector are workspace services. We run
       # them in the background and capture pid + logs so a smoke failure
@@ -297,14 +298,10 @@ jobs:
       - name: Start local stack
         run: docker compose up -d --wait
 
-      - name: Declare RabbitMQ topology
-        run: pnpm rabbitmq:provision
-
-      - name: Apply PostgreSQL migrations
-        run: pnpm db:migrate
-
-      - name: Apply ClickHouse schema (incl. local users)
-        run: pnpm clickhouse:bootstrap-local
+      # See the acceptance job above for why this is `bin/setup` and not a
+      # hand-rolled sequence.
+      - name: Install Polaris (bin/setup)
+        run: ./bin/setup
 
       - name: Start ingester
         run: |

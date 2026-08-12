@@ -247,6 +247,47 @@ export async function declareComponentQueues(channel: Channel, component: string
 }
 
 /**
+ * Delete a super stream: every partition stream, then the exchange.
+ *
+ * The inverse of {@link declareSuperStream}, and deliberately adjacent to
+ * it — a teardown that derives names anywhere else is a teardown that
+ * silently stops matching the day a name changes.
+ *
+ * Queues before exchanges, always. Deleting the exchange first leaves the
+ * streams unbound but alive, and anything still publishing re-declares the
+ * exchange underneath the teardown; the objects then survive in a
+ * half-bound state that looks declared to the next `assert` and drops
+ * messages at runtime.
+ *
+ * Destructive and local-only by intent — nothing in the service path calls
+ * this. `scripts/rabbitmq-provision.mjs --destroy` is the only caller, and
+ * it runs behind `bin/setup`'s guard.
+ */
+export async function deleteSuperStream(channel: Channel, spec: SuperStreamSpec): Promise<void> {
+  for (let partition = 0; partition < spec.partitions; partition += 1) {
+    await channel.deleteQueue(partitionStreamName(spec.family, partition));
+  }
+  await channel.deleteExchange(streamExchangeName(spec.family));
+}
+
+/**
+ * Delete a component's retry tiers, redelivery queue, and DLQ.
+ *
+ * The inverse of {@link declareComponentQueues}, in reverse order: retry
+ * tiers dead-letter into the redelivery queue and the redelivery queue
+ * dead-letters into the DLQ, so tearing down upstream-first means nothing
+ * is ever dead-lettering into an object that has just been removed.
+ */
+export async function deleteComponentQueues(channel: Channel, component: string): Promise<void> {
+  for (const tier of RETRY_BACKOFF_TIERS_MS) {
+    await channel.deleteQueue(retryQueueName(component, tier));
+  }
+  await channel.deleteQueue(redeliverQueueName(component));
+  await channel.deleteQueue(dlqQueueName(component));
+  await channel.deleteExchange(retryExchangeName(component));
+}
+
+/**
  * Shared quorum-queue arguments.
  *
  * `x-dead-letter-strategy: at-least-once` (with `x-overflow:
