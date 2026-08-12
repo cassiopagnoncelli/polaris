@@ -33,7 +33,14 @@ export type TransportHookEvent =
   | "consumer.partition_released"
   | "consumer.checkpoint_saved"
   | "consumer.rewound"
-  | "consumer.poisoned";
+  | "consumer.poisoned"
+  /**
+   * A message was handled but its checkpoint could not be persisted. The
+   * reader pauses; the message itself needs no retry. Distinct from
+   * `handler_failed` on purpose — conflating the two is what let a
+   * PostgreSQL fault dead-letter healthy messages.
+   */
+  | "consumer.checkpoint_failed";
 
 /**
  * Free-form payload shape attached to a hook event. Field names are

@@ -2,7 +2,13 @@ import type { RedisConfig } from "@polaris/shared-config";
 import type { Logger } from "@polaris/shared-logger";
 import type { RedisOptions } from "ioredis";
 
-import type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "./types.js";
+import type {
+  DedupeClaimInput,
+  DedupeClaimOutcome,
+  DedupeConfirmInput,
+  DedupeKey,
+  DedupeStore,
+} from "./types.js";
 
 /**
  * Minimum Redis client surface used by the dedupe store.
@@ -18,6 +24,10 @@ export interface RedisClientLike {
     ttl: number,
     mode2: "NX",
   ): Promise<"OK" | null | string>;
+  /** Promote a lease to the full window. */
+  expire(key: string, seconds: number): Promise<number>;
+  /** Drop a lease whose publish failed. */
+  del(key: string): Promise<number>;
   quit?(): Promise<unknown>;
   on?(event: "error" | "ready" | "end" | "connect", listener: (err?: unknown) => void): unknown;
 }
@@ -110,6 +120,35 @@ export function createRedisDedupeStore(options: CreateRedisDedupeStoreOptions): 
     }
   }
 
+  async function confirm(input: DedupeConfirmInput): Promise<void> {
+    const key = buildDedupeKey(keyPrefix, input);
+    try {
+      await withTimeout(client.expire(key, input.ttlSec), opTimeoutMs, "redis_expire_timeout");
+    } catch (err) {
+      // Degradation only: the lease expires on its own and a later duplicate
+      // slips through to the broker. Downstream stays idempotent.
+      logger?.warn(
+        { component: "ingest.dedupe", err: redisErrSummary(err), key_prefix: keyPrefix },
+        "redis dedupe confirm failed; lease will expire and a duplicate may pass",
+      );
+    }
+  }
+
+  async function release(input: DedupeKey): Promise<void> {
+    const key = buildDedupeKey(keyPrefix, input);
+    try {
+      await withTimeout(client.del(key), opTimeoutMs, "redis_del_timeout");
+    } catch (err) {
+      // The caller is about to tell the client to retry, and that retry will
+      // hit this surviving lease. Loud, because it is the failure that makes
+      // a retry look like a duplicate — bounded by DEDUPE_LEASE_TTL_SEC.
+      logger?.error(
+        { component: "ingest.dedupe", err: redisErrSummary(err), key_prefix: keyPrefix },
+        "redis dedupe release failed; client retries rejected as duplicate until the lease expires",
+      );
+    }
+  }
+
   async function close(): Promise<void> {
     try {
       await client.quit?.();
@@ -123,6 +162,8 @@ export function createRedisDedupeStore(options: CreateRedisDedupeStoreOptions): 
 
   return {
     claim,
+    confirm,
+    release,
     isHealthy: () => healthy,
     close,
   };
@@ -134,7 +175,7 @@ export function createRedisDedupeStore(options: CreateRedisDedupeStoreOptions): 
  * environments cannot collide, and so per-project window overrides act on
  * a disjoint key space.
  */
-export function buildDedupeKey(prefix: string, input: DedupeClaimInput): string {
+export function buildDedupeKey(prefix: string, input: DedupeKey): string {
   return `${prefix}:${input.projectId}:${input.environment}:${input.eventId}`;
 }
 

@@ -159,7 +159,6 @@ state_stores:
 # architecture doc ("Processor Configuration").
 defaults:
   consumer_group: polaris-attribution-engine-v2
-  partitions_consumed_concurrently: 1
 
 # Replay metadata. The engine is replayable from analytics.events. The
 # deterministic touchpoint_id derivation guarantees byte-identical

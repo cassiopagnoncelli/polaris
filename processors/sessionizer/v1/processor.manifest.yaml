@@ -85,7 +85,6 @@ state_stores:
 # in the manifest, not in env. A bump requires v2.
 defaults:
   consumer_group: polaris-sessionizer-v1
-  partitions_consumed_concurrently: 1
   # SEMANTIC: 30 minutes per docs/architecture/10-sdk-standards.md and
   # the Web SDK's session rotation rule. v1 emits session.ended for any
   # key with last_seen_at + 1800s < occurred_at on the next observed

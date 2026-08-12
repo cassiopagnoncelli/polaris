@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthenticatedRequestContext } from "../../src/auth/index.js";
 import type { IngesterConfig } from "../../src/config.js";
-import { InMemoryDedupeStore } from "../../src/dedupe/index.js";
+import { DisabledDedupeStore, InMemoryDedupeStore } from "../../src/dedupe/index.js";
 import { createIngestHandler } from "../../src/ingest/handler.js";
 import {
   IngestMetrics,
@@ -389,6 +389,76 @@ describe("ingest handler — dedupe", () => {
     if (!("accepted" in retry.body)) throw new Error("expected batch body");
     expect(retry.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
     expect(producer.publishes).toHaveLength(1);
+  });
+});
+
+describe("ingest handler — dedupe lease", () => {
+  it("lets the client's retry succeed after a publish failure", async () => {
+    // The regression this whole layer was rebuilt for. The claim is written
+    // BEFORE the publish so a retry storm's second copy never reaches the
+    // broker — which means a failed publish used to leave a claim standing
+    // over an event that does not exist. The response says "retry the
+    // event"; the retry then hit that claim, came back `duplicate`, and the
+    // event was gone. Permanently, and on nothing worse than a broker blip.
+    const producer = new RecordingProducer();
+    producer.throwOnPublish = new Error("broker unavailable");
+    const dedupe = new InMemoryDedupeStore();
+    const { handler } = deps({ producer, dedupe });
+
+    const first = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in first.body)) throw new Error("expected batch body");
+    expect(first.body.rejected[0]?.code).toBe(BATCH_REASON_PUBLISH_FAILED);
+    // The lease was dropped, so nothing is held over an event that does not exist.
+    expect(dedupe.size()).toBe(0);
+
+    // `throwOnPublish` is one-shot, so this retry is the client obeying the
+    // instruction it was handed.
+    const retry = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in retry.body)) throw new Error("expected batch body");
+    expect(retry.body.rejected).toHaveLength(0);
+    expect(retry.body.accepted[0]?.status).toBe("accepted");
+    expect(producer.publishes).toHaveLength(1);
+  });
+
+  it("still rejects a genuine duplicate after a successful publish", async () => {
+    // The lease must not weaken the thing the layer exists for.
+    const dedupe = new InMemoryDedupeStore();
+    const { handler, producer } = deps({ dedupe });
+
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    const again = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in again.body)) throw new Error("expected batch body");
+    expect(again.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
+    expect(producer.publishes).toHaveLength(1);
+  });
+
+  it("promotes the lease to the full per-project window on success", async () => {
+    // Confirm has to actually extend the entry, or every dedupe window
+    // silently collapses to the 60s lease.
+    let nowMs = Date.parse("2026-05-12T10:00:00.000Z");
+    const dedupe = new InMemoryDedupeStore({ now: () => nowMs });
+    const { handler, producer } = deps({ dedupe });
+
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    // Past the 60s lease, inside the 15-minute default window.
+    nowMs += 5 * 60_000;
+    const late = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in late.body)) throw new Error("expected batch body");
+    expect(late.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
+    expect(producer.publishes).toHaveLength(1);
+  });
+
+  it("does not hold a lease when the store skipped the claim", async () => {
+    // Redis down: nothing was claimed, so there is nothing to release, and
+    // the publish-failure path must not invent a release call.
+    const producer = new RecordingProducer();
+    producer.throwOnPublish = new Error("broker unavailable");
+    const dedupe = new DisabledDedupeStore();
+    const { handler } = deps({ producer, dedupe: dedupe as never });
+
+    const result = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in result.body)) throw new Error("expected batch body");
+    expect(result.body.rejected[0]?.code).toBe(BATCH_REASON_PUBLISH_FAILED);
   });
 });
 

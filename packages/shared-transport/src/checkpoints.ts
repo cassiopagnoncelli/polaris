@@ -125,13 +125,31 @@ export class PostgresCheckpointStore implements CheckpointStore {
  * the checkpoint claims those rows were handled and a crash discards
  * them — silent loss, on the one path with no upstream retry.
  *
- * Wrapping the real store defers every write until `commit()` is called,
- * which the owner does only after its batch is durable. `rollback()`
- * drops the pending positions so a failed batch is re-read.
+ * Wrapping the real store defers every write until the owner says its batch
+ * is durable.
  *
- * Positions still only move forward: `commit()` forwards the highest
- * pending offset per stream.
+ * ## Why `take()` and not `commit()`
+ *
+ * The owner holds ONE store across every partition it reads — the sink runs
+ * fifteen readers — and the transport writes each reader's position into it
+ * independently. An earlier version drained the whole pending map inside
+ * `commit()`, which silently broke the guarantee this class exists for:
+ *
+ *   flush() swaps its row buffers, awaits the INSERT, and DURING that await
+ *   another partition's chain handles a message and writes its offset into
+ *   the same map. The commit that follows persists that offset too — for a
+ *   row that is still only in memory. A crash then loses the row under a
+ *   checkpoint asserting it was handled. Exactly the failure the wrapper
+ *   claims to prevent, reintroduced one partition over.
+ *
+ * So the snapshot is taken at the same instant the row buffers swap, and the
+ * commit names what it is committing. Positions still only move forward:
+ * `take()` keeps the highest offset per stream, and `restore()` merges back
+ * without lowering anything a later batch already recorded.
  */
+/** A snapshot of held positions, as returned by {@link DeferredCheckpointStore.take}. */
+export type HeldCheckpoints = readonly Checkpoint[];
+
 export class DeferredCheckpointStore implements CheckpointStore {
   readonly #inner: CheckpointStore;
   readonly #pending = new Map<string, Checkpoint>();
@@ -159,18 +177,50 @@ export class DeferredCheckpointStore implements CheckpointStore {
     this.#pending.set(entryKey, checkpoint);
   }
 
-  /** Flush every held position to the durable store. */
-  async commit(): Promise<void> {
+  /**
+   * Detach the positions held so far and start a fresh set.
+   *
+   * Call this at the same instant the owner swaps its row buffers: what is
+   * returned covers exactly the rows being flushed, and anything a
+   * concurrent reader writes afterwards accumulates for the next batch.
+   */
+  take(): HeldCheckpoints {
     const held = [...this.#pending.values()];
     this.#pending.clear();
+    return held;
+  }
+
+  /** Durably persist a snapshot from {@link take}. */
+  async commit(held: HeldCheckpoints): Promise<void> {
     for (const checkpoint of held) {
       await this.#inner.write(checkpoint);
     }
   }
 
-  /** Drop held positions so the owner's failed work is re-read. */
-  rollback(): void {
-    this.#pending.clear();
+  /**
+   * Put a failed batch's positions back so the transport re-reads its rows.
+   *
+   * Merged rather than assigned: a later batch may already hold a higher
+   * offset for the same stream, and restoring must never move a position
+   * backwards.
+   */
+  restore(held: HeldCheckpoints): void {
+    for (const checkpoint of held) {
+      const entryKey = key(checkpoint.group_name, checkpoint.stream);
+      const existing = this.#pending.get(entryKey);
+      if (
+        existing !== undefined &&
+        BigInt(existing.last_offset) >= BigInt(checkpoint.last_offset)
+      ) {
+        continue;
+      }
+      this.#pending.set(entryKey, checkpoint);
+    }
+  }
+
+  /** Test-only view of the currently held positions. */
+  pendingSize(): number {
+    return this.#pending.size;
   }
 
   /** Positions currently held but not yet durable. Tests assert on this. */

@@ -352,26 +352,109 @@ describe("createPolarisConsumer", () => {
   });
 });
 
-describe("poison messages", () => {
-  /** A producer double that records DLQ publishes. */
-  function poisonProducer(): { producer: never; sent: Array<{ queue: string }> } {
-    const sent: Array<{ queue: string }> = [];
-    const producer = {
-      async connect() {},
-      async disconnect() {},
-      async publishEvent() {
-        throw new Error("not used");
+function poisonProducer(): { producer: never; sent: Array<{ queue: string }> } {
+  const sent: Array<{ queue: string }> = [];
+  const producer = {
+    async connect() {},
+    async disconnect() {},
+    async publishEvent() {
+      throw new Error("not used");
+    },
+    async publish() {
+      throw new Error("not used");
+    },
+    async publishToQueue(input: { queue: string }) {
+      sent.push({ queue: input.queue });
+    },
+  } as unknown as never;
+  return { producer, sent };
+}
+
+describe("checkpoint write failures", () => {
+  /** A checkpoint store whose writes fail, standing in for a Postgres fault. */
+  function brokenCheckpoints(inner: InMemoryCheckpointStore) {
+    return {
+      read: (g: string, s: string) => inner.read(g, s),
+      readAll: (g: string) => inner.readAll(g),
+      write: async () => {
+        throw new Error("connection terminated unexpectedly");
       },
-      async publish() {
-        throw new Error("not used");
-      },
-      async publishToQueue(input: { queue: string }) {
-        sent.push({ queue: input.queue });
-      },
-    } as unknown as never;
-    return { producer, sent };
+    };
   }
 
+  it("does not treat a failed checkpoint write as a handler failure", async () => {
+    // The regression. `saveCheckpoint` used to sit inside the handler's try,
+    // after the ack — so a PostgreSQL fault on an already-handled,
+    // already-published message counted as a poison attempt. Five faults
+    // re-ran the side effects five times and then dead-lettered a message
+    // that had succeeded every single time.
+    const connection = new FakeConnection({
+      ...testRabbitmqConfig,
+      partitions: 1,
+      checkpointEvery: 1,
+    });
+    const { producer, sent } = poisonProducer();
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints: brokenCheckpoints(new InMemoryCheckpointStore()) as never,
+      retryDelayMs: 1,
+      maxRetryDelayMs: 2,
+      maxDeliveryAttempts: 3,
+      poison: { component: "sessionizer", producer },
+    });
+
+    let handled = 0;
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async () => {
+      handled += 1;
+    });
+
+    for (let i = 0; i < 4; i += 1) {
+      connection.last.deliver(streamDelivery({ offset: 9 }));
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    // The handler ran once and succeeded. It must not be replayed, and it
+    // must never reach the DLQ.
+    expect(handled).toBe(1);
+    expect(sent).toEqual([]);
+    await consumer.disconnect();
+  });
+
+  it("emits consumer.checkpoint_failed rather than consumer.handler_failed", async () => {
+    // The two are different incidents and page differently: one is a bad
+    // message, the other is the control-plane database.
+    const connection = new FakeConnection({
+      ...testRabbitmqConfig,
+      partitions: 1,
+      checkpointEvery: 1,
+    });
+    const events: string[] = [];
+    const consumer = createPolarisConsumer({
+      connection: connection.asConnection(),
+      groupName: "g",
+      checkpoints: brokenCheckpoints(new InMemoryCheckpointStore()) as never,
+      retryDelayMs: 1,
+      hooks: {
+        onEvent: (event: string) => {
+          events.push(event);
+        },
+      } as never,
+    });
+
+    await consumer.subscribe({ families: ["raw.events"] });
+    await consumer.runEach(async () => {});
+    connection.last.deliver(streamDelivery({ offset: 9 }));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(events).toContain("consumer.checkpoint_failed");
+    expect(events).not.toContain("consumer.handler_failed");
+    await consumer.disconnect();
+  });
+});
+
+describe("poison messages", () => {
   it("routes a message that keeps failing to the DLQ and advances past it", async () => {
     // Without this, one bad payload pins its partition forever and every
     // healthy event behind it waits with it.

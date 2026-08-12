@@ -331,7 +331,6 @@ function buildManifestYaml(name: string, version: string): string {
     "state_stores: []",
     "defaults:",
     "  consumer_group: polaris-analytics-projector-v1",
-    "  partitions_consumed_concurrently: 1",
     "replay:",
     "  supported: true",
     "  restrictions: []",

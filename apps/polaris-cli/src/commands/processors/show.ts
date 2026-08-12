@@ -188,11 +188,6 @@ function renderHuman(
     lines.push(
       `defaults.consumer_group           ${manifest.defaults.consumer_group ?? "(unset)"}`,
     );
-    if (manifest.defaults.partitions_consumed_concurrently !== undefined) {
-      lines.push(
-        `defaults.partitions_consumed_concurrently ${manifest.defaults.partitions_consumed_concurrently}`,
-      );
-    }
   }
   if (manifest.replay !== undefined) {
     lines.push(`replay.supported       ${String(manifest.replay.supported)}`);

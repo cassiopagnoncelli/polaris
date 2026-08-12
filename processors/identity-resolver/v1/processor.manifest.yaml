@@ -79,7 +79,6 @@ state_stores:
 # architecture doc ("Processor Configuration").
 defaults:
   consumer_group: polaris-identity-resolver-v1
-  partitions_consumed_concurrently: 1
 
 # Replay metadata. Identity-resolver runs in replay mode by re-applying the
 # explicit-overlap rule against the source raw.events range; idempotency is

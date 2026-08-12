@@ -196,8 +196,12 @@ land as additional entries inside the existing version's CHANGELOG.
 ### Semantic-vs-operational defaults
 
 The `defaults` block is mostly non-semantic — the runtime may override
-`consumer_group`, `partitions_consumed_concurrently`, batch sizes, etc.
-without bumping the processor version. But some defaults ARE semantic.
+`consumer_group`, batch sizes, etc. without bumping the processor version.
+Declare a default only when something reads it: `partitions_consumed_concurrently`
+sat here, in the Zod schema and in `processors show` for months while no
+runtime read it, so an operator tuning a lagging processor could set it,
+redeploy, and see nothing change. Concurrency comes from partition count
+and assignment. But some defaults ARE semantic.
 The clearest example is sessionizer v1's `session_inactivity_seconds`:
 changing the inactivity window changes which events get
 `session.started` vs `session.ended`, which IS a change to emitted

@@ -16,4 +16,11 @@ export {
   createRedisDedupeStore,
   type RedisClientLike,
 } from "./redis.js";
-export type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "./types.js";
+export {
+  DEDUPE_LEASE_TTL_SEC,
+  type DedupeClaimInput,
+  type DedupeClaimOutcome,
+  type DedupeConfirmInput,
+  type DedupeKey,
+  type DedupeStore,
+} from "./types.js";

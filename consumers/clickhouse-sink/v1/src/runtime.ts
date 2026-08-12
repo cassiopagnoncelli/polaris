@@ -202,9 +202,12 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     const processedRows = processedBatch;
     // Swap the buffers before awaiting so a delivery that lands during the
     // INSERT accumulates into the next batch instead of being lost or
-    // double-counted.
+    // double-counted. The held checkpoints are taken in the same breath, so
+    // the snapshot covers exactly these rows — a position written by another
+    // partition mid-INSERT belongs to the next batch, not this one.
     sourceBatch = [];
     processedBatch = [];
+    const held = deps.checkpoints.take();
     batchOpenedAt = now();
     const started = now();
     try {
@@ -215,13 +218,13 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
         await deps.writer.insertBatch(processedRows, ANALYTICS_PROCESSED_QUEUE_TABLE);
       }
     } catch (err) {
-      // Drop the held positions so the transport re-reads these rows
+      // Put these positions back so the transport re-reads these rows
       // rather than resuming past them.
-      deps.checkpoints.rollback();
+      deps.checkpoints.restore(held);
       throw err;
     }
     // The rows are durable in ClickHouse; the positions may follow.
-    await deps.checkpoints.commit();
+    await deps.checkpoints.commit(held);
     const duration = now() - started;
     if (sourceRows.length > 0) {
       deps.metrics.recordBatch(sourceRows.length, duration, ANALYTICS_QUEUE_TABLE);

@@ -25,7 +25,6 @@
  *   state_stores: []
  *   defaults:
  *     consumer_group: polaris-analytics-projector-v1
- *     partitions_consumed_concurrently: 1
  *   replay:
  *     supported: true
  *     restrictions: []
@@ -153,7 +152,6 @@ export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
 export const processorDefaultsSchema = z
   .object({
     consumer_group: z.string().min(1).max(128).optional(),
-    partitions_consumed_concurrently: z.number().int().positive().optional(),
   })
   .passthrough();
 export type ProcessorDefaults = z.infer<typeof processorDefaultsSchema>;

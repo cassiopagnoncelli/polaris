@@ -101,7 +101,6 @@ export type ProcessorReplay = z.infer<typeof processorReplaySchema>;
 export const processorDefaultsSchema = z
   .object({
     consumer_group: z.string().min(1).max(128).optional(),
-    partitions_consumed_concurrently: z.number().int().positive().optional(),
   })
   .passthrough();
 export type ProcessorDefaults = z.infer<typeof processorDefaultsSchema>;

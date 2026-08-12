@@ -82,7 +82,6 @@ state_stores: []
 # architecture doc ("Processor Configuration").
 defaults:
   consumer_group: polaris-geoip-enricher-v1
-  partitions_consumed_concurrently: 1
 
 # Replay metadata. GeoIP enrichment is deterministic for a fixed
 # IPLookup backend — replaying the same raw.events range yields

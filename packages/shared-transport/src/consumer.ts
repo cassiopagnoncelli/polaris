@@ -295,19 +295,57 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
     emitHook(hooks, "consumer.message_received", base);
     try {
       await handler(payload, context);
-      reader.channel?.ack(raw);
-      reader.poisonOffset = undefined;
-      reader.poisonAttempts = 0;
-      if (reader.kind === "stream") {
-        reader.lastOffset = message.offset;
-        reader.sinceCheckpoint += 1;
-        await saveCheckpoint(reader, false);
-      }
-      emitHook(hooks, "consumer.message_handled", {
-        ...base,
-        duration_ms: Date.now() - start,
-      });
     } catch (err) {
+      await onHandlerFailed(reader, raw, payload, message, base, start, err);
+      return;
+    }
+
+    // Past this line the message IS handled: the side effects ran and any
+    // derived event is published. Nothing below may route it to a DLQ or
+    // rewind to replay it — doing so would re-apply work that already
+    // succeeded. This split is the point of the two blocks: a checkpoint
+    // write is a CONTROL-PLANE operation, and a PostgreSQL fault used to
+    // land in the handler's catch, where it counted as a poison attempt.
+    // Five faults dead-lettered a healthy message after re-publishing its
+    // output five times.
+    reader.channel?.ack(raw);
+    reader.poisonOffset = undefined;
+    reader.poisonAttempts = 0;
+    if (reader.kind === "stream") {
+      reader.lastOffset = message.offset;
+      reader.sinceCheckpoint += 1;
+      try {
+        await saveCheckpoint(reader, false);
+      } catch (err) {
+        // The position is lost, not the work. Stop the reader rather than
+        // consume further on a stale checkpoint: a crash now would resume
+        // from the last durable position and redo everything since. A
+        // visible stall is the honest outcome, and it matches the rewind
+        // path's existing preference for stalling over silent loss.
+        await pauseOnCheckpointFailure(reader, message.offset, err as Error);
+        return;
+      }
+    }
+    emitHook(hooks, "consumer.message_handled", {
+      ...base,
+      duration_ms: Date.now() - start,
+    });
+  }
+
+  /**
+   * The handler itself failed: the message is NOT processed. Retry, poison
+   * or rewind all apply here and only here.
+   */
+  async function onHandlerFailed(
+    reader: Reader,
+    raw: ConsumeMessage,
+    payload: TransportMessagePayload,
+    message: TransportMessage,
+    base: ReturnType<typeof baseHookPayload>,
+    start: number,
+    err: unknown,
+  ): Promise<void> {
+    {
       const error = err as Error;
       emitHook(hooks, "consumer.handler_failed", {
         ...base,
@@ -362,6 +400,44 @@ export function createPolarisConsumer(options: CreatePolarisConsumerOptions): Po
       );
       await rewind(reader);
     }
+  }
+
+  /**
+   * A message was handled but its checkpoint could not be persisted.
+   *
+   * Cancels the consumer so nothing further is delivered on a position the
+   * durable store does not know about. Recovery is an operator restart (or
+   * the existing reattach path on the next epoch) once PostgreSQL is back;
+   * the message itself needs nothing, because it is already done.
+   */
+  async function pauseOnCheckpointFailure(
+    reader: Reader,
+    offset: string,
+    error: Error,
+  ): Promise<void> {
+    emitHook(hooks, "consumer.checkpoint_failed", {
+      topic: reader.source,
+      topic_family: reader.family,
+      partition: reader.partition,
+      offset,
+      group_id: groupName,
+      error_class: error.name,
+      error_message: error.message,
+    });
+    logger?.error(
+      {
+        component: "transport.consumer",
+        consumer: consumerName,
+        group_id: groupName,
+        source: reader.source,
+        partition: reader.partition,
+        offset,
+        err: { name: error.name, message: error.message },
+      },
+      "checkpoint write failed after a handled message; pausing the reader",
+    );
+    reader.stopped = true;
+    await detach(reader);
   }
 
   /**

@@ -1,4 +1,10 @@
-import type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "./types.js";
+import type {
+  DedupeClaimInput,
+  DedupeClaimOutcome,
+  DedupeConfirmInput,
+  DedupeKey,
+  DedupeStore,
+} from "./types.js";
 
 /**
  * In-memory dedupe store.
@@ -34,7 +40,7 @@ export class InMemoryDedupeStore implements DedupeStore {
   }
 
   async claim(input: DedupeClaimInput): Promise<DedupeClaimOutcome> {
-    const key = `${input.projectId}:${input.environment}:${input.eventId}`;
+    const key = entryKey(input);
     const now = this.now();
     this.sweep(now);
     const existing = this.entries.get(key);
@@ -44,6 +50,19 @@ export class InMemoryDedupeStore implements DedupeStore {
     const expiresAt = now + input.ttlSec * 1000;
     this.entries.set(key, expiresAt);
     return { status: "claimed" };
+  }
+
+  async confirm(input: DedupeConfirmInput): Promise<void> {
+    const key = entryKey(input);
+    // Only extend a lease we still hold: a key that already expired must not
+    // be resurrected by a late confirm.
+    const existing = this.entries.get(key);
+    if (existing === undefined || existing <= this.now()) return;
+    this.entries.set(key, this.now() + input.ttlSec * 1000);
+  }
+
+  async release(input: DedupeKey): Promise<void> {
+    this.entries.delete(entryKey(input));
   }
 
   /** Test-only helper that clears the store. */
@@ -80,4 +99,16 @@ export class DisabledDedupeStore implements DedupeStore {
   async claim(): Promise<DedupeClaimOutcome> {
     return { status: "skipped", reason: "dedupe_disabled" };
   }
+  /** No lease was taken, so there is nothing to promote. */
+  async confirm(): Promise<void> {}
+  /** No lease was taken, so there is nothing to drop. */
+  async release(): Promise<void> {}
+}
+
+/**
+ * Key shape for the in-memory store. NUL-separated so a value containing the
+ * separator cannot make two distinct triples collide.
+ */
+function entryKey(input: DedupeKey): string {
+  return `${input.projectId}\u0000${input.environment}\u0000${input.eventId}`;
 }

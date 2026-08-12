@@ -28,7 +28,7 @@ import {
   sharedOnlyIsolationLookup,
 } from "@polaris/shared-transport";
 import type { IngestConfig } from "../config.js";
-import type { DedupeStore } from "../dedupe/index.js";
+import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
 import type { IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
 import { batchRequestSchema, type IngestRequestContext } from "./types.js";
@@ -249,13 +249,21 @@ async function processOneEvent(
   }
 
   // ---- short-window dedupe -------------------------------------------
-  const ttlSec = resolveDedupeWindowSec(auth.projectId, deps.ingestConfig);
-  const claim = await deps.dedupe.claim({
+  // A LEASE, not a record. The entry has to be written before the publish to
+  // keep a retry storm's second copy off the broker, which means a failed
+  // publish would otherwise leave a claim standing over an event that does
+  // not exist — and the client, following the `retry the event` instruction
+  // below, would get `duplicate` and lose it. So the claim is short-lived
+  // and the publish path closes it either way. See ../dedupe/types.ts.
+  const windowSec = resolveDedupeWindowSec(auth.projectId, deps.ingestConfig);
+  const dedupeKey = {
     projectId: envelope.project_id,
     environment: envelope.environment,
     eventId: envelope.event_id,
-    ttlSec,
-  });
+  };
+  const claim = await deps.dedupe.claim({ ...dedupeKey, ttlSec: DEDUPE_LEASE_TTL_SEC });
+  /** Only a real lease can be promoted or dropped; `skipped` took none. */
+  const holdsLease = claim.status === "claimed";
   if (claim.status === "duplicate") {
     deps.metrics.incrementDedupeHit({
       project_id: envelope.project_id,
@@ -311,6 +319,11 @@ async function processOneEvent(
       isolation,
       partitionKey,
     });
+    // Durable now, so the lease becomes the real dedupe window. Deliberately
+    // not awaited: a failed promotion lets a duplicate through after the
+    // lease expires, which this layer is explicitly allowed to do, and the
+    // ingest response should not pay a Redis round trip for it.
+    if (holdsLease) void deps.dedupe.confirm({ ...dedupeKey, ttlSec: windowSec });
     deps.metrics.incrementPublishSuccess({
       project_id: envelope.project_id,
       environment: envelope.environment,
@@ -340,6 +353,10 @@ async function processOneEvent(
     return { kind: "accepted", accepted: result };
   } catch (err) {
     const error = err as Error;
+    // Awaited, unlike `confirm`: the response we are about to write tells the
+    // client to retry, and that retry hits this lease. Dropping it first is
+    // what makes the instruction true.
+    if (holdsLease) await deps.dedupe.release(dedupeKey);
     deps.logger.error(
       {
         component: "ingest.publish",
