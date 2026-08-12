@@ -1,5 +1,14 @@
 # Polaris Alerts Index
 
+> **Lag alerts, read this first.** `polaris_processor_lag_ms_last` had no
+> emitter until the timer-driven reporter landed: `observeLagMs` existed with
+> zero call sites, so the two rules below could not fire and the panels drew
+> an empty series. They now receive a reading every 10 seconds per
+> `(processor, family, partition)`. Their thresholds were chosen against no
+> data at all, so treat the first two weeks as calibration rather than as a
+> paging signal.
+
+
 This page is the operator's "what fires when" cheat sheet. Every
 Prometheus alert rule shipped under
 [`infra/prometheus/rules/`](../../infra/prometheus/rules/) is listed

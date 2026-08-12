@@ -292,6 +292,27 @@ export async function buildAttributionEngineApp(
     shutdownTasks.push(...options.shutdownTasks);
   }
 
+  // ---- readiness -------------------------------------------------------
+  // `/ready` answered an unconditional 200 for this service: no probe was
+  // ever registered, here or by `main.ts`. A pod with a dead producer or an
+  // unreachable checkpoint store therefore reported itself ready and kept
+  // claiming partitions it could not serve.
+  //
+  // Both dependencies are load-bearing. Without the producer nothing reaches
+  // attribution.events; without the checkpoint pool a handled message cannot record
+  // its position, which now pauses the reader by design.
+  const readinessProbes: ReadinessProbe[] = [...(options.readinessProbes ?? [])];
+  if (ownsProducer) {
+    readinessProbes.push(async () => {
+      const healthy = connection.connected;
+      return {
+        name: "rabbitmq",
+        status: healthy ? ("up" as const) : ("down" as const),
+        ...(healthy ? {} : { detail: "transport connection is down" }),
+      };
+    });
+  }
+
   // ---- Fastify shell ---------------------------------------------------
   const bootstrap = await bootstrapService({
     info: {
@@ -309,7 +330,7 @@ export async function buildAttributionEngineApp(
       bodyLimit: config.http.bodyLimitBytes,
       disableRequestLogging: true,
     },
-    ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
+    ...(readinessProbes.length > 0 ? { readinessProbes } : {}),
     openapi: {
       setup: NOOP_OPENAPI_SETUP,
       metadata: {

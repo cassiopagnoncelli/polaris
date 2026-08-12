@@ -327,3 +327,28 @@ describe("buildAnalyticsProjectorApp activation gate", () => {
     expect(asked).toEqual([{ project_id: "checkout", environment: "production" }]);
   });
 });
+
+describe("buildAnalyticsProjectorApp readiness", () => {
+  it("drops /ready when a probe reports the transport down", async () => {
+    // `/ready` answered an unconditional 200 for every processor: no probe was
+    // registered here or by main.ts, so a pod with a dead producer reported
+    // itself ready and kept claiming partitions it could not serve.
+    const result = await buildAnalyticsProjectorApp({
+      config: TEST_CONFIG,
+      installShutdown: false,
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      recordRun: false,
+      readinessProbes: [
+        async () => ({ name: "rabbitmq", status: "down" as const, detail: "connection is down" }),
+      ],
+    });
+    try {
+      const res = await result.bootstrap.app.inject({ method: "GET", url: "/ready" });
+      expect(res.statusCode).toBe(503);
+    } finally {
+      await result.bootstrap.app.close();
+    }
+  });
+});
