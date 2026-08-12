@@ -26,6 +26,7 @@ export function BrowserCheckout() {
         type="button"
         disabled={sdk === null}
         onClick={() => {
+          record("ui", "click: checkout.started (browser)");
           void sdk
             ?.track("checkout.started", { ...CART, items: [...CART.items] })
             .then((eventId) => record("web", `track checkout.started (browser) -> ${eventId}`));
@@ -35,8 +36,10 @@ export function BrowserCheckout() {
       </button>
       <button
         type="button"
+        className="danger"
         disabled={sdk === null}
         onClick={() => {
+          record("ui", "click: invalid checkout.started");
           // `currency` must be a three-letter ISO 4217 code. The SDK does not
           // know that — only the ingester holds the catalog — so this leaves
           // the browser happily and comes back rejected.
@@ -51,6 +54,7 @@ export function BrowserCheckout() {
       >
         send an invalid one
       </button>
+      <span className="muted">watch the activity drawer for the answer</span>
     </div>
   );
 }

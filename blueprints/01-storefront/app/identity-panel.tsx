@@ -46,7 +46,6 @@ export function IdentityPanel() {
 
   return (
     <div className="panel">
-      <h3>Identity</h3>
       {envelope === null ? (
         <p className="muted">
           {mode === null

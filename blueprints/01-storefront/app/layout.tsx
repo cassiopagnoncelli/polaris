@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { type ReactNode, Suspense } from "react";
+import { ActivityDrawer } from "./activity-drawer";
 import { PageViewTracker, PolarisProvider } from "./polaris-provider";
+import { SiteNav } from "./site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,20 +17,22 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <PolarisProvider>
-          {/* useSearchParams() inside the tracker needs a Suspense boundary. */}
+          {/* useSearchParams() inside these needs a Suspense boundary. */}
           <Suspense fallback={null}>
             <PageViewTracker />
           </Suspense>
           <header className="topbar">
-            <strong>Polaris blueprint</strong>
-            <nav>
-              <Link href="/">Overview</Link>
-              <Link href="/checkout">Checkout</Link>
-              <Link href="/transport">Transport</Link>
-              <Link href="/?utm_source=newsletter">Overview ?utm_source=newsletter</Link>
-            </nav>
+            <Link href="/" className="brand">
+              <span className="brand-mark" aria-hidden="true" />
+              Polaris <span className="brand-dim">blueprint</span>
+            </Link>
+            <Suspense fallback={null}>
+              <SiteNav />
+            </Suspense>
           </header>
           <main>{children}</main>
+          {/* One feed for the whole app, pinned to the bottom of every page. */}
+          <ActivityDrawer />
         </PolarisProvider>
       </body>
     </html>

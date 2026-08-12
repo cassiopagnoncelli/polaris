@@ -1,5 +1,6 @@
 "use client";
 
+import { record } from "../../lib/feed";
 import { endpointFor, TRANSPORT_MODES } from "../../lib/transport-mode";
 import { usePolaris } from "../polaris-provider";
 
@@ -31,7 +32,10 @@ export function TransportSwitch() {
             type="button"
             aria-pressed={mode === candidate}
             className={mode === candidate ? "active" : undefined}
-            onClick={() => setMode(candidate)}
+            onClick={() => {
+              record("ui", `click: transport → ${candidate}`);
+              setMode(candidate);
+            }}
           >
             {candidate}
           </button>

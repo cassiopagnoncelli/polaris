@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { record } from "../lib/feed";
 import { usePolaris } from "./polaris-provider";
@@ -27,6 +28,7 @@ export function DemoPanel() {
           type="button"
           disabled={sdk === null}
           onClick={() => {
+            record("ui", `click: identify(${customerId})`);
             // identify() attaches customer_id to every later event and
             // persists it in the same first-party store as anonymous_id.
             // It does not emit an event by itself.
@@ -40,6 +42,7 @@ export function DemoPanel() {
           type="button"
           disabled={sdk === null}
           onClick={() => {
+            record("ui", "click: reset()");
             // reset() clears customer_id and rotates session_id and
             // anonymous_id — the sign-out default. Pass
             // { anonymous: false } to keep anonymous continuity.
@@ -53,6 +56,7 @@ export function DemoPanel() {
           type="button"
           disabled={sdk === null}
           onClick={() => {
+            record("ui", "click: flush()");
             void sdk?.flush().then((result) => {
               record("web", `manual flush -> delivered ${result.delivered}`);
             });
@@ -62,9 +66,9 @@ export function DemoPanel() {
         </button>
       </div>
       <p className="muted">
-        Identity lives in a first-party cookie (mirrored to localStorage). Reload and the{" "}
-        <code>anonymous_id</code> stays; <code>reset()</code> rotates it. Switching transport does
-        not — the identity is in storage, not in the SDK object.
+        Reload and the <code>anonymous_id</code> stays; <code>reset()</code> rotates it. Switching
+        transport does not — the identity is in storage, not in the SDK object.{" "}
+        <Link href="/learn#stitch">Why storage is the fragile part</Link>.
       </p>
     </div>
   );

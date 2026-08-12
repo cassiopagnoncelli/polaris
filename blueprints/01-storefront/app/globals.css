@@ -4,8 +4,15 @@
   --muted: #5c6470;
   --bg: #fbfbfc;
   --panel: #ffffff;
+  --raised: #f4f5f7;
   --line: #e2e5ea;
   --accent: #2f5bd7;
+  --accent-soft: #eef2fd;
+  --danger: #b3261e;
+  --ok: #1b7f4b;
+  --shadow: 0 1px 2px rgb(18 21 26 / 6%), 0 8px 24px rgb(18 21 26 / 5%);
+  /* The collapsed drawer's height, reserved at the bottom of every page. */
+  --drawer-head: 2.75rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -14,8 +21,13 @@
     --muted: #9aa3ae;
     --bg: #14161a;
     --panel: #1b1e24;
+    --raised: #21252c;
     --line: #2b3038;
     --accent: #7fa2ff;
+    --accent-soft: #1e2740;
+    --danger: #ff9b93;
+    --ok: #63c68f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px rgb(0 0 0 / 28%);
   }
 }
 
@@ -28,48 +40,137 @@ body {
   background: var(--bg);
   color: var(--fg);
   font:
-    15px / 1.55 ui-sans-serif,
+    15px / 1.6 ui-sans-serif,
     system-ui,
     -apple-system,
     "Segoe UI",
     sans-serif;
+  /* Never let the collapsed drawer sit on top of the last line of a page. */
+  padding-bottom: var(--drawer-head);
+}
+
+/* Open, the drawer overlays the page. Reserve its full height too, or the
+   last section of a page can never be scrolled out from under it — the
+   document simply stops scrolling before it clears. */
+body:has(.drawer[data-open="true"]) {
+  padding-bottom: 40dvh;
 }
 
 main {
-  max-width: 60rem;
+  max-width: 74rem;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 4rem;
+  padding: 1.5rem 1.5rem 3rem;
 }
+
+/* The prose pages keep a readable measure inside the wider shell. The
+   overview page lays itself out in <section> blocks and opts out, because
+   its grids are meant to use the full width. */
+main > :not(section) {
+  max-width: 62rem;
+}
+
+/* ── Chrome ─────────────────────────────────────────────────────────── */
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.75rem 1.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.85rem 1.25rem;
+  padding: 0.7rem 1.5rem;
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(8px);
 }
 
-.topbar nav {
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.brand-dim {
+  color: var(--muted);
+  font-weight: 450;
+}
+
+.topbar-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.nav-link {
+  padding: 0.3rem 0.7rem;
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  background: var(--raised);
+  color: var(--fg);
+}
+
+.nav-link[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 550;
+}
+
+.nav-link-aside {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
 }
 
 a {
   color: var(--accent);
 }
 
+/* ── Type ───────────────────────────────────────────────────────────── */
+
 h1 {
-  font-size: 1.5rem;
-  margin: 1.5rem 0 0.5rem;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.6rem;
 }
 
 h2 {
-  font-size: 1.05rem;
-  margin: 2rem 0 0.5rem;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.35rem;
+}
+
+h3 {
+  font-size: 0.98rem;
+  margin: 0 0 0.5rem;
+}
+
+/* Headings the prose pages set directly, which have no section wrapper to
+   space them. */
+main > h1 {
+  margin-top: 0.75rem;
+}
+
+main > h2 {
+  margin-top: 2rem;
 }
 
 p,
@@ -81,47 +182,20 @@ li {
   color: var(--muted);
 }
 
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 1rem 1.15rem;
-  margin: 1rem 0;
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-button {
-  font: inherit;
-  padding: 0.45rem 0.85rem;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-input {
-  font: inherit;
-  padding: 0.45rem 0.6rem;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--fg);
+.lead {
+  max-width: 46rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05rem;
 }
 
 code,
@@ -138,55 +212,279 @@ pre {
   padding: 0.8rem;
 }
 
-.feed {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 18rem;
-  overflow-y: auto;
-}
+/* ── Layout ─────────────────────────────────────────────────────────── */
 
-.feed li {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.3rem 0;
+.hero {
+  padding: 2.25rem 0 1.75rem;
   border-bottom: 1px solid var(--line);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 0.82rem;
 }
 
-.feed li:last-child {
-  border-bottom: none;
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
 }
 
-.feed time {
-  color: var(--muted);
-  white-space: nowrap;
+.section {
+  margin: 2.5rem 0;
 }
 
-/* Which producer a feed line came from: the browser SDK, or a server path. */
-.tag {
-  flex: none;
-  align-self: flex-start;
-  padding: 0 0.4rem;
-  border-radius: 4px;
+.section-head {
+  margin-bottom: 1rem;
+}
+
+.section-head .muted {
+  max-width: 46rem;
+  margin: 0;
+}
+
+.stack > h3 {
+  margin: 1.25rem 0 0.4rem;
+}
+
+.stack > h3:first-child {
+  margin-top: 0;
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 52rem) {
+  .cards-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .cards-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.1rem 1.25rem;
   border: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.5;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
-.tag-web {
+.card > p {
+  margin: 0;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+}
+
+.card li + li {
+  margin-top: 0.4rem;
+}
+
+.card-route {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.card-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 0.9rem;
+  margin: 0.35rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.86rem;
+}
+
+.card-meta dt {
+  color: var(--muted);
+}
+
+.card-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-link {
+  margin-top: auto;
+  padding-top: 0.6rem;
+  font-size: 0.86rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.card-link:hover {
+  text-decoration: underline;
+}
+
+/* A whole card that is one link — the "Learn more" index. */
+.card-clickable {
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-clickable:hover {
+  border-color: var(--accent);
+}
+
+.card-clickable:hover .card-link {
+  text-decoration: underline;
+}
+
+/* Jump links land below the sticky topbar, not under it. */
+[id] {
+  scroll-margin-top: 4.5rem;
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.toc a {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.toc a:hover {
+  border-color: var(--accent);
+}
+
+.callout {
+  padding: 1.25rem 1.4rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-left-width: 3px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.callout p {
+  max-width: 52rem;
+  margin: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin: 0 0 0.75rem;
+  box-shadow: var(--shadow);
+}
+
+.panel > .muted:last-child {
+  margin-bottom: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/* Identity beside the controls on wide screens, stacked on narrow ones. */
+.split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+/* ── Controls ───────────────────────────────────────────────────────── */
+
+button,
+.btn {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--fg);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+.btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Buttons that exist to be rejected. */
+button.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* The active transport in the switch on /transport. */
 button.active {
   border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
+}
+
+input {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Identity panel: label/value pairs that stay readable when ids are long. */
@@ -218,7 +516,7 @@ button.active {
 .compare td {
   text-align: left;
   vertical-align: top;
-  padding: 0.5rem 0.7rem;
+  padding: 0.55rem 0.75rem;
   border-bottom: 1px solid var(--line);
 }
 
@@ -231,15 +529,187 @@ button.active {
   color: var(--muted);
 }
 
-/* Identity beside activity on wide screens, stacked on narrow ones. */
-.split {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0 1.5rem;
+/* ── Activity drawer ────────────────────────────────────────────────── */
+
+.drawer {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 28px rgb(0 0 0 / 10%);
 }
 
-@media (min-width: 60rem) {
-  .split {
-    grid-template-columns: 1fr 1fr;
+.drawer-head {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+  height: var(--drawer-head);
+  flex: none;
+}
+
+.drawer-toggle {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.drawer-toggle:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--raised);
+}
+
+.drawer-chevron {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  transition: transform 160ms ease;
+}
+
+.drawer[data-open="false"] .drawer-chevron {
+  transform: rotate(-90deg);
+}
+
+.drawer-label {
+  flex: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.drawer-count {
+  flex: none;
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+/* Collapsed, the bar still shows the newest line — so it stays useful shut. */
+.drawer-peek {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-clear {
+  align-self: center;
+  flex: none;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Open, the drawer is exactly 40% of the viewport, head included — a fixed
+   height rather than a cap, so the page below it never reflows as lines
+   arrive.
+
+   Deliberately not transitioned. A `transition` on a height that resolves
+   from `dvh` freezes the used value: Chromium does not re-run the
+   transition when only the viewport changes, so the drawer keeps whatever
+   height it had before the window was resized. An instant open beats a
+   drawer that is the wrong size until the next reload. */
+.drawer-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  height: calc(40dvh - var(--drawer-head));
+  border-top: 1px solid var(--line);
+}
+
+.drawer[data-open="false"] .drawer-body {
+  height: 0;
+  border-top-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-chevron {
+    transition: none;
   }
+}
+
+.drawer-empty {
+  margin: 0;
+  padding: 1rem 1.25rem;
+}
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.feed li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.3rem 1.25rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.feed li:nth-child(odd) {
+  background: color-mix(in srgb, var(--raised) 55%, transparent);
+}
+
+.feed time {
+  flex: none;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Which producer a feed line came from: the browser SDK, a server path, or
+   an interaction that produced no event at all. */
+.tag {
+  flex: none;
+  align-self: flex-start;
+  min-width: 3.6rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tag-web {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag-server {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+  color: var(--ok);
+}
+
+.tag-relay {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+  color: var(--ok);
+}
+
+.tag-ui {
+  border-style: dashed;
 }

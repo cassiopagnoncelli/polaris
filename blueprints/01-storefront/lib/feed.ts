@@ -14,7 +14,16 @@
  * inside any component, sometimes before the tree has mounted.
  */
 
-export type FeedChannel = "web" | "server" | "relay";
+/**
+ * Who produced a line.
+ *
+ * `web`, `server`, and `relay` are reports about events Polaris actually
+ * saw. `ui` is the odd one out on purpose: it is something this page did —
+ * a click, a route change, a control flipped — that produced no event at
+ * all. Keeping it in the same list, under its own tag, is what makes the
+ * boundary visible: an interaction is not an event until you track one.
+ */
+export type FeedChannel = "web" | "server" | "relay" | "ui";
 
 export interface FeedEntry {
   readonly id: number;
@@ -23,7 +32,7 @@ export interface FeedEntry {
   readonly text: string;
 }
 
-const MAX_FEED_ENTRIES = 40;
+const MAX_FEED_ENTRIES = 80;
 const EMPTY_FEED: readonly FeedEntry[] = [];
 
 let feed: readonly FeedEntry[] = EMPTY_FEED;
@@ -38,6 +47,12 @@ export function record(channel: FeedChannel, text: string): void {
     text,
   };
   feed = [entry, ...feed].slice(0, MAX_FEED_ENTRIES);
+  for (const listener of listeners) listener();
+}
+
+/** Empty the list. A demo affordance — nothing upstream is affected. */
+export function clearFeed(): void {
+  feed = EMPTY_FEED;
   for (const listener of listeners) listener();
 }
 

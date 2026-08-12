@@ -137,6 +137,19 @@ async function create(mode: TransportMode): Promise<PolarisWebSdk | null> {
     }),
     diagnostics: {
       onFlush: (result: FlushResult) => {
+        // The steady timer fires every 5 seconds whether or not anything is
+        // waiting. Your logger wants those — an empty flush is still proof
+        // the timer is alive. A drawer a human is reading does not: a
+        // metronome of `delivered 0, queued 0, dropped 0` buries the lines
+        // that mean something. Report movement only.
+        if (
+          result.mode === "steady" &&
+          result.delivered === 0 &&
+          result.queued === 0 &&
+          result.dropped === 0
+        ) {
+          return;
+        }
         record(
           "web",
           `flush (${result.mode}) via ${mode}: delivered ${result.delivered}, queued ${result.queued}, dropped ${result.dropped}`,

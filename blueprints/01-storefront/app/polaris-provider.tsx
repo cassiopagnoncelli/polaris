@@ -3,6 +3,7 @@
 import type { PolarisWebSdk } from "@polaris/web-sdk";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { record } from "../lib/feed";
 import { getPolaris } from "../lib/polaris-web";
 import { readTransportMode, type TransportMode, writeTransportMode } from "../lib/transport-mode";
 
@@ -83,31 +84,37 @@ export function PageViewTracker() {
 
   useEffect(() => {
     if (sdk === null) return;
-    void sdk.track(
-      "page.viewed",
-      {
-        // page.viewed v2 properties. Every key is required by the catalog
-        // schema; unknown values are explicit nulls, never omitted.
-        path: pathname,
-        search: search.length > 0 ? `?${search}` : null,
-        title: document.title,
-        referrer: document.referrer.length > 0 ? document.referrer : null,
-      },
-      {
-        // The SDK defaults to schema_version 1. page.viewed v1 is a
-        // different shape, so v2 callers say so explicitly.
-        schemaVersion: 2,
-        context: {
-          page: {
-            url: window.location.href,
-            path: pathname,
-            title: document.title,
-            referrer: document.referrer.length > 0 ? document.referrer : null,
-          },
-          locale: navigator.language,
+    const url = search.length > 0 ? `${pathname}?${search}` : pathname;
+    record("ui", `route change → ${url}`);
+    void sdk
+      .track(
+        "page.viewed",
+        {
+          // page.viewed v2 properties. Every key is required by the catalog
+          // schema; unknown values are explicit nulls, never omitted.
+          path: pathname,
+          search: search.length > 0 ? `?${search}` : null,
+          title: document.title,
+          referrer: document.referrer.length > 0 ? document.referrer : null,
         },
-      },
-    );
+        {
+          // The SDK defaults to schema_version 1. page.viewed v1 is a
+          // different shape, so v2 callers say so explicitly.
+          schemaVersion: 2,
+          context: {
+            page: {
+              url: window.location.href,
+              path: pathname,
+              title: document.title,
+              referrer: document.referrer.length > 0 ? document.referrer : null,
+            },
+            locale: navigator.language,
+          },
+        },
+      )
+      // Queued, not delivered — the id is how you find it again in the
+      // flush line that follows, and in `raw.events` after that.
+      .then((eventId) => record("web", `track page.viewed v2 ${url} -> ${eventId}`));
   }, [sdk, pathname, search]);
 
   return null;

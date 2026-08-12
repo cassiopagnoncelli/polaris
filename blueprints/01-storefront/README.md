@@ -47,16 +47,37 @@ pnpm dev
 ```
 
 Open <http://localhost:3641>. Nothing crashes on a half-finished setup: an
-unconfigured path reports itself in the activity feed and disables its
+unconfigured path reports itself in the activity drawer and disables its
 buttons, so you can fill keys in one at a time.
 
 ## The pages
 
-| Page         | Shows                                                                             |
-| ------------ | --------------------------------------------------------------------------------- |
-| `/`          | identity, the SDK's diagnostic callbacks live, and `identify` / `reset` / `flush`  |
-| `/checkout`  | the same `checkout.started` from three producers, and whether they stitched        |
-| `/transport` | direct vs relay, switchable in place, with the trade-off laid out                  |
+Three of them are for pressing buttons; the fourth is for reading. Nothing is
+explained twice.
+
+| Page         | Shows                                                                            |
+| ------------ | -------------------------------------------------------------------------------- |
+| `/`          | identity, `track()` accepted and refused four ways, and `identify` / `reset` / `flush` |
+| `/checkout`  | the same `checkout.started` from three producers, and whether they stitched       |
+| `/transport` | direct vs relay, switchable in place                                              |
+| `/learn`     | every explanation, in one readable page, anchored per topic                       |
+
+## The activity drawer
+
+Pinned to the bottom of every page, collapsible, exactly 40% of the viewport
+when open. It carries three kinds of line, and the difference between them is
+the point:
+
+| Tag      | Means                                                                          |
+| -------- | ------------------------------------------------------------------------------ |
+| `ui`     | this page did something — a click, a route change. No event was produced.       |
+| `web`    | the Web SDK's diagnostic callbacks, verbatim: `onDiagnostic`, `onFlush`, `onDrop`, `onError` |
+| `server` | what a Server Action or route handler reported back                             |
+
+Every control reports twice — once as `ui` for the interaction, once as `web`
+for whatever the SDK made of it. The gap between the two lines is where a
+`track()` call would have to go in your own app, because nothing in the SDK
+puts it there for you.
 
 ## The files that matter
 
@@ -66,6 +87,9 @@ buttons, so you can fill keys in one at a time.
 | `lib/polaris-node.ts`               | one Node SDK per process, and the cookie read that makes the stitch  |
 | `lib/transport-mode.ts`             | the direct/relay choice, in one place                                |
 | `app/polaris-provider.tsx`          | the SDK in React context, and explicit `page.viewed` on navigation   |
+| `app/event-panel.tsx`               | `track()` accepted twice and refused twice, against the same catalog |
+| `app/activity-drawer.tsx`           | the bottom drawer, and what the diagnostic callbacks are wired to     |
+| `app/learn/page.tsx`                | the explanations the other pages link to instead of repeating        |
 | `app/checkout/browser-checkout.tsx` | a catalog event, plus the same event rejected on purpose             |
 | `app/checkout/actions.ts`           | the same event from a Server Action, with the browser's identity     |
 | `app/api/checkout/route.ts`         | the same event from a route handler, plus server-decided context     |
