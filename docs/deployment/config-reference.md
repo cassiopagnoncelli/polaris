@@ -213,14 +213,22 @@ Source: [`processors/geoip-enricher/v1/src/config.ts`](../../processors/geoip-en
 `POLARIS_GEOIP_DB_PATH` is reserved in `.env.example` but the v1
 processor does not read it; the follow-up MaxMind adapter task will.
 
-#### attribution-engine v1
+#### attribution-engine v1 / v2
 
-Source: [`processors/attribution-engine/v1/src/config.ts`](../../processors/attribution-engine/v1/src/config.ts).
+Source: [`processors/attribution-engine/v1/src/config.ts`](../../processors/attribution-engine/v1/src/config.ts),
+[`processors/attribution-engine/v2/src/config.ts`](../../processors/attribution-engine/v2/src/config.ts).
 
-| Variable | Status | Default |
-| --- | --- | --- |
-| `POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP` | optional | `polaris-attribution-engine-v1` |
-| `POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY` | optional | `1` |
+| Variable | Status | Default (v1) | Default (v2) |
+| --- | --- | --- | --- |
+| `POLARIS_ATTRIBUTION_ENGINE_CONSUMER_GROUP` | optional | `polaris-attribution-engine-v1` | `polaris-attribution-engine-v2` |
+| `POLARIS_ATTRIBUTION_ENGINE_CONCURRENCY` | optional | `1` | `1` |
+
+v2 adds a 90-day attribution window (v1 has none). The window itself has
+**no environment variable**: it is a semantic rule, so it lives in the v2
+manifest and changing it requires a v3. Both versions may be enabled at once
+during a cutover — their touchpoint chains are isolated by `processor_version`
+in `attribution_touchpoint_chains`, and the differing consumer-group defaults
+keep their stream offsets separate.
 
 ### consumers (destinations)
 

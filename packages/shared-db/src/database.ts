@@ -450,6 +450,16 @@ export type IdentityLinkConfidence = "authoritative" | "candidate";
  * @see db/migrations/20260811000001_create_attribution_touchpoint_chains.sql
  */
 export interface AttributionTouchpointChainsTable {
+  /**
+   * Processor version that owns this chain. Part of the primary key:
+   * `processor_activations` lets v1 and v2 be enabled for the same
+   * project simultaneously, which is the normal state during a cutover,
+   * and two versions sharing a chain row would corrupt both.
+   *
+   * Column-level DEFAULT 'v1' in the migration, so a repository that
+   * predates the column keeps working without naming it.
+   */
+  processor_version: ColumnType<string, string | undefined, string>;
   /** Project scope. */
   project_id: string;
   /** Environment scope. */
