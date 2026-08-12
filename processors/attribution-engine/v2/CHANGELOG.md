@@ -103,14 +103,22 @@ the decision is made on EVENT time and never on wall-clock.
 
 ### Known limitations
 
-- **No per-project window.** One platform-wide 90 days. Projects with
-  materially different attribution needs would need their own processor
-  version, since the window is semantic. Per-project semantic configuration
-  is a larger architectural question than this version answers.
+- **No per-project window.** One platform-wide 90 days. The architectural
+  question this used to raise is now answered — see
+  `docs/architecture/05-processors-and-replay.md` "Per-Project Semantic
+  Parameters": per-project semantic values are allowed in the project
+  CATALOG (versioned, replay-reproducible), never in PostgreSQL, with the
+  manifest declaring the default and the upper bound. Reading one is a v3,
+  because a version that consults the catalog behaves differently from one
+  that does not. The transform already takes `window_seconds` as a
+  parameter, so v3 is resolution and plumbing rather than new logic.
 - **No view-through / click-through distinction.** Vendors bound those
   differently (Meta: 1-day view, 7-day click). Polaris treats every
   campaign-tagged observation identically; destinations that care apply
-  their own rule downstream.
+  their own rule downstream. v3 would classify a touchpoint by whether its
+  campaign tuple carries a `click_id` and apply a window per class — the
+  same mechanism as the per-project window, with a second parameter, not a
+  second mechanism.
 - ~~**Retention is now possible but not implemented.**~~ **Resolved** —
   `polaris processors chains-prune --version v2` deletes rows idle beyond the
   window, and `infra/backups/prune-attribution-chains.sh` schedules it. The

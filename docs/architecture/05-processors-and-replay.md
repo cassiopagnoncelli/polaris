@@ -211,6 +211,66 @@ This is deliberately the opposite of the ingester's dedupe store, which
 swallows every Redis failure and continues — dedupe is a retry-storm
 absorber, and losing it degrades nothing that matters.
 
+## Per-Project Semantic Parameters
+
+A processor's semantic rules live in its manifest, which is what makes
+`(name, version)` a reproducible contract. That rule collides with a real
+requirement — different projects legitimately want different attribution
+windows, session timeouts, or thresholds — and the collision was left
+open when attribution-engine v2 shipped with one platform-wide 90-day
+window.
+
+**The resolution: per-project semantic parameters are allowed, in the
+catalog, never in PostgreSQL.**
+
+`catalog/projects/<project_id>.yaml` already declares file-backed
+semantics that `polaris projects sync` materialises into a database row
+— the file's own header says "semantic membership stays in this file".
+A per-project window belongs there for the same reason: it is versioned
+in git, reviewable in a pull request, and a replay reproduces it by
+reading the catalog at the same commit. A `processor_activations`-style
+row could not do any of that.
+
+```yaml
+# catalog/projects/storefront.yaml
+processors:
+  attribution-engine:
+    attribution_window_seconds: 2592000   # 30 days, narrower than the default
+```
+
+Three rules keep this from becoming the drift that versioning exists to
+prevent:
+
+1. **The manifest declares the default and the bound.** A project may
+   narrow a window, never widen it past what the manifest permits. The
+   manifest stays the contract; the catalog picks a point inside it.
+2. **Introducing the capability is a new processor version.** A version
+   that reads a per-project parameter behaves differently from one that
+   does not, for the same input. v2's window is fixed; a v3 would be the
+   first version to consult the catalog.
+3. **The resolved value is stamped on the run.** `processor_runs` records
+   what each run actually used, so an output is explicable without
+   re-deriving the catalog state at that moment.
+
+### Applied to attribution-engine
+
+Two limitations recorded against v2 are both v3 work, and both are now
+unblocked by the above rather than open questions:
+
+- **Per-project attribution window.** v3 reads
+  `attribution_window_seconds` from the project catalog, defaulting to
+  the manifest's 90 days and refusing a value above it. The transform
+  already takes `window_seconds` as a parameter, so the change is in
+  resolution and plumbing, not in the decision logic.
+- **View-through vs click-through.** Vendors bound these differently
+  (Meta: 1-day view, 7-day click). v3 would classify a touchpoint by
+  whether its campaign tuple carries a `click_id`, and apply a window per
+  class. That is a second semantic parameter on the same mechanism, not a
+  second mechanism.
+
+Neither is scheduled. What changed is that they are now a version away
+rather than an architecture decision away.
+
 ## Identity Resolution
 
 Canonical identity resolution uses an explicit-link graph.
