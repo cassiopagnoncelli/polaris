@@ -74,7 +74,11 @@ the alert fires on the first partition that lags, not the average.
    `polaris processors list` or the admin panel's Processors page,
    and re-enable with `polaris processors enable` if the disable was
    not intended. Takes effect within ~10s; no redeploy.
-7. **Topic isolation cutover in flight.** A `polaris topics isolate`
+7. **NOT topic isolation.** `polaris topics isolate` refuses in this
+   build: no producer or consumer reads the isolation row, so it can
+   neither cause lag nor relieve it. Rule it out and move on. The
+   original text, kept because the reasoning still applies once the
+   runtime honours isolation: a `polaris topics isolate`
    was issued and the resolver cache is mid-cutover; producers may
    still be writing to the shared topic while the consumer cut over
    (or vice versa). See
@@ -136,8 +140,10 @@ Open Grafana, dashboard UID `polaris-per-partition-skew`
 If one partition is carrying most of one project's traffic, the
 isolation trigger from
 [`docs/architecture/03-rabbitmq-streams.md`](../architecture/03-rabbitmq-streams.md)
-applies; cross-reference
-[`topic-isolation-cutover.md`](topic-isolation-cutover.md).
+applies in principle — but isolation is not wired into the runtime, so
+it is not a mitigation available to you today. Redistribute
+`POLARIS_RABBITMQ_ASSIGNED_PARTITIONS` instead, and raise the wiring
+work if skew persists.
 
 ### 6. Look for poison messages
 
@@ -190,10 +196,13 @@ way the schema-validation gate at ingest didn't catch.
 
 ### Long-term
 
-- **Isolate the project.** When skew or schema-risk persists across
-  review cycles, follow
-  [`topic-isolation-cutover.md`](topic-isolation-cutover.md) to move
-  the project to a dedicated topic.
+- **Isolate the project — once it is wired.** `polaris topics isolate`
+  currently refuses: the row it writes is read by nothing, in either
+  direction. Making it real means threading a `ScopedIsolationLookup`
+  and `StreamIsolationCache` through every producer and consumer, and
+  giving the destination runtime the `isolatedProjects` option that
+  `packages/shared-destinations/src/runtime.ts` hardcodes to `[]`.
+  Until then this is a task to schedule, not a lever to pull.
 - **Tune the handler.** If `handler_duration_ms_last` is the binding
   constraint, the long-term fix is a code change to the processor
   (batched downstream calls, cache, etc.).

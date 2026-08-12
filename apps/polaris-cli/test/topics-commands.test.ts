@@ -27,6 +27,7 @@
 import {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
+  dedicatedStreamFamily,
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
 } from "@polaris/shared-transport";
@@ -296,172 +297,57 @@ const ISOLATE_BASE_ARGS = {
 } as const;
 
 describe("topics isolate runner", () => {
-  it("inserts an active row, materializes the concrete topic name, and emits human output", async () => {
-    const store = new InMemoryTopicStore();
+  // The command used to write a topic_isolations row and report a cutover.
+  // Nothing in the platform reads that row: every producer and consumer
+  // resolves families through sharedOnlyIsolationLookup and no service
+  // constructs a StreamIsolationCache. So the write changed no traffic while
+  // telling an operator — often mid-incident, following a runbook that
+  // recommends it — that a cutover was underway.
+  it("refuses, because the runtime does not honour the row it would write", async () => {
     const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({
-      openStore: () => store.asIsolateStore(),
-      issueId: () => "polaris_tiso_fixed-id-1",
-      generateAuditId: () => "audit-iso-1",
-      now: () => new Date("2026-05-14T12:00:00.000Z"),
-    });
-    await runner(ISOLATE_BASE_ARGS, makeContext(capture.streams));
-
-    expect(store.inserts).toHaveLength(1);
-    const inserted = store.inserts[0];
-    if (inserted === undefined) throw new Error("expected insert");
-    expect(inserted.id).toBe("polaris_tiso_fixed-id-1");
-    expect(inserted.id.startsWith(TOPIC_ISOLATION_ID_PREFIX)).toBe(true);
-    expect(inserted.project_id).toBe("storefront");
-    expect(inserted.environment).toBe("production");
-    expect(inserted.topic_family).toBe("raw.events");
-    expect(inserted.concrete_topic).toBe("raw.events.storefront");
-    expect(inserted.reason).toBe("volume share above 25% for two review cycles");
-
-    const stdout = capture.stdout.join("");
-    expect(stdout).toContain("topic isolation activated");
-    expect(stdout).toContain("polaris_tiso_fixed-id-1");
-    expect(stdout).toContain("raw.events.storefront");
-    expect(stdout).toContain("Cutover instructions:");
-  });
-
-  it("writes one audit row with the activation snapshot and `before: null`", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({
-      openStore: () => store.asIsolateStore(),
-      issueId: () => "polaris_tiso_audit",
-      generateAuditId: () => "audit-iso-audit",
-      now: () => new Date("2026-05-14T12:00:00.000Z"),
-    });
-    await runner(ISOLATE_BASE_ARGS, makeContext(capture.streams));
-
-    expect(store.auditCalls).toHaveLength(1);
-    const audit = store.auditCalls[0];
-    if (audit === undefined) throw new Error("expected audit row");
-    expect(audit.action).toBe("topics.isolate");
-    expect(audit.auditId).toBe("audit-iso-audit");
-    expect(audit.targetType).toBe("topic_isolation");
-    expect(audit.targetId).toBe("polaris_tiso_audit");
-    expect(audit.actorSource).toBe("cli");
-    expect(audit.actorLabel).toBe("cli");
-    expect(audit.projectId).toBe("storefront");
-    expect(audit.environment).toBe("production");
-    expect(audit.before).toBeNull();
-    expect(audit.after).toMatchObject({
-      id: "polaris_tiso_audit",
-      project_id: "storefront",
-      environment: "production",
-      topic_family: "raw.events",
-      concrete_topic: "raw.events.storefront",
-      reason: "volume share above 25% for two review cycles",
-    });
-  });
-
-  it("emits the JSON shape with cutover instructions under --output json", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({
-      openStore: () => store.asIsolateStore(),
-      issueId: () => "polaris_tiso_json",
-      generateAuditId: () => "audit-iso-json",
-      now: () => new Date("2026-05-14T12:00:00.000Z"),
-    });
-    await runner(ISOLATE_BASE_ARGS, jsonContext(capture.streams));
-    const parsed = JSON.parse(capture.stdout.join(""));
-    expect(parsed).toMatchObject({
-      topic_isolation_id: "polaris_tiso_json",
-      project_id: "storefront",
-      environment: "production",
-      topic_family: "raw.events",
-      concrete_topic: "raw.events.storefront",
-      reason: "volume share above 25% for two review cycles",
-      activated_at: "2026-05-14T12:00:00.000Z",
-    });
-    expect(Array.isArray(parsed.cutover_instructions)).toBe(true);
-    expect(parsed.cutover_instructions.length).toBeGreaterThan(0);
-  });
-
-  it("translates a duplicate-active-triple insert into a UsageError", async () => {
-    const store = new InMemoryTopicStore();
-    // Seed an active row matching the args.
-    store.insert({
-      id: "polaris_tiso_existing",
-      project_id: "storefront",
-      environment: "production",
-      topic_family: "raw.events",
-      concrete_topic: "raw.events.storefront",
-      reason: "earlier reason",
-      actor_id: "cli",
-      activated_at: "2026-05-14T11:00:00.000Z",
-      deactivated_at: null,
-      created_at: "2026-05-14T11:00:00.000Z",
-      updated_at: "2026-05-14T11:00:00.000Z",
-    });
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({
-      openStore: () => store.asIsolateStore(),
-      issueId: () => "polaris_tiso_dup",
-    });
-    await expect(runner(ISOLATE_BASE_ARGS, makeContext(capture.streams))).rejects.toMatchObject({
-      name: "UsageError",
-    });
-    expect(store.inserts).toHaveLength(0);
-  });
-
-  it("rejects unknown topic families with a UsageError", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({ openStore: () => store.asIsolateStore() });
+    const runner = buildTopicsIsolateRunner();
     await expect(
-      runner({ ...ISOLATE_BASE_ARGS, family: "not.a.family" }, makeContext(capture.streams)),
-    ).rejects.toMatchObject({ name: "UsageError" });
-    expect(store.inserts).toHaveLength(0);
-  });
-
-  it("rejects unknown environments with a UsageError", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({ openStore: () => store.asIsolateStore() });
-    await expect(
-      runner({ ...ISOLATE_BASE_ARGS, env: "qa" }, makeContext(capture.streams)),
-    ).rejects.toMatchObject({ name: "UsageError" });
-  });
-
-  it("rejects malformed project ids", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({ openStore: () => store.asIsolateStore() });
-    await expect(
-      runner({ ...ISOLATE_BASE_ARGS, project: "BadProject!" }, makeContext(capture.streams)),
-    ).rejects.toMatchObject({ name: "UsageError" });
-  });
-
-  it("rejects an empty --reason", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({ openStore: () => store.asIsolateStore() });
-    await expect(
-      runner({ ...ISOLATE_BASE_ARGS, reason: "   " }, makeContext(capture.streams)),
-    ).rejects.toMatchObject({ name: "UsageError" });
-  });
-
-  it("supports every canonical family", async () => {
-    for (const family of CANONICAL_STREAM_FAMILIES) {
-      const store = new InMemoryTopicStore();
-      const capture = captureOutput();
-      const runner = buildTopicsIsolateRunner({
-        openStore: () => store.asIsolateStore(),
-        issueId: () => `polaris_tiso_${family}`,
-        now: () => new Date("2026-05-14T12:00:00.000Z"),
-      });
-      await runner(
-        { project: "alpha", env: "production", family, reason: "test" },
+      runner(
+        {
+          project: "storefront",
+          env: "production",
+          family: "raw.events",
+          reason: "hot partition",
+        },
         makeContext(capture.streams),
-      );
-      expect(store.inserts[0]?.topic_family).toBe(family);
-      expect(store.inserts[0]?.concrete_topic).toBe(`${family}.alpha`);
-    }
+      ),
+    ).rejects.toMatchObject({ name: "NotImplementedError" });
+  });
+
+  it("does not touch the store when refusing", async () => {
+    // Nothing may be written, and no audit row may claim otherwise.
+    let opened = 0;
+    const capture = captureOutput();
+    const runner = buildTopicsIsolateRunner({
+      openStore: () => {
+        opened += 1;
+        throw new Error("store must not be opened");
+      },
+    });
+    await expect(
+      runner(
+        { project: "storefront", env: "production", family: "raw.events", reason: "x" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "NotImplementedError" });
+    expect(opened).toBe(0);
+  });
+
+  it("still validates its arguments before refusing", async () => {
+    // A bad --env should read as a usage error, not as the feature gap.
+    const capture = captureOutput();
+    const runner = buildTopicsIsolateRunner();
+    await expect(
+      runner(
+        { project: "storefront", env: "nope", family: "raw.events", reason: "x" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
   });
 });
 
@@ -734,22 +620,12 @@ describe("topics analytics-events family", () => {
   // Defense-in-depth that the every-canonical-family loop above covers
   // analytics.events specifically. Destinations consume from this family,
   // so the per-project share dashboards depend on it.
-  it("issues a dedicated topic for analytics.events", async () => {
-    const store = new InMemoryTopicStore();
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner({
-      openStore: () => store.asIsolateStore(),
-      issueId: () => "polaris_tiso_analytics",
-    });
-    await runner(
-      {
-        project: "storefront",
-        env: "production",
-        family: STREAM_FAMILY_ANALYTICS_EVENTS,
-        reason: "destination consumer lag against shared offsets",
-      },
-      makeContext(capture.streams),
+  it("names the dedicated topic it WOULD issue, without writing it", async () => {
+    // The naming rule (`<family>.<project>`) is still worth pinning: it is
+    // what a future wiring change has to reproduce, and `topics list` renders
+    // it for rows written before the refusal landed.
+    expect(dedicatedStreamFamily(STREAM_FAMILY_ANALYTICS_EVENTS, "storefront")).toBe(
+      "analytics.events.storefront",
     );
-    expect(store.inserts[0]?.concrete_topic).toBe("analytics.events.storefront");
   });
 });

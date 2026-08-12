@@ -46,7 +46,7 @@ import {
   type InsertTopicIsolationInput,
   isolateTopicWithAudit,
 } from "../../db/index.js";
-import { UsageError } from "../../errors.js";
+import { NotImplementedError, UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 
 const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
@@ -133,9 +133,9 @@ export const topicsIsolateCommand: CommandDefinition = {
           "Activate dedicated-topic isolation for a (family, project, environment) triple.",
           "Writes a topic_isolations row + audit_records row in one transaction.",
           "",
-          "The runtime resolver reads the active row through a TTL-bounded cache, so",
-          "the cutover becomes live within one TTL window across all services. See",
-          "docs/operations/topic-isolation-cutover.md for the producer/consumer sequence.",
+          "REFUSED in this build: no service reads the isolation row, so writing one",
+          "would change no traffic while reporting a cutover. See the runner for what",
+          "wiring it requires.",
         ].join("\n"),
       )
       .requiredOption("--project <project_id>", "Project to isolate.")
@@ -161,6 +161,34 @@ export function buildTopicsIsolateRunner(hooks: TopicsIsolateHooks = {}) {
   return async function runner(args: TopicsIsolateArgs, ctx: CommandContext): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     const validated = validate(args);
+
+    // Refuse, because the runtime does not honour the row this would write.
+    //
+    // `StreamIsolationCache` exists and is correct, and NOTHING constructs one:
+    // every producer and every consumer in the platform resolves families
+    // through `sharedOnlyIsolationLookup`, so an isolated project's events keep
+    // flowing on the shared stream in both directions. Writing the row would
+    // change no traffic while telling an operator — under incident pressure,
+    // following a runbook that recommends exactly this — that a cutover is in
+    // progress. A command that appears to act and does nothing is worse than
+    // one that refuses.
+    //
+    // Wiring it is a real task: thread a `ScopedIsolationLookup` + cache
+    // through every app, and give the destination runtime the
+    // `isolatedProjects` option that `packages/shared-destinations/src/runtime.ts`
+    // hardcodes to `[]`. Delete this guard in the same change that lands it.
+    throw new NotImplementedError(
+      [
+        "topic isolation is not honoured by the runtime, so this would write a row that changes nothing.",
+        "",
+        "Every producer and consumer resolves stream families through sharedOnlyIsolationLookup;",
+        "no service constructs a StreamIsolationCache. An isolated project's events would keep",
+        "flowing on the shared stream, in both directions, while this command reported success.",
+        "",
+        "`polaris topics list` and `deisolate` still work, so existing rows remain inspectable",
+        "and removable.",
+      ].join("\n"),
+    );
     const now = nowFn();
     const id = issueId();
     const concreteTopic = dedicatedStreamFamily(validated.family, validated.project);

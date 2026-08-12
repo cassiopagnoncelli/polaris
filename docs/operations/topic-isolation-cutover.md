@@ -1,5 +1,13 @@
 # Topic Isolation Cutover Runbook
 
+> **Not available in this build.** `polaris topics isolate` refuses with
+> `not_implemented`. No producer or consumer reads the isolation row —
+> every one of them resolves stream families through
+> `sharedOnlyIsolationLookup`, and no service constructs a
+> `StreamIsolationCache` — so a cutover started from this page would move
+> no traffic while reporting success. The sequence below is retained as the
+> design to implement, not as a runbook to follow.
+
 Operators use this runbook when a project graduates from a shared
 canonical RabbitMQ topic to a dedicated topic
 (`<family>.<project_id>`), or rolls the move back once the trigger has
