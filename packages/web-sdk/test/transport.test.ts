@@ -1,3 +1,4 @@
+import { batchRejectedResultSchema } from "@polaris/shared-schemas";
 // @vitest-environment happy-dom
 /**
  * `HttpsTransport` — fetch / sendBeacon transport for the Web SDK.
@@ -310,5 +311,60 @@ describe("TransportError", () => {
     expect(err.status).toBe(502);
     expect(err.code).toBe("ECONNRESET");
     expect(err.name).toBe("TransportError");
+  });
+});
+
+describe("HttpsTransport — rejection classification against the real wire shape", () => {
+  /** Exactly what the ingester emits, validated against the ingester's schema. */
+  function serverRejection(code: string, retryable: boolean) {
+    const entry = {
+      event_id: event("01").event_id,
+      status: "rejected" as const,
+      code,
+      retryable,
+    };
+    // The crossing. This SDK parsed `entry.reason` — a field the ingester has
+    // never sent — so every rejection was classified permanent and the SDK
+    // dropped events the ingester asked it to retry. Parsing the fixture with
+    // the server's own schema is what makes that divergence fail loudly.
+    batchRejectedResultSchema.parse(entry);
+    return entry;
+  }
+
+  async function classify(entry: Record<string, unknown>) {
+    const fakeFetch = vi.fn(async () =>
+      fakeResponse(200, JSON.stringify({ accepted: [], rejected: [entry] })),
+    );
+    const transport = new HttpsTransport({
+      endpoint: "https://example.invalid/events",
+      apiKey: "test-key",
+      fetch: fakeFetch,
+    });
+    const result = await transport.send([event("01")], "steady");
+    return result.rejected[0];
+  }
+
+  it("retries publish_failed", async () => {
+    expect((await classify(serverRejection("publish_failed", true)))?.retryable).toBe(true);
+  });
+
+  it("retries in_progress", async () => {
+    expect((await classify(serverRejection("in_progress", true)))?.retryable).toBe(true);
+  });
+
+  it("does not retry a duplicate", async () => {
+    expect((await classify(serverRejection("duplicate", false)))?.retryable).toBe(false);
+  });
+
+  it("falls back to the local set when `retryable` is absent", async () => {
+    expect(
+      (
+        await classify({
+          event_id: event("01").event_id,
+          status: "rejected",
+          code: "publish_failed",
+        })
+      )?.retryable,
+    ).toBe(true);
   });
 });

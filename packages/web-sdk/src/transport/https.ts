@@ -1,3 +1,4 @@
+import type { BatchRejectedResult } from "@polaris/shared-schemas";
 /**
  * HTTPS POST transport for the Web SDK.
  *
@@ -76,11 +77,22 @@ export interface HttpsTransportOptions {
   readonly sendBeacon?: (url: string, body: string) => boolean;
 }
 
-interface BatchResponseEntry {
+/**
+ * The ingester's per-event entry, as it actually goes over the wire.
+ *
+ * Derived from the server's own `batchRejectedResultSchema` rather than
+ * hand-written. The previous local mirror declared `reason?: string` — a field
+ * the ingester has never sent — and omitted `code` and `retryable`, which it
+ * does. TypeScript agreed with the mirror because a mirror is what it was
+ * checking against, so the two sides of this contract disagreed silently and
+ * every rejection was classified permanent.
+ */
+type BatchResponseEntry = Partial<BatchRejectedResult> & {
   readonly event_id: string;
   readonly status: "accepted" | "rejected";
+  /** Retained so an older ingester that sent `reason` still parses. */
   readonly reason?: string;
-}
+};
 
 interface BatchResponse {
   readonly accepted?: readonly BatchResponseEntry[];
@@ -91,6 +103,12 @@ interface BatchResponse {
  * Closed-set permanent rejection reasons returned by the ingester
  * (per `04-ingestion-and-sdks.md` and `10-sdk-standards.md`). The retry
  * coordinator must not retry these.
+ */
+/**
+ * Fallback classification, used only when the ingester did not send
+ * `retryable` — i.e. against an older deployment. The server is the source of
+ * truth (`isRetryableBatchReason`); duplicating the rule here is how the two
+ * drift, so this set exists purely for compatibility and must not grow.
  */
 const PERMANENT_REJECTION_REASONS = new Set([
   "schema_validation_failed",
@@ -340,8 +358,18 @@ function parseBatchResponse(events: readonly QueuedEventPayload[], body: string)
   }
   for (const entry of parsed.rejected ?? []) {
     seen.add(entry.event_id);
-    const reason = entry.reason;
-    const retryable = reason === undefined ? false : !PERMANENT_REJECTION_REASONS.has(reason);
+    // The wire field is `code` (see `batchRejectedResultSchema`). Reading
+    // `entry.reason` — which the ingester has never sent — left `reason`
+    // undefined on every rejection, so the expression below evaluated to
+    // `retryable: false` for ALL of them and this SDK dropped every event the
+    // ingester asked it to retry, including `publish_failed`.
+    const reason = entry.code ?? entry.reason;
+    const retryable =
+      // The server decides. Only fall back to the local set when it said
+      // nothing, which means an ingester older than the `retryable` field.
+      typeof entry.retryable === "boolean"
+        ? entry.retryable
+        : reason !== undefined && !PERMANENT_REJECTION_REASONS.has(reason);
     rejected.push({
       event_id: entry.event_id,
       status: "rejected",

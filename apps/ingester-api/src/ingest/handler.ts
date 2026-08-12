@@ -19,6 +19,7 @@ import {
   type BatchResponse,
   type Envelope,
   type EventCatalog,
+  isRetryableBatchReason,
   validateCatalogEvent,
 } from "@polaris/shared-schemas";
 import {
@@ -482,6 +483,10 @@ function buildRejected(input: {
     event_id: eventId,
     status: "rejected",
     code: input.code as BatchReasonCode,
+    // Derived, never passed in: a caller that could choose its own value is a
+    // caller that can get it wrong, and this flag decides whether a producer
+    // keeps the event or throws it away.
+    retryable: isRetryableBatchReason(input.code),
   };
   if (input.detail !== undefined) {
     return { ...out, detail: input.detail };

@@ -174,6 +174,21 @@ export const batchRejectedResultSchema = z
     event_id: z.string().uuid(),
     status: z.literal("rejected"),
     code: batchReasonCodeSchema,
+    /**
+     * Whether the producer should send this event again.
+     *
+     * Derived from `code` by {@link isRetryableBatchReason} — never decided
+     * per call site, so the answer cannot drift between one rejection path
+     * and another.
+     *
+     * This field is why it exists at all: the SDK's retry loop branches on
+     * `retryable === true` and drops everything else as a permanent failure,
+     * but nothing ever SET it. So a producer discarded its event on
+     * `publish_failed` — a transient broker blip whose own detail message
+     * says "retry the event". The flag was declared on the client and
+     * populated by no one, which no type check and no test could see.
+     */
+    retryable: z.boolean(),
     detail: z
       .object({
         event: z.string().optional(),
@@ -191,6 +206,31 @@ export const batchRejectedResultSchema = z
   .strict();
 
 export type BatchRejectedResult = z.infer<typeof batchRejectedResultSchema>;
+
+/**
+ * Reason codes a producer should retry.
+ *
+ * Everything else is permanent: the event is malformed, forbidden by policy,
+ * or already durably stored, and sending it again cannot change that.
+ *
+ * The two members are the transient ones, and both are transient for the same
+ * reason — the platform does not have the event and might on the next attempt:
+ *
+ *   - `publish_failed`: the broker refused the publish.
+ *   - `in_progress`: another request holds an unresolved dedupe lease, so the
+ *     event is mid-flight or its publisher died. `duplicate` is deliberately
+ *     NOT here: it means the event IS stored, and a producer that keeps
+ *     retrying it is wasting effort on something already done.
+ */
+const RETRYABLE_BATCH_REASONS: ReadonlySet<string> = new Set([
+  BATCH_REASON_PUBLISH_FAILED,
+  BATCH_REASON_IN_PROGRESS,
+]);
+
+/** Whether a producer should send an event again after this reason code. */
+export function isRetryableBatchReason(code: string): boolean {
+  return RETRYABLE_BATCH_REASONS.has(code);
+}
 
 /**
  * Top-level shape of `POST /v1/events` batch responses. Partial acceptance

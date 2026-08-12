@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { batchRejectedResultSchema } from "@polaris/shared-schemas";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HttpsTransport, TransportError } from "../src/transport/https.js";
@@ -242,5 +243,76 @@ describe("HttpsTransport", () => {
     const err = new TransportError("x", { retryable: true, status: 500 });
     expect(err.retryable).toBe(true);
     expect(err.status).toBe(500);
+  });
+});
+
+describe("HttpsTransport — rejection classification against the real wire shape", () => {
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  afterEach(async () => {
+    await server?.close();
+    server = undefined;
+  });
+
+  /** Exactly what the ingester emits, validated against the ingester's schema. */
+  function serverRejection(code: string, retryable: boolean) {
+    const entry = {
+      event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      status: "rejected" as const,
+      code,
+      retryable,
+      detail: { event: "page.viewed", message: "…" },
+    };
+    // The crossing. If the server's contract changes shape, this throws here
+    // rather than silently producing an SDK that misreads every rejection —
+    // which is precisely what happened: this SDK parsed `entry.reason`, a
+    // field the ingester has never sent, so every rejection came back
+    // `retryable: false` and the SDK dropped events it was asked to retry.
+    batchRejectedResultSchema.parse(entry);
+    return entry;
+  }
+
+  async function classify(entry: Record<string, unknown>) {
+    server = await startServer({
+      status: 200,
+      body: JSON.stringify({ accepted: [], rejected: [entry] }),
+    });
+    const transport = new HttpsTransport({
+      endpoint: server.url,
+      apiKey: "k",
+      userAgent: "ua",
+      requestTimeoutMs: 5_000,
+    });
+    const result = await transport.send([makeEvent(String(entry["event_id"]))]);
+    return result.rejected[0];
+  }
+
+  it("retries publish_failed — the transient case the ingester tells clients to resend", async () => {
+    const entry = await classify(serverRejection("publish_failed", true));
+    expect(entry?.retryable).toBe(true);
+    expect(entry?.reason).toBe("publish_failed");
+  });
+
+  it("retries in_progress — another request holds the dedupe lease", async () => {
+    const entry = await classify(serverRejection("in_progress", true));
+    expect(entry?.retryable).toBe(true);
+  });
+
+  it("does not retry a duplicate — the platform already has the event", async () => {
+    const entry = await classify(serverRejection("duplicate", false));
+    expect(entry?.retryable).toBe(false);
+  });
+
+  it("does not retry a validation failure", async () => {
+    const entry = await classify(serverRejection("invalid_properties", false));
+    expect(entry?.retryable).toBe(false);
+  });
+
+  it("falls back to the local set for an ingester that sends no `retryable`", async () => {
+    const entry = await classify({
+      event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      status: "rejected",
+      code: "publish_failed",
+    });
+    expect(entry?.retryable).toBe(true);
   });
 });

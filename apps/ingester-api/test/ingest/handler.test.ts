@@ -639,3 +639,50 @@ describe("ingest handler — partition key", () => {
     }
   });
 });
+
+describe("ingest handler — retryable flag", () => {
+  it("marks publish_failed retryable so a producer resends instead of dropping", async () => {
+    // The flag the SDKs branch on. It was absent from the schema entirely, so
+    // `retryable === true` was never true and every SDK treated a transient
+    // broker failure as a permanent one.
+    const producer = new RecordingProducer();
+    producer.throwOnPublish = new Error("broker unavailable");
+    const { handler } = deps({ producer });
+    const result = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in result.body)) throw new Error("expected batch body");
+    expect(result.body.rejected[0]?.code).toBe(BATCH_REASON_PUBLISH_FAILED);
+    expect(result.body.rejected[0]?.retryable).toBe(true);
+  });
+
+  it("marks in_progress retryable", async () => {
+    const dedupe = new InMemoryDedupeStore();
+    await dedupe.claim({
+      projectId: "checkout",
+      environment: "production",
+      eventId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      ttlSec: 60,
+    });
+    const { handler } = deps({ dedupe });
+    const result = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in result.body)) throw new Error("expected batch body");
+    expect(result.body.rejected[0]?.retryable).toBe(true);
+  });
+
+  it("marks duplicate and validation failures permanent", async () => {
+    const dedupe = new InMemoryDedupeStore();
+    const { handler } = deps({ dedupe });
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    const again = await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    if (!("accepted" in again.body)) throw new Error("expected batch body");
+    // Already stored: retrying it forever would be waste, not safety.
+    expect(again.body.rejected[0]?.code).toBe(BATCH_REASON_DUPLICATE);
+    expect(again.body.rejected[0]?.retryable).toBe(false);
+
+    const bad = await handler.handle(
+      { events: [buildEnvelopePayload({ properties: {} })] },
+      context(),
+    );
+    if (!("accepted" in bad.body)) throw new Error("expected batch body");
+    expect(bad.body.rejected[0]?.retryable).toBe(false);
+  });
+});
