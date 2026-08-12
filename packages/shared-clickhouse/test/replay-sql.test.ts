@@ -121,8 +121,8 @@ describe("analytics_processed readers", () => {
   });
 
   it("projects the transport lineage columns", () => {
-    // The derived path has no ingest log, so the lineage on the surviving
-    // row is the only record of which offset produced it.
+    // A deduped row should still say which offset produced it, without
+    // a join back to the ingest log.
     const sql = buildArgMaxProcessedByEventKeySql(argMaxFilter);
     expect(sql).toMatch(/argMax\(_topic,\s*_version\)\s+AS\s+_topic/);
     expect(sql).toMatch(/argMax\(_offset,\s*_version\)\s+AS\s+_offset/);

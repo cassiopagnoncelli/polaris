@@ -159,6 +159,57 @@ PostgreSQL examples:
 - replay attempts
 - audit records
 - runtime activation state
+- authoritative per-identifier processor state (identity links, attribution chains)
+
+### Choosing between them
+
+No processor keeps working state in its own process. Both stores beat an
+in-process map, and the choice between them is decided by the **shape of
+the state**, not by which processor happens to own it:
+
+| Question | Redis | PostgreSQL |
+|---|---|---|
+| Does the state have a natural expiry? | yes — expiry *is* the domain rule | no, or measured in months |
+| Is losing it recoverable by replay? | yes | no, or not cheaply |
+| Does anyone need to query it? | no | yes |
+| Should its write share the consumer's checkpoint transaction? | cannot | can |
+
+Worked examples, one on each side:
+
+- **Session windows → Redis.** A session record must die at the
+  inactivity window, so Redis key expiry is the rule itself rather than
+  an approximation of it, and no sweeper is needed. Loss is tolerable
+  because `session_id` derivation is deterministic — a replay from
+  `raw.events` reproduces the same output.
+
+- **Attribution touchpoint chains → PostgreSQL.** These have no natural
+  expiry (attribution windows run 30–90 days), so a TTL store would hold
+  an unbounded hot keyspace for months. They are also authoritative:
+  losing a chain silently re-attributes a conversion rather than costing
+  a bounded window. PostgreSQL bounds them, survives restarts, and makes
+  them queryable, which is a capability operators otherwise lack.
+
+The trap the table above is written to avoid is picking one store for
+both out of a preference for uniformity. Redis for attribution is a
+90-day TTL on an unbounded keyspace; PostgreSQL for sessions is a row
+write per event on the platform's hottest path to hold state designed to
+be thrown away.
+
+### Failure mode
+
+Externalising state means the store is on the hot path, and processors
+whose state is authoritative **fail the message rather than degrade**.
+Without the prior record the sessionizer cannot tell a continuation from
+a new session, and the attribution engine cannot tell a first
+observation from a continuation; guessing would emit a wrong
+`session_id` or a duplicate `first_touch_assigned`. So a store outage
+propagates: the checkpoint does not advance, the message is redelivered,
+and the processor stalls rather than corrupting its output. `/ready`
+drops with it so the pod stops claiming partitions it cannot serve.
+
+This is deliberately the opposite of the ingester's dedupe store, which
+swallows every Redis failure and continues — dedupe is a retry-storm
+absorber, and losing it degrades nothing that matters.
 
 ## Identity Resolution
 

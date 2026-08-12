@@ -119,7 +119,16 @@ behavior may affect historical outputs"):
   map is a leak before it is a durability gap. Note the fix is bounding,
   not expiry — chains have no natural TTL (attribution windows run 30-90
   days), which is exactly why they went to PostgreSQL while session state
-  went to Redis. Trimming old chains is a retention decision, still open.
+  went to Redis.
+- **Trimming old chains is a v2 decision, not a retention chore.** The
+  engine has no attribution-window concept at all — the manifest states
+  that "no expiring windows participate" — so a chain is consulted no
+  matter how old it is. Deleting one therefore CHANGES OUTPUT: the next
+  touchpoint for that identifier becomes a new `first_touch_assigned`.
+  Per the manifest's semantic-immutability rule, that requires a v2
+  processor, not a scheduled DELETE. The table is bounded and durable
+  today; giving it a retention policy means first deciding what the
+  attribution window is.
 - **A database outage stalls the processor.** With chains external, a
   Postgres failure fails the message rather than degrading: without the
   prior chain the engine cannot tell a first observation from a

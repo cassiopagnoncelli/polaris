@@ -53,12 +53,15 @@ event reaching `analytics_raw` inflates every projection built on it and
 nothing in the system says so. Picking the destination table instead
 makes a routing bug visible as rows in the wrong place.
 
-One consequence to know: the derived path has no ingest log. Duplicate
-deliveries collapse in `analytics_processed`'s ReplacingMergeTree and
-their lineage collapses with them, so duplicate-delivery forensics for
-derived events rely on the sink's metrics rather than on a stored
-append-only record. The lineage columns (`_topic`, `_partition`,
-`_offset`) ride on `analytics_processed` itself for the surviving row.
+Both paths write to the same `analytics_ingest_log`. That table records
+what ClickHouse consumed, and consuming half the streams while logging
+only the other half would make its name a lie — and would leave
+duplicate-delivery forensics unanswerable for four of the five families
+the sink reads, because duplicates collapse in `analytics_processed`'s
+ReplacingMergeTree and take their lineage with them. The lineage columns
+(`_topic`, `_partition`, `_offset`) also ride on `analytics_processed`
+itself, so a single deduped row says which offset produced it; the log is
+what says how many times it arrived.
 
 ## Initial Format
 

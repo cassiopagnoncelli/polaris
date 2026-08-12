@@ -92,9 +92,10 @@ const ARG_MAX_COLUMNS = [
  * Columns projected through argMax for `analytics_processed`. Keep in
  * sync with `sql/clickhouse/32_analytics_processed.sql`.
  *
- * The lineage columns are projected too: the derived path has no ingest
- * log, so `_topic` / `_partition` / `_offset` on the surviving row are
- * the only record of which stream offset produced it.
+ * The lineage columns are projected too, so a single deduped row says
+ * which stream offset produced it. For delivery *history* — the same
+ * event arriving twice — read `analytics_ingest_log`, which carries both
+ * ingestion paths.
  */
 const PROCESSED_ARG_MAX_COLUMNS = [
   "schema_version",

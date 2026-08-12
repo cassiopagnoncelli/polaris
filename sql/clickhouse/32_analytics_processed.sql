@@ -79,15 +79,15 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_processed ON CLUSTER '{cluster}'
     _version          UInt64,
 
     -- Transport lineage. analytics_raw does not carry these because
-    -- analytics_ingest_log does; the derived path has no ingest log, so
-    -- the lineage rides on the fact table instead. Without it there is
-    -- no way to answer "which stream offset produced this row" during a
-    -- replay investigation.
+    -- analytics_ingest_log does; this table carries them so a single
+    -- row answers "which stream offset produced this" without a join.
     --
-    -- Note the consequence: because this is a ReplacingMergeTree, a
-    -- duplicate delivery collapses at merge time and its lineage
-    -- disappears with it. Duplicate-delivery forensics for derived
-    -- events therefore rely on the sink's metrics, not on this table.
+    -- It answers that for the SURVIVING row only: this is a
+    -- ReplacingMergeTree, so a duplicate delivery collapses at merge
+    -- time and its lineage collapses with it. Delivery history —
+    -- "was this delivered twice?" — is the ingest log's job, and
+    -- 22_mv_processed_queue_to_ingest_log.sql routes the derived path
+    -- there too.
     _topic            LowCardinality(String),
     _partition        UInt16,
     _offset           UInt64

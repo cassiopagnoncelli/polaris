@@ -18,13 +18,15 @@ RabbitMQ analytics.events                RabbitMQ enriched / session /
 polaris.analytics_events_queue                   v
     (Null engine, never queried)      polaris.analytics_processed_queue
     |                                     (Null engine, never queried)
-    +--> MV --> polaris.analytics_ingest_log     |
-    |             (MergeTree, append-only)       +--> MV --> polaris.analytics_processed
-    |                                                          (ReplacingMergeTree,
-    +--> MV --> polaris.analytics_raw                           deduped derived facts)
-                  (ReplacingMergeTree, deduped source facts)
-                       |
-                       v
+    |                                          |    |
+    +--> MV --+--> polaris.analytics_ingest_log <---+
+    |         |      (MergeTree, append-only, BOTH paths)
+    |
+    +--> MV --> polaris.analytics_raw          +--> MV --> polaris.analytics_processed
+                  (ReplacingMergeTree,                       (ReplacingMergeTree,
+                   deduped source facts)                      deduped derived facts)
+                       |                                          |
+                       v                                          v
                   argMax MV ----> projection tables (query surface)
 ```
 
@@ -34,6 +36,12 @@ Two ingestion interface tables, split by what the event *is*:
 processor concluded). `clickhouse-sink` picks the destination by stream
 family at INSERT time, so every MV below stays unfiltered — see the
 rationale on `11_analytics_processed_queue.sql`.
+
+`analytics_ingest_log` takes rows from BOTH queues. It records what
+ClickHouse consumed, and logging only half of what the sink writes would
+leave duplicate-delivery forensics unanswerable for the derived families
+— duplicates collapse in `analytics_processed` and take their lineage
+with them.
 
 Neither interface table is **ever** queried directly. The MVs that read
 from them are the only sanctioned consumers. Application queries hit
@@ -48,16 +56,19 @@ sql/clickhouse/
   00_database.sql                              CREATE DATABASE polaris
   10_analytics_events_queue.sql                ingestion interface, source events
   11_analytics_processed_queue.sql             ingestion interface, derived events
-  20_analytics_ingest_log.sql                  append-only ingest log
-  21_mv_queue_to_ingest_log.sql                MV: queue -> ingest log
+  20_analytics_ingest_log.sql                  append-only ingest log (both paths)
+  21_mv_queue_to_ingest_log.sql                MV: source queue -> ingest log
+  22_mv_processed_queue_to_ingest_log.sql      MV: derived queue -> ingest log
   30_analytics_raw.sql                         ReplacingMergeTree source facts
   31_mv_queue_to_raw.sql                       MV: queue -> raw (flatten JSON)
   32_analytics_processed.sql                   ReplacingMergeTree derived facts
   33_mv_processed_queue_to_processed.sql       MV: processed queue -> processed
   projections/
-    40_event_daily_counts.sql                  example SummingMergeTree projection
+    40_event_daily_counts.sql                  SummingMergeTree projection over analytics_raw
+    42_session_daily_metrics.sql               SummingMergeTree projection over analytics_processed
   materialized-views/
     41_mv_raw_to_event_daily_counts.sql        argMax-based MV
+    43_mv_processed_to_session_daily_metrics.sql  argMax-based MV
   roles/
     00_roles.sql                               role definitions
     01_grants.sql                              role grants
@@ -72,7 +83,7 @@ top-down. New objects slot into the appropriate ranges:
 ```text
 00-09   database / cluster bootstrap
 10-19   ingestion interface tables
-20-29   ingest log + its MV
+20-29   ingest log + its MVs (one per ingestion path)
 30-39   raw-tier fact tables (analytics_raw, analytics_processed) + their MVs
 40-89   projection tables and their argMax MVs
 roles/  role definitions and grants (re-applied last)

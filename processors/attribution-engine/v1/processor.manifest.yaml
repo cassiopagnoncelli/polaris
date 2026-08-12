@@ -86,12 +86,12 @@ description: |
   fields are out of scope. The catch-all `campaign.click_id` is recorded
   verbatim and downstream destinations interpret it.
 
-  State store: in-memory. Crash-induced loss of touchpoint chains is
-  acceptable for v1 because (a) the engine is replayable from
-  `analytics.events`, (b) the deterministic touchpoint_id derivation
-  means replay reproduces identical output, and (c) the v1 chain depth
-  is bounded by the touchpoint observations themselves — no expiring
-  windows participate. A Redis-backed v2 is deferred — see CHANGELOG.
+  State store: PostgreSQL (`attribution_touchpoint_chains`), per ADR 0005
+  and docs/architecture/05-processors-and-replay.md "State Stores".
+  Chains survive restarts and are queryable. Note that no expiring
+  windows participate: a chain is consulted however old it is, so
+  trimming the table would change output and requires a new processor
+  version — see CHANGELOG.
 
 # Streaming mode: each input event maps to zero, one, two, or three
 # emitted attribution.* events:
