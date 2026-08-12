@@ -43,14 +43,29 @@ destroying anything. Reach for it after changing something under `catalog/`.
 
 **2. Nothing.** `make setup` already issued the blueprint's two keys — a web
 key sending as `storefront-web`, a backend key sending as `payments-api` — and
-wrote them to `blueprints/api-key`. `next.config.ts` reads that file for any
-value `.env.local` leaves unset, so there is nothing to copy.
+wrote them to `01-storefront/.env.development.local`, which Next loads ahead
+of your `.env.local`. There is nothing to copy, and nothing to copy again
+after the next `make setup`.
+
+That ordering is the whole design. Reissued keys have to beat pasted ones,
+because `make setup` drops the old keys as it issues new ones — so a token you
+pasted somewhere is stale from that moment, and a stale token does not
+announce itself, it just 401s. Rather than enforce that with code, the
+installer writes to the file Next already ranks higher. Your `.env.local` is
+for choices; the generated file is for values.
 
 The one exception is `NEXT_PUBLIC_POLARIS_API_KEY`, which direct mode needs
 and which is deliberately left to you: setting it inlines a token into the JS
-bundle, and deciding that is the point of the web-vs-backend split below. Paste
-the web token from `blueprints/api-key` into `.env.local` when you want to see
-direct mode; leave it empty to run relay-only.
+bundle, and deciding that is the point of the web-vs-backend split below.
+Uncomment one line in `.env.local` to opt in:
+
+```
+NEXT_PUBLIC_POLARIS_API_KEY=$POLARIS_WEB_API_KEY
+```
+
+Note the `$`. That references the issued token instead of copying it, so it
+cannot go stale either — the decision to publish is yours and persists, the
+value stays the installer's. Leave it commented to run relay-only.
 
 To reissue by hand — each command prints its token exactly once, and only an
 argon2id hash is stored, so a lost token is reissued and never recovered:

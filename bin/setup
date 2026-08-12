@@ -30,7 +30,8 @@
 //   5. Destroy      — drop PostgreSQL, ClickHouse, RabbitMQ, Redis state.
 //   6. Provision    — role/db, migrations, ClickHouse schema, broker topology.
 //   7. Seed         — catalog projects and sources, dev browser origins.
-//   8. Keys         — issue the blueprint's API keys into blueprints/api-key.
+//   8. Keys         — issue the blueprint's API keys, and write them where
+//                     the blueprint and the smoke test each read them.
 //   9. Receipt      — print the state produced, and the two next commands.
 //
 // The order of 4 and 5 is deliberate and was got wrong on the first pass.
@@ -110,6 +111,26 @@ const BLUEPRINT = {
 
 /** Where issued tokens land. Generated, gitignored, owned by this script. */
 const KEY_FILE = resolve(REPO_ROOT, "blueprints/api-key");
+
+/**
+ * The same tokens again, in the file Next itself loads.
+ *
+ * Next reads `.env.development.local` ahead of `.env.local`, so writing the
+ * tokens here makes the generated value outrank a hand-pasted one by the
+ * framework's own documented precedence — no code in the blueprint, and no
+ * rule a reader has to be told about. That ordering is the point: `make
+ * setup` drops the old keys as it issues new ones, so a pasted copy is stale
+ * from the next run onward, and the generated file has to be the one that
+ * wins.
+ *
+ * Two files, one source: both are rendered from the same `issued` array, so
+ * they cannot drift. They have different readers. `blueprints/api-key` is the
+ * record of what was issued, with its provenance, and is read by anything
+ * that is not this Next app — `scripts/smoke/vertical-slice.mjs` picks the
+ * backend token out of it. This one is wiring for one app, in a filename the
+ * framework chose.
+ */
+const ENV_FILE = resolve(REPO_ROOT, BLUEPRINT.dir, ".env.development.local");
 
 // Mirrors `source_allowed_origins_origin_format` in
 // db/migrations/20260512000013_create_source_allowed_origins.sql. Checking
@@ -560,11 +581,17 @@ function assertValidOrigin(origin) {
  * that was just dropped — and nothing says "your key is stale", it just
  * fails to authenticate.
  *
- * This script owns `blueprints/api-key` outright and overwrites it: the file
- * is generated and gitignored, which is what makes that safe. It does *not*
+ * This script owns both files it writes outright and overwrites them: they
+ * are generated and gitignored, which is what makes that safe. It does *not*
  * write the blueprint's `.env.local`, which holds the developer's own
  * choices — which transport to start on, whether direct mode is enabled at
- * all. `next.config.ts` reads the tokens from here instead.
+ * all. The split is value versus choice: this script owns the *value* of a
+ * token, because the run that writes it is the run that invalidated every
+ * older one; `.env.local` owns the choices, and nothing here touches it.
+ *
+ * Next's load order is what keeps that split honest, which is why the tokens
+ * are written to `.env.development.local` rather than injected by the
+ * blueprint's `next.config.ts`. See ENV_FILE.
  */
 function issueKeys(endpoints) {
   const issued = [];
@@ -602,12 +629,18 @@ function issueKeys(endpoints) {
     issued.push({ ...key, token: parsed.token, apiKeyId: parsed.api_key_id });
   }
 
-  writeFileSync(KEY_FILE, renderKeyFile(issued), { mode: 0o600 });
-  // `mode` on writeFileSync only applies when the file is created, and this
-  // one is overwritten on every run — so an existing file would keep whatever
-  // permissions it had. These are live credentials; set it explicitly.
-  chmodSync(KEY_FILE, 0o600);
+  writeSecret(KEY_FILE, renderKeyFile(issued));
+  writeSecret(ENV_FILE, renderEnvFile(issued));
   return issued;
+}
+
+/** Write a generated credentials file, readable only by its owner. */
+function writeSecret(path, contents) {
+  writeFileSync(path, contents, { mode: 0o600 });
+  // `mode` on writeFileSync only applies when the file is created, and these
+  // are overwritten on every run — so an existing file would keep whatever
+  // permissions it had. These are live credentials; set it explicitly.
+  chmodSync(path, 0o600);
 }
 
 function renderKeyFile(issued) {
@@ -620,8 +653,47 @@ function renderKeyFile(issued) {
     "# recovered. Reissue the pair by re-running `make setup`, or issue one by",
     "# hand with `make api_key`.",
     "#",
-    `# ${BLUEPRINT.dir}/next.config.ts reads this file, so a fresh install needs`,
-    "# no copying — restart the blueprint and it picks the new tokens up.",
+    "# This is the record of what was issued, for readers outside the app —",
+    "# `pnpm smoke:vertical-slice` takes its backend token from here. The",
+    "# blueprint itself does not read this file; it reads the same two tokens",
+    `# from ${BLUEPRINT.dir}/.env.development.local,`,
+    "# which Next loads on its own. Either way a fresh install needs no copying.",
+    "#",
+    `# Issued ${new Date().toISOString()}, project ${BLUEPRINT.projectId} / env ${ENVIRONMENT}.`,
+    "",
+  ];
+  const lines = issued.map((key) => `${key.envVar}=${key.token}`);
+  return `${[...header, ...lines].join("\n")}\n`;
+}
+
+/**
+ * The blueprint's copy, in the file `next dev` loads by itself.
+ *
+ * Nothing in the app parses this — Next reads `.env.development.local` ahead
+ * of `.env.local`, so the tokens below simply win over anything pasted there,
+ * by the framework's documented precedence rather than by any rule this repo
+ * invented.
+ */
+function renderEnvFile(issued) {
+  const header = [
+    `# Tokens for ${BLUEPRINT.dir}, loaded by \`next dev\`.`,
+    "#",
+    "# Generated by bin/setup — overwritten on every run, gitignored, never",
+    "# committed. Do not edit: your own settings belong in .env.local, and a",
+    "# token you paste there is stale the next time `make setup` runs.",
+    "#",
+    "# Next loads .env.development.local ahead of .env.local, so these values",
+    "# outrank anything set there. That is the whole mechanism, and it is the",
+    "# reason this file exists instead of code in next.config.ts.",
+    "#",
+    "# NEXT_PUBLIC_POLARIS_API_KEY is deliberately absent. Setting it inlines a",
+    "# token into the JS bundle, which is a decision about what is publishable",
+    "# — yours to make, not the installer's. Opt in from .env.local with:",
+    "#",
+    "#     NEXT_PUBLIC_POLARIS_API_KEY=$POLARIS_WEB_API_KEY",
+    "#",
+    "# which references the token below instead of copying it, and so stays",
+    "# correct across reissues.",
     "#",
     `# Issued ${new Date().toISOString()}, project ${BLUEPRINT.projectId} / env ${ENVIRONMENT}.`,
     "",
@@ -653,6 +725,7 @@ async function printReceipt(endpoints, keys) {
     ["rabbitmq", `${endpoints.rabbitmq.host}:${endpoints.rabbitmq.port}`, topology],
     ["redis", `${endpoints.redis.host}:${endpoints.redis.port}`, "polaris:* cleared"],
     ["keys", rel(KEY_FILE), keys.map((k) => `${k.sourceId} (${k.type})`).join(", ")],
+    ["blueprint", rel(ENV_FILE), "same tokens, loaded by `next dev`"],
   ];
 
   const width = Math.max(...rows.map(([name]) => name.length));

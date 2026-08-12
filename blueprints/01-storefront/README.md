@@ -32,9 +32,23 @@ pnpm install --ignore-workspace
 cp .env.example .env.local
 ```
 
-No keys to paste: this app produces from two sources, and `make setup` issued
-one for each into `blueprints/api-key`. `next.config.ts` reads them from there
-for anything `.env.local` leaves empty. To reissue by hand:
+No keys to paste, now or after the next `make setup`: this app produces from
+two sources, and the installer issued one for each into
+`.env.development.local` — a file Next loads ahead of your `.env.local`, so
+the freshly issued token always wins over anything you could paste.
+
+One line to uncomment, if you want to watch direct mode:
+
+```
+NEXT_PUBLIC_POLARIS_API_KEY=$POLARIS_WEB_API_KEY
+```
+
+That one is yours to set because it puts a key in the JS bundle, and deciding
+that is half of what this blueprint is for. The `$` references the issued
+token rather than copying it, so it does not go stale. Leave it commented and
+the app runs relay-only.
+
+To reissue by hand:
 
 ```bash
 make api_key                                           # web  -> storefront-web

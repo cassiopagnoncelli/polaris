@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
@@ -16,70 +15,22 @@ import type { NextConfig } from "next";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
- * Take the API tokens from the file `bin/setup` generates.
+ * There is deliberately no API-key handling here.
  *
- * The split is value versus choice. `blueprints/api-key` owns the *value* of
- * a token, because the command that writes it is the same command that
- * invalidated every older one. `.env.local` owns the *choices* — which
- * transport a fresh browser starts on, and whether direct mode is enabled at
- * all — and nothing here touches those.
+ * `make setup` writes the tokens it issues to `.env.development.local`, which
+ * Next loads ahead of `.env.local` on its own. A freshly issued token
+ * therefore outranks a hand-pasted one by the framework's documented
+ * precedence, which is what we want — `make setup` drops the old keys as it
+ * issues new ones, so a pasted copy goes stale and a stale token does not
+ * announce itself, it just 401s.
  *
- * This file therefore wins over `.env.local` for the two token variables,
- * which is the opposite of the usual precedence and is deliberate. The first
- * cut had `.env.local` win where it set a value, and that reproduced the
- * exact failure the generated file exists to prevent: `make setup` reissues
- * the keys, the token someone once pasted into `.env.local` keeps winning,
- * and every request 401s with `unknown_key` until they think to look. A
- * stale credential is not a preference worth honouring.
- *
- * `NEXT_PUBLIC_POLARIS_API_KEY` is the careful case. Setting it inlines a
- * token into the JS bundle, which is a decision about what is publishable —
- * the decision this blueprint exists to teach — so an empty value stays
- * empty and the app runs relay-only. But once a developer has put something
- * there they have already made that call, and refreshing it to the current
- * web token keeps their choice working rather than making a new one.
+ * This file used to parse `blueprints/api-key` and assign into `process.env`
+ * to force that outcome, warning whenever it overwrote something. It worked,
+ * but it inverted the precedence every Next developer already knows, so the
+ * inversion needed a warning to explain itself, and the warning fired on
+ * every boot at the developer who had done exactly what the README said. The
+ * ordering was never the problem; hand-rolling it was.
  */
-function loadIssuedKeys(): void {
-  const keyFile = resolve(repoRoot, "blueprints/api-key");
-  if (!existsSync(keyFile)) return;
-
-  const issued = new Map<string, string>();
-  for (const line of readFileSync(keyFile, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) continue;
-    issued.set(trimmed.slice(0, separator).trim(), trimmed.slice(separator + 1).trim());
-  }
-
-  for (const [name, token] of issued) {
-    apply(name, token);
-  }
-
-  // Direct mode only: refresh a token the developer opted into, never
-  // introduce one they did not.
-  const webToken = issued.get("POLARIS_WEB_API_KEY");
-  if (webToken !== undefined && (process.env["NEXT_PUBLIC_POLARIS_API_KEY"] ?? "") !== "") {
-    apply("NEXT_PUBLIC_POLARIS_API_KEY", webToken);
-  }
-}
-
-/** Set `name`, saying so when it replaces a different non-empty value. */
-function apply(name: string, token: string): void {
-  const current = process.env[name] ?? "";
-  if (current === token) return;
-  if (current !== "") {
-    console.warn(
-      `[polaris] ${name} in .env.local is not the token blueprints/api-key holds — ` +
-        "using the issued one. `make setup` reissues keys, which makes any pasted " +
-        "copy stale; delete the line from .env.local to silence this.",
-    );
-  }
-  process.env[name] = token;
-}
-
-loadIssuedKeys();
-
 const nextConfig: NextConfig = {
   turbopack: { root: repoRoot },
   outputFileTracingRoot: repoRoot,
