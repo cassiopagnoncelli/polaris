@@ -173,6 +173,11 @@ function renderHuman(
     `name                   ${manifest.name}`,
     `version                ${manifest.version}`,
     `owner                  ${manifest.owner}`,
+    // Surfaced because it is the first thing a version cutover checks:
+    // enabling a version that is not `released` activates semantics
+    // nobody has signed off on. See
+    // docs/operations/processor-version-cutover.md step 1.
+    `release_status         ${manifest.release_status ?? "(unset)"}`,
     `mode                   ${manifest.mode}`,
     `manifest_path          ${discovered.path}`,
     `inputs                 ${inputs}`,

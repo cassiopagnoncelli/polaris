@@ -45,6 +45,20 @@ take. Forgetting it leaves both versions emitting to
 `attribution.events` forever, which double-counts every touchpoint
 downstream.
 
+**Absence means enabled.** A version with no activation row is running,
+not stopped. `polaris processors list` prints
+
+```text
+attribution-engine v1 ...
+    (no activation rows in processor_activations)
+```
+
+for a version that is live for every project — the gate only closes on
+an explicit `disabled` row. So a cutover does not *move* a row from v1 to
+v2; it creates one row enabling v2 and a second row disabling v1. The
+audit trail shows this as `(no row) -> disabled`, which is the signature
+of the first time anyone has ever stopped that version.
+
 ## Standard cutover procedure
 
 Throughout: `--env` is one of `development | staging | production`, and
@@ -138,6 +152,28 @@ polaris processors disable attribution-engine --version v1 \
 Traffic should return to its pre-cutover volume within one batch
 interval. Confirm with the same query.
 
+### 6b. Confirm the audit trail
+
+Both mutations write an `audit_records` row in the same transaction as
+the activation change, so the cutover is reconstructable afterwards:
+
+```sql
+SELECT to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') AS at,
+       action,
+       target_id,
+       coalesce(before->>'enabled_state', '(no row)') AS before,
+       after->>'enabled_state'                       AS after
+FROM audit_records
+WHERE action IN ('processors.enable', 'processors.disable')
+ORDER BY created_at;
+```
+
+`target_id` is the composite
+`<name>:<version>:<project>:<environment>`, so one query covers every
+scope you touched. A cutover reads as an `enable` of the new version
+followed by a `disable` of the old one; a half-finished cutover is
+visible as an enable with no matching disable.
+
 ### 7. Repeat per project, then per environment
 
 Cut over the remaining projects, then promote to production. Production
@@ -159,6 +195,19 @@ DELETE FROM attribution_touchpoint_chains WHERE processor_version = 'v1';
 That refusal is the point — the command will not let you do this by
 accident. Running it by hand is the explicit acknowledgement that v1 is
 never coming back for this data.
+
+## What this procedure has been exercised against
+
+Steps 1, 2, 4, 6, 6b and the rollback have been run end-to-end against a
+live control plane (`storefront` / `development`), including the audit
+assertions. Two runbook errors were found and fixed that way: `processors
+show` did not print `release_status`, and this document did not say that
+a version with no activation row is running rather than stopped.
+
+Steps 3 and 5 — deploying the v2 service and comparing the two versions'
+output in ClickHouse — need the running data path and have not been
+rehearsed. Treat the expected-divergence table in step 5 as reasoning
+from the semantics, not as observed output.
 
 ## Rollback procedure
 
