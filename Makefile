@@ -37,8 +37,9 @@ endif
 #   make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
 #
 # They match catalog/sources/storefront/* — the sources `make seed`
-# materializes — so the no-argument form issues the key `samples/01-web-events`
-# expects.
+# materializes — so the no-argument form issues the web key
+# `blueprints/01-storefront` expects. That blueprint also produces backend
+# events, so it wants both: run the bare form and the KEY_SOURCE form above.
 #
 # The `KEY_` prefix is not decoration. Make seeds its variables from the
 # environment, and `?=` does not override something already set — so a bare
@@ -109,9 +110,11 @@ typecheck: ## Run tsc --noEmit across the workspace
 # that will never come. So a second bare-metal stack leaves behind a full set
 # of supervisors that run nothing and hold ~1k descriptors and their kqueue
 # watches each. Enough of those and the machine runs out of watch capacity,
-# which shows up somewhere else entirely: `next dev` in `samples/` fails with
-# EMFILE, Watchpack reports the failed watcher as a deleted directory, and the
-# sample restarts forever. Refuse the second stack rather than debug that.
+# which shows up somewhere else entirely: `next dev` in `blueprints/` fails
+# with EMFILE, Watchpack reports the failed watcher as a deleted directory,
+# and the blueprint restarts forever. Refuse the second stack rather than
+# debug that. `blueprints/preflight-watch-capacity.mjs` catches the same
+# shortage from the other side, for the stacks this guard cannot see.
 #
 # The bracketed characters below keep `pgrep -f` from matching the very recipe
 # that runs it.

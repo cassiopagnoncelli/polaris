@@ -28,6 +28,6 @@ Thumbs.db
 resources/maxmind
 agents/
 
-# Samples
-samples/api-key
+# Blueprints
+blueprints/api-key
 

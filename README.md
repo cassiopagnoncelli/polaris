@@ -57,7 +57,7 @@ pnpm smoke:vertical-slice
 | [Documentation index](docs/README.md)                                                  | The reading order for architecture docs, ADRs, and implementation playbook.       |
 | [Getting started](docs/development/getting-started.md)                                 | You just cloned the repo. Start here.                                            |
 | [SDK Handbook](docs/sdk/README.md)                                                     | You're integrating `@polaris/web-sdk` or `@polaris/node-sdk` into a producer.    |
-| [Samples](samples/README.md)                                                           | You want a runnable Next.js app to copy: browser, backend, or relayed ingest.    |
+| [Blueprints](blueprints/README.md)                                                     | You want a runnable Next.js app to copy: browser, relayed, and backend ingest.   |
 | [API Docs](docs/api/README.md)                                                         | You need the ingester's OpenAPI document, request/response shapes, or error codes. |
 | [Audit and Export](docs/development/audit-and-export.md)                               | You need to inspect or bulk-export operational state via the `polaris` CLI.       |
 | [CI](docs/development/ci.md)                                                           | You want to know what gates run on every PR and how to opt into integration runs. |

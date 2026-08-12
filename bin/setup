@@ -48,10 +48,16 @@ const DEFAULT_DATABASE_URL = "postgres://polaris:polaris@localhost:5432/polaris?
 /**
  * Dev browser origins, per web source.
  *
- * Only `samples/01-web-events` needs an entry: it posts from the browser
- * straight to the ingester, so the browser sends an `Origin` header the
- * ingester checks. Samples 02 and 03 reach the ingester server-side — no
+ * Only `blueprints/01-storefront` needs an entry, and only for its `direct`
+ * transport: that one posts from the browser straight to the ingester, so
+ * the browser sends an `Origin` header the ingester checks. Its `relay`
+ * transport and its backend events reach the ingester server-side — no
  * `Origin` header, nothing to allow-list.
+ *
+ * The port below must match the blueprint's `dev` script. They have drifted
+ * apart once already: the app moved 3000 -> 3641 and this list did not, so a
+ * fresh checkout seeded an origin no browser would ever send and every
+ * direct-mode batch was denied. If you move the port, move it here too.
  *
  * `POLARIS_DEV_ORIGINS` (comma-separated) appends to every source here, for
  * when the dev server is not on its documented port. See `.env.local.example`.
@@ -60,7 +66,7 @@ const ORIGIN_SEEDS = [
   {
     projectId: "storefront",
     sourceId: "storefront-web",
-    origins: ["http://localhost:3000"],
+    origins: ["http://localhost:3641"],
   },
 ];
 
