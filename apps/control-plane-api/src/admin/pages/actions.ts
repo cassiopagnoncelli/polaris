@@ -98,6 +98,29 @@ export function actionForm(input: ActionFormInput): Html {
   `;
 }
 
+/**
+ * The same gate, folded behind the button that opens it.
+ *
+ * A `<details>` rather than a `<dialog>`: `showModal()` is the only way to open
+ * a dialog, and this panel ships no JavaScript. What the fold buys is
+ * placement — the action can sit beside the title of the thing it acts on
+ * without the page opening on a confirmation nobody has asked for yet.
+ *
+ * The fold is presentation and nothing else. No part of the ritual moves to
+ * the client: the typed label and the reason are still checked on the server,
+ * so a browser that ignores `<details>` entirely and renders the form open
+ * loses only the fold, not the gate.
+ */
+export function confirmAction(input: ActionFormInput): Html {
+  const inner = html`<summary class="${input.danger ? "confirm-trigger danger" : "confirm-trigger"}">${input.submitLabel}</summary>
+    ${actionForm(input)}`;
+  // A refusal came back with the form, so it opens: the error explaining what
+  // went wrong and the values the operator typed are both inside the fold.
+  return input.refusal !== undefined
+    ? html`<details class="confirm" open>${inner}</details>`
+    : html`<details class="confirm">${inner}</details>`;
+}
+
 /** Rendered above a detail page after a mutation succeeds or no-ops. */
 export function mutationResultNotice(input: {
   applied: boolean;

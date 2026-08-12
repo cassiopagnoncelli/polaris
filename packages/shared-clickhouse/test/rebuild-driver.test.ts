@@ -21,6 +21,9 @@
  * @see packages/shared-clickhouse/src/rebuild/driver.ts
  */
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import type { OperatorRaw, RawQueryResult } from "../src/index.js";
@@ -30,6 +33,9 @@ import {
   createClickhouseRebuildDriver,
   REBUILD_DRIVER_CALLER,
 } from "../src/rebuild/index.js";
+
+/** Monorepo root: this file lives at `packages/shared-clickhouse/test/`. */
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 interface RecordedCall {
   readonly sql: string;
@@ -452,8 +458,10 @@ describe("createClickhouseRebuildDriver", () => {
 
   it("default registry: the checked-in event_daily_counts rebuild SELECT is loadable from disk", async () => {
     // No injected `projections` / `readFile` — exercises the
-    // production path against the real `process.cwd()` from the
-    // monorepo root. The test suite always runs from there.
+    // production path against the real files on disk. `repoRoot` is
+    // derived from this file's own location rather than left to
+    // default to `process.cwd()`, so the case holds whether the run
+    // starts from the monorepo root or from this package directory.
     const { raw, calls } = makeRaw([
       {
         match: (sql) => sql.startsWith("SELECT written_rows"),
@@ -463,6 +471,7 @@ describe("createClickhouseRebuildDriver", () => {
     const driver = createClickhouseRebuildDriver({
       raw,
       jobId: "polaris_chr_test1",
+      repoRoot: REPO_ROOT,
       sleep: async () => undefined,
     });
     await driver.rebuildPartition({

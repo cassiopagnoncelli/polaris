@@ -225,6 +225,7 @@ async function buildApp(harness: Harness) {
     listApiKeys: async () => [API_KEY],
     findApiKey: async (id: string) => (id === API_KEY.api_key_id ? API_KEY : null),
     listProcessorActivations: async () => [ACTIVATION],
+    listProcessorRuns: async () => [],
     listAudit: async () => [],
     findAudit: async () => null,
     listDlq: async () => [DLQ_ROW],
@@ -525,6 +526,62 @@ describe("admin mutations — read-only deployment", () => {
     });
     expect(res.body).toContain("Enable destination");
     expect(res.body).not.toContain("Disable destination");
+    await app.app.close();
+  });
+});
+
+describe("admin mutations — the confirmation fold", () => {
+  it("puts the button beside the title and keeps its confirmation folded", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/destinations/polaris_dst_1",
+      headers: { cookie: sessionCookie("admin") },
+    });
+    // The trigger is inside the block the h1 lives in, not down the page.
+    const head = res.body.slice(
+      res.body.indexOf('<div class="page-title">'),
+      res.body.indexOf('<div class="page-lede">'),
+    );
+    expect(head).toContain("Disable destination");
+    // Closed on arrival: nobody asked to disable anything by opening the page.
+    expect(res.body).toContain('<details class="confirm">');
+    expect(res.body).not.toContain('<details class="confirm" open>');
+    await app.app.close();
+  });
+
+  it("re-opens the fold when the submission came back refused", async () => {
+    // The refusal and what the operator typed are inside the fold. Rendering
+    // it closed would report the failure by appearing to have done nothing.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/destinations/polaris_dst_1/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ confirm: "storefront-staging", reason: "vendor outage on their side" }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('<details class="confirm" open>');
+    await app.app.close();
+  });
+
+  it("reports the result above the page rather than at the foot of it", async () => {
+    // The POST re-renders the whole page, which the browser shows from the
+    // top — a result below the related links is a result nobody reads.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({ row: destination(), mutations: stubMutations(spy) });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/destinations/polaris_dst_1/disable",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ confirm: LABEL, reason: "vendor outage on their side" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.indexOf("Destination disabled.")).toBeLessThan(
+      res.body.indexOf("Delivery limits"),
+    );
     await app.app.close();
   });
 });

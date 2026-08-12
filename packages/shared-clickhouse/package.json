@@ -39,7 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@clickhouse/client": "^1.10.1",
+    "@clickhouse/client": "^1.23.1",
     "@polaris/shared-logger": "workspace:*",
     "zod": "^4.4.3"
   },

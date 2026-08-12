@@ -30,6 +30,7 @@ const TEST_CONFIG: GeoipEnricherRuntimeConfig = {
     logPretty: false,
     gitSha: "deadbee",
     buildTime: "2026-05-12T10:00:00.000Z",
+    releaseLabel: undefined,
   },
   http: {
     host: "127.0.0.1",
