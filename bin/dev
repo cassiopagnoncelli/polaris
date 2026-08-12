@@ -1,0 +1,542 @@
+#!/usr/bin/env node
+// Polaris bare-metal dev stack — `make dev` is this script, and this script is
+// the whole of running the platform locally.
+//
+// There used to be five targets: `dev` (two APIs), `dev-all` (everything),
+// `dev-ingester`, `dev-control-plane`, `dev-stop`, plus a `dev-guard` that
+// refused to start when a stack was already up. They differed only in which
+// services they left out, none of them reliably stopped what it started, and
+// so "is a stack running?" was a question you answered with `pgrep`. One
+// command that starts everything and one Ctrl-C that stops everything is less
+// to know and less to get wrong.
+//
+// In order, this script:
+//
+//   1. Stops whatever is already running (`stopRunningStack`) — a previous
+//      stack, a crashed one, a hand-started `pnpm --filter ... run dev`.
+//      Starting is therefore always safe: nothing refuses, nothing has to be
+//      cleaned up by hand first.
+//   2. Resolves the roster (`resolveRoster`) — every workspace package with a
+//      `dev` script, newest version only where versions are siblings.
+//   3. Starts them as a single `pnpm -r --parallel run dev` in its own
+//      process group.
+//   4. Kills that group on Ctrl-C, SIGTERM, or terminal close: SIGTERM first
+//      so each service runs the graceful shutdown its bootstrap installs,
+//      SIGKILL for anything still alive after the grace period.
+//
+// Step 4 is why this is a script and not a Makefile recipe. Make forwards
+// signals to nothing — Ctrl-C reaches only what shares the terminal's
+// foreground process group, and `tsx watch` supervisors outlive the `pnpm`
+// that started them. That is where the leftover stacks came from: fourteen
+// supervisors still holding their file watches, still holding ports 4000 and
+// 4001, with nothing left in the terminal to stop them. The child process
+// group created below (`detached: true`) exists precisely so it can be
+// signalled as a unit.
+//
+// What the stack needs before it can run — `.env.local`, the shared package
+// builds — is done here rather than as Makefile prerequisites, so `./bin/dev`
+// and `make dev` are the same command and neither can be half-run.
+
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** How long the stack gets to shut down gracefully before SIGKILL. */
+const SHUTDOWN_GRACE_MS = 10_000;
+
+/** How long a previously running stack gets to die before SIGKILL. */
+const SWEEP_GRACE_MS = 5_000;
+
+/** How long SIGKILL gets to take effect before anything left is reported. */
+const KILL_SETTLE_MS = 2_000;
+
+/** Poll interval while waiting for either grace period above. */
+const POLL_MS = 250;
+
+/**
+ * Roster print order: the data path, not the alphabet. Anything not named
+ * here sorts after these, alphabetically.
+ *
+ * @see docs/architecture/00-overview.md
+ */
+const GROUP_ORDER = ["apps", "processors", "consumers"];
+
+/**
+ * How a still-running Polaris service is recognised, as `pgrep -f` patterns.
+ *
+ * Both are anchored on this checkout's `node_modules`, so a second clone (or
+ * a git worktree) running its own stack is left alone. Two patterns because a
+ * service is two processes: the `tsx watch` supervisor, and the node process
+ * it supervises. The supervisor's group covers both in the normal case — but
+ * a supervisor that was SIGKILLed leaves its child orphaned and still holding
+ * the port, and that orphan is the one that makes the next start fail with
+ * `EADDRINUSE`. Matching it directly is how a stale stack gets cleared
+ * instead of diagnosed.
+ *
+ * Deliberately narrower than "anything running tsx": both patterns require a
+ * service entry point (`src/main.ts` / `src/server.ts`), so an unrelated
+ * `tsx some-script.ts` in this repo survives `make dev`.
+ */
+const RUNNING_SERVICE_PATTERNS = [
+  `${escapeForPgrep(REPO_ROOT)}/node_modules/.*tsx/dist/cli\\.mjs watch src/(main|server)\\.ts`,
+  `${escapeForPgrep(REPO_ROOT)}/node_modules/.*tsx/dist/loader\\.mjs src/(main|server)\\.ts`,
+];
+
+async function main() {
+  loadEnvLocal();
+  buildSharedPackages();
+
+  const stopped = stopRunningStack();
+  if (stopped > 0) {
+    console.log(`Stopped a dev stack that was already running (${stopped} processes).\n`);
+  }
+
+  const roster = resolveRoster();
+  if (roster.started.length === 0) {
+    fail("no workspace package defines a `dev` script — nothing to run.");
+  }
+  printRoster(roster);
+
+  const stack = startStack(roster.superseded);
+  const exitCode = await superviseStack(stack);
+  process.exit(exitCode);
+}
+
+/**
+ * Put the repo-root `.env.local` into the environment the services inherit.
+ *
+ * They cannot read it themselves: `packages/shared-config` resolves `.env`
+ * files against `process.cwd()`, and a service started by pnpm runs from its
+ * own package directory. The Makefile solves this for its other targets with
+ * `include .env.local`; this is the same trick for the one target that no
+ * longer goes through Make for anything else.
+ *
+ * `process.loadEnvFile` leaves variables that are already exported alone,
+ * which matches how `shared-config` merges the same file — real environment
+ * wins, the file fills the gaps.
+ */
+function loadEnvLocal() {
+  const envFile = resolve(REPO_ROOT, ".env.local");
+  if (!existsSync(envFile)) return;
+  try {
+    process.loadEnvFile(envFile);
+  } catch (err) {
+    fail(`could not read .env.local: ${err.message}\n  Expected plain KEY=VALUE lines.`);
+  }
+}
+
+/**
+ * Build `packages/*` so the services can import them.
+ *
+ * Workspace packages export `./dist/*` only, and the services run from source
+ * under `tsx watch` — so without this the first import fails with a bare
+ * MODULE_NOT_FOUND naming a `@polaris/shared-*` path. `tsc --incremental`
+ * makes the no-op case a few seconds, which is cheap enough to pay on every
+ * start rather than leave as a step someone can forget.
+ */
+function buildSharedPackages() {
+  console.log("Building shared packages ...");
+  const result = spawnSync("pnpm", ["-r", "--filter", "./packages/*", "run", "build"], {
+    cwd: REPO_ROOT,
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  if (result.error !== undefined) {
+    fail(`could not run pnpm: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    fail("`pnpm -r --filter ./packages/* run build` failed — fix the build, then rerun.");
+  }
+  console.log("");
+}
+
+/**
+ * Stop every Polaris service already running from this checkout.
+ *
+ * Signals process *groups*, not processes: `pnpm`, the `tsx watch`
+ * supervisors, and the node processes they supervise all share one group, so
+ * one signal per group takes down the whole tree — including the `make` that
+ * started it, which is what makes a stack in another terminal go away too.
+ *
+ * Returns the number of processes that were found running.
+ */
+function stopRunningStack() {
+  const pids = findRunningServicePids();
+  if (pids.length === 0) return 0;
+
+  signalGroups(processGroupsOf(pids), "SIGTERM");
+  waitForExitSync(SWEEP_GRACE_MS);
+
+  const stubborn = findRunningServicePids();
+  if (stubborn.length > 0) {
+    signalGroups(processGroupsOf(stubborn), "SIGKILL");
+    waitForExitSync(KILL_SETTLE_MS);
+  }
+
+  const survivors = findRunningServicePids();
+  if (survivors.length > 0) {
+    console.warn(
+      `Warning: ${survivors.length} process(es) from a previous stack would not die ` +
+        `(${survivors.join(", ")}).\n` +
+        "  Something else owns them — `ps -p <pid>` to see what.\n",
+    );
+  }
+  return pids.length;
+}
+
+/** Block until no service process is left, or `timeoutMs` passes. */
+function waitForExitSync(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && findRunningServicePids().length > 0) {
+    sleepSync(POLL_MS);
+  }
+}
+
+/** PIDs of anything matching `RUNNING_SERVICE_PATTERNS`, deduplicated. */
+function findRunningServicePids() {
+  const pids = new Set();
+  for (const pattern of RUNNING_SERVICE_PATTERNS) {
+    // pgrep exits 1 with no output when nothing matches; that is not an error.
+    const result = spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" });
+    for (const line of (result.stdout ?? "").split("\n")) {
+      const pid = Number.parseInt(line.trim(), 10);
+      if (Number.isInteger(pid) && pid > 1) pids.add(pid);
+    }
+  }
+  return [...pids];
+}
+
+/**
+ * Process-group IDs for the given PIDs, minus this process's own group.
+ *
+ * The exclusion is not theoretical: `make dev` runs in the same group as the
+ * `make` that invoked it and as the caller's shell job, so a pattern that
+ * ever matched a sibling of this script would otherwise have it kill its own
+ * terminal job on startup.
+ */
+function processGroupsOf(pids) {
+  const own = readProcessGroup(process.pid);
+  const groups = new Set();
+  for (const pid of pids) {
+    const pgid = readProcessGroup(pid);
+    if (pgid !== undefined && pgid !== own) groups.add(pgid);
+  }
+  return [...groups];
+}
+
+function readProcessGroup(pid) {
+  const result = spawnSync("ps", ["-o", "pgid=", "-p", String(pid)], { encoding: "utf8" });
+  const pgid = Number.parseInt((result.stdout ?? "").trim(), 10);
+  return Number.isInteger(pgid) && pgid > 1 ? pgid : undefined;
+}
+
+/** Signal whole process groups, ignoring the ones that died in between. */
+function signalGroups(groups, signal) {
+  for (const pgid of groups) {
+    try {
+      process.kill(-pgid, signal);
+    } catch {
+      // ESRCH: the group is already gone, which is the outcome we wanted.
+    }
+  }
+}
+
+/**
+ * Which packages `make dev` runs, and which it deliberately leaves out.
+ *
+ * The package list comes from pnpm rather than from globbing the repo, so
+ * this agrees with `pnpm -r run dev` by construction — including for any
+ * package added later. The root package is dropped because `pnpm -r run`
+ * skips it too.
+ *
+ * Versioned siblings (`processors/<name>/v1`, `.../v2`) are collapsed to the
+ * newest version that has a `dev` script. They pin the same
+ * `POLARIS_HTTP_PORT`, so running both was never possible: the loser exits 1
+ * on `EADDRINUSE` and leaves its supervisor watching files for a service that
+ * is not there. Older versions stay runnable for replay — by name, not by
+ * being started here.
+ */
+function resolveRoster() {
+  const candidates = listWorkspacePackages()
+    .filter((pkg) => pkg.path !== REPO_ROOT)
+    .map((pkg) => describePackage(pkg))
+    .filter((pkg) => pkg !== undefined);
+
+  const newestByFamily = new Map();
+  for (const pkg of candidates) {
+    const incumbent = newestByFamily.get(pkg.family);
+    if (incumbent === undefined || pkg.version > incumbent.version) {
+      newestByFamily.set(pkg.family, pkg);
+    }
+  }
+
+  const started = [...newestByFamily.values()].sort(byGroupThenPort);
+  const startedNames = new Set(started.map((pkg) => pkg.name));
+  const superseded = candidates
+    .filter((pkg) => !startedNames.has(pkg.name))
+    .sort(byGroupThenPort)
+    .map((pkg) => ({ ...pkg, supersededBy: newestByFamily.get(pkg.family) }));
+
+  return { started, superseded };
+}
+
+/** Every package in the workspace, as pnpm itself resolves them. */
+function listWorkspacePackages() {
+  const result = spawnSync("pnpm", ["-r", "list", "--depth", "-1", "--json"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error !== undefined) {
+    fail(`could not run pnpm: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    fail(`\`pnpm -r list\` exited ${result.status}.\n${indent(result.stderr || "(no output)")}`);
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch (err) {
+    fail(`could not read the workspace package list: ${err.message}`);
+  }
+}
+
+/**
+ * Read the one package.json field that matters here — `scripts.dev` — and the
+ * two env assignments the dev scripts carry, so the roster can print what a
+ * service is called and where it listens without a second source of truth.
+ *
+ * Returns `undefined` for a package with no `dev` script; those are libraries
+ * and `--if-present` skips them.
+ */
+function describePackage(pkg) {
+  const manifestPath = resolve(pkg.path, "package.json");
+  if (!existsSync(manifestPath)) return undefined;
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (err) {
+    fail(`could not read ${rel(manifestPath)}: ${err.message}`);
+  }
+
+  const devScript = manifest.scripts?.dev;
+  if (typeof devScript !== "string" || devScript.trim().length === 0) return undefined;
+
+  const dir = rel(pkg.path);
+  const versionMatch = /\/v(\d+)$/.exec(dir);
+
+  return {
+    name: pkg.name,
+    dir,
+    // `processors/attribution-engine/v2` and `.../v1` are one family; an
+    // unversioned package (`apps/ingester-api`) is a family of its own.
+    family: versionMatch === null ? dir : dirname(dir),
+    version: versionMatch === null ? 0 : Number.parseInt(versionMatch[1], 10),
+    group: dir.split("/")[0],
+    service: /POLARIS_SERVICE_NAME=([\w.-]+)/.exec(devScript)?.[1] ?? pkg.name,
+    port: /POLARIS_HTTP_PORT=(\d+)/.exec(devScript)?.[1] ?? "",
+  };
+}
+
+function byGroupThenPort(a, b) {
+  if (a.group !== b.group) {
+    const rankA = groupRank(a.group);
+    const rankB = groupRank(b.group);
+    if (rankA !== rankB) return rankA - rankB;
+    return a.group < b.group ? -1 : 1;
+  }
+  if (a.port !== b.port) return a.port < b.port ? -1 : 1;
+  return a.name < b.name ? -1 : 1;
+}
+
+function groupRank(group) {
+  const index = GROUP_ORDER.indexOf(group);
+  return index === -1 ? GROUP_ORDER.length : index;
+}
+
+/** The roster, as a table, before anything starts writing log lines over it. */
+function printRoster({ started, superseded }) {
+  console.log(`Polaris dev stack — ${started.length} services\n`);
+
+  const width = Math.max(...started.map((pkg) => pkg.service.length));
+  let group;
+  for (const pkg of started) {
+    if (pkg.group !== group) {
+      group = pkg.group;
+      console.log(`  ${group}`);
+    }
+    console.log(`    ${pkg.port.padStart(5)}  ${pkg.service.padEnd(width)}  ${pkg.dir}`);
+  }
+
+  for (const pkg of superseded) {
+    const clash =
+      pkg.port !== "" && pkg.port === pkg.supersededBy.port ? ` (both bind ${pkg.port})` : "";
+    const newer = `v${pkg.supersededBy.version}`;
+    console.log(`\n  Not started: ${pkg.dir} — superseded by ${newer}${clash}.`);
+  }
+
+  console.log("\n  Ctrl-C stops every process this started.\n");
+}
+
+/**
+ * Start the stack in its own process group.
+ *
+ * One `pnpm` for the whole stack rather than one child per service: pnpm's
+ * parallel runner already prefixes each line with the package it came from,
+ * which is the difference between readable and unreadable once thirteen
+ * services are logging at once.
+ *
+ * `detached: true` is the load-bearing option — it puts pnpm and everything
+ * it spawns in a new process group that Ctrl-C does *not* reach, leaving this
+ * script as the only thing that decides when they stop. stdin is closed for
+ * the same reason: a process group that is not the terminal's foreground
+ * group has no business reading the terminal.
+ */
+function startStack(superseded) {
+  const args = ["-r", "--parallel", "--if-present"];
+  for (const pkg of superseded) {
+    args.push("--filter", `!${pkg.name}`);
+  }
+  args.push("run", "dev");
+
+  const child = spawn("pnpm", args, {
+    cwd: REPO_ROOT,
+    detached: true,
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+  child.on("error", (err) => {
+    fail(`could not start the stack: ${err.message}`);
+  });
+  return child;
+}
+
+/**
+ * Run until the stack exits or a stop signal arrives, then make sure nothing
+ * it spawned is left behind.
+ *
+ * SIGHUP is in the list because closing the terminal is a way people stop a
+ * dev stack, and it is the way that used to leave the whole tree running.
+ */
+function superviseStack(child) {
+  return new Promise((resolveExit) => {
+    let stopping = false;
+
+    const stop = (signal) => {
+      if (stopping) return;
+      stopping = true;
+      console.log(`\nStopping (${signal}) ...`);
+      void terminateGroup(child).then(() => resolveExit(0));
+    };
+
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      process.on(signal, () => stop(signal));
+    }
+
+    child.on("exit", (code, signal) => {
+      if (stopping) return;
+      stopping = true;
+      // pnpm exited on its own: every service crashed, or one did and pnpm
+      // tore the rest down. Its children can still outlive it, so the group
+      // gets the same treatment as a Ctrl-C.
+      console.log(`\nThe stack exited on its own (${signal ?? `code ${code}`}) — cleaning up.`);
+      void terminateGroup(child).then(() => resolveExit(code ?? 1));
+    });
+  });
+}
+
+/**
+ * SIGTERM the stack's process group, then SIGKILL whatever ignored it.
+ *
+ * The negative PID is the whole group — pnpm, the `tsx watch` supervisors,
+ * and the node processes under them. Signalling `child.pid` alone is what
+ * left supervisors running: pnpm exits, its children do not.
+ */
+async function terminateGroup(child) {
+  const group = -child.pid;
+
+  try {
+    process.kill(group, "SIGTERM");
+  } catch {
+    // Already gone.
+  }
+
+  const deadline = Date.now() + SHUTDOWN_GRACE_MS;
+  while (Date.now() < deadline && groupIsAlive(group)) {
+    await sleep(POLL_MS);
+  }
+
+  if (groupIsAlive(group)) {
+    console.log("Some services ignored SIGTERM — killing them.");
+    try {
+      process.kill(group, "SIGKILL");
+    } catch {
+      // Already gone.
+    }
+    const killDeadline = Date.now() + KILL_SETTLE_MS;
+    while (Date.now() < killDeadline && groupIsAlive(group)) {
+      await sleep(POLL_MS);
+    }
+  }
+
+  const survivors = findRunningServicePids();
+  if (survivors.length > 0) {
+    console.warn(`Warning: ${survivors.length} process(es) survived: ${survivors.join(", ")}.`);
+    console.warn("  `make dev` clears them on the next start.");
+  }
+  console.log("Stopped.");
+}
+
+/** Signal 0 probes a process group without touching it. */
+function groupIsAlive(group) {
+  try {
+    process.kill(group, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((done) => setTimeout(done, ms));
+}
+
+/**
+ * Block the thread for `ms`.
+ *
+ * The sweep runs before anything is started and has nothing to interleave
+ * with, so it stays synchronous — `Atomics.wait` is the sleep that does not
+ * need an event loop turn.
+ */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Escape a literal path for use inside a `pgrep -f` extended regular
+ * expression. Repo paths rarely contain metacharacters; a checkout under a
+ * directory with a `+` or `(` in its name would silently stop matching.
+ */
+function escapeForPgrep(literal) {
+  return literal.replace(/[.[\]{}()*+?^$|\\]/g, "\\$&");
+}
+
+function rel(absolute) {
+  return relative(REPO_ROOT, absolute);
+}
+
+function indent(text) {
+  return text
+    .trimEnd()
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+function fail(message) {
+  console.error(`\nbin/dev: ${message}`);
+  process.exit(1);
+}
+
+await main();

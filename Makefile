@@ -25,8 +25,7 @@ export
 endif
 
 .PHONY: help setup seed install lint style format check typecheck \
-        dev dev-all dev-ingester dev-control-plane dev-guard dev-stop \
-        build build-packages build-cli test tests ci stats \
+        dev build build-packages build-cli test tests ci stats \
         docker-up docker-down docker-ps docker-logs docker-nuke \
         cli api_key clean \
         db-bootstrap db-migrate db-rollback db-status \
@@ -105,47 +104,26 @@ check: ## Run Biome lint + format checks
 typecheck: ## Run tsc --noEmit across the workspace
 	pnpm typecheck
 
-# A service that loses the port race exits 1 (see each `src/main.ts`), but the
-# `tsx watch` supervising it does not — it stays up waiting for a file change
-# that will never come. So a second bare-metal stack leaves behind a full set
-# of supervisors that run nothing and hold ~1k descriptors and their kqueue
-# watches each — wasted, since they supervise nothing. Refuse the second stack
-# rather than debug that. The blueprints used to be where this surfaced, as an
-# EMFILE restart loop in `next dev`; they now poll instead of watch (see
-# `blueprints/README.md`) and no longer care how much capacity is left.
-#
-# The bracketed characters below keep `pgrep -f` from matching the very recipe
-# that runs it.
-dev-guard:
-	@if pgrep -f "tsx/dist/cli.mjs watc[h]" >/dev/null 2>&1; then \
-	  echo "A bare-metal dev stack is already running ($$(pgrep -f 'tsx/dist/cli.mjs watc[h]' | wc -l | tr -d ' ') tsx watch processes)."; \
-	  echo "Stop it with 'make dev-stop', then try again."; \
-	  exit 1; \
-	fi
-
-dev-stop: ## Stop any bare-metal dev stack left running by dev / dev-all
-	@pkill -f "pnpm -r --parallel --if-present run de[v]" 2>/dev/null || true
-	@pkill -f "tsx/dist/cli.mjs watc[h]" 2>/dev/null || true
-	@echo "Bare-metal dev stack stopped."
-
-dev: dev-guard build-packages ## Run the two HTTP APIs bare-metal with tsx watch (ingester + control-plane)
-	pnpm --parallel --filter @polaris/ingester-api --filter @polaris/control-plane-api run dev
-
-dev-all: dev-guard build-packages ## Run every service bare-metal in parallel (apps + processors + consumers)
-	pnpm -r --parallel --if-present run dev
-
-dev-ingester: build-packages ## Run only the ingester API bare-metal
-	pnpm --filter @polaris/ingester-api run dev
-
-dev-control-plane: build-packages ## Run only the control-plane API bare-metal
-	pnpm --filter @polaris/control-plane-api run dev
+# The whole bare-metal dev story is `bin/dev`, and this alias is all of the
+# Makefile's share of it. There used to be six targets here — dev, dev-all,
+# dev-ingester, dev-control-plane, dev-stop, and a dev-guard that refused to
+# start when a stack was already up — differing only in which services they
+# left out, none of them able to stop what they started. Signal handling is
+# the reason it moved: Make forwards signals to nothing, so a recipe cannot
+# promise that Ctrl-C reaches the processes it spawned. `bin/dev` runs the
+# stack in its own process group and kills that group. See its header.
+dev: ## Run the whole platform bare-metal (Ctrl-C stops everything it started)
+	@./bin/dev
 
 build: ## Build all workspace packages
 	pnpm build
 
-# Workspace packages export only ./dist/* — tsx watch in the apps imports
-# from those dists, so they must exist before `make dev`. `tsc --incremental`
-# makes the no-op case fast (~3-5s) so this is cheap to keep as a dev dep.
+# Workspace packages export only ./dist/*, so anything importing `@polaris/*`
+# needs these built first — `setup`, `build-cli`, and the dev stack alike.
+# `bin/dev` runs the same command itself rather than depending on this target,
+# so starting the stack is one script and not a prerequisite chain; keep the
+# two in step. `tsc --incremental` makes the no-op case ~3-5s, cheap enough to
+# pay on every start.
 build-packages: ## Build shared packages so workspace imports resolve at runtime
 	pnpm -r --filter './packages/*' run build
 

@@ -42,7 +42,7 @@ pnpm install
 
 # 2. Bring up the local data-path stack (RabbitMQ, Postgres, Redis, ClickHouse).
 docker compose up -d --wait
-# or: make up
+# or: make docker-up
 
 # 3. Apply PostgreSQL migrations.
 pnpm db:migrate
@@ -52,9 +52,10 @@ pnpm db:migrate
 pnpm clickhouse:bootstrap-local
 ```
 
-`make setup` is a shortcut that runs `install` → `up` → `db-migrate` in one
-go. It does not run `clickhouse:bootstrap-local`; call that explicitly
-afterwards if you need ClickHouse locally.
+`make setup` is the same sequence in one command, plus the ClickHouse
+bootstrap, the RabbitMQ user and topology, and the dev seeds — see `make help`
+for what each step is. It assumes bare-metal infra at the default endpoints;
+run `make docker-up` first if you would rather have those in containers.
 
 Verify each service is healthy:
 
@@ -80,7 +81,30 @@ ClickHouse Keeper, ephemeral Redis).
 
 ## Daily workflow
 
-### Run the ingester
+### Run the platform
+
+```bash
+make dev
+```
+
+That is the only command for running services locally. It builds the shared
+packages, prints the roster it is about to start (every app, processor, and
+consumer, with the port each one listens on), and runs them under `tsx watch`.
+Ctrl-C stops all of them — process groups, not best effort, so nothing is left
+holding a port. Starting it again is always safe: it clears any stack it finds
+still running, including one a previous crash left behind.
+
+Where a processor has more than one version directory, `make dev` runs the
+newest. Older versions stay runnable by name (below) for replay work; they
+pin the same port, so a stack cannot run both.
+
+The implementation is [`bin/dev`](../../bin/dev), and its header is the long
+version of this paragraph.
+
+### Run one service on its own
+
+Nothing about `make dev` is required to run a single service — the package
+scripts are still there, and take an explicit port:
 
 ```bash
 # Override POLARIS_HTTP_PORT if you want the smoke runner's default (8080).
@@ -94,7 +118,7 @@ and CI workflow both expect the ingester on `8080`; the platform default
 of `3000` is fine for ad-hoc usage but you'll override it when you want to
 follow the smoke runbook step-by-step.
 
-### Run the analytics projector (P4-001)
+The analytics projector, for example (P4-001):
 
 ```bash
 POLARIS_HTTP_PORT=8081 \

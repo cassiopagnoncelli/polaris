@@ -52,20 +52,20 @@ make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
 The first is the web key, used by the browser paths; the second is the backend
 key, used by the Node SDK. `KEY_PROJECT` and `KEY_ENV` override the rest.
 
-**3. Start the ingester** and leave it running:
+**3. Start the platform** and leave it running:
 
 ```bash
-make dev-ingester
+make dev
 ```
 
-It listens on **4000**, which is what `.env.example` points at.
+That is the whole dev stack — the ingester on **4000**, which is what
+`.env.example` points at, plus the processors and consumers behind it. There
+is no smaller target to reach for: `make dev` stops whatever it finds already
+running before it starts, and Ctrl-C stops everything it started.
 
-Prefer `make dev-ingester` over `make dev-all` while you are working in a
-blueprint — `dev-all` starts one `tsx watch` supervisor per service, and
-fourteen of those hold a large share of the machine's file-watch capacity for
-nothing you need here. `make dev-stop` clears a stack you left running.
-
-The blueprint does not depend on that going well, though. Next.js watches its
+A blueprint only needs the ingester, and thirteen `tsx watch` supervisors do
+hold a large share of the machine's file-watch capacity. The blueprint does
+not depend on winning that race, though. Next.js watches its
 config files and `.next/dev` through Watchpack, which on macOS means FSEvents;
 on a machine short of watch capacity that watcher fails with `EMFILE`, and
 Watchpack reports a failed watcher as a *deleted* directory. Next.js concludes
@@ -126,7 +126,7 @@ once they are in ClickHouse.
 ### Watching it reach a destination
 
 Destination consumers deliver to `destinations` rows, and a fresh checkout has
-none — so `make dev-all` runs every vendor consumer and none of them sends
+none — so `make dev` runs every vendor consumer and none of them sends
 anything. That is the intended default (destinations are opt-in), and each
 consumer says so on its `/metrics`:
 
@@ -142,16 +142,15 @@ node -e 'require("http").createServer((q,s)=>{let b="";q.on("data",c=>b+=c);q.on
 ```
 
 Add `POLARIS_WEBHOOK_TEST_URL=http://localhost:4321/hook` to `.env.local`,
-restart `make dev-all` so the consumers pick it up, then:
+restart `make dev` so the consumers pick it up, then:
 
 ```bash
 ./polaris destinations create --project storefront --env development --vendor webhook --instance-label local-test-sink --secret-ref env:POLARIS_WEBHOOK_TEST_URL
 ```
 
-This walkthrough is the one place that wants the full `dev-all` stack, which
-is also the stack that starves the blueprint of file watches. Start the
-blueprint first and leave it running: `dev-all` takes what is left, and the
-blueprint only needs its watches at startup.
+Start the blueprint before the stack and leave it running: `make dev` takes
+what is left of the machine's file watches, and the blueprint only needs its
+own at startup.
 
 The next event arrives on 4321 within a few seconds, and `select * from
 delivery_records` in PostgreSQL records the attempt. Note `--vendor webhook`,

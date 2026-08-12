@@ -16,8 +16,11 @@ From the repo root:
 make setup
 ```
 
-`make setup` installs dependencies, starts Docker Compose, and applies
-PostgreSQL migrations.
+`make setup` installs dependencies, builds the shared packages, and brings the
+schema up: the PostgreSQL role and database, its migrations, the ClickHouse
+schema, the RabbitMQ user and topology, and the dev seeds. It expects those
+four services to be reachable on their default localhost ports — `make
+docker-up` starts them in containers if you are not running them natively.
 
 Check service health:
 
@@ -105,6 +108,15 @@ recovered later.
 
 ## 6. Start the Ingester API
 
+`make dev` runs the whole platform — every app, processor, and consumer, the
+ingester among them on port **4000** — and one Ctrl-C stops all of it. That is
+the normal way to have Polaris running locally, and the rest of this document
+works against it if you read `8080` as `4000`.
+
+The explicit form below is here because this walkthrough is about seeing one
+service work in isolation: nothing but the ingester, every input named on the
+command line, on the port the smoke runbook uses.
+
 In one terminal:
 
 ```bash
@@ -115,7 +127,7 @@ POLARIS_POSTGRES_HOST=127.0.0.1 \
 POLARIS_POSTGRES_DATABASE=polaris \
 POLARIS_POSTGRES_USER=polaris \
 POLARIS_POSTGRES_PASSWORD=polaris \
-POLARIS_RABBITMQ_URL=127.0.0.1:19092 \
+POLARIS_RABBITMQ_URL=amqp://polaris:polaris@localhost:5672 \
 POLARIS_RABBITMQ_CLIENT_ID=ingester-api-local \
 POLARIS_REDIS_HOST=127.0.0.1 \
 pnpm --filter @polaris/ingester-api run start

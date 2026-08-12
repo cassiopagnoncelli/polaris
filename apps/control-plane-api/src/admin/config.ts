@@ -6,7 +6,7 @@
  * settings are:
  *
  *   local / development   dev defaults matching the Idp dev seed, so
- *                         `make dev-control-plane` needs no env at all
+ *                         `make dev` needs no env at all
  *   staging / production  the two secrets are required and a dev value is
  *                         refused, at boot rather than at first sign-in
  *
