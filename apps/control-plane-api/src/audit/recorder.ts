@@ -37,7 +37,13 @@ export type { AuditRecordsTable };
  * migration. Kept narrow on purpose so a typo at the call site fails
  * type-check.
  */
-export const AUDIT_ACTOR_SOURCES = ["declared", "cli", "migration", "system"] as const;
+export const AUDIT_ACTOR_SOURCES = [
+  "declared",
+  "operator_token",
+  "cli",
+  "migration",
+  "system",
+] as const;
 export type AuditActorSource = (typeof AUDIT_ACTOR_SOURCES)[number];
 
 export const AUDIT_ENVIRONMENTS = ["development", "staging", "production"] as const;

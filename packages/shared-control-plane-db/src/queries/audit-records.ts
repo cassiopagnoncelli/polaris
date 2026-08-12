@@ -40,14 +40,28 @@ import type { ColumnType, Kysely } from "kysely";
  * From `docs/architecture/02-control-plane.md` "Operator Identity and Audit
  * Actor":
  *
- *   - `declared`  — `--actor` flag / env var / OS user / git identity
+ *   - `declared`  — an authenticated principal from the control-plane
+ *                   API: a verified bearer token, or an admin session
+ *                   whose identity came from the IdP. NOT self-asserted;
+ *                   nothing in Polaris accepts an unverified actor name.
+ *   - `operator_token` — the CLI, after verifying an operator token's
+ *                   secret against its argon2id hash and confirming the
+ *                   row is active. Distinguished from `declared` so an
+ *                   incident review can tell a CLI mutation from an
+ *                   admin-panel one.
  *                   (display only; never authenticated in v1)
  *   - `cli`       — long-lived operator CLI session; the v1 default until
  *                   P6-007 wires `cli_token`
  *   - `migration` — schema/data migration writer (P11+)
  *   - `system`    — internal batch / scheduled job
  */
-export const AUDIT_ACTOR_SOURCES = ["declared", "cli", "migration", "system"] as const;
+export const AUDIT_ACTOR_SOURCES = [
+  "declared",
+  "operator_token",
+  "cli",
+  "migration",
+  "system",
+] as const;
 export type AuditActorSource = (typeof AUDIT_ACTOR_SOURCES)[number];
 
 /**

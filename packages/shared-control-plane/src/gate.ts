@@ -121,10 +121,32 @@ export class ProductionMutationRefusedError extends Error {
  * recorder persist a denied audit row before re-throwing for exit-code
  * translation. The gate itself stays pure: no DB writes, no logging.
  */
+/**
+ * Actor sources that clear the production gate.
+ *
+ * Both mean "a credential was verified", and the gate's question is only
+ * whether anyone authenticated at all — not which credential they used:
+ *
+ *   - `operator_token` — the CLI verified an operator token's secret
+ *     against its argon2id hash and confirmed the row is active.
+ *   - `declared`       — the control-plane API authenticated a bearer
+ *     token or an admin IdP session.
+ *
+ * `cli` (the resolver's fallback for every failed or absent credential)
+ * and the machine sources are absent on purpose. Listing the allowed
+ * sources rather than excluding `cli` means a future source has to be
+ * added here deliberately, instead of clearing a production gate by
+ * simply existing.
+ */
+const PRODUCTION_GATE_ALLOWED_SOURCES: ReadonlySet<string> = new Set([
+  "declared",
+  "operator_token",
+]);
+
 export function enforceProductionMutationGate(input: GateInput): void {
   if (!input.command.mutates) return;
   if (input.environment !== "production") return;
-  if (input.actor.source === "declared") return;
+  if (PRODUCTION_GATE_ALLOWED_SOURCES.has(input.actor.source)) return;
 
   input.metrics?.incrementGateDenial({
     actor: input.actor.source,

@@ -140,8 +140,14 @@ export async function resolveActor(options: ResolveActorOptions): Promise<Resolv
     // Intentionally swallowed.
   }
 
+  // `operator_token`, not `declared`. Everything above this line is a
+  // verification: the token parsed, the row exists, its status is active,
+  // the hash algorithm matches, and the secret verifies against the
+  // argon2id hash. Recording that as "declared" — which the audit schema
+  // documented as a self-asserted name — understated the assurance to
+  // whoever reads the row later.
   return {
-    source: "declared" as ActorSource,
+    source: "operator_token" as ActorSource,
     label: row.operator_label,
     tokenId: row.operator_token_id,
   };

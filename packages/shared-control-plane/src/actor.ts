@@ -34,7 +34,7 @@
  * Closed set of actor-source values. See the module-level doc above for the
  * v1 semantics of each variant.
  */
-export const ACTOR_SOURCES = ["declared", "cli", "migration", "system"] as const;
+export const ACTOR_SOURCES = ["declared", "operator_token", "cli", "migration", "system"] as const;
 
 /** TS union of the actor-source values. */
 export type ActorSource = (typeof ACTOR_SOURCES)[number];

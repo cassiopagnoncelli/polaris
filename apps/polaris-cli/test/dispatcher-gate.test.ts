@@ -15,7 +15,7 @@
  *     production-without-token,
  *   - the dispatcher passes the resolved actor through `ctx.actor` so
  *     commands stamp `actor_source` and `actor_label` on their audit rows,
- *   - a valid `POLARIS_OPERATOR_TOKEN` flips the actor to `declared` and
+ *   - a valid `POLARIS_OPERATOR_TOKEN` flips the actor to `operator_token` and
  *     the gate allows the run.
  */
 
@@ -191,7 +191,7 @@ describe("dispatcher gate: refuse production-mutating without operator token", (
     expect(capture.stderr.join("")).toContain("production mutation refused");
   });
 
-  it("allows production-mutating runs when a valid operator token resolves to declared", async () => {
+  it("allows production-mutating runs when a valid operator token resolves", async () => {
     const observed: { actor?: ResolvedActor; ranArgs?: unknown } = {};
     const capture = captureOutput();
     const repository = new StubRepository([activeRow]);
@@ -211,7 +211,7 @@ describe("dispatcher gate: refuse production-mutating without operator token", (
     });
     expect(code).toBe(ExitCode.Ok);
     expect(observed.actor).toEqual({
-      source: "declared",
+      source: "operator_token",
       label: "alice@polaris.dev",
       tokenId: "polaris_ot_active",
     });
@@ -275,8 +275,8 @@ describe("dispatcher gate: actor injection via test hooks", () => {
   it("threads the supplied actor through ctx.actor", async () => {
     const observed: { actor?: ResolvedActor; ranArgs?: unknown } = {};
     const capture = captureOutput();
-    const declared: ResolvedActor = {
-      source: "declared",
+    const authenticated: ResolvedActor = {
+      source: "operator_token",
       label: "carol@polaris.dev",
       tokenId: "polaris_ot_carol-rec",
     };
@@ -286,15 +286,15 @@ describe("dispatcher gate: actor injection via test hooks", () => {
       output: capture.streams,
       meta: META,
       commands: [buildProbeCommand(observed, { mutates: true, takesEnvFlag: true })],
-      actor: declared,
+      actor: authenticated,
     });
     expect(code).toBe(ExitCode.Ok);
-    expect(observed.actor).toEqual(declared);
+    expect(observed.actor).toEqual(authenticated);
   });
 });
 
 describe("dispatcher integration: destinations.disable + audit row carries the actor", () => {
-  it("inserts an audit row with actor_source='declared' when a valid token resolves", async () => {
+  it("inserts an audit row with actor_source='operator_token' when a valid token resolves", async () => {
     // We import directly to avoid pulling commander wiring through; the
     // runner already does the audit through its store contract.
     const { buildDestinationsDisableRunner } = await import("../src/index.js");
@@ -344,8 +344,8 @@ describe("dispatcher integration: destinations.disable + audit row carries the a
     });
 
     const capture = captureOutput();
-    const declared: ResolvedActor = {
-      source: "declared",
+    const authenticated: ResolvedActor = {
+      source: "operator_token",
       label: "alice@polaris.dev",
       tokenId: "polaris_ot_alice-rec",
     };
@@ -378,13 +378,13 @@ describe("dispatcher integration: destinations.disable + audit row carries the a
       } as unknown as CommandContext["logger"],
       output: capture.streams,
       meta: META,
-      actor: declared,
+      actor: authenticated,
     };
     await runner({ destinationId: "polaris_dst_under-test", reason: "operator decision" }, ctx);
     expect(recorded).toHaveLength(1);
     expect(recorded[0]).toEqual({
       action: "destinations.disable",
-      actorSource: "declared",
+      actorSource: "operator_token",
       actorLabel: "alice@polaris.dev",
       targetId: "polaris_dst_under-test",
     });

@@ -4,7 +4,15 @@ import { ACTOR_SOURCES, isActorSource } from "../src/index.js";
 
 describe("ACTOR_SOURCES closed set", () => {
   it("mirrors the audit_records CHECK constraint exactly", () => {
-    expect([...ACTOR_SOURCES]).toEqual(["declared", "cli", "migration", "system"]);
+    // Order and membership must match
+    // db/migrations/20260812000002_add_operator_token_actor_source.sql.
+    expect([...ACTOR_SOURCES]).toEqual([
+      "declared",
+      "operator_token",
+      "cli",
+      "migration",
+      "system",
+    ]);
   });
 });
 

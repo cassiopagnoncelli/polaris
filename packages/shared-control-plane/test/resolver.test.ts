@@ -135,7 +135,7 @@ describe("resolveActor fallback to source=cli", () => {
 });
 
 describe("resolveActor success path", () => {
-  it("returns declared with the row label + tokenId on a verified active row", async () => {
+  it("returns operator_token with the row label + tokenId on a verified active row", async () => {
     const repo = new StubRepository({ rows: [activeRow] });
     const fixedNow = new Date("2026-05-12T18:00:00.000Z");
     const actor = await resolveActor({
@@ -145,7 +145,7 @@ describe("resolveActor success path", () => {
       now: () => fixedNow,
     });
     expect(actor).toEqual({
-      source: "declared",
+      source: "operator_token",
       label: "alice@polaris.dev",
       tokenId: "polaris_ot_active",
     });
@@ -162,7 +162,7 @@ describe("resolveActor success path", () => {
       repository: repo,
       verify: async () => true,
     });
-    expect(actor.source).toBe("declared");
+    expect(actor.source).toBe("operator_token");
     expect(actor.label).toBe("alice@polaris.dev");
   });
 });
