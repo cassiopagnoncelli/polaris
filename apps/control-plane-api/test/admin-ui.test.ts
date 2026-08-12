@@ -297,20 +297,36 @@ function setCookies(headers: Record<string, unknown>): string[] {
 // ---------------------------------------------------------------------------
 
 describe("admin UI — access control", () => {
-  it("redirects an unauthenticated browser to login, remembering where it was going", async () => {
+  it("sends an unauthenticated browser into the Idp flow, remembering where it was going", async () => {
+    // Straight to /auth/start, not to a page with one button on it. With a
+    // live Idp session the operator never sees a sign-in screen at all.
     const app = await buildApp();
     const res = await app.app.inject({ method: "GET", url: "/admin/projects" });
     expect(res.statusCode).toBe(303);
-    expect(res.headers["location"]).toContain("/admin/auth/login");
+    expect(res.headers["location"]).toContain("/admin/auth/start");
     expect(res.headers["location"]).toContain("next=%2Fadmin%2Fprojects");
     await app.app.close();
   });
 
-  it("serves the login page unauthenticated", async () => {
+  it("redirects /auth/login into the flow when there is no failure to report", async () => {
     const app = await buildApp();
-    const res = await app.app.inject({ method: "GET", url: "/admin/auth/login" });
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/auth/login?next=%2Fadmin%2Fprojects",
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toBe("/admin/auth/start?next=%2Fadmin%2Fprojects");
+    await app.app.close();
+  });
+
+  it("still renders /auth/login when a sign-in attempt failed", async () => {
+    // The one case that must NOT bounce: the round trip just broke, so
+    // restarting it silently would loop the browser instead of explaining.
+    const app = await buildApp();
+    const res = await app.app.inject({ method: "GET", url: "/admin/auth/login?reason=idp_error" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.body).toContain("Idp refused the sign-in");
     expect(res.body).toContain("Continue with Idp");
     await app.app.close();
   });
@@ -361,7 +377,9 @@ describe("admin UI — access control", () => {
     await app.app.close();
   });
 
-  it("sends an expired session back to login with a reason it can explain", async () => {
+  it("sends an expired session back through Idp rather than to a screen", async () => {
+    // An expired session is not something the operator can act on, so there
+    // is nothing to render — the reason stays in the log.
     const app = await buildApp({
       idpAuth: {
         verifyAccessToken: async () => {
@@ -375,7 +393,7 @@ describe("admin UI — access control", () => {
       headers: { cookie: sessionCookie("admin-token") },
     });
     expect(res.statusCode).toBe(303);
-    expect(res.headers["location"]).toContain("reason=token_expired");
+    expect(res.headers["location"]).toBe("/admin/auth/start?next=%2Fadmin");
     await app.app.close();
   });
 
@@ -402,7 +420,7 @@ describe("admin UI — access control", () => {
     const app = await buildApp();
     const res = await app.app.inject({ method: "GET", url: "/admin" });
     expect(res.statusCode).toBe(303);
-    expect(res.headers["location"]).toContain("/admin/auth/login");
+    expect(res.headers["location"]).toContain("/admin/auth/start");
     await app.app.close();
   });
 });
@@ -585,6 +603,164 @@ describe("admin UI — OAuth flow", () => {
     });
     expect(res.statusCode).toBe(403);
     expect(revokeRefreshToken).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+});
+
+describe("admin UI — account menu", () => {
+  /** The panel body of the `<details>`, so assertions cannot pass on the trigger. */
+  function menuPanel(body: string): string {
+    const start = body.indexOf('<div class="usermenu-panel">');
+    expect(start).toBeGreaterThan(-1);
+    return body.slice(start, body.indexOf("</details>", start));
+  }
+
+  const FORM_POST = {
+    "sec-fetch-site": "same-origin",
+    "content-type": "application/x-www-form-urlencoded",
+  };
+
+  it("collects identity, role, theme, and sign out into one menu", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: sessionCookie("owner-token") },
+    });
+
+    const panel = menuPanel(res.body);
+    expect(panel).toContain(EMAIL);
+    expect(panel).toContain(">owner<");
+    for (const label of ["Light", "Dark", "System"]) {
+      expect(panel).toContain(`>${label}</button>`);
+    }
+    expect(panel).toContain(">Sign out</button>");
+    // Everything in the menu is reachable without opening it in a browser: the
+    // point of the reorganisation is one place to look, not four.
+    expect(panel.indexOf(EMAIL)).toBeLessThan(panel.indexOf("Sign out"));
+    await app.app.close();
+  });
+
+  it("leaves nothing loose in the header beside the menu", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: sessionCookie("owner-token") },
+    });
+
+    const header = res.body.slice(
+      res.body.indexOf('<header class="topbar">'),
+      res.body.indexOf("</header>"),
+    );
+    const outsideMenu = header.slice(0, header.indexOf('<div class="usermenu-panel">'));
+    expect(outsideMenu).not.toContain("Sign out");
+    expect(outsideMenu).not.toContain("badge-muted");
+    await app.app.close();
+  });
+
+  it("defaults to following the operating system", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: sessionCookie("owner-token") },
+    });
+    expect(res.body).toContain('<html lang="en" data-theme="system">');
+    expect(menuPanel(res.body)).toContain(
+      'value="system" class="theme-option current" aria-pressed="true"',
+    );
+    await app.app.close();
+  });
+
+  it("renders the operator's stored theme, and marks it as the current option", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_theme=light` },
+    });
+    expect(res.body).toContain('<html lang="en" data-theme="light">');
+    const panel = menuPanel(res.body);
+    expect(panel).toContain('value="light" class="theme-option current" aria-pressed="true"');
+    // Exactly one option claims to be the current one.
+    expect(panel.match(/theme-option current/g)).toHaveLength(1);
+    await app.app.close();
+  });
+
+  it("falls back to the default rather than echoing a junk cookie into the document", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin",
+      headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_theme=neon` },
+    });
+    expect(res.body).toContain('<html lang="en" data-theme="system">');
+    await app.app.close();
+  });
+
+  it("stores a theme change and returns the operator to the view they were on", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/preferences/theme",
+      headers: { cookie: sessionCookie("owner-token"), ...FORM_POST },
+      payload: "theme=dark&next=%2Fadmin%2Fdlq%3Fvendor%3Dmixpanel",
+    });
+
+    expect(res.statusCode).toBe(303);
+    // Filters survive, or changing the palette would quietly discard the
+    // query the operator had built up.
+    expect(res.headers["location"]).toBe("/admin/dlq?vendor=mixpanel");
+    const cookie = setCookies(res.headers).find((c) => c.startsWith("polaris_admin_theme="));
+    expect(cookie).toContain("polaris_admin_theme=dark");
+    expect(cookie).toContain("Path=/admin");
+    await app.app.close();
+  });
+
+  it("refuses to send the operator to another origin after a theme change", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/preferences/theme",
+      headers: { cookie: sessionCookie("owner-token"), ...FORM_POST },
+      payload: "theme=dark&next=https%3A%2F%2Fevil.example%2Fadmin",
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toBe("/admin");
+    await app.app.close();
+  });
+
+  it("refuses a cross-origin theme change", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/preferences/theme",
+      headers: {
+        cookie: sessionCookie("owner-token"),
+        "content-type": "application/x-www-form-urlencoded",
+        "sec-fetch-site": "cross-site",
+        origin: "https://evil.example",
+      },
+      payload: "theme=dark&next=%2Fadmin",
+    });
+    expect(res.statusCode).toBe(403);
+    expect(setCookies(res.headers).some((c) => c.startsWith("polaris_admin_theme="))).toBe(false);
+    await app.app.close();
+  });
+
+  it("keeps the theme through a sign-out — it is a preference, not a credential", async () => {
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/auth/logout",
+      headers: {
+        cookie: `${sessionCookie("admin-token")}; polaris_admin_theme=light`,
+        "sec-fetch-site": "same-origin",
+      },
+    });
+    const cleared = setCookies(res.headers).filter((c) => c.startsWith("polaris_admin_theme="));
+    expect(cleared).toEqual([]);
     await app.app.close();
   });
 });
@@ -938,7 +1114,7 @@ describe("admin UI — session refresh in the guard", () => {
     await app.app.close();
   });
 
-  it("sends the operator to login when the grant is dead", async () => {
+  it("sends the operator back through Idp when the grant is dead", async () => {
     const app = await buildApp({
       idpAuth: expiringThenValid(),
       refresher: { refresh: async () => ({ ok: false, reason: "invalid_grant" }) },
@@ -949,7 +1125,7 @@ describe("admin UI — session refresh in the guard", () => {
       headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
     });
     expect(res.statusCode).toBe(303);
-    expect(res.headers["location"]).toContain("reason=token_expired");
+    expect(res.headers["location"]).toBe("/admin/auth/start?next=%2Fadmin");
     await app.app.close();
   });
 
@@ -985,7 +1161,7 @@ describe("admin UI — session refresh in the guard", () => {
       headers: { cookie: `${sessionCookie("owner-token")}; polaris_admin_refresh=refresh-old` },
     });
     expect(res.statusCode).toBe(303);
-    expect(res.headers["location"]).toContain("reason=token_revoked");
+    expect(res.headers["location"]).toContain("/admin/auth/start");
     expect(refresh).not.toHaveBeenCalled();
     await app.app.close();
   });

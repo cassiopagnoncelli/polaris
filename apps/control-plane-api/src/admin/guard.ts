@@ -7,11 +7,13 @@
  *
  * Order of business, and each step's failure mode:
  *
- *   1. No token                       → 302 to login (a browser, not an error)
- *   2. Token fails verification       → 302 to login, with the reason in the
- *                                       query so the page can say *why* the
- *                                       session ended rather than looping
- *                                       silently
+ *   1. No token                       → 303 into the Idp flow (a browser, not
+ *                                       an error)
+ *   2. Token fails verification       → 303 into the Idp flow, reason logged
+ *                                       rather than rendered: a dead session
+ *                                       is not something the operator can act
+ *                                       on, and with a live Idp session they
+ *                                       land back on the page they asked for
  *   3. Role below `admin`             → 403 HTML, never a redirect: a signed-in
  *                                       operator who lacks the role would
  *                                       otherwise bounce between login and
@@ -44,12 +46,13 @@ import {
 } from "./platform-role.js";
 import type { SessionRefresher } from "./refresh.js";
 import {
-  AUTH_PREFIX,
+  ADMIN_PREFIX,
   type CookieOptions,
   readIdentityCookie,
   readRefreshToken,
   readSessionToken,
   setSessionCookies,
+  signInPath,
 } from "./session.js";
 
 export interface AdminContext {
@@ -71,9 +74,6 @@ export interface AdminGuardDeps {
   readonly cookieOptions: CookieOptions;
 }
 
-/** Signals the plugin should send the operator back to the IdP. */
-export const LOGIN_PATH = `${AUTH_PREFIX}/login` as const;
-
 export function createAdminGuard(deps: AdminGuardDeps): preHandlerAsyncHookHandler {
   return async function adminGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     // Cookie only. An `Authorization: Bearer <idp access token>` cannot reach
@@ -84,7 +84,7 @@ export function createAdminGuard(deps: AdminGuardDeps): preHandlerAsyncHookHandl
     // Operators wanting a terminal have the `polaris` CLI.
     const token = readSessionToken(request);
     if (token === undefined) {
-      redirectToLogin(request, reply, "signed_out");
+      redirectToSignIn(request, reply, "signed_out");
       return;
     }
 
@@ -100,8 +100,7 @@ export function createAdminGuard(deps: AdminGuardDeps): preHandlerAsyncHookHandl
       const refreshed =
         reason === "token_expired" ? await tryRefresh(request, reply, deps) : undefined;
       if (refreshed === undefined) {
-        request.log.debug({ reason }, "admin session rejected");
-        redirectToLogin(request, reply, reason);
+        redirectToSignIn(request, reply, reason);
         return;
       }
       passport = refreshed;
@@ -195,14 +194,22 @@ async function tryRefresh(
   return passport;
 }
 
-function redirectToLogin(request: FastifyRequest, reply: FastifyReply, reason: string): void {
-  const params = new URLSearchParams({ reason });
-  // Only same-origin paths round-trip, so a crafted `next` cannot bounce an
-  // operator off-site after login.
-  if (request.method === "GET" && request.url.startsWith("/admin")) {
-    params.set("next", request.url);
-  }
-  void reply.redirect(`${LOGIN_PATH}?${params.toString()}`, 303);
+/**
+ * Send the operator straight into the Idp flow, remembering where they were.
+ *
+ * The reason only reaches the log. It named a state the operator cannot do
+ * anything about — the session is gone either way — and rendering it meant an
+ * interstitial standing between them and the one provider this panel has.
+ * Failures of the flow *itself* still stop at `/auth/login`, which is what
+ * keeps a broken round trip from bouncing forever.
+ */
+function redirectToSignIn(request: FastifyRequest, reply: FastifyReply, reason: string): void {
+  request.log.debug({ reason }, "admin session rejected");
+  // Only same-origin GETs round-trip, so a crafted `next` cannot bounce an
+  // operator off-site after login, and a POST is not something to replay.
+  const next =
+    request.method === "GET" && request.url.startsWith(ADMIN_PREFIX) ? request.url : null;
+  void reply.redirect(signInPath(next), 303);
 }
 
 declare module "fastify" {

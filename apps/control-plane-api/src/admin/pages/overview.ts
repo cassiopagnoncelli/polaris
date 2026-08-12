@@ -10,7 +10,7 @@
  */
 
 import { type Html, html } from "../html.js";
-import { type AdminPageContext, emptyRow, envBadge, mono, page } from "../layout.js";
+import { type AdminPageContext, emptyRow, envBadge, mono, page, statCard } from "../layout.js";
 import type { AuditRow, OverviewCounts } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
 import { formatInstant } from "./format.js";
@@ -22,13 +22,8 @@ export function renderOverviewPage(input: {
 }): string {
   const { counts } = input;
 
-  const stat = (label: string, value: number, href?: string): Html => {
-    const body = html`<div class="n">${String(value)}</div>
-      <div class="k">${label}</div>`;
-    return html`<div class="card-stat">
-      ${href === undefined ? body : html`<a href="${href}" style="color:inherit">${body}</a>`}
-    </div>`;
-  };
+  const stat = (label: string, value: number, href: string): Html =>
+    statCard({ label, value: String(value), href });
 
   const rows =
     input.recentAudit.length === 0

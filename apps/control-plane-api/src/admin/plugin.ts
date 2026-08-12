@@ -86,7 +86,9 @@ import {
   readRefreshToken,
   setFlowCookies,
   setSessionCookies,
+  signInPath,
 } from "./session.js";
+import { parseTheme, readTheme, setThemeCookie } from "./theme.js";
 
 export interface AdminPluginDeps {
   readonly config: AdminConfig;
@@ -186,15 +188,15 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           .send(render(STYLESHEET));
       });
 
+      // Only reachable with a reason: a flow that failed, and a person who
+      // needs to be told why. Everything else — a bookmark, the signed-out
+      // page's link, an unrecognised reason — has nothing to say and no
+      // choice to offer, so it goes straight through to Idp.
       publicScope.get("/auth/login", async (request, reply) => {
-        return sendHtml(
-          reply,
-          200,
-          renderLoginPage({
-            reason: loginReason(queryString(request, "reason")),
-            next: safeNext(queryString(request, "next")),
-          }),
-        );
+        const next = safeNext(queryString(request, "next"));
+        const reason = loginReason(queryString(request, "reason"));
+        if (reason === null) return reply.redirect(signInPath(next), 303);
+        return sendHtml(reply, 200, renderLoginPage({ reason, next }));
       });
 
       // Starts the OAuth round trip. A GET because it is a navigation, not a
@@ -367,6 +369,14 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           role: admin?.role ?? "none",
           requestId: String(request.id),
           path: request.url.split("?")[0] ?? request.url,
+          // A theme change redirects here afterwards, so it has to be somewhere
+          // a GET can land. Most pages are GETs and keep their query string —
+          // filters survive the round trip. The rest are mutation POSTs that
+          // re-render a detail page under an action URL (`…/keys/x/revoke`),
+          // which has no GET handler; those fall back to the overview rather
+          // than redirecting the operator into a 404.
+          returnTo: request.method === "GET" ? request.url : ADMIN_PREFIX,
+          theme: readTheme(request),
         };
       };
 
@@ -583,6 +593,31 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             ...(options.previous !== undefined ? { previous: options.previous } : {}),
           })}`;
       };
+
+      /**
+       * Light/dark/system, from the account menu.
+       *
+       * A POST rather than three links, for the same reason the other writes
+       * here are: it is a state change, and the same-origin check that guards
+       * every other form applies unchanged. It writes one display cookie and
+       * nothing else — no audit record, because a palette is not an
+       * operational fact anyone will need to reconstruct later.
+       */
+      guarded.post<{ Body: Record<string, unknown> }>(
+        "/preferences/theme",
+        async (request, reply) => {
+          const origin = verifySameOrigin(request);
+          if (!origin.ok) {
+            request.log.warn({ reason: origin.reason }, "admin theme change refused: cross-origin");
+            return sendHtml(reply, 403, renderOriginRefusedPage());
+          }
+
+          setThemeCookie(reply, parseTheme(formField(request, "theme")), cookieOptions);
+          // Re-validated rather than trusted: the value was rendered by this
+          // panel, but it arrives back as a form field like any other.
+          return reply.redirect(safeNext(formField(request, "next")) ?? ADMIN_PREFIX, 303);
+        },
+      );
 
       guarded.get("/", async (request, reply) => {
         const [counts, recentAudit] = await Promise.all([
@@ -1252,9 +1287,6 @@ function blankToUndefined(value: string): string | undefined {
 }
 
 const LOGIN_REASONS: ReadonlySet<string> = new Set<LoginReason>([
-  "signed_out",
-  "token_expired",
-  "token_revoked",
   "invalid_token",
   "state_mismatch",
   "missing_verifier",
@@ -1262,8 +1294,9 @@ const LOGIN_REASONS: ReadonlySet<string> = new Set<LoginReason>([
   "idp_error",
 ]);
 
-function loginReason(value: string): LoginReason {
-  return LOGIN_REASONS.has(value) ? (value as LoginReason) : "signed_out";
+/** `null` for anything unrecognised: no failure to report, so no page. */
+function loginReason(value: string): LoginReason | null {
+  return LOGIN_REASONS.has(value) ? (value as LoginReason) : null;
 }
 
 /**

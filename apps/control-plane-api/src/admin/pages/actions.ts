@@ -45,7 +45,7 @@ export interface ActionFormInput {
 export function actionForm(input: ActionFormInput): Html {
   const isProduction = input.environment === "production";
   return html`
-    <form method="post" action="${input.action}" class="action-form">
+    <form method="post" action="${input.action}" class="${input.danger ? "action-form danger" : "action-form"}">
       ${
         input.refusal !== undefined
           ? html`<p class="notice error">${describeRefusal(input.refusal)}</p>`
@@ -67,8 +67,13 @@ export function actionForm(input: ActionFormInput): Html {
           : null
       }
       <p class="muted">${input.description}</p>
+      <!--
+        The caption is one element, not a run of text nodes around a <code>:
+        the stylesheet lays a label out as a grid of caption-then-input, and
+        loose text nodes each become a row of their own.
+      -->
       <label>
-        Type <code>${input.expectedConfirmation}</code> to confirm
+        <span>Type <code>${input.expectedConfirmation}</code> to confirm</span>
         <input
           type="text"
           name="confirm"
@@ -79,7 +84,7 @@ export function actionForm(input: ActionFormInput): Html {
         />
       </label>
       <label>
-        Reason (recorded in the audit log, min ${String(MIN_REASON_LENGTH)} characters)
+        <span>Reason (recorded in the audit log, min ${String(MIN_REASON_LENGTH)} characters)</span>
         <input
           type="text"
           name="reason"

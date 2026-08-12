@@ -35,6 +35,23 @@ export const NEXT_COOKIE = "polaris_admin_next" as const;
 export const ADMIN_PREFIX = "/admin" as const;
 export const AUTH_PREFIX = `${ADMIN_PREFIX}/auth` as const;
 
+/**
+ * Where an operator without a usable session is sent.
+ *
+ * `/auth/start`, not `/auth/login`: a panel with exactly one identity provider
+ * has nothing to ask, so the interstitial was a button that could only be
+ * pressed one way. Idp decides whether the operator sees a form at all — with
+ * a live Idp session they are bounced straight back to where they were going.
+ * `/auth/login` still exists, but only to explain a flow that already failed.
+ */
+export const SIGN_IN_PATH = `${AUTH_PREFIX}/start` as const;
+
+/** The sign-in URL, carrying the page the operator was heading for. */
+export function signInPath(next: string | null): string {
+  if (next === null) return SIGN_IN_PATH;
+  return `${SIGN_IN_PATH}?${new URLSearchParams({ next }).toString()}`;
+}
+
 /** The OAuth round trip is a redirect pair, not a session. Five minutes is generous. */
 const FLOW_COOKIE_MAX_AGE_SEC = 300;
 

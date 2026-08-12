@@ -8,7 +8,17 @@
  */
 
 import { type Html, html } from "../html.js";
-import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
+import {
+  type AdminPageContext,
+  emptyRow,
+  envBadge,
+  linkCard,
+  mono,
+  page,
+  statCard,
+  statusBadge,
+  valueBadge,
+} from "../layout.js";
 import type { DestinationRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
 import { filterForm, selectField, textField } from "./filters.js";
@@ -80,6 +90,61 @@ export function renderDestinationsPage(input: {
   });
 }
 
+/**
+ * The operator's own sentence, on its own line and inside quotation marks.
+ *
+ * `disabled_reason` is free text with no guaranteed punctuation, so running it
+ * inline into the platform's copy produces "…quota increase Events keep
+ * flowing…". Quoting it also marks where our words stop and theirs start.
+ */
+function recordedReason(reason: string | null): Html {
+  if (reason === null) {
+    return html`<span class="notice-detail muted">No reason was recorded.</span>`;
+  }
+  return html`<span class="notice-detail">Reason on record: <q>${reason}</q></span>`;
+}
+
+/**
+ * Whether this destination is delivering right now, said once, at the top.
+ *
+ * The flat field list this page used to be gave `status` and `disabled_reason`
+ * the same weight as `dead_letter_threshold`, so the one fact an operator
+ * opens the page for — is it delivering, and if not, why not — had to be
+ * found. `disabled_reason` also rendered an em dash on every healthy row,
+ * which is a line of nothing on the overwhelming majority of visits.
+ *
+ * `mode` earns a banner of its own: a production destination in `sandbox` or
+ * `test` is quietly not delivering anywhere real, and nothing else on the page
+ * says so out loud.
+ */
+function stateNotices(dest: DestinationRow): readonly Html[] {
+  const notices: Html[] = [];
+
+  if (dest.status === "disabled") {
+    notices.push(html`<p class="notice error">
+      <strong>Delivery is stopped.</strong> Events keep flowing through the
+      pipeline — they are not sent here until this destination is enabled again.
+      ${recordedReason(dest.disabled_reason)}
+    </p>`);
+  } else if (dest.status === "paused") {
+    notices.push(html`<p class="notice warn">
+      <strong>Delivery is paused.</strong> This destination is not taking
+      traffic and has not been disabled.
+      ${recordedReason(dest.disabled_reason)}
+    </p>`);
+  }
+
+  if (dest.environment === "production" && dest.mode !== "live") {
+    notices.push(html`<p class="notice warn">
+      This is a <strong>production</strong> destination running in
+      <strong>${dest.mode}</strong> mode. Production traffic is not reaching the
+      real ${dest.vendor} endpoint.
+    </p>`);
+  }
+
+  return notices;
+}
+
 export function renderDestinationDetailPage(input: {
   ctx: AdminPageContext;
   destination: DestinationRow;
@@ -87,11 +152,40 @@ export function renderDestinationDetailPage(input: {
   actions?: Html | undefined;
 }): string {
   const dest = input.destination;
+  const destinationId = encodeURIComponent(dest.destination_id);
 
   return page({
     ctx: input.ctx,
+    // The tab keeps the vendor — it is what tells two open destinations apart.
+    // The heading does not: the breadcrumb directly above it already said it.
     title: `${dest.vendor} · ${dest.instance_label}`,
+    heading: dest.instance_label,
+    breadcrumb: [
+      { label: "Destinations", href: `${ADMIN_PREFIX}/destinations` },
+      { label: dest.instance_label },
+    ],
+    // States the vendor rather than claiming delivery: `active` here means the
+    // instance is not disabled, which on a paused or sandboxed row is not the
+    // same as traffic arriving at the vendor.
+    lede: html`${envBadge(dest.environment)} ${statusBadge(dest.status)}
+    ${valueBadge(`${dest.mode} mode`)}
+    <span><strong>${dest.vendor}</strong> destination</span>`,
     body: html`
+      ${stateNotices(dest)}
+
+      <h2>Delivery limits</h2>
+      <div class="cards compact">
+        ${statCard({ label: "Max RPS", value: String(dest.max_rps) })}
+        ${statCard({ label: "Max concurrency", value: String(dest.max_concurrency) })}
+        ${statCard({ label: "Dead-letter threshold", value: String(dest.dead_letter_threshold) })}
+        ${statCard({ label: "Retry policy", value: dest.retry_policy, mono: true })}
+      </div>
+      <p class="muted">
+        Configured ceilings, not live readings — actual throughput and failure
+        rates are in the Grafana <em>polaris-destinations</em> dashboard.
+      </p>
+
+      <h2>Configuration</h2>
       <dl class="detail">
         <dt>Destination id</dt>
         <dd>${mono(dest.destination_id)}</dd>
@@ -101,47 +195,59 @@ export function renderDestinationDetailPage(input: {
             >${mono(dest.project_id)}</a
           >
         </dd>
-        <dt>Environment</dt>
-        <dd>${envBadge(dest.environment)}</dd>
-        <dt>Status</dt>
-        <dd>${statusBadge(dest.status)}</dd>
-        <dt>Disabled reason</dt>
-        <dd>${dest.disabled_reason ?? html`<span class="muted">—</span>`}</dd>
-        <dt>Mode</dt>
-        <dd>${dest.mode}</dd>
         <dt>Secret ref</dt>
         <dd>${mono(dest.secret_ref)} <span class="muted">(pointer, not a secret)</span></dd>
-        <dt>Max concurrency</dt>
-        <dd>${String(dest.max_concurrency)}</dd>
-        <dt>Max RPS</dt>
-        <dd>${String(dest.max_rps)}</dd>
-        <dt>Retry policy</dt>
-        <dd>${dest.retry_policy}</dd>
-        <dt>Dead-letter threshold</dt>
-        <dd>${String(dest.dead_letter_threshold)}</dd>
+        ${
+          /*
+           * Enabling nulls this column, so a reason surviving on an active row
+           * is state that should not exist — a direct write, or a clear that
+           * did not happen. Rendering it only when it is set drops the em dash
+           * from every healthy page without hiding the one case that matters.
+           * When the status banner is already quoting it, this row stays out.
+           */
+          dest.disabled_reason !== null && dest.status === "active"
+            ? html`<dt>Disabled reason</dt>
+              <dd>
+                ${dest.disabled_reason}
+                <span class="muted">— stale, this destination is active</span>
+              </dd>`
+            : null
+        }
         <dt>Replay opt-in</dt>
         <dd>
-          ${formatBool(dest.replay_opt_in)}
+          ${
+            dest.replay_opt_in
+              ? html`<span class="badge badge-ok">yes</span>`
+              : html`<span class="badge badge-muted">no</span>`
+          }
           ${
             dest.replay_opt_in_reason !== null
               ? html`<span class="muted"> — ${dest.replay_opt_in_reason}</span>`
               : null
           }
         </dd>
-        <dt>Created</dt>
-        <dd>${formatInstant(dest.created_at)}</dd>
-        <dt>Updated</dt>
-        <dd>${formatInstant(dest.updated_at)}</dd>
       </dl>
 
-      <h2>Recent deliveries</h2>
-      <p class="muted">
-        Delivery volume and failure rates live in the Grafana
-        <em>polaris-destinations</em> dashboard. Failed messages awaiting triage
-        are under <a href="${ADMIN_PREFIX}/dlq?destination=${encodeURIComponent(dest.destination_id)}">DLQ</a>.
-      </p>
+      <h2>Related</h2>
+      <div class="linkrow">
+        ${linkCard({
+          href: `${ADMIN_PREFIX}/dlq?destination=${destinationId}`,
+          title: "Dead-letter queue →",
+          description: "Messages this destination gave up on, awaiting triage.",
+        })}
+        ${linkCard({
+          href: `${ADMIN_PREFIX}/audit?target_type=destination&target_id=${destinationId}`,
+          title: "Audit history →",
+          description: "Every change made to this destination, and who made it.",
+        })}
+      </div>
 
       ${input.actions ?? null}
+
+      <p class="provenance">
+        <span>Created ${formatInstant(dest.created_at)}</span>
+        <span>Last changed ${formatInstant(dest.updated_at)}</span>
+      </p>
     `,
   });
 }
