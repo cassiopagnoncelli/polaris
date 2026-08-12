@@ -2,7 +2,8 @@
 #
 # Runs the quality gates documented in docs/architecture/09-engineering-standards.md
 # ("CI Quality Gates") plus the ClickHouse import-restriction check from
-# docs/architecture/07-clickhouse.md ("Access Control").
+# docs/architecture/07-clickhouse.md ("Access Control") and the raw-NUL-byte
+# check (see docs/development/ci.md).
 #
 # Docker-backed integration checks (Postgres, Redis, RabbitMQ, ClickHouse,
 # vertical-slice smoke test) live in `integration.yml` and run on a schedule,
@@ -64,7 +65,7 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Lint (Biome + ClickHouse import-restriction)
+      - name: Lint (Biome + ClickHouse import-restriction + raw-NUL check)
         run: pnpm lint
 
       - name: Format check (Biome)

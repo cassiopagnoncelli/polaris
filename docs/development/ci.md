@@ -8,7 +8,7 @@ plus the ClickHouse access enforcement from
 
 | Workflow                                    | Trigger                                              | Purpose                                                                                    |
 | ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)           | every PR and push to `main`, manual dispatch         | typecheck, lint (Biome + ClickHouse import rule), format check, tests, build, migration smoke |
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)           | every PR and push to `main`, manual dispatch         | typecheck, lint (Biome + ClickHouse import rule + raw-NUL check), format check, tests, build, migration smoke |
 | [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml) | schedule (06:00 UTC), manual dispatch, `integration` PR label | Docker-backed checks against Postgres, Redis, RabbitMQ, ClickHouse                         |
 
 The integration workflow is opt-in on PRs because the service matrix is slow
@@ -104,13 +104,57 @@ pnpm lint:clickhouse-imports
 rm apps/ingester-api/src/_oops.ts
 ```
 
+## Raw-NUL-byte check
+
+A text source file containing a raw NUL byte is *binary* to the tools we
+read code with, and both of them fail quietly:
+
+- **ripgrep skips binary files during recursive search.** It prints no
+  warning and exits with the same status as a genuine no-match, so the
+  file simply stops appearing in repo-wide results.
+- **git renders the diff as `Bin 9450 -> 9851 bytes`** instead of
+  reviewable text, so changes to it cannot be read in review.
+
+This is not hypothetical. `apps/control-plane-api/src/admin/pages/processors.ts`
+and `packages/shared-processor/src/activation-gate.ts` each built a
+composite `Map` key with a NUL separator written as the byte itself, and
+both files were invisible to every `rg` search until it was noticed by
+accident.
+
+NUL as a *separator* is correct — it is the one character an identifier
+cannot contain, so joined keys cannot collide. Writing it as the raw byte
+is what breaks the tooling. The `\u0000` escape is the identical
+string at runtime and leaves the file as plain text.
+
+The check is implemented in
+[`scripts/lint-nul-bytes.mjs`](../../scripts/lint-nul-bytes.mjs). It walks
+`apps/`, `packages/`, `processors/`, `consumers/`, `catalog/`, `scripts/`,
+`sql/`, `db/`, `docs/`, and `tests/`, scanning an **allow-list** of text
+extensions — so a genuinely binary file committed to the tree can never
+fail the build. It is wired into the root `pnpm lint`, and
+[`scripts/__tests__/lint-nul-bytes.test.ts`](../../scripts/__tests__/lint-nul-bytes.test.ts)
+covers it via `pnpm test:scripts`.
+
+To verify a violation is caught locally:
+
+```bash
+# printf expands \0 into a real NUL byte.
+printf 'const k = "a\0b";\n' > packages/shared-db/src/_oops.ts
+
+pnpm lint:nul-bytes
+# => exits 1, prints file:line and the byte offset of each NUL
+
+# Clean up
+rm packages/shared-db/src/_oops.ts
+```
+
 ## Running the same checks locally
 
 ```bash
 pnpm install
 pnpm build           # produces dist/ for every package — typecheck and tests need this
 pnpm typecheck
-pnpm lint            # Biome + ClickHouse import-restriction
+pnpm lint            # Biome + ClickHouse import-restriction + raw-NUL check
 pnpm format:check
 pnpm test            # workspace Vitest + scripts/ Vitest
 ```
