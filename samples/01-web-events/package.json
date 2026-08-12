@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Polaris sample: browser events with @polaris/web-sdk, posted straight to the ingester.",
   "scripts": {
-    "dev": "next dev --port 3641",
+    "dev": "node ../preflight-watch-capacity.mjs && next dev --port 3641",
     "build": "next build",
     "start": "next start --port 3641",
     "typecheck": "tsc --noEmit"

@@ -59,6 +59,14 @@ make dev-ingester
 
 It listens on **4000**, which is what every sample's `.env.example` points at.
 
+Prefer `make dev-ingester` over `make dev-all` while you are working in a
+sample. `dev-all` starts one `tsx watch` supervisor per service, and fourteen
+of those hold enough of the machine's file-watch capacity that `next dev` has
+none left — it fails with `EMFILE`, reads the dead watcher as a deleted
+`.next/dev`, and restarts forever. The samples check for this before starting
+and say so, so you will get a message rather than the loop. `make dev-stop`
+clears it.
+
 ### Running a browser app on a different port
 
 The ingester checks the `Origin` header of browser-sent batches against a
@@ -127,6 +135,11 @@ restart `make dev-all` so the consumers pick it up, then:
 ```bash
 ./polaris destinations create --project storefront --env development --vendor webhook --instance-label local-test-sink --secret-ref env:POLARIS_WEBHOOK_TEST_URL
 ```
+
+This walkthrough is the one place that wants the full `dev-all` stack, which
+is also the stack that starves the sample of file watches. Start the sample
+first and leave it running: `dev-all` takes what is left, and the sample only
+needs its watches at startup.
 
 The next event through the sample arrives on 4321 within a few seconds, and
 `select * from delivery_records` in PostgreSQL records the attempt. Note
