@@ -37,10 +37,19 @@ export const PROCESSOR_SERVICE_NAME = "sessionizer" as const;
  * NOTE on `POLARIS_SESSIONIZER_INACTIVITY_SECONDS`: the inactivity window
  * is SEMANTIC per the processor manifest. Changing it would alter the
  * emitted `session.started` / `session.ended` events for the same input
- * slice. Operators may set this env var to mirror the manifest default
- * (1800) for transparency, but a real change requires a new processor
- * version (v2 directory + new manifest). The runtime defaults to the
- * manifest value and ignores attempts to widen it.
+ * slice — a wider window merges sessions v1 would have split, a narrower
+ * one splits sessions v1 would have merged. A real change requires a new
+ * processor version (v2 directory + new manifest).
+ *
+ * The runtime therefore ACCEPTS this variable and IGNORES its value: the
+ * window always comes from the manifest constant. Operators may set it to
+ * mirror the manifest for transparency, and `app.ts` logs a warn when the
+ * two disagree so a misconfiguration surfaces in the logs rather than in
+ * a session count.
+ *
+ * This used to be a promise rather than a behaviour — the comment claimed
+ * the runtime "ignores attempts to widen it" while the configured value
+ * was passed straight through in both directions. See CHANGELOG.
  */
 export const sessionizerEnvSchema = z
   .object({

@@ -8,6 +8,27 @@ schema, or the inactivity-window value requires a new version directory
 (v2/) — see `docs/architecture/05-processors-and-replay.md` "Processor
 Versioning".
 
+## v1 — inactivity window is now actually pinned to the manifest
+
+Non-semantic **bug fix**, with a caveat worth reading.
+
+`POLARIS_SESSIONIZER_INACTIVITY_SECONDS` was passed straight through to the
+runtime while the config comment claimed the runtime "ignores attempts to
+widen it". It ignored nothing: a deployment could set any value and silently
+run semantics that were not v1's — a wider window merges sessions v1 would
+have split, a narrower one splits sessions v1 would have merged. The comment
+also only mentioned widening, though narrowing is equally semantic.
+
+The window now always comes from the manifest constant. The env var is still
+accepted (so existing deployments do not fail to boot) and is ignored; when it
+differs from the manifest value, `app.ts` logs a warn naming both numbers.
+
+**Caveat:** a deployment that had set this variable to something other than
+1800 was not running v1 semantics, and its emitted sessions will change after
+this fix. That is the fix, not a regression — but it is a behaviour change for
+such a deployment, and it is why this entry exists rather than a silent patch.
+For anyone running the documented configuration, output is byte-identical.
+
 ## v1 — manifest standardisation (P8-006, 2026-05-15)
 
 Non-semantic. Adds the cross-cutting manifest fields P8-006 standardised

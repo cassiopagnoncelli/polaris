@@ -185,6 +185,13 @@ export interface SessionizerRuntime {
   readonly metrics: ProcessorMetrics;
   /** In-memory store the runtime is wired to. Mostly for tests. */
   readonly store: SessionStore;
+  /**
+   * The inactivity window this runtime is actually using. Exposed so a
+   * test can assert it equals the manifest constant regardless of what
+   * env asked for — the window is semantic, and "the code ignores the
+   * env var" is a claim worth pinning rather than commenting.
+   */
+  readonly inactivitySeconds: number;
 }
 
 /**
@@ -243,7 +250,7 @@ export function createRuntime(deps: SessionizerRuntimeDeps): SessionizerRuntime 
     await deps.consumer.disconnect();
   }
 
-  return { start, stop, handler, metrics, store: deps.store };
+  return { start, stop, handler, metrics, store: deps.store, inactivitySeconds };
 }
 
 // ---------------------------------------------------------------------------

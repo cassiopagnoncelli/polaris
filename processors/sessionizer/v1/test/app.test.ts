@@ -21,6 +21,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildSessionizerApp } from "../src/app.js";
 import type { SessionizerRuntimeConfig } from "../src/config.js";
 import { InMemorySessionStore } from "../src/store.js";
+import { DEFAULT_INACTIVITY_SECONDS } from "../src/transform.js";
 
 const TEST_CONFIG: SessionizerRuntimeConfig = {
   service: {
@@ -203,5 +204,42 @@ describe("buildSessionizerApp activation gate", () => {
     }
 
     expect(asked).toEqual([{ project_id: "checkout", environment: "production" }]);
+  });
+});
+
+describe("buildSessionizerApp inactivity window", () => {
+  it("uses the manifest window even when env asks for a different one", async () => {
+    // The window is semantic. This used to be a promise in a comment while
+    // the configured value was passed straight through in both directions,
+    // so a deployment could silently run semantics that were not v1's.
+    const runs = new InMemoryProcessorRunRepository();
+    const app = await buildSessionizerApp({
+      config: {
+        ...TEST_CONFIG,
+        sessionizer: { ...TEST_CONFIG.sessionizer, inactivitySeconds: 86_400 },
+      },
+      installShutdown: false,
+      consumer: stubConsumer(),
+      producer: stubProducer(),
+      startRuntime: false,
+      runRepository: runs,
+      store: new InMemorySessionStore(),
+    });
+    try {
+      expect(app.runtime.inactivitySeconds).toBe(DEFAULT_INACTIVITY_SECONDS);
+      expect(app.runtime.inactivitySeconds).not.toBe(86_400);
+    } finally {
+      await app.bootstrap.shutdown();
+    }
+  });
+
+  it("uses the manifest window when env mirrors it", async () => {
+    const runs = new InMemoryProcessorRunRepository();
+    const app = await build(runs);
+    try {
+      expect(app.runtime.inactivitySeconds).toBe(DEFAULT_INACTIVITY_SECONDS);
+    } finally {
+      await app.bootstrap.shutdown();
+    }
   });
 });

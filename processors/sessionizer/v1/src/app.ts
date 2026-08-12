@@ -57,7 +57,12 @@ import {
 } from "./redis-store.js";
 import { createRuntime, type SessionizerRuntime } from "./runtime.js";
 import type { SessionStore } from "./store.js";
-import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./transform.js";
+import {
+  DEFAULT_INACTIVITY_SECONDS,
+  PROCESSOR_IDENTITY,
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
+} from "./transform.js";
 
 export interface BuildAppOptions {
   readonly config: SessionizerRuntimeConfig;
@@ -223,7 +228,7 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
     ...(options.now !== undefined ? { now: options.now } : {}),
-    inactivity_seconds: config.sessionizer.inactivitySeconds,
+    inactivity_seconds: resolveInactivitySeconds(config, processorLogger),
     producer_name: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`,
     producer_version: config.service.serviceVersion,
     run_id: run.run_id,
@@ -438,6 +443,42 @@ async function createRedisClient(
     "connecting redis session store",
   );
   return new IoRedisCtor(buildRedisOptions(config.redis));
+}
+
+/**
+ * Resolve the inactivity window.
+ *
+ * Always the manifest constant — never the env value.
+ *
+ * `POLARIS_SESSIONIZER_INACTIVITY_SECONDS` is documented as something an
+ * operator may set to MIRROR the manifest for transparency, and the
+ * config comment has always claimed the runtime "ignores attempts to
+ * widen it". It did not: the configured value was passed straight
+ * through, so a deployment could silently run semantics that were not
+ * v1's in either direction — a wider window merges sessions that v1
+ * would have split, a narrower one splits sessions v1 would have merged.
+ *
+ * The window is SEMANTIC. Per `docs/architecture/05-processors-and-replay.md`
+ * "Processor Configuration", env and PostgreSQL carry runtime
+ * configuration and never semantic transformation rules; changing this
+ * value is a v2, not a deployment flag. So the env var is now accepted
+ * and ignored, and a mismatch is logged at warn — an operator who set it
+ * expecting it to take effect deserves to find out from the logs rather
+ * than from a session count.
+ */
+function resolveInactivitySeconds(config: SessionizerRuntimeConfig, logger: Logger): number {
+  const configured = config.sessionizer.inactivitySeconds;
+  if (configured !== DEFAULT_INACTIVITY_SECONDS) {
+    logger.warn(
+      {
+        component: "sessionizer.config",
+        configured_seconds: configured,
+        manifest_seconds: DEFAULT_INACTIVITY_SECONDS,
+      },
+      "POLARIS_SESSIONIZER_INACTIVITY_SECONDS differs from the manifest window and is being ignored; the inactivity window is semantic and changing it requires a new processor version",
+    );
+  }
+  return DEFAULT_INACTIVITY_SECONDS;
 }
 
 function errSummary(err: unknown): { name?: string; message?: string } {
