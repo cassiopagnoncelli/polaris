@@ -447,16 +447,20 @@ describe.skipIf(!ENABLED)("deferred checkpoints against live PostgreSQL", () => 
     await deferred.write({ group_name: group, stream: "analytics.events-0", last_offset: "7" });
     expect(await durable.read(group, "analytics.events-0")).toBeUndefined();
 
-    await deferred.commit();
+    await deferred.commit(deferred.take());
     expect(await durable.read(group, "analytics.events-0")).toBe("7");
   });
 
-  it("drops a rolled-back position so the work is re-read", async () => {
+  it("keeps a failed batch out of the durable store until a later commit carries it", async () => {
     const deferred = new DeferredCheckpointStore(durable);
     await deferred.write({ group_name: group, stream: "analytics.events-0", last_offset: "9" });
-    deferred.rollback();
-    await deferred.commit();
+    const held = deferred.take();
+    // The batch failed: its snapshot was never committed, so the durable
+    // position is unchanged and the rows will be re-read on resume.
     expect(await durable.read(group, "analytics.events-0")).toBe("7");
+    // restore() re-holds the positions for the next batch's snapshot.
+    deferred.restore(held);
+    expect(deferred.take()).toEqual(held);
   });
 
   it("reads through to the durable position, not the held one", async () => {

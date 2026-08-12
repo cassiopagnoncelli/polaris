@@ -13,6 +13,7 @@ import {
 
 const ACTORS: Record<ActorSource, ResolvedActor> = {
   declared: { source: "declared", label: "alice@polaris.dev", tokenId: "polaris_ot_alice" },
+  operator_token: { source: "operator_token", label: "ops@polaris.dev", tokenId: "polaris_ot_ops" },
   cli: { source: "cli", label: "cli" },
   migration: { source: "migration", label: "schema-migration" },
   system: { source: "system", label: "scheduled-job" },
@@ -37,19 +38,21 @@ describe("enforceProductionMutationGate", () => {
     }
   });
 
-  it("allows production + mutates + declared", () => {
-    expect(() =>
-      enforceProductionMutationGate({
-        command: { id: "destinations.disable", mutates: true },
-        environment: "production",
-        actor: ACTORS.declared,
-      }),
-    ).not.toThrow();
+  it("allows production + mutates + authenticated sources", () => {
+    for (const source of ["declared", "operator_token"] as const) {
+      expect(() =>
+        enforceProductionMutationGate({
+          command: { id: "destinations.disable", mutates: true },
+          environment: "production",
+          actor: ACTORS[source],
+        }),
+      ).not.toThrow();
+    }
   });
 
   it("allows non-production + mutates + any source", () => {
     for (const env of NON_PROD_ENVS) {
-      for (const source of ["declared", "cli", "migration", "system"] as const) {
+      for (const source of ["declared", "operator_token", "cli", "migration", "system"] as const) {
         expect(() =>
           enforceProductionMutationGate({
             command: { id: "destinations.disable", mutates: true },
@@ -62,7 +65,7 @@ describe("enforceProductionMutationGate", () => {
   });
 
   it("allows production + read-only + any source", () => {
-    for (const source of ["declared", "cli", "migration", "system"] as const) {
+    for (const source of ["declared", "operator_token", "cli", "migration", "system"] as const) {
       expect(() =>
         enforceProductionMutationGate({
           command: { id: "destinations.list", mutates: false },
