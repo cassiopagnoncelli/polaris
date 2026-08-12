@@ -55,18 +55,20 @@ announce itself, it just 401s. Rather than enforce that with code, the
 installer writes to the file Next already ranks higher. Your `.env.local` is
 for choices; the generated file is for values.
 
-The one exception is `NEXT_PUBLIC_POLARIS_API_KEY`, which direct mode needs
-and which is deliberately left to you: setting it inlines a token into the JS
-bundle, and deciding that is the point of the web-vs-backend split below.
-Uncomment one line in `.env.local` to opt in:
+The one that behaves differently is `NEXT_PUBLIC_POLARIS_API_KEY`, because it
+is the one that publishes — setting it inlines a token into the JS bundle,
+which is the web-vs-backend split below made concrete. `.env.example` ships it
+as a reference:
 
 ```
 NEXT_PUBLIC_POLARIS_API_KEY=$POLARIS_WEB_API_KEY
 ```
 
-Note the `$`. That references the issued token instead of copying it, so it
-cannot go stale either — the decision to publish is yours and persists, the
-value stays the installer's. Leave it commented to run relay-only.
+Note the `$`. It references the issued token instead of copying it, so the
+example file holds no secret and the value cannot go stale. It ships active
+because the default transport is `direct` and direct needs a browser key —
+open devtools and the token is right there, which is the thing worth seeing.
+Comment it out to run relay-only.
 
 To reissue by hand — each command prints its token exactly once, and only an
 argon2id hash is stored, so a lost token is reissued and never recovered:

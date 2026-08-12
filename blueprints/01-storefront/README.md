@@ -39,16 +39,18 @@ of your `.env.local`, so the freshly issued token always wins over anything
 you could paste. One per mode, so `pnpm dev` and `pnpm build && pnpm start`
 are both wired.
 
-One line to uncomment, if you want to watch direct mode:
+Including the one that publishes:
 
 ```
 NEXT_PUBLIC_POLARIS_API_KEY=$POLARIS_WEB_API_KEY
 ```
 
-That one is yours to set because it puts a key in the JS bundle, and deciding
-that is half of what this blueprint is for. The `$` references the issued
-token rather than copying it, so it does not go stale. Leave it commented and
-the app runs relay-only.
+`.env.example` ships that line active, because the default transport is
+`direct` and a browser on direct needs a key of its own. Open devtools and you
+will find the token in the bundle — that is the point, and it is what
+`/transport` argues about. Comment the line out to run relay-only. The `$`
+references the issued token rather than copying it, so nothing here goes stale
+and this file holds no secret.
 
 To reissue by hand:
 

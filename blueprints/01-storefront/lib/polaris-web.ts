@@ -107,8 +107,8 @@ async function create(mode: TransportMode): Promise<PolarisWebSdk | null> {
     // trace: say so where the blueprint already reports things.
     record(
       "web",
-      "direct mode needs NEXT_PUBLIC_POLARIS_API_KEY — uncomment it in .env.local " +
-        "(it references the issued token), or stay on relay",
+      "direct mode needs NEXT_PUBLIC_POLARIS_API_KEY — .env.example ships it as " +
+        "`$POLARIS_WEB_API_KEY`; restore that line in .env.local, or stay on relay",
     );
     return null;
   }
