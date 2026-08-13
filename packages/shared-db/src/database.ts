@@ -112,6 +112,76 @@ export interface ProjectsTable {
 }
 
 /**
+ * `project_config` table.
+ *
+ * Per-`(project_id, environment)` configuration values, one row per key,
+ * namespaced by the component that reads them. Row-per-key rather than a blob
+ * so two operators editing different keys never race, and so audit and
+ * validation are per key.
+ *
+ * **PostgreSQL DOES NOT store semantics here.** This table holds VALUES for
+ * keys a component declares in its own code (a Zod schema in `src/config.ts`,
+ * exported as a generated artifact). It has no column resembling `mapping`,
+ * `routing`, `transform`, or `field_map`, and must never gain one.
+ *
+ * Schema reference:
+ *   db/migrations/20260813000001_create_project_config.sql
+ */
+export interface ProjectConfigTable {
+  /** Owning project. References `projects(project_id)`, cascades on delete. */
+  project_id: string;
+  /** Row environment. Closed set: development | staging | production. */
+  environment: Environment;
+  /** Reading component, e.g. `meta-capi`, `sessionizer`, `ingest`. */
+  namespace: string;
+  /** Key within the namespace. Snake case, matched by CHECK. */
+  config_key: string;
+  /**
+   * The stored value. `jsonb` so a key's type is whatever its component's
+   * schema declares — string, number, boolean, enum member, or array —
+   * without a migration per shape.
+   *
+   * When `is_secret_ref` is true this is a `provider:ref` STRING and never a
+   * plaintext credential; the `project_config_secret_ref_shape` CHECK
+   * enforces that even against a direct SQL write.
+   */
+  value: ColumnType<unknown, unknown, unknown>;
+  /** Whether `value` is a secret reference to resolve rather than a literal. */
+  is_secret_ref: ColumnType<boolean, boolean | undefined, boolean>;
+  /** Last mutation time, in UTC. */
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  /** Audit actor label: an operator identity, or `migration` / `system`. */
+  updated_by: string;
+}
+
+/**
+ * `project_config_versions` table.
+ *
+ * One monotonic counter per `(project_id, environment)`, bumped in the same
+ * transaction as every `project_config` write. It exists so a cache can
+ * revalidate by reading one `bigint` per scope instead of re-reading every
+ * value row — the sweep in the project-config store checks all its cached
+ * scopes with a single query against this table.
+ *
+ * A missing row means "never written": treat it as version 0 and an empty
+ * configuration, not as an error.
+ *
+ * Schema reference:
+ *   db/migrations/20260813000001_create_project_config.sql
+ */
+export interface ProjectConfigVersionsTable {
+  project_id: string;
+  environment: Environment;
+  /**
+   * Monotonic version. `bigint` in PostgreSQL; `pg` returns it as a string to
+   * avoid precision loss, and writes accept either — same convention as
+   * `transport_checkpoints.last_offset`.
+   */
+  version: ColumnType<string, bigint | string | number | undefined, bigint | string | number>;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
+/**
  * `sources` table.
  *
  * Materialized from `catalog/sources/<project_id>/<source_id>.yaml`. The
@@ -254,6 +324,24 @@ export interface DestinationsTable {
    * gate; this column is informational.
    */
   replay_opt_in_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /**
+   * Consumer-interpreted configuration for THIS instance — the values that
+   * distinguish it from a sibling instance of the same vendor in the same
+   * `(project_id, environment)`, such as a pixel or measurement id.
+   *
+   * The boundary against the typed columns above: those are knobs the shared
+   * destination runtime reads (status, mode, max_rps, retry_policy); `config`
+   * is read only by the consumer's own code. Values shared across the whole
+   * project live in `project_config`; credentials live in `secret_ref`.
+   *
+   * Parameters only. No mappings, routing, transforms, or field maps — see
+   * the hard rule in the migration header.
+   */
+  config: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
   /** Issuance time, in UTC. */
   created_at: Generated<Date>;
   /** Last mutation time, in UTC. Stamped on every UPDATE. */
@@ -682,6 +770,8 @@ export interface Database {
   identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;
   processor_runs: ProcessorRunsTable;
+  project_config: ProjectConfigTable;
+  project_config_versions: ProjectConfigVersionsTable;
   projects: ProjectsTable;
   sources: SourcesTable;
   topic_isolations: TopicIsolationsTable;

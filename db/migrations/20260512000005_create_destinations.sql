@@ -43,10 +43,15 @@
 --     `retry_policy`, `dead_letter_threshold`) are non-semantic; they tune
 --     delivery and never alter event meaning.
 --
--- Hard rule baked into the schema:
---   - NO `field_map`, `mapping`, `event_map`, `target_field`, or similar
---     column. The CLI cannot store mapping semantics because the schema has
---     no place to put them.
+-- Hard rule baked into the schema (narrowed 2026-08-13; see
+-- docs/implementation/project-config-plan.md §2):
+--   - PostgreSQL stores VALUES for configuration keys declared in component
+--     code; it never stores mappings, routing, transforms, or field maps.
+--     NO `field_map`, `mapping`, `event_map`, `target_field`, or similar
+--     column, ever. The `config` column (added by
+--     20260813000002_add_destinations_config.sql) carries consumer-
+--     interpreted per-instance values such as pixel_id — parameters, not
+--     semantics. The mapping prohibition is unchanged and absolute.
 
 CREATE TABLE destinations (
   destination_id          text        PRIMARY KEY,

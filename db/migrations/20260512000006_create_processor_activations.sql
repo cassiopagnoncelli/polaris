@@ -50,12 +50,14 @@
 --   - `project_id` FK to projects(project_id) enforces materialized order;
 --     attempting to enable a processor for an undeclared project fails fast.
 --
--- Hard rule baked into the schema:
---   - NO `transform`, `rule`, `mapping`, `input_topic`, `output_topic`,
---     `config_blob`, `routing`, `enrichment`, or similar columns. The CLI
---     cannot store transformation semantics because the schema has nowhere
---     to put them. The manifest YAML next to the code is the only source of
---     truth for inputs/outputs/mode/transform.
+-- Hard rule baked into the schema (wording narrowed 2026-08-13; see
+-- docs/implementation/project-config-plan.md §2):
+--   - PostgreSQL stores VALUES for configuration keys declared in component
+--     code (the `project_config` table); it never stores transformation
+--     semantics. NO `transform`, `rule`, `mapping`, `input_topic`,
+--     `output_topic`, `config_blob`, `routing`, `enrichment`, or similar
+--     columns on THIS table. The manifest YAML next to the code remains the
+--     only source of truth for inputs/outputs/mode/transform.
 
 CREATE TABLE processor_activations (
   processor_name      text        NOT NULL,

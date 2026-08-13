@@ -162,6 +162,20 @@ export interface DeliveryRecordsTable {
   dedupe_key: ColumnType<string | null, string | null | undefined, string | null>;
   started_at: ColumnType<Date, Date | string | undefined, Date | string>;
   finished_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  /**
+   * `project_config_versions.version` in force when this delivery was
+   * produced. Config resolves once per batch, so every row of a batch carries
+   * the same value and "what configuration produced this delivery" stays
+   * answerable later.
+   *
+   * Nullable: consumers that have not migrated to the project-config store
+   * write NULL. `bigint` reads back as a string, per the repo convention.
+   */
+  config_version: ColumnType<
+    string | null,
+    bigint | string | number | null | undefined,
+    bigint | string | number | null
+  >;
 }
 
 declare module "@polaris/shared-db" {

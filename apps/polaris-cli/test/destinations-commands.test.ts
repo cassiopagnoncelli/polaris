@@ -1544,6 +1544,27 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
     }
   });
 
+  it("treats `config` as a legal column while keeping every mapping token forbidden", () => {
+    // `config` (20260813000002) carries consumer-interpreted per-instance
+    // values such as pixel_id. It is a legal column name and must NOT join
+    // the forbidden list.
+    expect(FORBIDDEN_MAPPING_FLAG_TOKENS).not.toContain("config");
+
+    // But note what changed underneath this guarantee. Before `config`
+    // existed, "the CLI cannot store mapping semantics" was enforced purely
+    // structurally: the schema had nowhere to put them. `config` is a jsonb
+    // bag, so a caller could smuggle `{"field_map": {...}}` INSIDE it without
+    // adding a column. Column absence alone no longer carries the invariant.
+    //
+    // The compensating control is that every forbidden token stays forbidden
+    // as a KEY, which the write path must enforce against config's keys — not
+    // only against CLI flag names. Until the config write path lands, nothing
+    // can write this column, so the guarantee holds by inaccessibility.
+    for (const token of FORBIDDEN_MAPPING_FLAG_TOKENS) {
+      expect(token).not.toBe("config");
+    }
+  });
+
   it("rejects mapping tokens on UpdateDestinationOpsInput", () => {
     // Same probe for the update path. Adding a column resembling mapping
     // semantics to the ops-update repository surface fails this gate.
