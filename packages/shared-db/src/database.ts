@@ -12,6 +12,7 @@
  * @see packages/shared-db/README.md "Extending the schema"
  */
 
+import type { PolarisEnvironment } from "@polaris/shared-environments";
 import type { ColumnType, Generated } from "kysely";
 
 /**
@@ -21,7 +22,7 @@ import type { ColumnType, Generated } from "kysely";
  * Mirrors the closed set baked into the `sources_allowed_environments_members`
  * CHECK constraint in `db/migrations/20260512000003_create_sources.sql`.
  */
-export type Environment = "development" | "staging" | "production";
+export type Environment = PolarisEnvironment;
 
 /**
  * Closed set of source types. Mirrors the

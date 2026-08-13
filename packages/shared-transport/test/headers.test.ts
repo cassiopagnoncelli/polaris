@@ -44,7 +44,7 @@ describe("buildEventHeaders", () => {
       event_name: "x.y",
       schema_version: 1,
       project_id: "p",
-      environment: "test",
+      environment: "development",
       occurred_at: "2026-05-12T10:00:00.000Z",
       producer: "ingester-api",
       topic_family: "raw.events",

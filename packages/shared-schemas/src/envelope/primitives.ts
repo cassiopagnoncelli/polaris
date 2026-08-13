@@ -1,3 +1,4 @@
+import { polarisEnvironmentSchema } from "@polaris/shared-environments";
 import { z } from "zod";
 
 /**
@@ -39,7 +40,7 @@ export const isoUtcTimestampSchema = z
   .datetime({ offset: false, message: "must be an ISO 8601 UTC timestamp" });
 
 /** Environment is stamped by the ingester from the API key; producers do not supply it. */
-export const environmentSchema = z.enum(["production", "staging", "development", "test"]);
+export const environmentSchema = polarisEnvironmentSchema;
 
 /** schema_version is a per-event positive integer. */
 export const schemaVersionSchema = z

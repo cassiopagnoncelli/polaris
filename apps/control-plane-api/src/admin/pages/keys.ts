@@ -14,6 +14,7 @@
  * keeps the UI's threat model free of plaintext secrets entirely.
  */
 
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ApiKeyRow } from "../queries.js";
@@ -27,7 +28,7 @@ export interface KeyFilterValues {
   readonly includeRevoked: boolean;
 }
 
-const ENVIRONMENTS = ["development", "staging", "production"] as const;
+const ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 
 export function renderKeysPage(input: {
   ctx: AdminPageContext;

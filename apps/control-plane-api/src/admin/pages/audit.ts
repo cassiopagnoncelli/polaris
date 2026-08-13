@@ -12,6 +12,7 @@
  * `<pre>` as escaped text, never as markup.
  */
 
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { formatJson, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page } from "../layout.js";
 import type { AuditRow } from "../queries.js";
@@ -28,7 +29,7 @@ export interface AuditFilterValues {
   readonly environment: string;
 }
 
-const ENVIRONMENTS = ["development", "staging", "production"] as const;
+const ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 
 export function renderAuditPage(input: {
   ctx: AdminPageContext;

@@ -17,6 +17,8 @@
  * `mutates: true` so the production-mutation gate from P6-007 picks it up
  * automatically.
  */
+
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -34,7 +36,7 @@ import { generateKeyMaterial, type IssuedKeyMaterial } from "./token.js";
 const SUPPORTED_SOURCE_TYPES = ["web", "backend", "mobile", "webhook", "job"] as const;
 type SupportedSourceType = (typeof SUPPORTED_SOURCE_TYPES)[number];
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 /**

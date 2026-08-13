@@ -28,6 +28,8 @@
  * @see docs/operations/topic-isolation-cutover.md
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
+
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
@@ -49,7 +51,7 @@ import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import type { TopicIsolationAuditSnapshot } from "./isolate.js";
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 const PROJECT_ID_FORMAT = /^[a-z0-9][a-z0-9_-]{0,126}[a-z0-9]$/;

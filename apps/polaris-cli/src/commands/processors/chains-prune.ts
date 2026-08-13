@@ -20,6 +20,7 @@
  */
 
 import { type ActorSource, enforceProductionMutationGate } from "@polaris/shared-control-plane";
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -28,7 +29,7 @@ import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import { rejectProcessorRuleArguments } from "./validation.js";
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 
 export interface ChainsPruneArgs {
   readonly version?: string;

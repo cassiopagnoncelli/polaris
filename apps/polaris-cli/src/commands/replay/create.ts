@@ -29,6 +29,8 @@
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-001-replay-job-model-cli.md
  */
+
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
@@ -51,7 +53,7 @@ import {
   rejectReplayPlanArguments,
 } from "./validation.js";
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 interface ReplayCreateArgs {

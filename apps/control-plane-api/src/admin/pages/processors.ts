@@ -24,6 +24,7 @@
  * triage, not a metrics surface.
  */
 
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ProcessorActivationRow, ProcessorRunRow } from "../queries.js";
@@ -63,7 +64,7 @@ type EffectiveState = "enabled" | "disabled" | "default_enabled";
  * keys / audit / destinations pages already declare; exported here
  * because the route needs the same list to build the matrix.
  */
-export const ACTIVATION_ENVIRONMENTS = ["development", "staging", "production"] as const;
+export const ACTIVATION_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 
 /**
  * Most combinations this page will render at once.

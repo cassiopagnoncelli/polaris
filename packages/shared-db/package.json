@@ -31,6 +31,7 @@
     "db:create": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../db/migrations new"
   },
   "dependencies": {
+    "@polaris/shared-environments": "workspace:*",
     "kysely": "^0.29.0",
     "pg": "^8.20.0"
   },

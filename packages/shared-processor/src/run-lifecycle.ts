@@ -47,6 +47,7 @@
  */
 
 import type { Database } from "@polaris/shared-db";
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { Logger } from "@polaris/shared-logger";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
@@ -76,7 +77,7 @@ const ERROR_SUMMARY_MAX_LENGTH = 500;
  * Passing that straight through fails the constraint, and because registration
  * is deliberately non-fatal the only symptom is a missing row.
  */
-const CONTROL_PLANE_ENVIRONMENTS: readonly string[] = ["development", "staging", "production"];
+const CONTROL_PLANE_ENVIRONMENTS: readonly string[] = POLARIS_ENVIRONMENTS;
 
 /**
  * Deployment labels that legitimately have no control-plane environment. The

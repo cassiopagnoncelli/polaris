@@ -59,6 +59,9 @@ importers:
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../../packages/shared-db
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../../packages/shared-environments
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
@@ -146,6 +149,9 @@ importers:
       '@polaris/shared-destinations':
         specifier: workspace:*
         version: link:../../packages/shared-destinations
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../../packages/shared-environments
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
@@ -419,6 +425,9 @@ importers:
 
   packages/shared-config:
     dependencies:
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       dotenv:
         specifier: 17.4.2
         version: 17.4.2
@@ -441,6 +450,9 @@ importers:
 
   packages/shared-control-plane:
     dependencies:
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       '@polaris/shared-secrets':
         specifier: workspace:*
         version: link:../shared-secrets
@@ -453,6 +465,9 @@ importers:
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../shared-db
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -462,6 +477,9 @@ importers:
 
   packages/shared-db:
     dependencies:
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -512,6 +530,12 @@ importers:
         specifier: ^14.0.0
         version: 14.0.0
 
+  packages/shared-environments:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/shared-logger:
     dependencies:
       pino:
@@ -534,6 +558,9 @@ importers:
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../shared-db
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../shared-logger
@@ -556,10 +583,17 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/shared-replay: {}
+  packages/shared-replay:
+    dependencies:
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
 
   packages/shared-schemas:
     dependencies:
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
       yaml:
         specifier: ^2.6.1
         version: 2.9.0

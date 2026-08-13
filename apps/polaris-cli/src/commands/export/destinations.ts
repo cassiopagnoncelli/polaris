@@ -18,6 +18,8 @@
  *
  * `mutates: false`.
  */
+
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, type DestinationRow, listDestinationsByProjectEnv } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
@@ -37,7 +39,7 @@ export interface ExportDestinationsHooks {
   readonly openStore?: () => ExportDestinationsStore;
 }
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 export const exportDestinationsCommand: CommandDefinition = {

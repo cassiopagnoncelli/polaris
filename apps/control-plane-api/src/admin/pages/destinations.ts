@@ -7,6 +7,7 @@
  * operator confirms a destination is wired to the right vault entry.
  */
 
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { type Html, html } from "../html.js";
 import {
   type AdminPageContext,
@@ -30,7 +31,7 @@ export interface DestinationFilterValues {
   readonly status: string;
 }
 
-const ENVIRONMENTS = ["development", "staging", "production"] as const;
+const ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 const STATUSES = ["active", "paused", "disabled"] as const;
 
 export function renderDestinationsPage(input: {

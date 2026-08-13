@@ -1,8 +1,8 @@
 {
-  "name": "@polaris/shared-control-plane-db",
+  "name": "@polaris/shared-environments",
   "version": "0.0.0",
   "private": true,
-  "description": "Control-plane data access shared by the polaris CLI and the control-plane API. Owns the audited mutation units of work: the bare writers and insertAuditRecord are internal, so no caller can mutate control-plane state without its audit row.",
+  "description": "Polaris environment vocabularies: the closed set of row/data environments and the wider deployment set that POLARIS_ENV ranges over. The single definition every other package re-exports.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,10 +10,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./progress": {
-      "types": "./dist/progress.d.ts",
-      "import": "./dist/progress.js"
     }
   },
   "files": [
@@ -33,10 +29,6 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-control-plane": "workspace:*",
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-environments": "workspace:*",
-    "kysely": "^0.29.0",
-    "uuid": "^14.0.0"
+    "zod": "4.4.3"
   }
 }

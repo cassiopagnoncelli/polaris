@@ -17,6 +17,7 @@
 import type { ResolvedActor } from "@polaris/shared-control-plane";
 import type { AuditRecordsTable } from "@polaris/shared-control-plane-db";
 import type { Database } from "@polaris/shared-db";
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -46,7 +47,7 @@ export const AUDIT_ACTOR_SOURCES = [
 ] as const;
 export type AuditActorSource = (typeof AUDIT_ACTOR_SOURCES)[number];
 
-export const AUDIT_ENVIRONMENTS = ["development", "staging", "production"] as const;
+export const AUDIT_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 export type AuditEnvironment = (typeof AUDIT_ENVIRONMENTS)[number];
 
 /**

@@ -31,6 +31,7 @@
  * @see apps/polaris-cli/src/audit/recorder.ts
  */
 import type { Database } from "@polaris/shared-db";
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
 import type { ColumnType, Kysely } from "kysely";
 
 /**
@@ -68,8 +69,8 @@ export type AuditActorSource = (typeof AUDIT_ACTOR_SOURCES)[number];
  * Closed set of environment values, mirroring the existing pattern in
  * other migrations and the `audit_records_environment_allowed` CHECK.
  */
-export const AUDIT_ENVIRONMENTS = ["development", "staging", "production"] as const;
-export type AuditEnvironment = (typeof AUDIT_ENVIRONMENTS)[number];
+export const AUDIT_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
+export type AuditEnvironment = PolarisEnvironment;
 
 /**
  * Typed mirror of the `audit_records` table.

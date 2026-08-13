@@ -12,15 +12,20 @@
  *   - db/migrations/20260512000002_create_projects.sql
  *   - db/migrations/20260512000003_create_sources.sql
  */
+import {
+  POLARIS_ENVIRONMENTS,
+  type PolarisEnvironment,
+  polarisEnvironmentSchema,
+} from "@polaris/shared-environments";
 import { z } from "zod";
 
 /**
  * Fixed environment set. Future ephemeral environments live behind explicit
  * task scopes and do not enter v1.
  */
-export const ENVIRONMENTS = ["development", "staging", "production"] as const;
-export const environmentSchema = z.enum(ENVIRONMENTS);
-export type Environment = z.infer<typeof environmentSchema>;
+export const ENVIRONMENTS = POLARIS_ENVIRONMENTS;
+export const environmentSchema = polarisEnvironmentSchema;
+export type Environment = PolarisEnvironment;
 
 /**
  * Closed set of source types. Must match the `sources_source_type_allowed`

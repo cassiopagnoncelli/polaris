@@ -29,6 +29,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
+    "@polaris/shared-environments": "workspace:*",
     "@polaris/shared-secrets": "workspace:*"
   }
 }

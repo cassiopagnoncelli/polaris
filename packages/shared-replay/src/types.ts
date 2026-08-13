@@ -29,6 +29,8 @@
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
 
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
+
 /**
  * Subsystems that a replay job can target. Mirrors the closed set the CLI
  * accepts for `--target` (see `apps/polaris-cli/src/db/replay-jobs.ts` —
@@ -51,8 +53,8 @@ export type ReplayPlanMode = (typeof REPLAY_PLAN_MODES)[number];
  * Environments the planner recognises. Only `production` triggers the
  * stricter scope checks (cannot be unscoped — `project_id` is required).
  */
-export const REPLAY_PLAN_ENVIRONMENTS = ["development", "staging", "production"] as const;
-export type ReplayPlanEnvironment = (typeof REPLAY_PLAN_ENVIRONMENTS)[number];
+export const REPLAY_PLAN_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
+export type ReplayPlanEnvironment = PolarisEnvironment;
 
 /**
  * Closed-set risk flags emitted by the planner. Each flag carries a

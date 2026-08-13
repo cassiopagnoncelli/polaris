@@ -14,12 +14,14 @@
  *
  * `mutates: false`. The P6-007 gate is a no-op for read-only commands.
  */
+
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, listActiveIsolations, type TopicIsolationRow } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 
 export interface TopicsListStore {
   list(filter: TopicsListFilter): Promise<TopicIsolationRow[]>;

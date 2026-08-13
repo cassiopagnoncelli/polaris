@@ -13,6 +13,7 @@
  * `mutates: false`.
  */
 
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import type { SourceRow } from "../../catalog/sync.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchSourcesByProject } from "../../db/index.js";
@@ -33,7 +34,7 @@ export interface ExportSourcesHooks {
   readonly openStore?: () => ExportSourcesStore;
 }
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 export const exportSourcesCommand: CommandDefinition = {

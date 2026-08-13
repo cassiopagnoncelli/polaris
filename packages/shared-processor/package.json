@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-environments": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-schemas": "workspace:*",

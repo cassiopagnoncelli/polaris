@@ -1,3 +1,7 @@
+import {
+  type DeploymentEnvironment,
+  deploymentEnvironmentSchema,
+} from "@polaris/shared-environments";
 import { z } from "zod";
 
 /**
@@ -7,10 +11,12 @@ import { z } from "zod";
  *
  * The `local` variant is included so developer machines and CI runs have a
  * truthful value to emit; it must never appear on a real deployed instance.
+ * This is the DEPLOYMENT set (the domain of `POLARIS_ENV`), which is why it
+ * is wider than the row environments every `environment` column accepts.
  */
-export const environmentSchema = z.enum(["local", "development", "staging", "production"]);
+export const environmentSchema = deploymentEnvironmentSchema;
 
-export type Environment = z.infer<typeof environmentSchema>;
+export type Environment = DeploymentEnvironment;
 
 /**
  * Pino-compatible log levels.

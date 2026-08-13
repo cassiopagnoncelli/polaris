@@ -28,6 +28,7 @@
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"
  * @see docs/architecture/11-production-readiness.md "Control-Plane Permissions"
  */
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
 import type { ActorSource, ResolvedActor } from "./actor.js";
 import type { OperatorGateMetricsSink } from "./metrics.js";
 
@@ -47,8 +48,8 @@ export type ProductionGateDeniedReason = typeof PRODUCTION_GATE_DENIED_REASON;
  * "non-production" for safety; the dispatcher's argument parser is the
  * authoritative type-check on the env flag, this is a defensive check.
  */
-export const GATE_ENVIRONMENTS = ["development", "staging", "production"] as const;
-export type GateEnvironment = (typeof GATE_ENVIRONMENTS)[number];
+export const GATE_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
+export type GateEnvironment = PolarisEnvironment;
 
 /** Minimum command shape the gate consults. */
 export interface GateCommand {

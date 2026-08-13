@@ -26,6 +26,7 @@
  * automatically.
  */
 import type { DestinationMode, DestinationRetryPolicy } from "@polaris/shared-db";
+import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {
@@ -41,7 +42,7 @@ import type { DestinationAuditSnapshot } from "./enable.js";
 import { generateDestinationId } from "./id.js";
 import { rejectMappingArguments, validateSecretRef } from "./validation.js";
 
-const SUPPORTED_ENVIRONMENTS = ["development", "staging", "production"] as const;
+const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
 
 const SUPPORTED_MODES: readonly DestinationMode[] = ["live", "sandbox", "test"] as const;
