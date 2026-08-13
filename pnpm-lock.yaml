@@ -11,6 +11,12 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.15
         version: 2.4.15
+      '@polaris/shared-control-plane-db':
+        specifier: workspace:*
+        version: link:packages/shared-control-plane-db
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:packages/shared-db
       '@polaris/shared-secrets':
         specifier: workspace:*
         version: link:packages/shared-secrets
@@ -32,6 +38,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
       vitest:
         specifier: 4.1.6
         version: 4.1.6(@types/node@22.19.19)(@vitest/coverage-v8@4.1.6)(happy-dom@15.11.7)(vite@8.0.12(@types/node@22.19.19)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.9.0))

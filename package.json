@@ -57,6 +57,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
+    "@polaris/shared-control-plane-db": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "@types/node": "22.19.19",
@@ -64,6 +66,7 @@
     "amqplib": "^2.0.1",
     "tsx": "^4.20.3",
     "typescript": "6.0.3",
+    "uuid": "^14.0.0",
     "vitest": "4.1.6",
     "yaml": "2.9.0",
     "zod": "4.4.3"
