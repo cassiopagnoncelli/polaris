@@ -98,6 +98,9 @@ importers:
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../../packages/shared-db
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../../packages/shared-environments
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
@@ -107,6 +110,9 @@ importers:
       '@polaris/shared-policy':
         specifier: workspace:*
         version: link:../../packages/shared-policy
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../packages/shared-project-config
       '@polaris/shared-schemas':
         specifier: workspace:*
         version: link:../../packages/shared-schemas

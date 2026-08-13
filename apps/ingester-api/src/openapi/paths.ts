@@ -169,7 +169,7 @@ const PROBLEM_RESPONSES = {
   },
   "429": {
     description:
-      "The per-API-key rate limit has been exceeded for the current window. The response carries a `Retry-After` header in seconds; SDKs MUST back off for at least that long before the next attempt. Refusals increment `polaris_ingest_rate_limit_rejected_total`. Polaris fails OPEN if the limiter subsystem (Redis) is unavailable — see `polaris_ingest_rate_limit_skipped_total`. Operators tune the per-key budget via `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` and per-project overrides via `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES`.",
+      "The per-API-key rate limit has been exceeded for the current window. The response carries a `Retry-After` header in seconds; SDKs MUST back off for at least that long before the next attempt. Refusals increment `polaris_ingest_rate_limit_rejected_total`. Polaris fails OPEN if the limiter subsystem (Redis) is unavailable — see `polaris_ingest_rate_limit_skipped_total`. Operators tune the per-key budget via `POLARIS_RATE_LIMIT_PER_API_KEY_RPS`, and set a per-project budget with `polaris config set --namespace ingest --key rate_limit_rps`.",
     headers: {
       "Retry-After": {
         description:

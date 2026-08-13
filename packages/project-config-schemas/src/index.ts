@@ -23,4 +23,27 @@ export interface ProjectConfigSchemaEntry {
  * secret-typed keys carry `secret: true` and are listed in `secretKeys`.
  * Empty until the first per-service cutover (sessionizer) lands.
  */
-export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = {};
+export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = {
+  ingest: {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        dedupe_window_sec: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+        rate_limit_rps: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
+};

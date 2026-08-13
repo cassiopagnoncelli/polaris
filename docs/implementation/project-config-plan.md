@@ -718,13 +718,39 @@ That mechanism also closes six pre-existing holes:
 directly, and all five consumers pass raw `process.env` into
 `EnvSecretProvider`, bypassing the frozen snapshot its own doc comment asks for.
 
-Of 103 `POLARIS_*` variables:
+**Corrected 2026-08-13 against the actual codebase.** An earlier revision of
+this table estimated "~30 vars move, e.g. sessionizer inactivity, attribution
+windows". Both examples were wrong, and the error was about to send a cutover
+at a service with nothing to migrate:
 
-| Tier | Count (approx) | Examples |
+- `POLARIS_SESSIONIZER_INACTIVITY_SECONDS` is **semantic**, not tunable. The
+  runtime accepts the variable and ignores it, pinning the window to the
+  manifest constant, because changing it alters which events v1 emits for the
+  same input — that is a v2, not a deployment flag
+  (`processors/sessionizer/v1/src/app.ts:511`). Moving it into
+  `project_config` would let an operator change session semantics from a web
+  form, which is precisely what §2's narrowed rule forbids.
+- `attribution-engine` has no window variable at all.
+
+**No processor has per-project configuration.** Every processor-specific
+variable is a consumer group, a Redis key prefix, or the GeoIP database path —
+all deployment-level. The processors are therefore not cutover candidates;
+their C11 work is limited to the bootstrap split and the lint allowlist.
+
+Verified per-service inventory:
+
+| Service | Moves to project config | Notes |
 |---|---|---|
-| Bootstrap — stays in env | ~65 | postgres, rabbitmq, redis, clickhouse, http, service identity, log, vault |
-| Moves to project config | ~30 | dedupe windows, rate limits, sessionizer inactivity, attribution windows, vendor hosts/timeouts |
-| Deleted outright | 2 | `POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS`, `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES` |
+| `ingester-api` | `INGEST_PROJECT_DEDUPE_WINDOWS`, `RATE_LIMIT_PROJECT_OVERRIDES` (deleted, superseded) + `INGEST_DEDUPE_DEFAULT_WINDOW_SEC`, `RATE_LIMIT_PER_API_KEY_RPS`, `INGEST_MAX_BATCH_EVENTS` become per-project with the same values as defaults | The two override strings are the design's motivating case |
+| 5 destination consumers | `*_ALLOW_REPLAY`, `*_API_HOST` / `*_GRAPH_HOST`, `*_REQUEST_TIMEOUT_MS` (3 × 5 = 15) | Plus GA4's `measurement_id` / `firebase_app_id`, extracted out of the resolved secret into `destinations.config` (§3.3) |
+| 6 processors | none | consumer groups, key prefixes, and the GeoIP path stay in env |
+| Everything else | none | |
+
+So roughly **20** variables move, of 103 — the rest are bootstrap
+(postgres, rabbitmq, redis, clickhouse, http, service identity, log, vault) or
+per-deployment tuning that has no project dimension. The smaller number does
+not weaken the case: the two comma-separated override strings it deletes are
+the mechanism this whole plan exists to replace.
 
 ## 8. Destination fan-out gains a project filter
 

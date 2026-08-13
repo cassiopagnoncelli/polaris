@@ -11,7 +11,9 @@ import {
   type RedisConfig,
   rabbitmqEnvSchema,
   redisEnvSchema,
+  type SecretProviderConfig,
   type ServiceConfig,
+  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -67,16 +69,16 @@ export const authCacheEnvKeys = [
  *     idempotency layer — downstream consumers must remain idempotent on
  *     their own (processor consumers key on `event_id + processor_version`,
  *     ClickHouse stores enough identifiers for `argMax` dedupe, etc.).
- *   - A project may opt in to a longer window (up to 24 hours) when its
- *     producers cannot deduplicate at the source. The opt-in is documented
- *     in the same config slot via `POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS`
- *     (comma-separated `project_id=seconds` pairs).
+ *   - A project may opt in to a longer window (up to the cap below) when its
+ *     producers cannot deduplicate at the source. That opt-in now lives in
+ *     `project_config[ingest].dedupe_window_sec`, not in this file — see
+ *     `src/project-config.ts`. The cap stays here on purpose: a project must
+ *     not be able to raise its own ceiling.
  *
  * Env vars:
  *
  *   POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC   (900)   default 15 min
  *   POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC       (86400) hard cap 24 h
- *   POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS      ""      e.g. "checkout=3600,marketing=86400"
  *   POLARIS_INGEST_REDIS_KEY_PREFIX            "polaris:ingest:dedupe"
  *   POLARIS_INGEST_REDIS_OP_TIMEOUT_MS         (50)    short SETNX deadline
  *   POLARIS_INGEST_MAX_BATCH_EVENTS            (1000)
@@ -85,7 +87,6 @@ export const ingestEnvSchema = z
   .object({
     POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC: positiveIntSchema.default(900),
     POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC: positiveIntSchema.default(86_400),
-    POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS: z.string().default(""),
     POLARIS_INGEST_REDIS_KEY_PREFIX: z.string().min(1).default("polaris:ingest:dedupe"),
     POLARIS_INGEST_REDIS_OP_TIMEOUT_MS: durationMsSchema.default(50),
     POLARIS_INGEST_MAX_BATCH_EVENTS: positiveIntSchema.default(1000),
@@ -102,16 +103,10 @@ export const ingestEnvSchema = z
       });
     }
   })
-  .transform((parsed, ctx): IngestConfig => {
-    const overrides = parseProjectWindowOverrides(
-      parsed["POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS"],
-      parsed["POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC"],
-      ctx,
-    );
+  .transform((parsed): IngestConfig => {
     return {
       defaultDedupeWindowSec: parsed["POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC"],
       maxDedupeWindowSec: parsed["POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC"],
-      projectDedupeWindows: overrides,
       redisKeyPrefix: parsed["POLARIS_INGEST_REDIS_KEY_PREFIX"],
       redisOpTimeoutMs: parsed["POLARIS_INGEST_REDIS_OP_TIMEOUT_MS"],
       maxBatchEvents: parsed["POLARIS_INGEST_MAX_BATCH_EVENTS"],
@@ -121,12 +116,6 @@ export const ingestEnvSchema = z
 export interface IngestConfig {
   readonly defaultDedupeWindowSec: number;
   readonly maxDedupeWindowSec: number;
-  /**
-   * Per-project dedupe-window overrides in seconds. Capped at
-   * `maxDedupeWindowSec`. Empty by default — projects opt in to a
-   * non-default window only after operational review.
-   */
-  readonly projectDedupeWindows: Readonly<Record<string, number>>;
   readonly redisKeyPrefix: string;
   /**
    * Short deadline applied to the dedupe SETNX call. Redis being slow must
@@ -140,7 +129,6 @@ export interface IngestConfig {
 export const ingestEnvKeys = [
   "POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC",
   "POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC",
-  "POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS",
   "POLARIS_INGEST_REDIS_KEY_PREFIX",
   "POLARIS_INGEST_REDIS_OP_TIMEOUT_MS",
   "POLARIS_INGEST_MAX_BATCH_EVENTS",
@@ -161,7 +149,6 @@ export const ingestEnvKeys = [
  *
  *   POLARIS_RATE_LIMIT_PER_API_KEY_RPS         (1000)   per-key request budget
  *   POLARIS_RATE_LIMIT_WINDOW_SECONDS          (1)      sliding window size
- *   POLARIS_RATE_LIMIT_PROJECT_OVERRIDES       ""       "project_id=rps,project_id=rps"
  *   POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX        "polaris:ingest:rl"
  *   POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS     (50)
  *
@@ -173,16 +160,13 @@ export const rateLimitEnvSchema = z
   .object({
     POLARIS_RATE_LIMIT_PER_API_KEY_RPS: z.coerce.number().int().min(0).default(1000),
     POLARIS_RATE_LIMIT_WINDOW_SECONDS: positiveIntSchema.default(1),
-    POLARIS_RATE_LIMIT_PROJECT_OVERRIDES: z.string().default(""),
     POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX: z.string().min(1).default("polaris:ingest:rl"),
     POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS: durationMsSchema.default(50),
   })
-  .transform((parsed, ctx): RateLimitConfig => {
-    const overrides = parseProjectRpsOverrides(parsed["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"], ctx);
+  .transform((parsed): RateLimitConfig => {
     return {
       perApiKeyRps: parsed["POLARIS_RATE_LIMIT_PER_API_KEY_RPS"],
       windowSeconds: parsed["POLARIS_RATE_LIMIT_WINDOW_SECONDS"],
-      projectOverrides: overrides,
       redisKeyPrefix: parsed["POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX"],
       redisOpTimeoutMs: parsed["POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS"],
     };
@@ -191,7 +175,6 @@ export const rateLimitEnvSchema = z
 export interface RateLimitConfig {
   readonly perApiKeyRps: number;
   readonly windowSeconds: number;
-  readonly projectOverrides: Readonly<Record<string, number>>;
   readonly redisKeyPrefix: string;
   readonly redisOpTimeoutMs: number;
 }
@@ -199,86 +182,9 @@ export interface RateLimitConfig {
 export const rateLimitEnvKeys = [
   "POLARIS_RATE_LIMIT_PER_API_KEY_RPS",
   "POLARIS_RATE_LIMIT_WINDOW_SECONDS",
-  "POLARIS_RATE_LIMIT_PROJECT_OVERRIDES",
   "POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX",
   "POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS",
 ] as const;
-
-function parseProjectRpsOverrides(raw: string, ctx: z.RefinementCtx): Record<string, number> {
-  const out: Record<string, number> = {};
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return out;
-  for (const entry of trimmed.split(",")) {
-    const pair = entry.trim();
-    if (pair.length === 0) continue;
-    const equalsIndex = pair.indexOf("=");
-    if (equalsIndex <= 0 || equalsIndex === pair.length - 1) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"],
-        message: `expected "project_id=rps" entries, got "${pair}"`,
-      });
-      continue;
-    }
-    const projectId = pair.slice(0, equalsIndex).trim();
-    const rpsRaw = pair.slice(equalsIndex + 1).trim();
-    const rps = Number(rpsRaw);
-    if (!Number.isInteger(rps) || rps < 0) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["POLARIS_RATE_LIMIT_PROJECT_OVERRIDES"],
-        message: `invalid rps for project '${projectId}': "${rpsRaw}"`,
-      });
-      continue;
-    }
-    out[projectId] = rps;
-  }
-  return out;
-}
-
-function parseProjectWindowOverrides(
-  raw: string,
-  cap: number,
-  ctx: z.RefinementCtx,
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return out;
-  for (const entry of trimmed.split(",")) {
-    const pair = entry.trim();
-    if (pair.length === 0) continue;
-    const equalsIndex = pair.indexOf("=");
-    if (equalsIndex <= 0 || equalsIndex === pair.length - 1) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS"],
-        message: `expected "project_id=seconds" entries, got "${pair}"`,
-      });
-      continue;
-    }
-    const projectId = pair.slice(0, equalsIndex).trim();
-    const secondsRaw = pair.slice(equalsIndex + 1).trim();
-    const seconds = Number(secondsRaw);
-    if (!Number.isInteger(seconds) || seconds <= 0) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS"],
-        message: `invalid seconds for project '${projectId}': "${secondsRaw}"`,
-      });
-      continue;
-    }
-    if (seconds > cap) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS"],
-        message: `dedupe window for project '${projectId}' (${seconds}s) exceeds max (${cap}s)`,
-      });
-      continue;
-    }
-    out[projectId] = seconds;
-  }
-  return out;
-}
 
 /**
  * Runtime configuration for the Polaris ingester API.
@@ -294,6 +200,7 @@ export interface IngesterConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
   readonly postgres: PostgresConfig;
+  readonly secretProvider: SecretProviderConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly redis: RedisConfig;
   readonly authCache: AuthCacheConfig;
@@ -322,6 +229,7 @@ export function ingesterConfigSchema() {
     service: serviceEnvSchema,
     http: httpEnvSchema,
     postgres: postgresEnvSchema,
+    secretProvider: secretProviderEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     redis: redisEnvSchema,
     authCache: authCacheEnvSchema,

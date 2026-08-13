@@ -31,6 +31,7 @@ import {
   METRIC_INGEST_PUBLISH_SUCCESS_TOTAL,
 } from "../../src/metrics/registry.js";
 import { createPolicyResolver } from "../../src/policy/loader.js";
+import type { IngestProjectConfigLookup } from "../../src/project-config-lookup.js";
 
 import {
   buildEnvelopePayload,
@@ -59,6 +60,8 @@ function deps(
     dedupe?: InMemoryDedupeStore | RecordingDedupeStore;
     metrics?: IngestMetrics;
     config?: IngesterConfig["ingest"];
+    projectDedupeWindows?: Record<string, number>;
+    projectConfig?: IngestProjectConfigLookup;
     now?: () => Date;
   } = {},
 ) {
@@ -66,6 +69,18 @@ function deps(
   const policy = createPolicyResolver();
   const producer = overrides.producer ?? new RecordingProducer();
   const dedupe = overrides.dedupe ?? new InMemoryDedupeStore();
+  const ingestConfig = overrides.config ?? testConfig.ingest;
+  // Stands in for the project-config lookup. The real one reads a cache
+  // synchronously and falls back to these same deployment defaults, so a
+  // plain map is a faithful double for handler-level tests.
+  const projectConfig = overrides.projectConfig ?? {
+    dedupeWindowSec: (projectId: string) =>
+      Math.min(
+        overrides.projectDedupeWindows?.[projectId] ?? ingestConfig.defaultDedupeWindowSec,
+        ingestConfig.maxDedupeWindowSec,
+      ),
+    rateLimitRps: () => 1000,
+  };
   const metrics = overrides.metrics ?? new IngestMetrics();
   return {
     handler: createIngestHandler({
@@ -76,7 +91,8 @@ function deps(
       dedupe,
       metrics,
       logger: SILENT_LOGGER,
-      ingestConfig: overrides.config ?? testConfig.ingest,
+      ingestConfig,
+      projectConfig,
       ...(overrides.now !== undefined ? { now: overrides.now } : {}),
     }),
     producer,
@@ -343,16 +359,49 @@ describe("ingest handler — dedupe", () => {
   });
 
   it("respects per-project dedupe overrides (longer window)", async () => {
-    const config = {
-      ...testConfig.ingest,
-      projectDedupeWindows: { checkout: 86_400 },
+    // Previously this asserted only that ONE claim landed, which the default
+    // window satisfies just as well — the override could have been ignored
+    // entirely and the test would still pass. It now records the TTL the
+    // handler actually asked for.
+    const seen: number[] = [];
+    const recording = new InMemoryDedupeStore();
+    // The dedupe entry is a LEASE: claim() writes a short-lived hold before
+    // the publish, and confirm() extends it to the real window once the event
+    // is safely on the broker. The per-project window therefore lands on
+    // confirm, not claim.
+    const confirm = recording.confirm.bind(recording);
+    recording.confirm = async (input) => {
+      seen.push(input.ttlSec);
+      return confirm(input);
     };
-    const { handler, dedupe } = deps({ dedupe: new InMemoryDedupeStore(), config });
+    const { handler } = deps({
+      dedupe: recording,
+      projectDedupeWindows: { [AUTH.projectId]: 86_400 },
+    });
     await handler.handle({ events: [buildEnvelopePayload()] }, context());
-    // Inspect the claim that landed on the store. The default window is 900s
-    // but the override pushes it to 86_400s for this project.
-    const claims = (dedupe as InMemoryDedupeStore).size();
-    expect(claims).toBe(1);
+    expect(seen).toEqual([86_400]);
+  });
+
+  it("caps a per-project dedupe window at the platform maximum", async () => {
+    // The cap is a deployment guardrail: a project must not be able to raise
+    // its own ceiling by storing a larger value.
+    const seen: number[] = [];
+    const recording = new InMemoryDedupeStore();
+    // The dedupe entry is a LEASE: claim() writes a short-lived hold before
+    // the publish, and confirm() extends it to the real window once the event
+    // is safely on the broker. The per-project window therefore lands on
+    // confirm, not claim.
+    const confirm = recording.confirm.bind(recording);
+    recording.confirm = async (input) => {
+      seen.push(input.ttlSec);
+      return confirm(input);
+    };
+    const { handler } = deps({
+      dedupe: recording,
+      projectDedupeWindows: { [AUTH.projectId]: 999_999_999 },
+    });
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    expect(seen).toEqual([testConfig.ingest.maxDedupeWindowSec]);
   });
 
   it("continues without dedupe and increments the skipped metric when Redis is down", async () => {
@@ -375,13 +424,12 @@ describe("ingest handler — dedupe", () => {
     // Default 15-min window would NOT dedupe a 30-minute-late retry; the
     // 24-hour opt-in does. The InMemoryDedupeStore uses absolute expiry so
     // we simulate the time-travel by hand.
-    const config = {
-      ...testConfig.ingest,
-      projectDedupeWindows: { checkout: 86_400 },
-    };
     let nowMs = Date.parse("2026-05-12T10:00:00.000Z");
     const dedupe = new InMemoryDedupeStore({ now: () => nowMs });
-    const { handler, producer } = deps({ dedupe, config });
+    const { handler, producer } = deps({
+      dedupe,
+      projectDedupeWindows: { [AUTH.projectId]: 86_400 },
+    });
     await handler.handle({ events: [buildEnvelopePayload()] }, context());
     expect(producer.publishes).toHaveLength(1);
     // Jump 30 minutes forward; the 24-hour window should still hold the claim.

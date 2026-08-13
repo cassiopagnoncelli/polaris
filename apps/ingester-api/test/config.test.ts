@@ -86,31 +86,22 @@ describe("ingesterConfigSchema", () => {
     const config = parseEnv({ ...baseEnv });
     expect(config.ingest.defaultDedupeWindowSec).toBe(900);
     expect(config.ingest.maxDedupeWindowSec).toBe(86_400);
-    expect(config.ingest.projectDedupeWindows).toEqual({});
     expect(config.ingest.redisKeyPrefix).toBe("polaris:ingest:dedupe");
     expect(config.ingest.redisOpTimeoutMs).toBe(50);
     expect(config.ingest.maxBatchEvents).toBe(1000);
   });
 
-  it("parses per-project dedupe window overrides up to the configured cap", () => {
+  it("no longer accepts per-project overrides as an env variable", () => {
+    // Per-project dedupe windows moved to project_config; the cap is enforced
+    // at use in project-config-lookup.ts, not at parse. Setting the retired
+    // variable is inert rather than an error, because deployment manifests
+    // keep it for one release as rollback insurance (plan §11).
     const config = parseEnv({
       ...baseEnv,
-      POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS: "checkout=3600, marketing=86400",
+      POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS: "checkout=3600",
     });
-    expect(config.ingest.projectDedupeWindows).toEqual({
-      checkout: 3600,
-      marketing: 86_400,
-    });
-  });
-
-  it("rejects per-project dedupe windows exceeding the configured cap", () => {
-    expect(() =>
-      parseEnv({
-        ...baseEnv,
-        POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC: "3600",
-        POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS: "checkout=86400",
-      }),
-    ).toThrow(ConfigValidationError);
+    expect(config.ingest).not.toHaveProperty("projectDedupeWindows");
+    expect(config.ingest.defaultDedupeWindowSec).toBe(900);
   });
 
   it("rejects a default window larger than the configured max", () => {

@@ -33,6 +33,7 @@ import type { IngestConfig } from "../config.js";
 import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
 import type { IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
+import type { IngestProjectConfigLookup } from "../project-config-lookup.js";
 import { batchRequestSchema, type IngestRequestContext } from "./types.js";
 
 /**
@@ -57,6 +58,11 @@ export interface IngestHandlerDeps {
    */
   readonly isolation?: SyncIsolationLookup;
   readonly ingestConfig: IngestConfig;
+  /**
+   * Per-project overrides, read from cache only. Synchronous by design — see
+   * ../project-config-lookup.ts.
+   */
+  readonly projectConfig: IngestProjectConfigLookup;
   /**
    * UUIDv7 generator used to stamp envelope timestamps deterministically
    * during tests. Defaults to `() => new Date()`.
@@ -257,7 +263,7 @@ async function processOneEvent(
   // not exist — and the client, following the `retry the event` instruction
   // below, would get `duplicate` and lose it. So the claim is short-lived
   // and the publish path closes it either way. See ../dedupe/types.ts.
-  const windowSec = resolveDedupeWindowSec(auth.projectId, deps.ingestConfig);
+  const windowSec = deps.projectConfig.dedupeWindowSec(auth.projectId, envelope.environment);
   const dedupeKey = {
     projectId: envelope.project_id,
     environment: envelope.environment,
@@ -492,10 +498,4 @@ function buildRejected(input: {
     return { ...out, detail: input.detail };
   }
   return out;
-}
-
-function resolveDedupeWindowSec(projectId: string, config: IngestConfig): number {
-  const override = config.projectDedupeWindows[projectId];
-  if (override !== undefined) return override;
-  return config.defaultDedupeWindowSec;
 }

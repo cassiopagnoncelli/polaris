@@ -55,10 +55,6 @@ const ALLOW = new Map([
   ["packages/browser-sdk", "published SDK surface"],
   // Generated or contract types re-exported for downstream typing.
   ["packages/shared-schemas", "event contract types are the public schema surface"],
-  // Built ahead of its callers: the 16 per-service cutovers that wire it are
-  // separate cards, so the store has no in-repo caller until they land.
-  // Remove this entry once the first service consumes it.
-  ["packages/shared-project-config", "store lands before the services that wire it"],
   // Generated schema surface, consumed by control-plane-api and `polaris
   // config validate` in later cards.
   ["packages/project-config-schemas", "generated schema artifacts land before their consumers"],

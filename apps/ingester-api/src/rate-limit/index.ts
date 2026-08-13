@@ -32,6 +32,7 @@ export type {
   RateLimiter,
 } from "./types.js";
 
+import type { PolarisEnvironment } from "@polaris/shared-environments";
 import type { RateLimitAllowanceResolver } from "./redis.js";
 import type { RateLimitAcquireInput } from "./types.js";
 
@@ -43,14 +44,17 @@ import type { RateLimitAcquireInput } from "./types.js";
  */
 export function createAllowanceResolver(input: {
   readonly defaultPerKeyRps: number;
-  readonly projectOverrides?: ReadonlyMap<string, number>;
+  /**
+   * Per-project budget, read from the project-config cache. Synchronous: the
+   * limiter runs on every request, so this must never perform I/O — see
+   * ../project-config-lookup.ts.
+   */
+  readonly resolveProjectRps?: (projectId: string, environment: PolarisEnvironment) => number;
 }): RateLimitAllowanceResolver {
-  const { defaultPerKeyRps, projectOverrides } = input;
-  if (projectOverrides === undefined || projectOverrides.size === 0) {
+  const { defaultPerKeyRps, resolveProjectRps } = input;
+  if (resolveProjectRps === undefined) {
     return () => defaultPerKeyRps;
   }
-  return (acquire: RateLimitAcquireInput) => {
-    const override = projectOverrides.get(acquire.projectId);
-    return override ?? defaultPerKeyRps;
-  };
+  return (acquire: RateLimitAcquireInput) =>
+    resolveProjectRps(acquire.projectId, acquire.environment as PolarisEnvironment);
 }

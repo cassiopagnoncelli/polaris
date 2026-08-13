@@ -70,7 +70,14 @@ const PACKAGE_DIR = resolve(REPO_ROOT, "packages", "project-config-schemas");
  * `instanceConfigSchema` from its built entry, then adding a row here.
  */
 export const REGISTRY = [
-  // First entry lands with the sessionizer cutover.
+  // The ingester is the first cutover, not sessionizer as originally planned:
+  // no processor has per-project configuration at all, and sessionizer's one
+  // candidate is semantic and deliberately ignored. See plan §7.
+  {
+    namespace: "ingest",
+    packageName: "@polaris/ingester-api",
+    distEntry: "apps/ingester-api/dist/project-config.js",
+  },
 ];
 
 /** Header stamped into every generated file. */

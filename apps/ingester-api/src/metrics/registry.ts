@@ -50,6 +50,14 @@ export const METRIC_INGEST_ORIGIN_REJECTED_TOTAL = "polaris_ingest_origin_reject
 export const METRIC_INGEST_RATE_LIMIT_REJECTED_TOTAL = "polaris_ingest_rate_limit_rejected_total";
 export const METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL = "polaris_ingest_rate_limit_skipped_total";
 export const METRIC_INGEST_PUBLISH_FAILED_TOTAL = "polaris_ingest_publish_failed_total";
+/**
+ * A project whose stored `ingest` config slice failed to parse, so the batch
+ * fell back to deployment defaults. Non-zero means an operator wrote a value
+ * this build cannot read — alertable, because that fallback is deliberately
+ * silent to producers (plan §5: never reject ingest).
+ */
+export const METRIC_INGEST_PROJECT_CONFIG_INVALID_TOTAL =
+  "polaris_ingest_project_config_invalid_total";
 export const METRIC_INGEST_PUBLISH_SUCCESS_TOTAL = "polaris_ingest_publish_success_total";
 
 /**
@@ -149,6 +157,10 @@ export class IngestMetrics {
 
   incrementDeprecatedSchemaVersion(labels: DeprecatedSchemaVersionLabels): void {
     this.incrementByLabels(METRIC_INGEST_DEPRECATED_SCHEMA_VERSION_TOTAL, toLabelRecord(labels));
+  }
+
+  incrementProjectConfigInvalid(labels: { project_id: string; environment: string }): void {
+    this.incrementByLabels(METRIC_INGEST_PROJECT_CONFIG_INVALID_TOTAL, toLabelRecord(labels));
   }
 
   incrementAccepted(labels: BatchOutcomeLabels): void {

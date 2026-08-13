@@ -1,8 +1,16 @@
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { loadEnvWithDefaults } from "@polaris/shared-config";
+import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
+import type { PolarisEnvironment } from "@polaris/shared-environments";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import type { ProjectPolicyOverride } from "@polaris/shared-policy";
+import {
+  createPgListenerTransport,
+  createProjectConfigStore,
+  type ProjectConfigStore,
+} from "@polaris/shared-project-config";
 import type { EventCatalog } from "@polaris/shared-schemas";
+import { createSecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -35,7 +43,6 @@ import {
   type RedisClientLike,
 } from "./dedupe/index.js";
 import { buildRedisOptions } from "./dedupe/redis.js";
-
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { IngestMetrics } from "./metrics/registry.js";
 import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
@@ -47,6 +54,11 @@ import {
   registerCorsPreflightRoute,
 } from "./origin/index.js";
 import { createPolicyResolver, type PolicyResolver } from "./policy/loader.js";
+import {
+  createIngestProjectConfigLookup,
+  prewarmIngestProjectConfig,
+} from "./project-config-lookup.js";
+import { nullProjectConfigStore } from "./project-config-null-store.js";
 import {
   createAllowanceResolver,
   createMemoryRateLimiter,
@@ -147,6 +159,8 @@ export interface BuildIngesterAppOptions {
    * limiter regardless of the wired adapter.
    */
   readonly rateLimiter?: RateLimiter;
+  /** Injected in tests; built from the db handle otherwise. */
+  readonly projectConfigStore?: ProjectConfigStore;
 }
 
 /**
@@ -195,6 +209,59 @@ export async function buildIngesterApp(
       "buildIngesterApp: pass `db`, `apiKeyRepository`, or leave both undefined to construct from config.postgres.",
     );
   }
+  const projectConfigStore =
+    options.projectConfigStore ??
+    (db !== undefined
+      ? createProjectConfigStore({
+          db,
+          secrets: createSecretResolver({
+            config: config.secretProvider,
+            env: loadEnvWithDefaults(),
+            logger,
+            deploymentEnvironment: config.service.environment,
+          }),
+          listener: createPgListenerTransport({
+            connectionString: postgresConnectionString(config.postgres),
+            logger,
+          }),
+          logger,
+        })
+      : undefined);
+
+  const projectConfig = createIngestProjectConfigLookup({
+    // A store is present whenever the app owns its db. The undefined branch
+    // exists only for callers injecting an apiKeyRepository without a db;
+    // those resolve every project to the deployment defaults.
+    store: projectConfigStore ?? nullProjectConfigStore(),
+    logger,
+    defaultDedupeWindowSec: config.ingest.defaultDedupeWindowSec,
+    maxDedupeWindowSec: config.ingest.maxDedupeWindowSec,
+    defaultRateLimitRps: config.rateLimit.perApiKeyRps,
+    onInvalidConfig: (project_id, environment) =>
+      metrics.incrementProjectConfigInvalid({ project_id, environment }),
+  });
+
+  if (projectConfigStore !== undefined && db !== undefined) {
+    // Not awaited: startup must not block on the control plane, and the
+    // lookup falls back to deployment defaults until this lands.
+    void projectConfigStore
+      .start()
+      .then(() =>
+        prewarmIngestProjectConfig({
+          db,
+          store: projectConfigStore,
+          environment: config.service.environment as PolarisEnvironment,
+          logger,
+        }),
+      )
+      .catch((err: unknown) => {
+        logger.warn(
+          { component: "ingest.project-config", err },
+          "project-config store failed to start; serving deployment defaults",
+        );
+      });
+  }
+
   const cache = new ApiKeyCache({
     repository,
     maxEntries: config.authCache.maxEntries,
@@ -271,7 +338,8 @@ export async function buildIngesterApp(
   //     are expected to have Redis wired.
   const allowanceFor = createAllowanceResolver({
     defaultPerKeyRps: config.rateLimit.perApiKeyRps,
-    projectOverrides: new Map(Object.entries(config.rateLimit.projectOverrides)),
+    resolveProjectRps: (projectId, environment) =>
+      projectConfig.rateLimitRps(projectId, environment),
   });
   let rateLimiter: RateLimiter;
   if (options.rateLimiter !== undefined) {
@@ -311,6 +379,11 @@ export async function buildIngesterApp(
 
   // ---- consolidate shutdown tasks --------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
+  if (options.projectConfigStore === undefined && projectConfigStore !== undefined) {
+    shutdownTasks.push(async () => {
+      await projectConfigStore.close();
+    });
+  }
   if (ownedDb && db !== undefined) {
     shutdownTasks.push(async () => {
       await closeDb(db);
@@ -390,6 +463,7 @@ export async function buildIngesterApp(
     metrics,
     logger,
     ingestConfig: config.ingest,
+    projectConfig,
   });
 
   // ---- CORS allow-list wire-up ----------------------------------------

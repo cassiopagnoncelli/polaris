@@ -16,7 +16,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -48,14 +48,32 @@ const fullFixtureEntry = {
 };
 
 describe("project-config-schemas-generate", () => {
-  it("regenerates byte-identical content to the checked-in package (empty registry)", () => {
-    if (REGISTRY.length > 0) {
-      throw new Error(
-        "REGISTRY is no longer empty: update this test to load each entry's built dist " +
-          "(mirror how scripts/openapi-generate.mjs loads the ingester) so drift stays covered.",
-      );
-    }
-    const files = buildArtifacts([]) as Record<string, string>;
+  it("regenerates byte-identical content to the checked-in package", async () => {
+    // Loads each registry entry's BUILT dist, the same way the generator does,
+    // so this asserts the committed artifacts match the live component schemas
+    // rather than a hand-maintained copy of them. Requires `pnpm build` first;
+    // CI builds before testing, and a missing dist fails loudly here rather
+    // than silently reducing coverage to the empty-registry case.
+    const entries = await Promise.all(
+      REGISTRY.map(async (item) => {
+        const distPath = resolve(REPO_ROOT, item.distEntry);
+        if (!existsSync(distPath)) {
+          throw new Error(
+            `${item.distEntry} is missing — run \`pnpm config-schemas\` (it builds each entry) ` +
+              "before this test, or run `pnpm build`.",
+          );
+        }
+        const mod: Record<string, unknown> = await import(pathToFileURL(distPath).href);
+        return {
+          namespace: item.namespace,
+          projectSchema: mod["projectConfigSchema"],
+          ...(mod["instanceConfigSchema"] !== undefined
+            ? { instanceSchema: mod["instanceConfigSchema"] }
+            : {}),
+        };
+      }),
+    );
+    const files = buildArtifacts(entries) as Record<string, string>;
     expect(Object.keys(files).sort()).toEqual(listGeneratedFilesOnDisk());
     for (const [relPath, contents] of Object.entries(files)) {
       const committed = readFileSync(resolve(PACKAGE_DIR, relPath), "utf8");

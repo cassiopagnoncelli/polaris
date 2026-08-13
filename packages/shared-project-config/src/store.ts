@@ -50,7 +50,16 @@ import type { PinnedConfig, ProjectConfigKey, ProjectConfigSnapshot } from "./ty
  * calls without a registry.
  */
 export interface ProjectConfigMetricsHooks {
-  onCacheLookup?(namespace: string, result: "hit" | "miss" | "stale"): void;
+  /**
+   * `peek_hit` / `peek_miss` are reported separately from `hit` / `miss` on
+   * purpose. A request-path `peek` miss is a normal, cheap fallback to a
+   * default, not a cache failure — folding the two together would make the
+   * hit-rate gauge unreadable for any service that uses both.
+   */
+  onCacheLookup?(
+    namespace: string,
+    result: "hit" | "miss" | "stale" | "peek_hit" | "peek_miss",
+  ): void;
   onResolveDuration?(namespace: string, seconds: number): void;
   onInvalidation?(source: "notify" | "sweep" | "reconnect"): void;
   onEviction?(): void;
@@ -72,6 +81,25 @@ export interface ProjectConfigStoreOptions {
 
 export interface ProjectConfigStore {
   get(key: ProjectConfigKey): Promise<ProjectConfigSnapshot>;
+  /**
+   * Cache-only read. Returns `undefined` on miss and NEVER performs I/O.
+   *
+   * For request-path callers that cannot afford a possible assembly — the
+   * ingester resolves per-project values on every batch, and an inline
+   * `get()` would put a database round-trip in ingest p99. Such callers pair
+   * this with {@link ProjectConfigStore.warm} at boot and fall back to their
+   * own default on a miss.
+   *
+   * A stale entry is still returned: staleness means "refetch soon", not
+   * "unusable", and a request path should never stall on that distinction.
+   */
+  peek(key: ProjectConfigKey): ProjectConfigSnapshot | undefined;
+  /**
+   * Resolve and cache the given scopes. Failures are swallowed — a scope that
+   * cannot be assembled at boot simply stays cold, and its callers fall back
+   * to defaults until it can be.
+   */
+  warm(keys: readonly ProjectConfigKey[]): Promise<void>;
   pin(keys: readonly ProjectConfigKey[]): Promise<PinnedConfig>;
   invalidate(projectId: string, environment?: PolarisEnvironment): void;
   invalidateAll(): void;
@@ -193,6 +221,40 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     // A failed assembly must NOT poison the cache: the entry is only replaced
     // on success, so a transient Vault error means the next read retries.
     return assembleInto(cacheKey, key);
+  }
+
+  function peek(key: ProjectConfigKey): ProjectConfigSnapshot | undefined {
+    // `cache.peek`, not `cache.get`: a request path touching every project on
+    // every batch would otherwise drive LRU recency entirely, and a rarely
+    // used namespace read through `get()` would be evicted by traffic it has
+    // nothing to do with.
+    const entry = cache.peek(snapshotKey(key));
+    metrics.onCacheLookup?.(key.namespace, entry === undefined ? "peek_miss" : "peek_hit");
+    return entry?.snapshot;
+  }
+
+  async function warm(keys: readonly ProjectConfigKey[]): Promise<void> {
+    await Promise.all(
+      keys.map(async (key) => {
+        try {
+          await get(key);
+        } catch (err) {
+          // A scope that will not assemble at boot must not stop the service
+          // from starting — it stays cold and its callers use defaults, which
+          // is §5's fail-soft rule for exactly this case.
+          options.logger.warn(
+            {
+              component: "project-config.warm",
+              project_id: key.projectId,
+              environment: key.environment,
+              namespace: key.namespace,
+              err,
+            },
+            "could not prewarm project config; callers will use defaults until it resolves",
+          );
+        }
+      }),
+    );
   }
 
   async function pin(keys: readonly ProjectConfigKey[]): Promise<PinnedConfig> {
@@ -339,6 +401,8 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
 
   return {
     get,
+    peek,
+    warm,
     pin,
     invalidate,
     invalidateAll,

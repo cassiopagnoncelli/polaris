@@ -96,10 +96,14 @@ describe("createAllowanceResolver", () => {
     expect(resolver(input())).toBe(1000);
   });
 
-  it("returns a per-project override when one is configured", () => {
+  it("delegates to the project-config resolver when one is supplied", () => {
+    // The resolver no longer holds a map parsed at startup; it calls into the
+    // project-config lookup, which reads the cache synchronously and falls
+    // back to the deployment default itself.
+    const overrides: Record<string, number> = { storefront: 250 };
     const resolver = createAllowanceResolver({
       defaultPerKeyRps: 1000,
-      projectOverrides: new Map([["storefront", 250]]),
+      resolveProjectRps: (projectId) => overrides[projectId] ?? 1000,
     });
     expect(resolver(input({ projectId: "storefront" }))).toBe(250);
     expect(resolver(input({ projectId: "marketing" }))).toBe(1000);
