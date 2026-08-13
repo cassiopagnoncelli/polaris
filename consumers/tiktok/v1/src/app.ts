@@ -23,7 +23,7 @@
  * RabbitMQ broker or PostgreSQL.
  */
 
-import { loadEnv } from "@polaris/shared-config";
+import { loadEnvWithDefaults } from "@polaris/shared-config";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -122,7 +122,7 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     options.secrets ??
     createSecretResolver({
       config: config.secretProvider,
-      env: loadEnv(),
+      env: loadEnvWithDefaults(),
       logger,
       deploymentEnvironment: config.service.environment,
     });

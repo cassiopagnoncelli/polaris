@@ -95,12 +95,29 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
   const sweepIntervalMs = options.sweepIntervalMs ?? DEFAULT_SWEEP_INTERVAL_MS;
   const secretDeadlineMs = options.secretRefreshDeadlineMs ?? SECRET_REFRESH_DEADLINE_MS;
 
-  const cache = new BoundedLru<string, CacheEntry>(options.capacity ?? DEFAULT_CACHE_CAPACITY, () =>
-    metrics.onEviction?.(),
+  const cache = new BoundedLru<string, CacheEntry>(
+    options.capacity ?? DEFAULT_CACHE_CAPACITY,
+    (evictedKey) => {
+      // The index must shrink with the cache, or a caller probing many
+      // distinct (project, environment, namespace) triples grows it without
+      // bound while the LRU stays bounded.
+      keyIndex.delete(evictedKey);
+      metrics.onEviction?.();
+    },
   );
   /** In-flight assemblies, so N concurrent misses issue ONE query. */
   const inFlight = new Map<string, Promise<ProjectConfigSnapshot>>();
   const keyIndex = new Map<string, ProjectConfigKey>();
+  /**
+   * Versions announced for a scope WHILE an assembly for that scope was in
+   * flight. A notification can only mark entries that are already cached, so
+   * without this a change committed during a cold assembly is invisible until
+   * the sweep: the assembly may have read values before the writer committed,
+   * yet caches its snapshot as fresh. Entries are consumed (and removed) when
+   * the last in-flight assembly for the scope settles — bounded by the number
+   * of concurrent cold assemblies, not by fleet size.
+   */
+  const notifiedMidAssembly = new Map<string, bigint>();
 
   let sweepTimer: NodeJS.Timeout | undefined;
   let closed = false;
@@ -129,9 +146,15 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
       .then((snapshot) => {
         const finishedAt = now().getTime();
         metrics.onResolveDuration?.(key.namespace, (finishedAt - startedAt) / 1000);
+        const scope = scopeKey(key.projectId, key.environment);
+        const announced = notifiedMidAssembly.get(scope);
         cache.set(cacheKey, {
           snapshot,
-          stale: false,
+          // A write may have committed while this assembly's reads were in
+          // flight; its notification could not mark an entry that did not
+          // exist yet. Born stale in that case, so the next reader refetches
+          // instead of waiting out the sweep.
+          stale: announced !== undefined && announced > snapshot.version,
           hasSecret: snapshotHasSecret(snapshot),
           confirmedAt: finishedAt,
         });
@@ -140,6 +163,16 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
       })
       .finally(() => {
         inFlight.delete(cacheKey);
+        const scope = scopeKey(key.projectId, key.environment);
+        const prefix = `${scope}\0`;
+        let scopeStillAssembling = false;
+        for (const pendingKey of inFlight.keys()) {
+          if (pendingKey.startsWith(prefix)) {
+            scopeStillAssembling = true;
+            break;
+          }
+        }
+        if (!scopeStillAssembling) notifiedMidAssembly.delete(scope);
       });
 
     inFlight.set(cacheKey, promise);
@@ -212,7 +245,8 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     environment: string;
     version: bigint;
   }): void {
-    const prefix = `${scopeKey(message.project_id, message.environment)}\0`;
+    const scope = scopeKey(message.project_id, message.environment);
+    const prefix = `${scope}\0`;
     let touched = false;
     for (const cacheKey of cache.keys()) {
       if (!cacheKey.startsWith(prefix)) continue;
@@ -221,6 +255,15 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
       if (message.version <= entry.snapshot.version) continue;
       entry.stale = true;
       touched = true;
+    }
+    // A cold assembly for this scope cannot be marked — its entry does not
+    // exist yet. Remember the announced version so the entry is born stale if
+    // the assembly's reads predate this write (see assembleInto).
+    for (const pendingKey of inFlight.keys()) {
+      if (!pendingKey.startsWith(prefix)) continue;
+      const prev = notifiedMidAssembly.get(scope) ?? 0n;
+      if (message.version > prev) notifiedMidAssembly.set(scope, message.version);
+      break;
     }
     if (touched) metrics.onInvalidation?.("notify");
   }
@@ -252,7 +295,12 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
       const scope = scopeKey(key.projectId, key.environment);
       const dbVersion = versions.get(scope) ?? 0n;
 
-      if (dbVersion > entry.snapshot.version) {
+      // Stale when the version moved forward — OR when it vanished while we
+      // hold a written snapshot. A deleted project CASCADEs its versions row
+      // away; without the second clause the comparison reads 0 < N as "still
+      // fresh" and the fleet serves a dead project's configuration forever.
+      const vanished = dbVersion === 0n && entry.snapshot.version > 0n;
+      if (dbVersion > entry.snapshot.version || vanished) {
         entry.stale = true;
         invalidated = true;
       } else {

@@ -74,11 +74,18 @@ export function snapshotKey(key: ProjectConfigKey): string {
 /**
  * Assemble one namespace slice.
  *
- * Reads values before the version, deliberately. A concurrent write bumps the
- * version after committing its values, so a version read last can only be
- * older than the values it labels — the snapshot is then invalidated one beat
- * early. Reading the version first could label new values with an old version
- * and leave the snapshot stale indefinitely.
+ * Reads the VERSION first, then the values — and the order is load-bearing.
+ * The two reads are separate statements, so a writer's commit (values and
+ * version bump in one transaction) can land between them. Version-first can
+ * only UNDER-label: the snapshot carries old-version + possibly-newer values,
+ * so the write's own notification (or the sweep) sees `new > cached` and
+ * marks it stale — one redundant refetch, then correct.
+ *
+ * Values-first can OVER-label: old values stamped with the new version. The
+ * notification then compares `new <= cached` and leaves the entry fresh, the
+ * sweep agrees with it, and the stale values survive until the next unrelated
+ * write. An earlier revision of this function had exactly that order, with a
+ * comment arguing it was the safe one.
  */
 export async function assembleSnapshot(input: {
   readonly db: Kysely<Database>;
@@ -88,6 +95,8 @@ export async function assembleSnapshot(input: {
 }): Promise<ProjectConfigSnapshot> {
   const { db, secrets, key } = input;
   try {
+    const version = await readVersion(db, key.projectId, key.environment);
+
     const rows = await db
       .selectFrom("project_config")
       .select(["config_key", "value", "is_secret_ref"])
@@ -95,8 +104,6 @@ export async function assembleSnapshot(input: {
       .where("environment", "=", key.environment)
       .where("namespace", "=", key.namespace)
       .execute();
-
-    const version = await readVersion(db, key.projectId, key.environment);
 
     const values: Record<string, unknown> = {};
     for (const row of rows) {

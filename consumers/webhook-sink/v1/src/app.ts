@@ -28,7 +28,7 @@
  * the runtime without a real RabbitMQ broker or PostgreSQL.
  */
 
-import { loadEnv } from "@polaris/shared-config";
+import { loadEnvWithDefaults } from "@polaris/shared-config";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -173,7 +173,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     options.secrets ??
     createSecretResolver({
       config: config.secretProvider,
-      env: loadEnv(),
+      env: loadEnvWithDefaults(),
       logger,
       deploymentEnvironment: config.service.environment,
     });

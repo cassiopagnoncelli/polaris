@@ -137,12 +137,38 @@ export type ComposedConfig<Shape extends Record<string, ZodType>> = {
 export function loadConfigWithDefaults<Schema extends ZodType>(
   options: Omit<LoadConfigOptions<Schema>, "files">,
 ): Schema["_output"] {
-  const env = options.processEnv ?? process.env;
+  return loadConfig({ ...options, files: defaultEnvFiles(options.processEnv ?? process.env) });
+}
+
+/**
+ * The standard `.env` file cascade for a process environment. Shared by
+ * {@link loadConfigWithDefaults} and {@link loadEnvWithDefaults} so the two
+ * can never disagree about which files exist.
+ */
+function defaultEnvFiles(env: NodeJS.ProcessEnv): string[] {
   const polarisEnv: string | undefined = env["POLARIS_ENV"];
   const files: string[] = [];
   if (polarisEnv) files.push(`.env.${polarisEnv}.local`);
   files.push(".env.local");
   if (polarisEnv) files.push(`.env.${polarisEnv}`);
   files.push(".env");
-  return loadConfig({ ...options, files });
+  return files;
+}
+
+/**
+ * A frozen env snapshot built with the SAME file cascade
+ * {@link loadConfigWithDefaults} feeds the config schema.
+ *
+ * This exists because there are two consumers of "the environment" in a
+ * service — the config loader, and the `env:` secret provider — and they must
+ * see one universe. A bare `loadEnv()` reads no files at all, so a service
+ * wired that way resolves `POLARIS_*` config from `.env.local` while
+ * `env:MY_TOKEN` from the same file fails as not-found: two behaviours for
+ * one file, and the difference is invisible until someone stores a secret.
+ *
+ * Production hosts inject real environment variables and carry no `.env`
+ * files, so there this is byte-identical to `loadEnv()`.
+ */
+export function loadEnvWithDefaults(options: Omit<LoadEnvOptions, "files"> = {}): EnvSource {
+  return loadEnv({ ...options, files: defaultEnvFiles(options.processEnv ?? process.env) });
 }

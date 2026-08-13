@@ -346,6 +346,82 @@ describe("project-config store", () => {
     expect(isSecret(snapshot.values["access_token"])).toBe(true);
   });
 
+  it("B13: a write committing during a cold assembly leaves the entry born stale", async () => {
+    // The race: assembly reads version (old), a writer commits values+version
+    // and its NOTIFY fires, then assembly reads values. The notification
+    // cannot mark an entry that does not exist yet, so without the
+    // mid-assembly bookkeeping the snapshot would cache as fresh and the
+    // change would wait for the sweep.
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    await h.store.start();
+
+    let release: (() => void) | undefined;
+    h.db.holdNextValueQuery = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    const assembling = h.store.get(KEY); // version read (1n), parked before values
+
+    h.db.setVersion(KEY.projectId, KEY.environment, 2n);
+    h.listener.notify(KEY.projectId, KEY.environment, 2n);
+    release?.();
+
+    const first = await assembling;
+    expect(first.version).toBe(1n); // under-labeled, by design
+
+    // The next read must refetch rather than serve the parked snapshot.
+    const queriesBefore = h.db.valueQueries;
+    const second = await h.store.get(KEY);
+    expect(h.db.valueQueries).toBe(queriesBefore + 1);
+    expect(second.version).toBe(2n);
+  });
+
+  it("B13b: a mid-assembly notification at or below the assembled version is ignored", async () => {
+    const h = harness();
+    seed(h.db, KEY, 5n);
+    await h.store.start();
+
+    let release: (() => void) | undefined;
+    h.db.holdNextValueQuery = new Promise((resolve) => {
+      release = resolve;
+    });
+    const assembling = h.store.get(KEY);
+    h.listener.notify(KEY.projectId, KEY.environment, 4n); // older — reordered delivery
+    release?.();
+    await assembling;
+
+    const queriesBefore = h.db.valueQueries;
+    await h.store.get(KEY);
+    expect(h.db.valueQueries).toBe(queriesBefore); // still a hit
+  });
+
+  it("B14: a versions row that vanished while cached marks the entry stale", async () => {
+    // A deleted project CASCADEs its versions row away. `0 < cached` must not
+    // read as "still fresh", or the fleet serves a dead project's
+    // configuration forever.
+    vi.useFakeTimers();
+    try {
+      const h = harness({ sweepIntervalMs: 1000 });
+      seed(h.db, KEY, 3n);
+      await h.store.start();
+      await h.store.get(KEY);
+
+      h.db.versions.clear();
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const queriesBefore = h.db.valueQueries;
+      const snapshot = await h.store.get(KEY);
+      expect(h.db.valueQueries).toBe(queriesBefore + 1);
+      expect(snapshot.version).toBe(0n);
+      expect(h.invalidations).toContain("sweep");
+
+      await h.store.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("B12: close stops the sweep and closes the transport", async () => {
     vi.useFakeTimers();
     try {

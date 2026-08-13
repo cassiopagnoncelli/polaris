@@ -37,6 +37,12 @@ export class FakeDb {
   versionQueries = 0;
   sweepQueries = 0;
   failNext: Error | undefined;
+  /**
+   * Gate the next VALUES query. Lets a test park an assembly between its
+   * version read and its values read — the window where a concurrent commit
+   * used to produce a fresh-looking snapshot of stale data.
+   */
+  holdNextValueQuery: Promise<void> | undefined;
 
   setVersion(projectId: string, environment: string, version: bigint): void {
     this.versions.set(`${projectId}|${environment}`, version);
@@ -63,6 +69,11 @@ export class FakeDb {
               const err = self.failNext;
               self.failNext = undefined;
               throw err;
+            }
+            if (self.holdNextValueQuery !== undefined) {
+              const gate = self.holdNextValueQuery;
+              self.holdNextValueQuery = undefined;
+              await gate;
             }
             self.valueQueries += 1;
             return self.rows.filter(
