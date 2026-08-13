@@ -85,6 +85,46 @@ export function parseConfigEnvironment(raw: string | undefined): PolarisEnvironm
 }
 
 /**
+ * Strict environment parse for the WRITE path.
+ *
+ * The GET tab falls back to development because a tab is a display
+ * affordance. A POST must not: a typoed `/config/prodution/set` URL that
+ * "falls back" lands the write in a different environment than the operator
+ * addressed, which is worse than failing.
+ */
+export function parseWriteEnvironment(raw: string): PolarisEnvironment | null {
+  const candidate = raw.trim();
+  return (POLARIS_ENVIRONMENTS as readonly string[]).includes(candidate)
+    ? (candidate as PolarisEnvironment)
+    : null;
+}
+
+export interface DeclaredKeyFacts {
+  readonly declared: boolean;
+  readonly secret: boolean;
+  readonly required: boolean;
+}
+
+/**
+ * What the generated schemas say about one key.
+ *
+ * The server consults this rather than trusting the form, for two decisions
+ * that must not be client-controlled: whether a key is secret-typed (a write
+ * omitting the `secret_ref` flag must not store a credential as a plain
+ * value — plan §3.5 assigns this check to the admin API), and whether the
+ * typed-confirmation ritual applies.
+ */
+export function declaredKeyFacts(namespace: string, key: string): DeclaredKeyFacts {
+  const entry = PROJECT_CONFIG_SCHEMAS[namespace];
+  const schema = entry?.project as Record<string, unknown> | undefined;
+  const properties = (schema?.["properties"] ?? {}) as Record<string, Record<string, unknown>>;
+  const property = properties[key];
+  if (property === undefined) return { declared: false, secret: false, required: false };
+  const required = new Set((schema?.["required"] ?? []) as string[]);
+  return { declared: true, secret: property["secret"] === true, required: required.has(key) };
+}
+
+/**
  * Parse a form value the way the CLI does: JSON when it parses, else a string.
  *
  * So `5000` stores a number and `graph.facebook.com` stores a string, which

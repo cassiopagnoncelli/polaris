@@ -143,6 +143,9 @@ importers:
 
   apps/polaris-cli:
     dependencies:
+      '@polaris/project-config-schemas':
+        specifier: workspace:*
+        version: link:../../packages/project-config-schemas
       '@polaris/shared-clickhouse':
         specifier: workspace:*
         version: link:../../packages/shared-clickhouse

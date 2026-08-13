@@ -15,6 +15,7 @@
  *     the audit row's arguments.
  */
 
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
 import { MappingSemanticsError } from "@polaris/shared-control-plane";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -86,6 +87,20 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
     if (args.value === undefined) throw new UsageError("--value is required");
 
     const isSecretRef = args.secretRef === true;
+    // A key the component schema marks secret cannot be written as a plain
+    // value: an operator omitting --secret-ref would otherwise store a live
+    // credential in PostgreSQL as ordinary jsonb, past every gate that only
+    // fires when is_secret_ref is set. Plan §3.5 assigns this check to both
+    // write surfaces; the admin panel enforces the same rule from the same
+    // generated schema.
+    const secretDeclared =
+      PROJECT_CONFIG_SCHEMAS[namespace]?.secretKeys.project.includes(configKey) === true;
+    if (secretDeclared && !isSecretRef) {
+      throw new UsageError(
+        `"${configKey}" is a secret-typed key in the "${namespace}" schema; pass --secret-ref ` +
+          "with a <provider>:<ref> value. Polaris never stores plaintext secrets.",
+      );
+    }
     const value = parseConfigValue(args.value, isSecretRef);
 
     const store = openStore();

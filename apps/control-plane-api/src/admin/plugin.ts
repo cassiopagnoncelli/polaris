@@ -74,7 +74,13 @@ import {
   renderActivationDetailPage,
   renderProcessorsPage,
 } from "./pages/processors.js";
-import { parseConfigEnvironment, parseConfigFormValue } from "./pages/project-config.js";
+import {
+  declaredKeyFacts,
+  needsConfirmation,
+  parseConfigEnvironment,
+  parseConfigFormValue,
+  parseWriteEnvironment,
+} from "./pages/project-config.js";
 import { renderProjectDetailPage, renderProjectsPage } from "./pages/projects.js";
 import {
   type PlatformRoleName,
@@ -779,21 +785,51 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           const project = await deps.queries.findProject(projectId);
           if (project === null) return notFound(reply, `No project "${projectId}".`);
 
-          const environment = parseConfigEnvironment(request.params.environment);
+          // Writes never guess an environment. The GET tab falls back to
+          // development because a tab is a display affordance; a POST with a
+          // typoed environment must fail, not land the write somewhere else.
+          const environment = parseWriteEnvironment(request.params.environment);
+          if (environment === null) {
+            return notFound(reply, `No environment "${request.params.environment}".`);
+          }
           const namespace = formField(request, "namespace").trim();
           const key = formField(request, "key").trim();
           const rawReason = formField(request, "reason");
           const label = `${namespace}.${key}`;
 
-          // Inline forms carry no typed confirmation; the ritual forms do.
-          // Passing the label as both sides makes checkMutation enforce role
-          // and reason while treating confirmation as satisfied, so one code
-          // path covers both shapes.
+          // The stored row and the schema's view of the key, fetched BEFORE
+          // the gate: whether the ritual applies is the SERVER's decision. An
+          // earlier revision treated an absent confirm field as "ritual
+          // satisfied", which meant a stripped form or a curl bypassed the
+          // typed confirmation on exactly the two shapes it exists for.
+          const current = await deps.queries.listProjectConfig({ projectId, environment });
+          const existing = current.find(
+            (row) => row.namespace === namespace && row.config_key === key,
+          );
+          const facts = declaredKeyFacts(namespace, key);
+          // A key the schema marks secret is secret regardless of what the
+          // form says, and a stored secret row stays one. Without this, a
+          // write omitting the flag would store a live credential as a plain
+          // value — plan §3.5 assigns this check to the admin API.
+          const isSecretRef =
+            facts.secret ||
+            existing?.is_secret_ref === true ||
+            formField(request, "secret_ref") === "true";
+          const ritualRequired = needsConfirmation({
+            action: action === "unset" ? "unset" : "set",
+            environment,
+            secret: isSecretRef,
+            required: facts.required,
+          });
+
           const typed = formField(request, "confirm");
           const check = checkMutation(config, {
             rowEnvironment: environment,
             role: request.adminContext?.role ?? "none",
-            confirmation: typed === "" ? label : typed,
+            // When the ritual applies the operator's typing must match; when
+            // it does not, the label satisfies itself so one code path still
+            // enforces role and reason for both form shapes.
+            confirmation: ritualRequired ? typed : label,
             expectedConfirmation: label,
             reason: rawReason,
           });
@@ -832,24 +868,29 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                 actor,
               );
             } else {
-              const isSecretRef = formField(request, "secret_ref") === "true";
               const raw = formField(request, "value");
+              // "Declare" means declare: colliding with an existing key would
+              // be a stealth overwrite that bypasses the compare-and-set the
+              // edit forms carry. Point the operator at the edit row instead.
+              if (action === "add" && existing !== undefined) {
+                const body = await configPage(request, projectId, environment, {
+                  error: `${label} already exists — edit it in the table above rather than re-declaring it.`,
+                });
+                if (body === null) return notFound(reply, `No project "${projectId}".`);
+                return sendHtml(reply, 409, body);
+              }
               // Compare-and-set: the form carries the row's updated_at as it
-              // was rendered. A mismatch means another operator wrote first,
-              // and the write is refused rather than clobbering them.
+              // was rendered; a mismatch means another operator wrote first.
+              // Read-then-write, not transactional — it guards the human case
+              // (a stale page held open), not a sub-millisecond race, which
+              // last-write-wins-with-audit is an acceptable answer to.
               const expected = formField(request, "expected_updated_at");
-              if (action === "set") {
-                const current = await deps.queries.listProjectConfig({ projectId, environment });
-                const existing = current.find(
-                  (row) => row.namespace === namespace && row.config_key === key,
-                );
-                if ((existing?.updated_at ?? "") !== expected) {
-                  const body = await configPage(request, projectId, environment, {
-                    conflictKey: label,
-                  });
-                  if (body === null) return notFound(reply, `No project "${projectId}".`);
-                  return sendHtml(reply, 409, body);
-                }
+              if (action === "set" && (existing?.updated_at ?? "") !== expected) {
+                const body = await configPage(request, projectId, environment, {
+                  conflictKey: label,
+                });
+                if (body === null) return notFound(reply, `No project "${projectId}".`);
+                return sendHtml(reply, 409, body);
               }
               await mutations.setProjectConfig(
                 {

@@ -12,9 +12,11 @@ import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
 import { describe, expect, it } from "vitest";
 import {
   buildEffectiveView,
+  declaredKeyFacts,
   needsConfirmation,
   parseConfigEnvironment,
   parseConfigFormValue,
+  parseWriteEnvironment,
 } from "../src/admin/pages/project-config.js";
 
 function row(overrides: Partial<ProjectConfigRow> = {}): ProjectConfigRow {
@@ -135,6 +137,46 @@ describe("parseConfigEnvironment", () => {
     for (const bad of [undefined, "", "prod", "local", "test", "  "]) {
       expect(parseConfigEnvironment(bad)).toBe("development");
     }
+  });
+});
+
+describe("parseWriteEnvironment", () => {
+  it("accepts each row environment", () => {
+    for (const env of ["development", "staging", "production"]) {
+      expect(parseWriteEnvironment(env)).toBe(env);
+    }
+  });
+
+  it("returns null for anything else — a typoed WRITE must fail, never fall back", () => {
+    // The lenient parse exists for the GET tab, where an unknown value should
+    // land the operator somewhere safe. A POST that "fell back" would write
+    // to a different environment than the operator addressed.
+    for (const bad of ["", "prodution", "local", "test", "PRODUCTION"]) {
+      expect(parseWriteEnvironment(bad)).toBeNull();
+    }
+  });
+});
+
+describe("declaredKeyFacts", () => {
+  it("reports a declared, non-secret, optional key", () => {
+    expect(declaredKeyFacts("ingest", "rate_limit_rps")).toEqual({
+      declared: true,
+      secret: false,
+      required: false,
+    });
+  });
+
+  it("reports an undeclared key as such", () => {
+    expect(declaredKeyFacts("ingest", "nope")).toEqual({
+      declared: false,
+      secret: false,
+      required: false,
+    });
+    expect(declaredKeyFacts("unknown-namespace", "anything")).toEqual({
+      declared: false,
+      secret: false,
+      required: false,
+    });
   });
 });
 

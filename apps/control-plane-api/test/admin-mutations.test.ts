@@ -15,13 +15,14 @@
  */
 
 import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/idp";
+import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
 import { describe, expect, it, vi } from "vitest";
 import type { AdminMutations, MutationOutcome } from "../src/admin/actions/mutations.js";
 import type { AdminConfig } from "../src/admin/config.js";
 import { AdminIdentityCodec } from "../src/admin/identity.js";
 import type { IdpAuth } from "../src/admin/idp-auth.js";
 import { IdpAuthError } from "../src/admin/idp-auth.js";
-import type { AdminQueries, DestinationRow } from "../src/admin/queries.js";
+import type { AdminQueries, DestinationRow, ProjectRow } from "../src/admin/queries.js";
 import { buildControlPlaneApp } from "../src/app.js";
 import type { ControlPlaneConfig } from "../src/config.js";
 
@@ -182,6 +183,8 @@ interface Harness {
   readonly row: DestinationRow;
   readonly config?: AdminConfig;
   readonly mutations?: AdminMutations | null;
+  readonly project?: ProjectRow;
+  readonly configRows?: readonly ProjectConfigRow[];
 }
 
 /** Every mutation shares one spy, so a test asserts on calls, not on which. */
@@ -221,8 +224,9 @@ async function buildApp(harness: Harness) {
       dlqUnresolved: 0,
     }),
     listProjects: async () => [],
-    findProject: async () => null,
-    listProjectConfig: async () => [],
+    findProject: async (id: string) =>
+      harness.project !== undefined && id === harness.project.project_id ? harness.project : null,
+    listProjectConfig: async () => harness.configRows ?? [],
     listSources: async () => [],
     listDestinations: async () => [],
     findDestination: async (id: string) => (id === harness.row.destination_id ? harness.row : null),
@@ -860,6 +864,185 @@ describe("admin mutations — DLQ triage", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Project-config writes
+// ---------------------------------------------------------------------------
+
+const PROJECT: ProjectRow = {
+  project_id: "storefront",
+  display_name: "Storefront",
+  owner: "storefront-platform",
+  description: "test project",
+  status: "active",
+  created_at: new Date("2026-05-12T10:00:00.000Z"),
+};
+
+/** A stored production secret: the shape whose edits demand the ritual. */
+const SECRET_ROW: ProjectConfigRow = {
+  project_id: "storefront",
+  environment: "production",
+  namespace: "meta-capi",
+  config_key: "access_token",
+  value: "vault:polaris/production/storefront/meta-capi",
+  is_secret_ref: true,
+  updated_at: "2026-08-13T09:30:00.000Z",
+  updated_by: "ops@example.com",
+};
+
+describe("admin mutations — project-config writes", () => {
+  it("refuses a production secret set with an EMPTY confirm — the ritual is server-decided", async () => {
+    // The defect this pins: an earlier revision treated an absent confirm
+    // field as "ritual satisfied", so a stripped form or a curl bypassed the
+    // typed confirmation on exactly the shapes it exists for. Whether the
+    // ritual applies must be computed server-side from the row and schema,
+    // never inferred from which fields the form happened to carry.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+      configRows: [SECRET_ROW],
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/production/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({
+        namespace: "meta-capi",
+        key: "access_token",
+        value: "vault:polaris/production/storefront/meta-capi-2",
+        secret_ref: "true",
+        expected_updated_at: SECRET_ROW.updated_at,
+        reason: "rotating to the new mount",
+        // no confirm field at all
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("applies the same set when the label is typed, and FORCES is_secret_ref", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+      configRows: [SECRET_ROW],
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/production/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({
+        namespace: "meta-capi",
+        key: "access_token",
+        value: "vault:polaris/production/storefront/meta-capi-2",
+        // Deliberately OMITTED: the stored row is a secret, and a write that
+        // drops the flag must not demote a credential slot to plaintext.
+        // secret_ref: absent
+        expected_updated_at: SECRET_ROW.updated_at,
+        reason: "rotating to the new mount",
+        confirm: "meta-capi.access_token",
+      }),
+    });
+    expect(res.statusCode).toBe(303);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ isSecretRef: true, configKey: "access_token" }),
+      "rotating to the new mount",
+      expect.anything(),
+    );
+    await app.app.close();
+  });
+
+  it("refuses a write to an environment that does not exist", async () => {
+    // The GET tab falls back to development because a tab is display; a
+    // typoed WRITE URL must fail, not land the write somewhere else.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/prodution/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({
+        namespace: "ingest",
+        key: "rate_limit_rps",
+        value: "5000",
+        expected_updated_at: "",
+        reason: "raising the launch budget",
+      }),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("refuses declaring a key that already exists — add is not a stealth overwrite", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+      configRows: [
+        {
+          ...SECRET_ROW,
+          environment: "development",
+          namespace: "ingest",
+          config_key: "rate_limit_rps",
+          value: 5000,
+          is_secret_ref: false,
+        },
+      ],
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/development/add",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        namespace: "ingest",
+        key: "rate_limit_rps",
+        value: "9000",
+        reason: "trying to re-declare it",
+      }),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(spy).not.toHaveBeenCalled();
+    await app.app.close();
+  });
+
+  it("applies an ordinary development edit inline — reason only, no ritual", async () => {
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/development/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({
+        namespace: "ingest",
+        key: "rate_limit_rps",
+        value: "5000",
+        expected_updated_at: "",
+        reason: "raising the launch budget",
+      }),
+    });
+    expect(res.statusCode).toBe(303);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ isSecretRef: false, value: 5000 }),
+      "raising the launch budget",
+      expect.anything(),
+    );
     await app.app.close();
   });
 });
