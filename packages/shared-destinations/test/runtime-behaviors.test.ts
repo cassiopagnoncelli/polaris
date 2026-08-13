@@ -17,7 +17,11 @@
 
 import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
-import type { SecretResolver } from "@polaris/shared-secrets";
+import {
+  SecretNotFoundError,
+  SecretProviderError,
+  type SecretResolver,
+} from "@polaris/shared-secrets";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -987,10 +991,51 @@ describe("destination runtime — secret handling + PII safety", () => {
     expect(env.delivererCalls[0]?.secretLength).toBe(SECRET.length);
   });
 
-  it("secret resolver throws → status=failed_permanent with error_class='auth'", async () => {
+  it("unreachable secret provider → failed_retryable, rethrows for retry", async () => {
+    // This asserted `failed_permanent` until the failure classes were split.
+    // That was the defect: a Vault 503 or a token-renewal race permanently
+    // dead-lettered deliveries that a retry seconds later would have
+    // completed, each one then needing a human to replay it.
     const env = makeEnv({
       resolveSecret: async () => {
-        throw new Error("secret store down");
+        throw new SecretProviderError("vault", "polaris/production/x", "503 from vault");
+      },
+    });
+    const consumer = buildConsumer(env);
+    await expect(
+      consumer.handleEvent({
+        envelope: makeEnvelope(),
+        destination_id: SEED_INSTANCE.destination_id,
+      }),
+    ).rejects.toThrow();
+    expect(env.delivererCalls).toHaveLength(0);
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("failed_retryable");
+    expect(rec?.error_class).toBe("transient");
+  });
+
+  it("unknown secret failure defaults to retryable", async () => {
+    const env = makeEnv({
+      resolveSecret: async () => {
+        throw new Error("something unclassified");
+      },
+    });
+    const consumer = buildConsumer(env);
+    await expect(
+      consumer.handleEvent({
+        envelope: makeEnvelope(),
+        destination_id: SEED_INSTANCE.destination_id,
+      }),
+    ).rejects.toThrow();
+    expect(lastRecord(env)?.status).toBe("failed_retryable");
+  });
+
+  it("unprovisioned secret reference → failed_permanent with error_class='auth'", async () => {
+    // Retrying cannot conjure a reference nobody created, so this one still
+    // goes straight to the DLQ for an operator to fix.
+    const env = makeEnv({
+      resolveSecret: async () => {
+        throw new SecretNotFoundError("vault", "polaris/production/missing");
       },
     });
     const consumer = buildConsumer(env);

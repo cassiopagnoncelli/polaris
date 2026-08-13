@@ -44,6 +44,7 @@
  * @see docs/implementation/tasks/P11-004-production-secret-provider.md
  */
 
+export { classifySecretFailure, type SecretFailureClass } from "./classify.js";
 export {
   SecretError,
   SecretNotFoundError,
@@ -51,6 +52,12 @@ export {
   SecretProviderNotConfiguredError,
   SecretReferenceParseError,
 } from "./errors.js";
+export {
+  type CreateSecretResolverOptions,
+  createSecretResolver,
+  InsecureSecretProviderError,
+  SECRET_PROVIDER_STRICT_ENV_VAR,
+} from "./factory.js";
 export {
   hashSecret,
   POLARIS_HASH_ALGORITHM,

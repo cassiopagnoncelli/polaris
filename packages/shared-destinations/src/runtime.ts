@@ -57,7 +57,7 @@ import {
   normalizeForDestination,
 } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
-import type { SecretResolver } from "@polaris/shared-secrets";
+import { classifySecretFailure, type SecretResolver } from "@polaris/shared-secrets";
 import {
   consumerFamiliesFor,
   decodeEvent,
@@ -842,6 +842,51 @@ async function processOne<Payload>(
   try {
     secret = await secrets.resolve(instance.secret_ref);
   } catch (err) {
+    // Not every secret failure is the operator's fault. A reference nobody
+    // provisioned is permanent and belongs in the DLQ; a provider that was
+    // briefly unreachable is not, and treating it as permanent destroyed
+    // deliveries a retry seconds later would have completed — each one then
+    // needing a human to notice and replay it.
+    const failureClass = classifySecretFailure(err);
+    const summary = truncateSummary(
+      `secret resolution failed for ${instance.secret_ref}: ${errSummaryString(err)}`,
+    );
+
+    if (failureClass === "transient") {
+      return recordOutcome({
+        ...outcomeBuildVersion,
+        records,
+        metrics,
+        logger,
+        identity,
+        instance,
+        envelope,
+        attempt,
+        startedAt,
+        now,
+        status: "failed_retryable",
+        error_class: "transient",
+        vendor_response_code: null,
+        vendor_response_summary: summary,
+        dedupe_key: vendor_dedupe_key,
+        delivery_key,
+        logLine: "secret resolution failed — failed_retryable",
+        labels: instanceLabels,
+        logErr: err,
+        // Re-throw through the same path a retryable delivery takes, so
+        // KafkaJS retry semantics apply unchanged.
+        rethrow: buildRetryableError({ error_class: "transient" }),
+        // And the same exhaustion rule: once the attempt counter reaches the
+        // destination's threshold, this still reaches the DLQ — just after the
+        // provider was given a chance to come back.
+        ...(attempt >= instance.dead_letter_threshold && payload !== undefined
+          ? { payloadForDlq: payload }
+          : {}),
+        producer,
+        ...(dlqRecords !== undefined ? { dlqRecords } : {}),
+      });
+    }
+
     return recordOutcome({
       ...outcomeBuildVersion,
       records,
@@ -856,9 +901,7 @@ async function processOne<Payload>(
       status: "failed_permanent",
       error_class: "auth",
       vendor_response_code: null,
-      vendor_response_summary: truncateSummary(
-        `secret resolution failed for ${instance.secret_ref}: ${errSummaryString(err)}`,
-      ),
+      vendor_response_summary: summary,
       dedupe_key: vendor_dedupe_key,
       delivery_key,
       logLine: "secret resolution failed — failed_permanent",

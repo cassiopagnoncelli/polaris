@@ -31,7 +31,9 @@ import {
   postgresEnvSchema,
   type RabbitmqConfig,
   rabbitmqEnvSchema,
+  type SecretProviderConfig,
   type ServiceConfig,
+  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -107,6 +109,7 @@ export interface WebhookSinkRuntimeConfig {
   readonly http: HttpConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
+  readonly secretProvider: SecretProviderConfig;
   readonly sink: WebhookSinkConfig;
 }
 
@@ -121,6 +124,7 @@ export function webhookSinkConfigSchema() {
     http: httpEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
+    secretProvider: secretProviderEnvSchema,
     sink: webhookSinkEnvSchema,
   });
 }

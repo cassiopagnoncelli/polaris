@@ -23,6 +23,7 @@
  * RabbitMQ broker or PostgreSQL.
  */
 
+import { loadEnv } from "@polaris/shared-config";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -39,7 +40,7 @@ import {
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
+import { createSecretResolver, type SecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -119,10 +120,11 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
   // ---- secrets -------------------------------------------------------
   const secrets =
     options.secrets ??
-    new SecretResolver({
-      adapters: {
-        env: new EnvSecretProvider({ source: process.env }),
-      },
+    createSecretResolver({
+      config: config.secretProvider,
+      env: loadEnv(),
+      logger,
+      deploymentEnvironment: config.service.environment,
     });
 
   // ---- metrics + transport hooks ------------------------------------

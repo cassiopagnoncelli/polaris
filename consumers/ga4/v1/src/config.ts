@@ -33,7 +33,9 @@ import {
   postgresEnvSchema,
   type RabbitmqConfig,
   rabbitmqEnvSchema,
+  type SecretProviderConfig,
   type ServiceConfig,
+  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -89,6 +91,7 @@ export interface Ga4RuntimeConfig {
   readonly http: HttpConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
+  readonly secretProvider: SecretProviderConfig;
   readonly ga4: Ga4Config;
 }
 
@@ -98,6 +101,7 @@ export function ga4ConfigSchema() {
     http: httpEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
+    secretProvider: secretProviderEnvSchema,
     ga4: ga4EnvSchema,
   });
 }

@@ -36,7 +36,9 @@ import {
   postgresEnvSchema,
   type RabbitmqConfig,
   rabbitmqEnvSchema,
+  type SecretProviderConfig,
   type ServiceConfig,
+  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -91,6 +93,7 @@ export interface BrazeRuntimeConfig {
   readonly http: HttpConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
+  readonly secretProvider: SecretProviderConfig;
   readonly braze: BrazeConfig;
 }
 
@@ -100,6 +103,7 @@ export function brazeConfigSchema() {
     http: httpEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
+    secretProvider: secretProviderEnvSchema,
     braze: brazeEnvSchema,
   });
 }
