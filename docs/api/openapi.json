@@ -554,10 +554,9 @@
           "environment": {
             "type": "string",
             "enum": [
-              "production",
-              "staging",
               "development",
-              "test"
+              "staging",
+              "production"
             ]
           },
           "occurred_at": {
