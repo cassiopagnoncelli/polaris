@@ -200,12 +200,36 @@ the hot path; see the [Vault deployment
 guide](../deployment/secret-provider-vault.md) for the read-rate
 implications.
 
+## How long a rotation takes to land
+
+One cache stands between a rotated Vault value and a running replica: the
+Vault adapter's own in-memory cache, `POLARIS_VAULT_CACHE_TTL_MS`, default
+5 minutes. The procedure above accounts for it.
+
+A failure to reach Vault mid-rotation is **not** a data-loss event. A provider
+that cannot be reached now classifies transient, so the delivery retries and
+only dead-letters if the outage outlasts the destination's
+`dead_letter_threshold`. Before that split, a brief Vault blip permanently
+dead-lettered deliveries and each one needed a manual replay — if you are
+working from memory of that behaviour, it no longer applies.
+
+> **Coming with the per-service configuration cutovers.** When a service moves
+> onto `@polaris/shared-project-config`, resolved secrets are additionally
+> cached in that service's config snapshot, on its own 5-minute deadline —
+> version-based invalidation cannot see a rotation, because the stored
+> reference does not change. At that point this runbook gains a second wait,
+> and `polaris config invalidate --project <id> --env <env> --reason <text>`
+> becomes the way to force the drop immediately. No destination consumer
+> reads configuration that way yet, so today the Vault TTL above is the whole
+> story.
+
 ## Failure modes
 
 | Symptom | Likely cause | Remedy |
 | --- | --- | --- |
 | `SecretNotFoundError` after rotation | Wrote to wrong Vault path, or stored under a key other than `value` | Re-check the `secret_ref` and the KV layout; `vault kv get` the path |
 | `SecretProviderError: vault authentication failed` after rotation | Vault role binding rejected the SA JWT; or the SA was rotated/renamed | Re-run `vault write auth/kubernetes/role/...` with the current SA name; the [deployment guide](../deployment/secret-provider-vault.md) has the canonical HCL |
+| Deliveries retrying with `error_class = transient` during a Vault outage | Expected. A provider that cannot be reached is a transient failure, so the delivery retries rather than dead-lettering | Restore Vault. Nothing to replay — these reach the DLQ only if the outage outlasts the destination's `dead_letter_threshold` |
 | Delivery fails with vendor-side `auth` error after step 3 | The new value is wrong at the vendor; or the rotation crossed the vendor's grace window | Re-issue the credential at the vendor; rotate again |
 | Replicas show `degraded` health for > 2 cache TTLs | Vault unreachable from the cluster | Check Vault availability; the adapter is serving stale cache, so traffic is unaffected until cache entries expire |
 | One replica keeps using the old value after restart | The rolling restart did not actually replace the pod (stuck terminating, sidecar holding it) | `kubectl delete pod <name>` on the holdout; never `kubectl exec` to "reload" — there is no reload |

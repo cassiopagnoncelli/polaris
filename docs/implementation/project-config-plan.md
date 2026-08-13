@@ -1,6 +1,7 @@
 # Project Configuration Plan
 
-Status: **proposed**
+Status: **in progress** — foundation landed (C0–C3, C4 write path, C6);
+see the workstream table in §13 for per-item state and commits.
 Decision: per-`(project_id, environment)` configuration becomes the single
 source of runtime key-values for every Polaris service. Services stop reading
 environment variables for anything except bootstrap.
@@ -117,8 +118,8 @@ the compatibility check — each component's schema is **exported as a generated
 JSON artifact, never hand-written**. This is an established repo pattern, not
 an invention: `pnpm openapi` generates the OpenAPI document from the
 ingester's Zod schemas and `openapi:check` fails CI when the generated file
-drifts from the code (`scripts/openapi-generate.mjs`). `polaris config
-generate-schemas` / `--check` does the same per component. Enum keys survive
+drifts from the code (`scripts/openapi-generate.mjs`). `pnpm config-schemas` /
+`--check` does the same per component. Enum keys survive
 this round trip — `retry_policy IN ('standard','aggressive','conservative')`
 and friends are CHECK-constrained enums today, and the generated artifact
 carries `values`, so migrating them loses no validation.
@@ -273,8 +274,8 @@ namespace (`meta-capi-v2`), and its migration runbook copies values across
 first.
 
 A compatibility check enforces this by diffing the **generated schema
-artifacts** (§3.1) — the checked-in JSON that `polaris config generate-schemas
---check` already keeps in sync with the code — against the previous commit, so
+artifacts** (§3.1) — the checked-in JSON that `pnpm config-schemas --check`
+already keeps in sync with the code — against the previous commit, so
 a breaking config change fails its own PR rather than a rolling deploy. Two
 files diffed in CI, no database access needed.
 
@@ -675,12 +676,27 @@ controllable, so there is no zeroing story. It goes in
 `docs/architecture/11-production-readiness.md` as a known property of the
 design.
 
-**Vault becomes critical path.** `createVaultProvider` has zero callers today;
-every consumer hard-codes `EnvSecretProvider({ source: process.env })`, which
-reads the environment this plan eliminates. Wiring Vault
-(`packages/shared-config/src/schemas/secret-provider.ts:87` is written and
-unconsumed) moves from backlog to prerequisite. The `env:` provider survives
-only in the bootstrap tier for local development.
+**Vault becomes critical path.** ~~`createVaultProvider` has zero callers
+today; every consumer hard-codes `EnvSecretProvider({ source: process.env })`,
+which reads the environment this plan eliminates.~~ **LANDED** as card
+`FR74FN42`. `createSecretResolver` in `@polaris/shared-secrets` now builds the
+adapter from `secretProviderEnvSchema`, over a frozen `loadEnv()` snapshot, and
+all five destination consumers use it — which also closed the five
+`process.env` escape hatches §7 lists.
+
+**Amended in implementation: how `env:` is restricted.** This section said the
+`env:` provider "survives only in the bootstrap tier for local development",
+which reads as a hard runtime refusal. Implementing it that way would have been
+a rollback trap of exactly the kind §11 keeps inert env vars around to avoid:
+`POLARIS_SECRET_PROVIDER` defaults to `env`, so a fatal check would turn
+"deploy the new image" into an outage for any deployment still resolving
+production secrets from the environment.
+
+What shipped instead: production + `env:` logs a loud WARN naming the
+remediation, and refuses only under `POLARIS_SECRET_PROVIDER_STRICT=true`. The
+guarantee is reached by sequence rather than by fiat — provision Vault, set
+`POLARIS_SECRET_PROVIDER=vault`, then set strict, after which regression is
+impossible. `.env.example` documents the block and the ordering.
 
 ## 7. Environment variables
 
@@ -783,8 +799,8 @@ Big-bang is only safe with a gate that runs *before* the rollout, and CI cannot
 be that gate — a PR pipeline has no access to production's `project_config`
 table, so it can only check things that live in the repo. The two are split:
 
-1. **In CI, per PR:** generated-schema drift (`polaris config generate-schemas
-   --check`, the `openapi:check` pattern) and the additive-only compatibility
+1. **In CI, per PR:** generated-schema drift (`pnpm config-schemas --check`,
+   the `openapi:check` pattern) and the additive-only compatibility
    rule (§3.4). Catches "this schema change would break an existing project"
    at review time.
 2. **As a pre-deploy job in the target environment:**
@@ -834,16 +850,16 @@ covers both mechanisms failing.
 
 | # | Workstream | Depends on | Parallel? |
 |---|---|---|---|
-| C0 | Single-source the environment enum (§15) — card `8KY5SKZX` (ready) | — | — |
-| C1 | `project_config`, `project_config_versions`, `delivery_records.config_version`, `destinations.config` migrations; rewrite the two prohibition comments and their tests — card `WDKNARYV` | C0 | — |
-| C2 | `packages/shared-project-config`: store, LRU, sweep, LISTEN/NOTIFY listener + reconnect, single-flight, monotonic guard, `Secret<T>` — card `Q54PQL99` | C1 | — |
-| C3 | `pnpm config-schemas` / `--check` (Zod → JSON artifact per component, `openapi:check` pattern); additive-only compat check (§3.4) — card `WFHTKR4A` | C1 | with C2 |
+| C0 | **LANDED** `3a3e842` — single-source the environment enum (§15). Card `8KY5SKZX` | — | — |
+| C1 | **LANDED** `611e496` — migrations, Kysely types, narrowed prohibition. Card `WDKNARYV` | C0 | — |
+| C2 | **LANDED** `1442a2d` — read store: LRU, sweep, LISTEN/NOTIFY, single-flight, monotonic guard, `Secret<T>`. Card `Q54PQL99` | C1 | — |
+| C3 | **LANDED** `88b8db9` — `pnpm config-schemas` / `--check`, additive-only compat check (§3.4). Registry empty until the first service exports a schema. Card `WFHTKR4A` | C1 | with C2 |
 | C4 | `polaris config get/set/unset/list/invalidate` + audited write path — card `VCJ896JN` (landed). `validate`, the `projects sync` post-sync report, and the pre-deploy validate job remain, unblocked once C3 lands | C2, C3 | — |
 | C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
-| C6 | Wire Vault as production secret provider; restrict `env:` to bootstrap; split transient vs. permanent secret-resolution failure (§6) | C2 | yes |
+| C6 | **LANDED** `07eb4cb` — `createSecretResolver`, transient/permanent split, five consumers off `process.env`. `env:` restriction shipped as warn + `POLARIS_SECRET_PROVIDER_STRICT` (see §6). Card `FR74FN42` | C2 | yes |
 | C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
 | C8 | Fan-out project filter + pre-merge blast-radius query | C2 | yes |
-| C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke/integration fixture migration | C4 | yes |
+| C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke fixture migration. **Partly landed:** `tests/integration/project-config.test.ts` covers write → NOTIFY → store against real PostgreSQL | C4 | yes |
 | C10 | `scripts/backfill-project-config.mjs` | C4 | yes |
 | C11 | Per-service cutover ×16, one PR each: config path in, env path out, allowlist entry deleted, fail-closed startup, backfill run | C6, C7, C9, C10 | 16-way |
 | C12 | Env-var sweep PR: delete the inert deployment-manifest vars one release after C11 | C11 | — |
@@ -935,7 +951,8 @@ Cheap now, expensive once there is data.
 | Invalidation transport | Postgres LISTEN/NOTIFY | 9 of 16 services have no Redis; all 16 have Postgres; NOTIFY-on-commit is atomic with the write |
 | Freshness backstop | 10s jittered sweep, one batched query | Notification loss must self-heal |
 | Secret freshness | Separate 5-min re-resolution deadline | Version-based invalidation is blind to rotation behind a ref; 5 min matches the Vault provider's own cache |
-| Secret resolution failure | Transient retryable, permanent DLQs | Corrects a pre-existing defect where a Vault 503 permanently dead-letters |
+| Secret resolution failure | Transient retryable, permanent DLQs; unknown defaults transient | Corrects a pre-existing defect where a Vault 503 permanently dead-letters. Unknown-defaults-transient because a wrong `permanent` is data loss needing manual replay, while a wrong `transient` costs bounded retries and reaches the same DLQ anyway |
+| Restricting `env:` in production | Warn by default; refuse under `POLARIS_SECRET_PROVIDER_STRICT` | A fatal default would be a rollback trap: `env` is the default provider, so it would turn "deploy the new image" into an outage. The guarantee is reached by sequence — provision Vault, switch, then set strict |
 | Revalidation shape | Batched version sweep, not per-key inline | ~6 queries/sec fleet-wide; read path never blocks on I/O |
 | Invalidation behaviour | Lazy mark-stale + single-flight refetch | Eager refetch stampedes Postgres when 64 replicas hear one save |
 | Out-of-order notifications | Monotonic version guard | Duplicated/reordered NOTIFY must not downgrade a fresher entry |

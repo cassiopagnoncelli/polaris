@@ -910,12 +910,21 @@ importers:
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../packages/shared-config
+      '@polaris/shared-control-plane-db':
+        specifier: workspace:*
+        version: link:../packages/shared-control-plane-db
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../packages/shared-db
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../packages/shared-logger
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../packages/shared-project-config
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../packages/shared-secrets
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../packages/shared-transport

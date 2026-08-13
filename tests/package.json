@@ -7,7 +7,10 @@
   "dependencies": {
     "@polaris/node-sdk": "workspace:*",
     "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-control-plane-db": "workspace:*",
     "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-project-config": "workspace:*",
+    "@polaris/shared-secrets": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "kysely": "^0.29.0"
