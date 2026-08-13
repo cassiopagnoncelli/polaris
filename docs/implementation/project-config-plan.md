@@ -837,8 +837,8 @@ covers both mechanisms failing.
 | C0 | Single-source the environment enum (§15) — card `8KY5SKZX` (ready) | — | — |
 | C1 | `project_config`, `project_config_versions`, `delivery_records.config_version`, `destinations.config` migrations; rewrite the two prohibition comments and their tests — card `WDKNARYV` | C0 | — |
 | C2 | `packages/shared-project-config`: store, LRU, sweep, LISTEN/NOTIFY listener + reconnect, single-flight, monotonic guard, `Secret<T>` — card `Q54PQL99` | C1 | — |
-| C3 | `polaris config generate-schemas` / `--check` (Zod → JSON artifact per component, `openapi:check` pattern); additive-only compat check (§3.4) | C1 | with C2 |
-| C4 | `polaris config get/set/unset/list/validate/invalidate`, audit writes, `projects sync` post-sync report, pre-deploy validate job | C2, C3 | — |
+| C3 | `pnpm config-schemas` / `--check` (Zod → JSON artifact per component, `openapi:check` pattern); additive-only compat check (§3.4) — card `WFHTKR4A` | C1 | with C2 |
+| C4 | `polaris config get/set/unset/list/invalidate` + audited write path — card `VCJ896JN` (landed). `validate`, the `projects sync` post-sync report, and the pre-deploy validate job remain, unblocked once C3 lands | C2, C3 | — |
 | C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
 | C6 | Wire Vault as production secret provider; restrict `env:` to bootstrap; split transient vs. permanent secret-resolution failure (§6) | C2 | yes |
 | C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
