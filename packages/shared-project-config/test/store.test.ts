@@ -422,6 +422,86 @@ describe("project-config store", () => {
     }
   });
 
+  it("B15: peek serves a stale entry AND triggers its refresh", async () => {
+    // The defect this pins: a peek-only reader (the ingester) is the only
+    // observer of its entries. If peek returns the stale snapshot without
+    // kicking a refresh, get() is never called again and a config change
+    // never reaches the service — the cutover's whole capability, silently
+    // dead.
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    await h.store.start();
+    await h.store.get(KEY);
+
+    h.db.rows[0] = { ...h.db.rows[0], value: "updated-pixel" } as (typeof h.db.rows)[0];
+    h.db.setVersion(KEY.projectId, KEY.environment, 2n);
+    h.listener.notify(KEY.projectId, KEY.environment, 2n);
+
+    // Serves the old snapshot — a request path never stalls on freshness —
+    // and schedules the refetch as a side effect.
+    const beforeRefresh = h.store.peek(KEY);
+    expect(beforeRefresh?.values["pixel_id"]).toBe("1234567890");
+
+    // One macrotask drains every microtask the background assembly chains.
+    await new Promise((resolve) => setImmediate(resolve));
+    const afterRefresh = h.store.peek(KEY);
+    expect(afterRefresh?.values["pixel_id"]).toBe("updated-pixel");
+    expect(afterRefresh?.version).toBe(2n);
+  });
+
+  it("B15b: a burst of peeks on a stale entry schedules one refresh", async () => {
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    await h.store.start();
+    await h.store.get(KEY);
+    const queriesBefore = h.db.valueQueries;
+
+    h.listener.notify(KEY.projectId, KEY.environment, 2n);
+    h.store.peek(KEY);
+    h.store.peek(KEY);
+    h.store.peek(KEY);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(h.db.valueQueries).toBe(queriesBefore + 1);
+  });
+
+  it("B15c: peek neither queries nor refreshes a fresh entry", async () => {
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    await h.store.get(KEY);
+    const queriesBefore = h.db.valueQueries;
+
+    expect(h.store.peek(KEY)?.version).toBe(1n);
+    await Promise.resolve();
+    expect(h.db.valueQueries).toBe(queriesBefore);
+    expect(h.lookups.at(-1)).toEqual({ namespace: KEY.namespace, result: "peek_hit" });
+  });
+
+  it("B15d: peek on an uncached scope returns undefined without I/O", async () => {
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    expect(h.store.peek(KEY)).toBeUndefined();
+    expect(h.db.valueQueries).toBe(0);
+    expect(h.lookups.at(-1)).toEqual({ namespace: KEY.namespace, result: "peek_miss" });
+  });
+
+  it("B16: warm resolves scopes and swallows per-scope failures", async () => {
+    const h = harness();
+    seed(h.db, KEY, 1n);
+    seed(h.db, OTHER_PROJECT, 1n);
+    h.db.failNext = new Error("first assembly fails");
+
+    // Must not throw: a scope that will not assemble at boot stays cold and
+    // its callers use defaults.
+    await h.store.warm([KEY, OTHER_PROJECT]);
+
+    // One of the two failed (failNext consumes once); the other is cached.
+    const cached = [h.store.peek(KEY), h.store.peek(OTHER_PROJECT)].filter(
+      (snapshot) => snapshot !== undefined,
+    );
+    expect(cached).toHaveLength(1);
+  });
+
   it("B12: close stops the sweep and closes the transport", async () => {
     vi.useFakeTimers();
     try {

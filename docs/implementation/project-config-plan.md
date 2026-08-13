@@ -859,7 +859,7 @@ Following the `polaris_<component>_<thing>_<unit>` convention already in use:
 
 | Metric | Type | Purpose |
 |---|---|---|
-| `polaris_config_cache_lookups_total{namespace,result}` | counter | `result` = `hit` \| `miss` \| `stale` |
+| `polaris_config_cache_lookups_total{namespace,result}` | counter | `result` = `hit` \| `miss` \| `stale` \| `peek_hit` \| `peek_miss` — peek results are separate so request-path fallbacks do not distort the hit-rate gauge |
 | `polaris_config_resolve_duration_seconds{namespace}` | histogram | cold-miss assembly cost incl. secret resolution |
 | `polaris_config_missing_total{project,environment,namespace,key}` | counter | required key absent — alerts on any non-zero |
 | `polaris_config_invalidations_total{source}` | counter | `source` = `notify` \| `sweep` \| `reconnect` |

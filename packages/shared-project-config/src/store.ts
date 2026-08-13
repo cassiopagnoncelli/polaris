@@ -228,9 +228,35 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     // every batch would otherwise drive LRU recency entirely, and a rarely
     // used namespace read through `get()` would be evicted by traffic it has
     // nothing to do with.
-    const entry = cache.peek(snapshotKey(key));
+    const cacheKey = snapshotKey(key);
+    const entry = cache.peek(cacheKey);
     metrics.onCacheLookup?.(key.namespace, entry === undefined ? "peek_miss" : "peek_hit");
-    return entry?.snapshot;
+    if (entry === undefined) return undefined;
+
+    // A stale entry is served — a request path never stalls on freshness —
+    // but it must also REFRESH, and from here, because for a peek-only
+    // caller this is the only code that ever observes the staleness. The
+    // ingester reads exclusively through peek: without this kick, a NOTIFY
+    // marks the entry stale, every subsequent peek keeps hitting, get() is
+    // never called again, and a config change never reaches a running
+    // service. Single-flighted, so a burst of peeks schedules one assembly.
+    if (entry.stale || pastSecretDeadline(entry, now().getTime())) {
+      void assembleInto(cacheKey, key).catch((err: unknown) => {
+        // Next peek retries (the entry is still stale). Warn is bounded by
+        // the single-flight: one line per failed assembly, not per peek.
+        options.logger.warn(
+          {
+            component: "project-config.peek",
+            project_id: key.projectId,
+            environment: key.environment,
+            namespace: key.namespace,
+            err,
+          },
+          "background refresh of a stale entry failed; still serving the previous snapshot",
+        );
+      });
+    }
+    return entry.snapshot;
   }
 
   async function warm(keys: readonly ProjectConfigKey[]): Promise<void> {

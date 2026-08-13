@@ -248,6 +248,29 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
     expect(after.values["pixel_id"]).toBe(before.values["pixel_id"]);
   });
 
+  it("a config change reaches a peek-only reader without any get()", async () => {
+    // The ingester's actual read pattern: peek() on every batch, get() only on
+    // a cold miss. This loop is exactly "polaris config set, then watch a
+    // running ingester pick it up" — the capability the cutover shipped. The
+    // first implementation of peek() served the stale snapshot forever and
+    // this test is what pins the fix at the system level.
+    await until(async () => store.peek(key) !== undefined);
+
+    await setProjectConfigValueWithAudit(db, audit(7), {
+      projectId,
+      environment: ENVIRONMENT,
+      namespace: NAMESPACE,
+      configKey: "pixel_id",
+      value: "peeked-fresh-value",
+      isSecretRef: false,
+    });
+
+    // Only peek() from here on. NOTIFY marks the entry stale; peek must both
+    // serve and self-refresh, so within the poll window the new value appears
+    // with no explicit get() anywhere in the loop.
+    await until(async () => store.peek(key)?.values["pixel_id"] === "peeked-fresh-value");
+  });
+
   it("records one audit row per applied mutation", async () => {
     const rows = await db
       .selectFrom("audit_records")
@@ -255,7 +278,7 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
       .where("project_id", "=", projectId)
       .execute();
     const actions = rows.map((r) => r.action);
-    expect(actions.filter((a) => a === "config.set")).toHaveLength(3);
+    expect(actions.filter((a) => a === "config.set")).toHaveLength(4);
     expect(actions.filter((a) => a === "config.unset")).toHaveLength(1);
     expect(actions.filter((a) => a === "config.invalidate")).toHaveLength(1);
   });

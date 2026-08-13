@@ -20,9 +20,17 @@
 import type { Database } from "@polaris/shared-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
 import type { Logger } from "@polaris/shared-logger";
-import type { ProjectConfigKey, ProjectConfigStore } from "@polaris/shared-project-config";
+import type {
+  ProjectConfigKey,
+  ProjectConfigSnapshot,
+  ProjectConfigStore,
+} from "@polaris/shared-project-config";
 import type { Kysely } from "kysely";
-import { PROJECT_CONFIG_NAMESPACE, parseIngestProjectConfig } from "./project-config.js";
+import {
+  type IngestProjectConfig,
+  PROJECT_CONFIG_NAMESPACE,
+  parseIngestProjectConfig,
+} from "./project-config.js";
 
 export interface IngestProjectConfigLookup {
   /** Dedupe window for a project, in seconds. Already capped. */
@@ -95,6 +103,13 @@ export function createIngestProjectConfigLookup(
   const warming = new Set<string>();
   /** Scopes already reported as malformed, so the log records the transition. */
   const reportedInvalid = new Set<string>();
+  /**
+   * Parse-once per snapshot. Snapshots are frozen and replaced wholesale on
+   * refresh, so object identity is a correct cache key — and without this,
+   * a 1000-event batch runs the same Zod parse 1000 times on the hot path.
+   * WeakMap, so a replaced snapshot's entry goes with it.
+   */
+  const parsed = new WeakMap<ProjectConfigSnapshot, IngestProjectConfig>();
 
   function scheduleWarm(key: ProjectConfigKey): void {
     const scopeKey = `${key.projectId}\0${key.environment}`;
@@ -132,7 +147,10 @@ export function createIngestProjectConfigLookup(
       scheduleWarm(key);
       return undefined;
     }
+    const memoized = parsed.get(snapshot);
+    if (memoized !== undefined) return memoized;
     const { config, error } = parseIngestProjectConfig(snapshot.values);
+    parsed.set(snapshot, config);
     if (error !== undefined) {
       const scopeKey = `${projectId}\0${environment}`;
       if (!reportedInvalid.has(scopeKey)) {
