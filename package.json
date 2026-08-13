@@ -12,11 +12,12 @@
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && pnpm -r --if-present run typecheck",
-    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports",
+    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
     "lint:nul-bytes": "node scripts/lint-nul-bytes.mjs",
     "lint:dead-exports": "node scripts/lint-dead-exports.mjs",
+    "lint:process-env": "node scripts/lint-process-env.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "check": "biome check .",
