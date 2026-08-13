@@ -13,6 +13,12 @@
   --shadow: 0 1px 2px rgb(18 21 26 / 6%), 0 8px 24px rgb(18 21 26 / 5%);
   /* The collapsed drawer's height, reserved at the bottom of every page. */
   --drawer-head: 2.75rem;
+  /* Rounded on the two top corners only — the drawer rises out of the bottom
+     edge and runs the full width, so its other three corners are off-screen. */
+  --drawer-radius: 14px;
+  /* How much of the viewport the open drawer takes, head included. Half on a
+     laptop; a phone overrides it to the whole screen further down. */
+  --drawer-open: 50dvh;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -53,7 +59,7 @@ body {
    last section of a page can never be scrolled out from under it — the
    document simply stops scrolling before it clears. */
 body:has(.drawer[data-open="true"]) {
-  padding-bottom: 40dvh;
+  padding-bottom: var(--drawer-open);
 }
 
 main {
@@ -531,7 +537,31 @@ a:focus-visible {
 
 /* ── Activity drawer ────────────────────────────────────────────────── */
 
+/* The drawer is dark in both colour schemes and in both of its states — it is
+   a console bolted to the page, not part of it, and it should read that way
+   against a white page as much as against a dark one.
+
+   The palette is redefined here rather than on each piece: everything inside
+   the drawer — the tags, the feed rows, the `clear` button, the shortcut
+   key — already draws from these tokens, so overriding them at the drawer's
+   root is what turns the whole surface over. `--drawer-edge` is separate from
+   `--line` on purpose: `--line` divides things inside the drawer, while the
+   edge has to hold against whatever the page behind it happens to be.
+
+   The surface sits a shade above `--bg`'s dark value, which is what lifts the
+   drawer off the page now that nothing is casting a shadow for it. */
 .drawer {
+  --panel: #191d24;
+  --raised: #252a33;
+  --line: #313742;
+  --fg: #e9ecf1;
+  --muted: #99a2ae;
+  --accent: #8fb0ff;
+  --accent-soft: #243154;
+  --danger: #ff9b93;
+  --ok: #63c68f;
+  --drawer-edge: rgb(255 255 255 / 9%);
+
   position: fixed;
   inset-inline: 0;
   bottom: 0;
@@ -539,8 +569,14 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border-top: 1px solid var(--line);
-  box-shadow: 0 -8px 28px rgb(0 0 0 / 10%);
+  color: var(--fg);
+  /* Only the top edge is ever on screen; the other three run off the
+     viewport, so a border on them would just be a hairline in the bezel. */
+  border-top: 1px solid var(--drawer-edge);
+  border-radius: var(--drawer-radius) var(--drawer-radius) 0 0;
+  /* Clips the head's hover fill and the feed's scroll to the rounded corners,
+     so nothing squares off the shape from the inside. */
+  overflow: hidden;
 }
 
 .drawer-head {
@@ -636,7 +672,7 @@ a:focus-visible {
   color: var(--muted);
 }
 
-/* Open, the drawer is exactly 40% of the viewport, head included — a fixed
+/* Open, the drawer is exactly `--drawer-open` tall, head included — a fixed
    height rather than a cap, so the page below it never reflows as lines
    arrive.
 
@@ -648,13 +684,37 @@ a:focus-visible {
 .drawer-body {
   overflow-y: auto;
   overscroll-behavior: contain;
-  height: calc(40dvh - var(--drawer-head));
+  height: calc(var(--drawer-open) - var(--drawer-head));
   border-top: 1px solid var(--line);
 }
 
 .drawer[data-open="false"] .drawer-body {
   height: 0;
   border-top-color: transparent;
+}
+
+/* A phone has no room to spare for a half-height drawer: opened, it takes the
+   whole screen, and the two knock-on effects below follow from that. */
+@media (width < 52rem) {
+  :root {
+    --drawer-open: 100dvh;
+  }
+
+  /* Nothing shows behind a full-screen drawer, so there is nothing for the
+     rounding and the hairline to separate it from — the top corners would
+     only notch the viewport and reveal the page in two wedges. Dropping the
+     border also keeps head plus body at exactly 100dvh rather than 1px over. */
+  .drawer[data-open="true"] {
+    border-radius: 0;
+    border-top: 0;
+  }
+
+  /* No reservation either. The padding exists so a page's last line can be
+     scrolled clear of the drawer, and at full height nothing ever can be —
+     it would buy a dead viewport below the page and no visible scrolling. */
+  body:has(.drawer[data-open="true"]) {
+    padding-bottom: var(--drawer-head);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -680,6 +740,15 @@ a:focus-visible {
   padding: 0.3rem 1.25rem;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   font-size: 0.8rem;
+}
+
+/* The line's text. `min-width: 0` lets it shrink below its content inside the
+   flex row, and `anywhere` breaks the tokens that have no wrap opportunity to
+   offer — endpoint URLs, event ids — which are exactly the long ones. Without
+   it a phone-width feed scrolls sideways to be read. */
+.feed li > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .feed li:nth-child(odd) {
