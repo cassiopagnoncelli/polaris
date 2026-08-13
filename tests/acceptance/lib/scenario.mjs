@@ -192,6 +192,16 @@ export async function runAcceptanceScenario({ env = process.env, logger } = {}) 
     }),
   );
 
+  // --- step 1b: control plane: project configuration -------------------
+  append(
+    await runStep({
+      id: "control_plane_project_config",
+      label: "Project configuration round-trips (polaris config set/list/validate)",
+      logger,
+      body: async () => stepProjectConfig(cfg),
+    }),
+  );
+
   // --- step 2: control plane: API key ---------------------------------
   append(
     await runStep({
@@ -400,6 +410,99 @@ async function stepEnsureCatalog(cfg) {
   return {
     project_id: cfg.projectId,
     source_id: cfg.sourceId,
+  };
+}
+
+/**
+ * The project-configuration loop, through the real CLI against real
+ * PostgreSQL.
+ *
+ * Everything else that covers this is either a unit test with a faked
+ * database or an integration test that calls the mutation functions
+ * directly. Neither exercises what an operator actually does: run the binary,
+ * have it parse a value, write it through the audited transaction, and read
+ * it back. A regression in argument parsing, exit codes, or the CLI's own
+ * store wiring would be invisible to both.
+ *
+ * The value chosen is a real `ingest` key, so this also asserts that the
+ * namespace the ingester reads is the namespace the CLI writes — the two
+ * halves agreeing on a string is exactly the sort of thing that silently
+ * stops being true.
+ */
+async function stepProjectConfig(cfg) {
+  const NAMESPACE = "ingest";
+  const KEY = "rate_limit_rps";
+  const VALUE = "4242";
+
+  invokeCli(cfg, [
+    "config",
+    "set",
+    "--project",
+    cfg.projectId,
+    "--env",
+    cfg.environment,
+    "--namespace",
+    NAMESPACE,
+    "--key",
+    KEY,
+    "--value",
+    VALUE,
+    "--reason",
+    "acceptance scenario",
+  ]);
+
+  const listed = invokeCli(cfg, [
+    "config",
+    "list",
+    "--project",
+    cfg.projectId,
+    "--env",
+    cfg.environment,
+    "--output",
+    "json",
+  ]);
+  const parsed = JSON.parse(listed);
+  const stored = (parsed.values ?? []).find(
+    (row) => row.namespace === NAMESPACE && row.config_key === KEY,
+  );
+  if (stored === undefined) {
+    throw new AcceptanceStepError(
+      `config list did not return ${NAMESPACE}.${KEY} after setting it`,
+    );
+  }
+  // Parsed as JSON on the way in, so a numeric string becomes a number —
+  // the behaviour an operator typing into a form or a flag expects.
+  if (stored.value !== Number(VALUE)) {
+    throw new AcceptanceStepError(
+      `expected ${NAMESPACE}.${KEY} to be ${VALUE}, got ${JSON.stringify(stored.value)}`,
+    );
+  }
+
+  // The pre-deploy gate must pass for an environment whose required keys are
+  // satisfied. It exits non-zero otherwise, which invokeCli turns into a
+  // step failure.
+  invokeCli(cfg, ["config", "validate", "--env", cfg.environment, "--project", cfg.projectId]);
+
+  invokeCli(cfg, [
+    "config",
+    "unset",
+    "--project",
+    cfg.projectId,
+    "--env",
+    cfg.environment,
+    "--namespace",
+    NAMESPACE,
+    "--key",
+    KEY,
+    "--reason",
+    "acceptance scenario cleanup",
+  ]);
+
+  return {
+    namespace: NAMESPACE,
+    config_key: KEY,
+    value: stored.value,
+    version: parsed.version,
   };
 }
 

@@ -47,6 +47,7 @@ const SHOULD_RUN = process.env["POLARIS_ACCEPTANCE_TEST"] === "1";
 // us to update both files when a new step lands.
 const EXPECTED_STEPS = [
   "control_plane_catalog",
+  "control_plane_project_config",
   "control_plane_api_key",
   "control_plane_destination",
   "sdk_track",

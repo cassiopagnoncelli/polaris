@@ -37,6 +37,7 @@ import {
 import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { cleanupProjectConfig } from "../helpers/project-config.js";
 
 const ENABLED = process.env["POLARIS_INTEGRATION"] === "1";
 
@@ -137,7 +138,7 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
 
   afterAll(async () => {
     await store.close();
-    await db.deleteFrom("audit_records").where("project_id", "=", projectId).execute();
+    await cleanupProjectConfig({ db, projectId, environment: ENVIRONMENT });
     await db.deleteFrom("projects").where("project_id", "=", projectId).execute();
     await closeDb(db);
   });

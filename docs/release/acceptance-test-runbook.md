@@ -22,14 +22,15 @@ Each numbered step is a separate assertion block in the Vitest report.
 | Step | What it proves |
 | --- | --- |
 | 1. `control_plane_catalog` | `polaris projects sync` + `polaris sources sync` can materialise the YAML catalog into PostgreSQL. |
-| 2. `control_plane_api_key` | `polaris keys create` mints a fresh backend API key bound to one `(project, env, source)` tuple. |
-| 3. `control_plane_destination` | `polaris destinations create` + `polaris destinations enable` register and activate a webhook-sink instance. |
-| 4. `sdk_track` | The published `@polaris/node-sdk` enqueues a `checkout.started` v1 event, flushes it, and the ingester returns per-event `accepted`. |
-| 5. `ingestion_accepted` | The acceptance signal observed by step 4 is preserved end-to-end. |
-| 6. `analytics_persisted` | `analytics-projector` v1 consumed the event and ClickHouse `analytics_raw` exposes the row with `processor_name='analytics-projector'`, `processor_version='v1'`. |
-| 7. `delivery_observed` | A `delivery_records` row exists for the event on the webhook-sink destination (visible via `polaris deliveries list`). |
-| 8. `replay_dry_run` | `polaris replay create --mode dry_run` records the operator intent and `polaris replay plan` renders the deterministic plan with no DB writes. |
-| 9. `release_documentation` | The acceptance runbook itself plus the four cross-referenced operations runbooks exist and are non-empty. |
+| 2. `control_plane_project_config` | `polaris config set` / `list` / `validate` / `unset` round-trip a per-`(project, environment)` value through the audited write path — the loop an operator uses to change a project's configuration without a redeploy. |
+| 3. `control_plane_api_key` | `polaris keys create` mints a fresh backend API key bound to one `(project, env, source)` tuple. |
+| 4. `control_plane_destination` | `polaris destinations create` + `polaris destinations enable` register and activate a webhook-sink instance. |
+| 5. `sdk_track` | The published `@polaris/node-sdk` enqueues a `checkout.started` v1 event, flushes it, and the ingester returns per-event `accepted`. |
+| 6. `ingestion_accepted` | The acceptance signal observed by step 5 is preserved end-to-end. |
+| 7. `analytics_persisted` | `analytics-projector` v1 consumed the event and ClickHouse `analytics_raw` exposes the row with `processor_name='analytics-projector'`, `processor_version='v1'`. |
+| 8. `delivery_observed` | A `delivery_records` row exists for the event on the webhook-sink destination (visible via `polaris deliveries list`). |
+| 9. `replay_dry_run` | `polaris replay create --mode dry_run` records the operator intent and `polaris replay plan` renders the deterministic plan with no DB writes. |
+| 10. `release_documentation` | The acceptance runbook itself plus the four cross-referenced operations runbooks exist and are non-empty. |
 
 A **pass** means every step is `pass` or `skip` (skips are explicit
 opt-outs documented below). A **fail** means at least one step reported
@@ -47,7 +48,7 @@ the per-step table the runner prints.
 | `pnpm clickhouse:bootstrap-local` + `pnpm clickhouse:migrate` | ClickHouse schema at HEAD — `polaris.analytics_raw` must exist with the v1 columns. |
 | Ingester running | `pnpm --filter @polaris/ingester-api run start` in a background terminal (or via your usual local dev orchestration). |
 | `analytics-projector` running | `pnpm --filter @polaris/processor-analytics-projector-v1 run start` in a background terminal. |
-| Optional: webhook-sink running | Only required for step 3 + step 7. When omitted, set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` and those steps are skipped (overall verdict still PASS). |
+| Optional: webhook-sink running | Only required for step 4 + step 8. When omitted, set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` and those steps are skipped (overall verdict still PASS). |
 | Optional: `psql` on `$PATH` | Some downstream investigation tooling shells out to `psql`. The scenario itself does not require it. |
 
 ## Running it
@@ -139,6 +140,7 @@ Abridged — the actual run prints the full Vitest reporter as well.
 | Step | Likely cause | Where to look |
 | --- | --- | --- |
 | `control_plane_catalog` | `DATABASE_URL` wrong, PostgreSQL not up, migrations not applied | `docker compose ps postgres`, `pnpm db:status`, [docs/development/getting-started.md](../development/getting-started.md) |
+| `control_plane_project_config` | `project_config` migrations not applied, or the CLI cannot reach PostgreSQL | `pnpm db:status`; the step writes through the same path as `polaris config set`, so try that command by hand |
 | `control_plane_api_key` | API key INSERT collides with a stale row from a previous failed run | `psql -c "DELETE FROM api_keys WHERE source_id='payments-api' AND environment='development'"` (the test does not auto-clean to preserve a forensic trail) |
 | `control_plane_destination` | Webhook URL empty, vendor mismatch, secret-ref validation failed | Either set `POLARIS_ACCEPTANCE_WEBHOOK_URL` or set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` to skip the destination steps |
 | `sdk_track` | Ingester not running, API key never propagated, SDK queue/transport regression | `docker compose logs ingester-api`, `curl http://localhost:4000/health`, check the SDK's `onDrop` diagnostic in the scenario output |
@@ -157,8 +159,8 @@ For platform-level issues touching multiple steps:
 
 The acceptance test extends the smoke; it does not replace it. When
 both fail, fix the smoke first — the surface it covers (one event
-through the ingester to ClickHouse) is a strict subset of step 4 +
-step 6 here.
+through the ingester to ClickHouse) is a strict subset of step 5 +
+step 7 here.
 
 ## Release gate posture
 
