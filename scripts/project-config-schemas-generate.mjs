@@ -74,6 +74,11 @@ export const REGISTRY = [
   // no processor has per-project configuration at all, and sessionizer's one
   // candidate is semantic and deliberately ignored. See plan §7.
   {
+    namespace: "meta-capi",
+    packageName: "@polaris/consumer-meta-capi-v1",
+    distEntry: "consumers/meta-capi/v1/dist/project-config.js",
+  },
+  {
     namespace: "ingest",
     packageName: "@polaris/ingester-api",
     distEntry: "apps/ingester-api/dist/project-config.js",

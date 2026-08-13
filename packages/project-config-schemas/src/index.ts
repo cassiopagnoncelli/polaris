@@ -47,4 +47,35 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
       instance: [],
     },
   },
+  "meta-capi": {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        allow_replay: {
+          anyOf: [
+            {
+              type: "boolean",
+            },
+            {
+              type: "string",
+            },
+          ],
+        },
+        graph_host: {
+          minLength: 1,
+          type: "string",
+        },
+        request_timeout_ms: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
 };

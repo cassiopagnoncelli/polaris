@@ -24,7 +24,7 @@
  */
 
 import { loadEnvWithDefaults } from "@polaris/shared-config";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
   createDestinationTransportHooks,
@@ -40,6 +40,12 @@ import {
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
+import {
+  createDestinationProjectConfigLookup,
+  createPgListenerTransport,
+  createProjectConfigStore,
+  type ProjectConfigStore,
+} from "@polaris/shared-project-config";
 import { createSecretResolver, type SecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
@@ -59,10 +65,10 @@ import {
   type TransportHooks,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
-
 import type { MetaCapiRuntimeConfig } from "./config.js";
 import { createMetaCapiDescriptor } from "./descriptor.js";
 import { CONSUMER_VENDOR, CONSUMER_VERSION } from "./descriptor-identity.js";
+import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
 
 export interface BuildAppOptions {
   readonly config: MetaCapiRuntimeConfig;
@@ -80,6 +86,8 @@ export interface BuildAppOptions {
   readonly records?: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
   readonly secrets?: SecretResolver;
+  /** Injected in tests; built from the db handle otherwise. */
+  readonly projectConfigStore?: ProjectConfigStore;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => Date;
   readonly startRuntime?: boolean;
@@ -188,6 +196,29 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
     ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
   });
 
+  // Per-project overrides. Built only when this app owns its db handle; a
+  // caller injecting its own pieces gets deployment defaults for every
+  // project, which is the pre-cutover behaviour.
+  const projectConfigStore =
+    options.projectConfigStore ??
+    createProjectConfigStore({
+      db,
+      secrets,
+      listener: createPgListenerTransport({
+        connectionString: postgresConnectionString(config.postgres),
+        logger,
+      }),
+      logger,
+    });
+  void projectConfigStore.start().catch((err: unknown) => {
+    // Startup must not block on the control plane: until the store is up,
+    // every project resolves to the deployment defaults it always used.
+    logger.warn(
+      { component: "meta-capi.project-config", err },
+      "project-config store failed to start; using deployment defaults",
+    );
+  });
+
   const runtime = createDestinationConsumer({
     descriptor,
     consumerBuildVersion:
@@ -200,6 +231,10 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
     secrets,
     logger: consumerLogger,
     allowReplay: config.meta.allowReplay,
+    projectConfig: createDestinationProjectConfigLookup({
+      store: projectConfigStore,
+      namespace: PROJECT_CONFIG_NAMESPACE,
+    }),
     metrics,
     ...(options.now !== undefined ? { now: options.now } : {}),
   });

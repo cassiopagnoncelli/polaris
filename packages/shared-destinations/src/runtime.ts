@@ -58,6 +58,23 @@ import {
 } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
 import { classifySecretFailure, type SecretResolver } from "@polaris/shared-secrets";
+
+/**
+ * The runtime's view of project configuration.
+ *
+ * Deliberately a one-method seam rather than the store itself: the runtime
+ * needs a synchronous slice and nothing else, and depending on
+ * `@polaris/shared-project-config` here would make every consumer that has
+ * NOT cut over take that dependency too.
+ */
+export interface ProjectConfigLookup {
+  /** Cache-only. Returns an empty object on a miss; never performs I/O. */
+  valuesFor(projectId: string, environment: string): Readonly<Record<string, unknown>>;
+}
+
+/** Shared so a cold path does not allocate an object per delivery. */
+const EMPTY_CONFIG: Readonly<Record<string, unknown>> = Object.freeze({});
+
 import {
   consumerFamiliesFor,
   decodeEvent,
@@ -140,6 +157,19 @@ export interface DestinationConsumerOptions<Payload> {
   readonly dlqRecords?: DlqRecordRepository;
   /** Secret resolver. The runtime calls `.resolve(instance.secret_ref)`. */
   readonly secrets: SecretResolver;
+  /**
+   * Per-`(project, environment)` configuration for this consumer's namespace.
+   *
+   * Optional, and absent means "every project uses the values this consumer
+   * was constructed with" — which is exactly the behaviour before any cutover,
+   * so a consumer that has not moved yet is unaffected by this existing.
+   *
+   * Read with `peek`, never `get`: delivery is a hot path and an inline
+   * assembly would put a database round-trip, and possibly a secret
+   * resolution, inside it (plan §4.5). A miss falls back to the deployment
+   * default and schedules a refresh through the store's own machinery.
+   */
+  readonly projectConfig?: ProjectConfigLookup | undefined;
   /** Structured logger. */
   readonly logger: Logger;
   /**
@@ -306,6 +336,7 @@ export function createDestinationConsumer<Payload>(
       records: options.records,
       ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
       secrets: options.secrets,
+      projectConfig: options.projectConfig,
       producer: options.producer,
       logger: options.logger,
       now,
@@ -430,6 +461,7 @@ export function createDestinationConsumer<Payload>(
           records: options.records,
           ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
           secrets: options.secrets,
+          projectConfig: options.projectConfig,
           producer: options.producer,
           logger: options.logger,
           now,
@@ -518,6 +550,7 @@ interface ProcessOneInput<Payload> {
   readonly records: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
   readonly secrets: SecretResolver;
+  readonly projectConfig: ProjectConfigLookup | undefined;
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   readonly now: () => Date;
@@ -543,6 +576,7 @@ async function processOne<Payload>(
     records,
     dlqRecords,
     secrets,
+    projectConfig,
     producer,
     logger,
     now,
@@ -930,6 +964,11 @@ async function processOne<Payload>(
         ...(vendor_dedupe_key !== null ? { dedupe_key: vendor_dedupe_key } : {}),
         attempt,
         delivery_key,
+        // Empty when no store is wired or the scope is cold. Deliverers fall
+        // back to their constructed defaults, which is what the migrated
+        // environment variable meant.
+        projectConfig:
+          projectConfig?.valuesFor(envelope.project_id, envelope.environment) ?? EMPTY_CONFIG,
       },
     });
   } catch (err) {

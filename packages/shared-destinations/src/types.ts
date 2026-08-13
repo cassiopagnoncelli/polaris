@@ -168,6 +168,21 @@ export interface DelivererContext<Payload> {
    * when no mapper-supplied `dedupe_key` is present.
    */
   readonly delivery_key: string;
+  /**
+   * This envelope's project configuration for the consumer's namespace, RAW.
+   *
+   * Empty when no store is wired or the scope is not yet cached, which is the
+   * normal state for a consumer that has not cut over — so a deliverer must
+   * treat every key as absent-able and fall back to the value it was
+   * constructed with. That fallback is not a courtesy: the deployment default
+   * is what the migrated environment variable meant, and losing it on a cold
+   * cache would silently change vendor behaviour mid-batch.
+   *
+   * No schema is applied here. The consumer parses its own slice in strip
+   * mode, because a project may declare keys this build knows nothing about
+   * (plan §3.1) and a strict parse would fail the whole delivery over one.
+   */
+  readonly projectConfig: Readonly<Record<string, unknown>>;
 }
 
 /**

@@ -43,6 +43,10 @@ export {
   SWEEP_JITTER_RATIO,
 } from "./constants.js";
 export {
+  createDestinationProjectConfigLookup,
+  type DestinationProjectConfigLookup,
+} from "./destination-lookup.js";
+export {
   PinMissingError,
   ProjectConfigAssemblyError,
   ProjectConfigError,

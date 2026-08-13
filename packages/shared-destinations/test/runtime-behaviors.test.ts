@@ -107,6 +107,8 @@ interface DelivererCall<P> {
   attempt: number;
   /** Did the runtime hand us the resolved plaintext secret? */
   secretLength: number;
+  /** The per-project slice the runtime resolved for this envelope. */
+  projectConfig: Readonly<Record<string, unknown>>;
 }
 
 interface SecretResolverCall {
@@ -133,6 +135,7 @@ interface TestEnv {
   secretCalls: SecretResolverCall[];
   mapperCalls: MapperCall<TestPayload>[];
   delivererCalls: DelivererCall<TestPayload>[];
+  projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
   producerSends: ProducerSend[];
   descriptor: DestinationDescriptor<TestPayload>;
 }
@@ -143,12 +146,14 @@ function makeEnv({
   deliverer,
   requiredConsent = {},
   resolveSecret,
+  projectConfig,
 }: {
   instance?: DestinationInstance;
   mapper?: Mapper<TestPayload>;
   deliverer?: Deliverer<TestPayload>;
   requiredConsent?: { marketing?: boolean; analytics?: boolean };
   resolveSecret?: (ref: string) => Promise<string>;
+  projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
 } = {}): TestEnv {
   const records = new InMemoryDeliveryRecordRepository();
   const instances = new InMemoryDestinationInstanceReader();
@@ -175,6 +180,7 @@ function makeEnv({
       payload: ctx.payload,
       attempt: ctx.attempt,
       secretLength: ctx.secret.length,
+      projectConfig: ctx.projectConfig,
     });
     return { kind: "accepted", vendor_response_code: "200", vendor_response_summary: "ok" };
   };
@@ -201,6 +207,7 @@ function makeEnv({
     secretCalls,
     mapperCalls,
     delivererCalls,
+    ...(projectConfig !== undefined ? { projectConfig } : {}),
     producerSends,
     descriptor,
   };
@@ -255,6 +262,7 @@ function buildConsumer(env: TestEnv, overrides: { consumerBuildVersion?: string 
     instances: env.instances,
     records: env.records,
     secrets: env.secrets,
+    ...(env.projectConfig !== undefined ? { projectConfig: env.projectConfig } : {}),
     logger: noopLogger,
     dedupe: env.dedupe,
     ...(overrides.consumerBuildVersion !== undefined
@@ -1137,5 +1145,50 @@ describe("destination runtime — subscription naming", () => {
     await consumer.start();
 
     expect(subscriptions[0]?.queues).toEqual(["braze.redeliver"]);
+  });
+});
+
+describe("destination runtime — per-project configuration", () => {
+  it("hands the envelope's project slice to the deliverer", async () => {
+    // The property the consumer cutover rests on: a value set for THIS
+    // project reaches the code that talks to the vendor. Nothing constructed
+    // a DelivererContext directly before this, so the field could have been
+    // added and never populated and every test would still have passed.
+    const env = makeEnv({
+      projectConfig: {
+        valuesFor: (projectId) =>
+          projectId === "storefront" ? { graph_host: "graph-staging.facebook.com" } : {},
+      },
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls[0]?.projectConfig).toEqual({
+      graph_host: "graph-staging.facebook.com",
+    });
+  });
+
+  it("hands an empty slice when no lookup is wired", async () => {
+    // The pre-cutover state, and the one every consumer that has not moved
+    // still runs in: deliverers must see a usable empty object, not undefined.
+    const env = makeEnv();
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls[0]?.projectConfig).toEqual({});
+  });
+
+  it("hands an empty slice for a project the lookup does not know", async () => {
+    const env = makeEnv({ projectConfig: { valuesFor: () => ({}) } });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls[0]?.projectConfig).toEqual({});
   });
 });

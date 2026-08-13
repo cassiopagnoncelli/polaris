@@ -332,6 +332,9 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../packages/shared-project-config
       '@polaris/shared-secrets':
         specifier: workspace:*
         version: link:../../../packages/shared-secrets

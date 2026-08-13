@@ -46,6 +46,7 @@
 import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
 
 import { META_GRAPH_API_VERSION } from "./descriptor-identity.js";
+import { parseMetaCapiProjectConfig } from "./project-config.js";
 import type { MetaCapiPayload, ResolvedMetaCapiSecret } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -65,12 +66,23 @@ export interface BuildDelivererOptions {
 /** Build a `Deliverer<MetaCapiPayload>` bound to a fetch + timeout + host. */
 export function buildMetaCapiDeliverer(options: BuildDelivererOptions): Deliverer<MetaCapiPayload> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const timeoutMs = options.requestTimeoutMs;
-  const host = options.graphHost ?? "graph.facebook.com";
+  // Deployment defaults. Each is overridable per project; a project that sets
+  // nothing gets exactly these, which is what POLARIS_META_CAPI_* meant.
+  const defaultTimeoutMs = options.requestTimeoutMs;
+  const defaultHost = options.graphHost ?? "graph.facebook.com";
 
   return async function deliver(
     context: DelivererContext<MetaCapiPayload>,
   ): Promise<DelivererResult> {
+    // 0. Per-project overrides. Parsed per delivery rather than per batch
+    //    because the runtime hands the slice in on the context; the parse is a
+    //    Zod safeParse over at most three keys, and correctness here is worth
+    //    more than the microseconds — a batch-level cache would have to be
+    //    invalidated on the same signal the store already handles.
+    const projectConfig = parseMetaCapiProjectConfig(context.projectConfig);
+    const timeoutMs = projectConfig.request_timeout_ms ?? defaultTimeoutMs;
+    const host = projectConfig.graph_host ?? defaultHost;
+
     // 1. Parse secret.
     const secret = parseResolvedSecret(context.secret);
     if (secret === null) {
