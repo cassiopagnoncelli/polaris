@@ -19,6 +19,20 @@ leaves three alone with reasons stated in §14. The win is that the ad-hoc
 mechanisms disappear and the remaining ones have a defensible boundary — not
 that one table swallows everything.
 
+## Fidelity to the original requirement
+
+> In Projects (eg. `/admin/projects/storefront`) one should be able to declare
+> per-environment variables, hydrating them down to consumers. Consumers
+> should only see these variables rather than global or .env variables.
+
+| Requirement | Where satisfied | Deviation, if any |
+|---|---|---|
+| Declare variables on the project page, per environment | §3.1 free-form keys + typed schema keys; §3.6 editor (C5) | None — an earlier draft allowed only schema-declared keys; this version restores declaration to the project page |
+| Hydrated down to consumers | Snapshot pull + `NOTIFY` push (§4); assembled JSON per `(project, environment)` | Pull-through-cache with push invalidation rather than literal push — same observable behaviour, survives restarts |
+| Consumers see only these variables | §7 bootstrap split, lint-enforced | **Deliberate:** infra coordinates (Postgres/broker DSNs) must stay in env — a consumer cannot fetch config from a database it has no address for. Everything behavioural moves. |
+| Consumers receive the `(project, environment)` JSON | §3.5 snapshot | **Deliberate:** each component receives its namespace slice, not the whole bag — the whole bag would put every vendor's resolved credentials in every consumer's heap, defeating the isolation this exists to build |
+| Multiple projects; path to tenant isolation | Whole design; free-form keys are the hook for client-owned consumers | Config isolation lands now; authz-level tenancy explicitly out of scope (§14) |
+
 Every decision in this document is made. §16 is the register of what was
 decided and why; there is no open-questions section.
 
@@ -68,45 +82,61 @@ guarantee that "the CLI cannot define semantics" survives intact.
 because a UI that wrote would fork the YAML source of truth against git. That
 reasoning holds for project *identity* and is preserved — the page still
 cannot create, rename, or retire a project. It gains a per-environment
-configuration editor that writes values only. The catalog stays authoritative
-for identity; `project_config` is authoritative for values. Nothing forks.
+variables editor that writes values only (§3.6). The catalog stays
+authoritative for identity; `project_config` is authoritative for values.
+Nothing forks.
 
 ## 3. Target architecture
 
-### 3.1 Declaration in files, values in Postgres
+### 3.1 Declaration in code, values in Postgres
 
-Each component declares the keys it needs, typed, in its manifest. Consumers
-and processors already have one; `apps/ingester-api` and
-`apps/control-plane-api` gain `service.manifest.yaml` in the same shape.
+The declaration is not a new artifact. Each component already declares its
+configuration as a Zod schema in `src/config.ts` — keys, types, defaults,
+`required` (today fed from env vars). That schema stays the single source of
+truth; the only change is where its input comes from. This follows the repo's
+own doctrine — the `.env.example` header states that the Zod schemas define
+what is required and documentation derives from them, "if it drifts, the
+schemas win."
 
-```yaml
-config:
-  namespace: meta-capi
-  # project | destination_instance — see §3.3
-  scope: destination_instance
-  keys:
-    pixel_id:           { type: string,  required: true }
-    access_token:       { type: string,  required: true, secret: true }
-    graph_host:         { type: string,  required: false, default: graph.facebook.com }
-    request_timeout_ms: { type: integer, required: false, default: 5000, min: 100, max: 60000 }
-    allow_replay:       { type: boolean, required: false, default: false }
-    action_source:      { type: enum,    required: false, default: website,
-                          values: [website, app, physical_store] }
+```ts
+export const metaCapiProjectConfigSchema = z.object({
+  graph_host: nonEmptyStringSchema.default(DEFAULT_GRAPH_HOST),
+  request_timeout_ms: positiveIntSchema.default(5000),
+  allow_replay: booleanFromStringSchema.default(false),
+  action_source: z.enum(["website", "app", "physical_store"]).default("website"),
+});
 ```
 
-Types are `string | integer | number | boolean | enum | string[]`. `enum` is
-not a nicety — the values it replaces are enums today, enforced by CHECK
-constraints (`retry_policy IN ('standard','aggressive','conservative')`,
-`mode IN ('live','sandbox','test')`). Shipping only scalars would demote those
-to free-text and lose validation the platform already has. Constraints
-(`min`, `max`, `values`, `pattern`) compile to the Zod schema the write path
-validates against, so a bad value is rejected at `config set` rather than at
-delivery time.
+The existing coercion helpers (`booleanFromStringSchema`, `positiveIntSchema`)
+already parse string inputs, so a value typed into a form parses exactly as its
+env-var predecessor did — which is what keeps each service's cutover diff
+small: the schema largely survives, its input source changes.
 
-The declaration is the contract: reviewable, versioned, diffable. This is what
-makes the system checkable — a free-form key-value bag can never answer "is
-storefront/production ready to run meta-capi?"; a declared contract answers it
-before a single event moves.
+For the control plane — the admin UI's typed form, `polaris config validate`,
+the compatibility check — each component's schema is **exported as a generated
+JSON artifact, never hand-written**. This is an established repo pattern, not
+an invention: `pnpm openapi` generates the OpenAPI document from the
+ingester's Zod schemas and `openapi:check` fails CI when the generated file
+drifts from the code (`scripts/openapi-generate.mjs`). `polaris config
+generate-schemas` / `--check` does the same per component. Enum keys survive
+this round trip — `retry_policy IN ('standard','aggressive','conservative')`
+and friends are CHECK-constrained enums today, and the generated artifact
+carries `values`, so migrating them loses no validation.
+
+**Projects may also declare keys no component schema knows.** The original
+requirement is Vercel-style: the project page is where an operator declares a
+variable, not just where they fill in blanks a repo PR created. And the
+multi-tenancy trajectory requires it — a future client-owned consumer has no
+schema in this repo, so its variables *cannot* be schema-declared here.
+Free-form keys are accepted, stored, hydrated, and flagged
+(`unknown to any component schema`) by `polaris config validate` as a warning,
+not an error. They are safe because meaning lives in the reader, not the
+store: every platform component parses its slice with a strict-typed schema
+and ignores keys it doesn't declare, so a free-form key is inert until some
+consumer ships code that reads it. The checkability argument survives intact —
+"is storefront/production ready to run meta-capi?" is answered by meta-capi's
+generated schema against the stored rows, unaffected by extra keys sitting
+beside them.
 
 ### 3.2 Schema
 
@@ -115,17 +145,12 @@ CREATE TABLE project_config (
   project_id    text        NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
   environment   text        NOT NULL,
   namespace     text        NOT NULL,
-  -- '' for project-scoped namespaces; a destination_id for instance-scoped
-  -- ones (§3.3). Empty string rather than NULL because Postgres primary
-  -- keys reject NULL, and a partial-unique-index alternative would make
-  -- every lookup branch on scope.
-  instance_ref  text        NOT NULL DEFAULT '',
   config_key    text        NOT NULL,
   value         jsonb       NOT NULL,
   is_secret_ref boolean     NOT NULL DEFAULT false,
   updated_at    timestamptz NOT NULL DEFAULT now(),
   updated_by    text        NOT NULL,
-  PRIMARY KEY (project_id, environment, namespace, instance_ref, config_key),
+  PRIMARY KEY (project_id, environment, namespace, config_key),
   CONSTRAINT project_config_environment_allowed
     CHECK (environment IN ('development','staging','production')),
   CONSTRAINT project_config_namespace_format
@@ -153,7 +178,11 @@ CREATE TABLE project_config_versions (
 );
 
 CREATE INDEX project_config_lookup_idx
-  ON project_config (project_id, environment, namespace, instance_ref);
+  ON project_config (project_id, environment, namespace);
+
+-- Per-instance vendor config rides the instance row itself (§3.3).
+ALTER TABLE destinations
+  ADD COLUMN config jsonb NOT NULL DEFAULT '{}';
 ```
 
 Row-per-key, not one blob per project: per-key audit, per-key type validation,
@@ -174,51 +203,58 @@ rather than retrofitted later.
 write goes through the CLI or admin API. It is the change history. A second
 append-only table would duplicate it and drift.
 
-### 3.3 Scope: why `(project, environment)` alone is not the key
+### 3.3 Per-instance values live on the destination row
 
-A namespace declares its scope, and destination consumers are not
-project-scoped.
-
-`destinations` carries
+Destination consumers are not purely project-scoped. `destinations` carries
 `UNIQUE (project_id, environment, vendor, instance_label)`
 (`db/migrations/20260512000005_create_destinations.sql:89`), explicitly so an
 operator can run two Meta CAPI instances for the same project and environment —
-two pixels, say — and `resolveFanoutTargets` returns *all* of them for delivery.
-A key of `(project, environment, namespace)` cannot express two different
-`pixel_id` values for one project, so it would break the primary motivating
-case for this entire design.
+two pixels, say — and `resolveFanoutTargets` returns *all* of them for
+delivery. A key of `(project, environment, namespace)` cannot hold two
+different `pixel_id` values for one project.
 
-Hence `scope` in the manifest and `instance_ref` in the table:
+An earlier draft of this plan solved that by adding an `instance_ref` column
+inside `project_config`'s primary key, with an empty-string sentinel for
+project-scoped rows. It worked, but it dragged sentinels into the key, an
+un-enforceable FK, and pinning that could only run after fan-out resolution.
+The simple mechanism was already in the schema: **the instance's values belong
+on the instance's row.** `destinations` gains `config jsonb NOT NULL DEFAULT
+'{}'`, holding the consumer-interpreted values that distinguish one instance
+from its siblings (`pixel_id`; `measurement_id`; webhook-sink's URL and
+headers).
 
-- `scope: project` — ingester, processors, project-wide defaults.
-  `instance_ref = ''`.
-- `scope: destination_instance` — the five destination consumers.
-  `instance_ref = <destination_id>`, and values resolve per instance.
+Everything an instance needs already travels with that row: the runtime
+fetches a `DestinationInstance` per delivery through an existing TTL+LRU cache
+(`packages/shared-destinations/src/db/destination-instance.ts`, 60s default,
+freshness contract documented in its header), mutations already flow through
+audited CLI commands (`destinations create` / `update-ops`), and lifecycle
+comes free — config dies with the row, so there is no orphan problem and no
+conditional-FK gymnastics. No new cache, no new invalidation path, no sentinel.
 
-Instance-scoped lookups fall back to the project-scoped row of the same
-namespace when an instance has no value of its own, so shared settings
-(`graph_host`, `request_timeout_ms`) are set once per project while
-distinguishing values (`pixel_id`, `access_token`) are set per instance.
+Resolution order for a destination consumer, applied at Zod parse:
 
-**Boundary with the `destinations` table.** Both now hold per-instance values,
-so the split has to be stated or it will drift back into ambiguity:
+```text
+schema defaults  →  project_config[namespace]  →  destinations.config
+```
 
-> A value lives on the `destinations` row if the **shared destination runtime**
-> interprets it — `status`, `mode`, `max_rps`, `max_concurrency`,
-> `retry_policy`, `dead_letter_threshold`, `replay_opt_in`. It lives in
-> `project_config` if the **consumer's own code** interprets it — `pixel_id`,
-> `graph_host`, `request_timeout_ms`, credentials.
+Shared settings (`graph_host`, `request_timeout_ms`) are set once per project;
+distinguishing values are set per instance; the instance wins where both
+speak.
 
-Runtime knobs and lifecycle state stay where they are, with their existing CLI,
-admin UI, and validation. Nothing migrates out of `destinations`; this plan adds
-the vendor-specific half that had nowhere to live except inside a secret.
+**Boundary between the two stores**, stated so it cannot drift back into
+ambiguity:
 
-`instance_ref` carries no foreign key — it cannot, since it is `''` for
-project-scoped rows and Postgres has no conditional FK. Orphans are not a
-problem today because destinations are only ever disabled, never deleted
-(`apps/polaris-cli/src/commands/destinations/` has `disable`, no `delete`). If
-a delete path is ever added it must reap the instance's config rows in the same
-transaction, and this paragraph is the reason why.
+> A value lives in typed `destinations` **columns** if the shared destination
+> runtime interprets it — `status`, `mode`, `max_rps`, `max_concurrency`,
+> `retry_policy`, `dead_letter_threshold`, `replay_opt_in`. A value lives in
+> `destinations.config` if the **consumer's own code** interprets it and it
+> varies per instance. It lives in `project_config` if the consumer's code
+> interprets it and it is shared across the project. Credentials stay in
+> `secret_ref`.
+
+Consumers with two secrets per instance keep today's answer: `secret_ref`
+points at one provider document whose JSON carries multiple fields. What
+changes is that non-secret values no longer hide in there with them.
 
 ### 3.4 Namespace and version coexistence
 
@@ -230,15 +266,17 @@ simultaneously as separate deployments reading the same stream — note that
 would otherwise fight over key types.
 
 The rule that makes sharing safe: **within a namespace, config evolution is
-additive-only.** A new manifest version may add optional keys with defaults.
+additive-only.** A new component version may add optional keys with defaults.
 It may not change an existing key's type, remove it, or promote it from
 optional to required. A change that needs to break the contract takes a new
 namespace (`meta-capi-v2`), and its migration runbook copies values across
 first.
 
-A manifest-compatibility lint enforces this by diffing each manifest's
-`config:` block against the previous version in the same repo, so a breaking
-config change fails its own PR rather than a rolling deploy.
+A compatibility check enforces this by diffing the **generated schema
+artifacts** (§3.1) — the checked-in JSON that `polaris config generate-schemas
+--check` already keeps in sync with the code — against the previous commit, so
+a breaking config change fails its own PR rather than a rolling deploy. Two
+files diffed in CI, no database access needed.
 
 ### 3.5 What a component receives
 
@@ -258,13 +296,22 @@ interface ProjectConfigSnapshot {
 }
 ```
 
-Resolution at assembly: manifest `default` → stored value. Missing +
-`required: true` is a hard error, never a silent empty string.
+Resolution at assembly: schema `default` → stored value. Missing + required is
+a hard error, never a silent empty string.
 
-**A `secret: true` key only ever accepts a reference.** The database cannot
-know which keys are secret — that lives in the manifest — so enforcement is two
-layers. The CLI and admin API reject a write to a `secret: true` key unless the
-value parses as a `provider:ref` via `parseSecretReference`, and set
+**Slices parse in strip mode, never `.strict()`.** The repo uses `.strict()`
+for catalog files, where an unknown field is a typo worth failing on. Here it
+would be a footgun: free-form keys (§3.1) are legitimate residents of the same
+`(project, environment)` bag, so a consumer that `.strict()`-parsed its slice
+would start failing the moment an operator declared any key it doesn't know —
+one free-form variable quarantining every project. Strip mode makes undeclared
+keys inert by construction, which is precisely the property §3.1's free-form
+argument relies on.
+
+**A secret-typed key only ever accepts a reference.** The database cannot know
+which keys are secret — that lives in the component's schema — so enforcement
+is two layers. The CLI and admin API reject a write to a secret-typed key
+unless the value parses as a `provider:ref` via `parseSecretReference`, and set
 `is_secret_ref = true`; the CHECK constraint in §3.2 then rejects a malformed
 ref even on a direct SQL write. Without both, an operator typing the credential
 itself into `polaris config set` would put plaintext in Postgres, in shell
@@ -277,6 +324,85 @@ form is a frozen object in which secret-typed values are `Secret<T>` instances
 of that `(project, environment)` pair for every purpose except that printing
 it cannot leak a credential. Nothing hands raw plaintext to a serializer by
 accident.
+
+### 3.6 Admin UI: per-environment variables at `/admin/projects/{project_id}`
+
+The project detail page gains a **Variables** panel. This is the interface the
+requirement names — the CLI is its automation twin, not the other way round.
+
+**Anatomy.** The three environments render as tabs — server-rendered links
+carrying `?env=development|staging|production` (default `development`), the
+same no-JavaScript filter idiom the rest of the admin uses. Under the active
+tab, one table per namespace, and the table *is* the effective view — the
+exact object §3.5's snapshot would assemble:
+
+- a row for every key in the component's generated schema, defaults rendered
+  greyed with source `default`; stored values with source `set`, plus
+  `updated_at` / `updated_by`;
+- free-form rows flagged `unknown to any schema` in warning colour;
+- missing required keys pinned to the top of their namespace with a red chip,
+  and a per-namespace status line ("meta-capi — 2 required keys missing") in
+  the panel header. These are the same facts `polaris config validate` prints
+  and `/health` lists, read through the same query — three surfaces, one
+  truth.
+- secret-typed rows show the provider badge and the ref, never a resolved
+  value — the precedent the destinations page already sets by rendering
+  `secret_ref` labelled as such.
+- namespaces whose consumer is instance-scoped (§3.3) end with a link to that
+  project + environment's destination rows; per-instance values are edited on
+  the destination detail page, which owns the row's lifecycle, not here.
+
+**Write flows.** Three POSTs, re-rendering the detail page under action URLs
+in the house style (`…/keys/x/revoke` precedent):
+
+```text
+POST /admin/projects/:projectId/config/:environment/set
+POST /admin/projects/:projectId/config/:environment/unset
+POST /admin/projects/:projectId/config/:environment/add     (free-form key)
+```
+
+- Inputs are typed from the generated schema — enum → `<select>`, boolean →
+  select, integer → number field, string → text; secret-typed keys render a
+  ref field rejected server-side unless it parses via `parseSecretReference`.
+  The `add` form takes namespace (datalist of known namespaces, free text
+  allowed), key, and value.
+- Authorization is the admin's existing rule, unchanged: resolve the target,
+  gate on the **row's** environment in the handler — `admin` for development
+  and staging, `POLARIS_ADMIN_PRODUCTION_MIN_ROLE` (default `owner`) for
+  production (`admin/actions/authorize.ts`, which also documents why the
+  service-env production gate is deliberately not reused here).
+- Friction is proportional to blast radius. Every mutation requires the
+  reason field (`MIN_REASON_LENGTH`, landing verbatim in the audit record),
+  and production forms carry the standard immediate-effect warning banner.
+  The full typed-confirmation ritual is reserved for the two shapes that can
+  break delivery in one click: unsetting a required key, and changing a
+  secret ref in production.
+- Concurrent edits: each edit form carries the row's `updated_at` as a hidden
+  field and the write is compare-and-set. A mismatch re-renders with a
+  conflict notice instead of silently clobbering the other operator. Row-per-
+  key storage (§3.2) already makes edits to *different* keys conflict-free.
+
+**Invariants.**
+
+- **One write path.** The three handlers call the same shared mutation
+  functions the CLI uses — upsert, version bump, audit record, `pg_notify`,
+  one transaction (§4.4). The UI gets no SQL of its own; if the two surfaces
+  can disagree, one of them is wrong.
+- Project identity stays read-only per §2 — no create, rename, or retire.
+- **No bulk ".env import" box, deliberately.** It is the feature an operator
+  would most expect and the one that would hurt: it invites pasting a file
+  containing live credentials as plain values, straight past the secret-ref
+  enforcement in §3.5. The backfill script (§10) is the sanctioned migration
+  path; it runs where the real values already live.
+- Generated schema artifacts are baked into the control-plane image at build
+  time, exactly like the catalog YAML the page header already warns about. A
+  component deployed newer than the admin image renders its not-yet-known keys
+  as free-form rows rather than typed ones — degraded rendering, never a
+  blocked write.
+
+Implementation lands as `admin/pages/project-config.ts` (renderer), reads
+added to `admin/queries.ts`, routes registered in `admin/plugin.ts` beside the
+destination mutations.
 
 ## 4. Cache and invalidation
 
@@ -303,8 +429,11 @@ during the gap are lost — cheap, and it is the only correct recovery.
 ### 4.2 Read path
 
 The cache is a bounded in-process LRU keyed
-`${projectId}\0${environment}\0${namespace}\0${instanceRef}`. **Reads never
-touch the database except on cold miss.** There is no inline revalidation.
+`${projectId}\0${environment}\0${namespace}` — matching the requirement's own
+words: stored per project, per environment, once. Per-instance values are not
+this cache's problem; they arrive on the `DestinationInstance` row through its
+existing cache (§3.3). **Reads never touch the database except on cold miss.**
+There is no inline revalidation.
 
 Freshness comes from two independent mechanisms:
 
@@ -335,7 +464,7 @@ entry is only invalidated by a message whose `version` is strictly greater
 than the cached entry's version. A late v4 after a cached v5 is ignored.
 
 **Negative caching.** A `(project, environment)` with no rows is legitimate —
-it means "all manifest defaults". That result is cached like any other, so an
+it means "all schema defaults". That result is cached like any other, so an
 all-defaults project does not query on every batch. This matches the auth
 cache's existing negative-TTL behaviour.
 
@@ -396,14 +525,15 @@ Rollback un-does all four. There is no ordering to get wrong.
 ### 4.5 Batch pinning
 
 A batch off `analytics.events` carries events from many projects, so pinning is
-a two-pass loop, not a single lookup: scan the batch, resolve fan-out targets
-per event, collect the distinct
-`(project_id, environment, namespace, instance_ref)` keys, `pin()` them in one
-call, then process every event against the pinned handle. **Pinning follows
-fan-out resolution, not the other way round** — for an instance-scoped
-namespace the `destination_id` is not known until fan-out has run. A batch
-cannot straddle two config versions, and the pinned `version` is stamped onto
-`delivery_records.config_version`.
+a two-pass loop, not a single lookup: scan the batch for distinct
+`(project_id, environment)` pairs, `pin()` them in one call, then process every
+event against the pinned handle. A batch cannot straddle two project-config
+versions, and the pinned `version` is stamped onto
+`delivery_records.config_version`. Instance values are read from the
+`DestinationInstance` the runtime has already fetched for the delivery, so
+they need no pinning pass of their own; their freshness contract is that
+cache's existing 60s TTL, the same one `status` and `max_rps` changes ride
+today.
 
 A project whose config fails to assemble is skipped for its own events only —
 the rest of the batch proceeds. One project's misconfiguration must never stall
@@ -412,7 +542,7 @@ a shared stream.
 **The ingester does not lazily miss.** It already enumerates projects at
 startup for the readiness report (§5), so it prewarms every
 `(project, environment)` pair then and relies on `NOTIFY` for projects created
-later. A cold miss on the ingest request path serves manifest defaults
+later. A cold miss on the ingest request path serves schema defaults
 immediately and warms asynchronously — it never adds a database round-trip to
 ingest p99.
 
@@ -420,7 +550,7 @@ ingest p99.
 
 ```ts
 export interface ProjectConfigStore {
-  /** Cached read; assembles namespace slice over manifest defaults. */
+  /** Cached read; assembles the namespace slice, parsed by the component's schema. */
   get(key: ProjectConfigKey): Promise<ProjectConfigSnapshot>;
   /** Batch-pinned handle held for the lifetime of one batch. */
   pin(keys: readonly ProjectConfigKey[]): Promise<PinnedConfig>;
@@ -439,8 +569,8 @@ Fail-closed everywhere is wrong here, and the asymmetry is deliberate:
 | Path | Missing required key | Store unreachable |
 |---|---|---|
 | Service startup | **Start anyway**; quarantine that project, list it in `/health`. | **Refuse to start** — cannot serve any project. |
-| Ingest (`ingester-api`) | **Fail soft** — apply manifest default, meter, serve the request. | Serve last-known cache indefinitely. |
-| Processors | Fail soft — manifest default, meter. | Serve stale. |
+| Ingest (`ingester-api`) | **Fail soft** — apply schema default, meter, serve the request. | Serve last-known cache indefinitely. |
+| Processors | Fail soft — schema default, meter. | Serve stale. |
 | Delivery (consumers) | **Fail closed** — skip the instance, `reason="config_incomplete"`. | Serve stale. |
 
 **A service never refuses to boot over a project's configuration.** An earlier
@@ -449,7 +579,7 @@ unacceptable: fifty projects, one typo, and every replica of all sixteen
 services refuses to start — one project's misconfiguration converted into a
 platform-wide outage, caused by the safety mechanism rather than the fault. A
 service refuses to start only for conditions that make it unable to serve *any*
-project: the config store unreachable at boot, or its own manifest malformed.
+project: the config store unreachable at boot.
 
 Per-project incompleteness is instead **quarantined**: the project is excluded
 from that namespace's processing, logged once, metered on
@@ -626,8 +756,8 @@ project × environment from:
 - the ~30 migrating `POLARIS_*` variables and their current deployed values,
 - the two comma-separated override strings, expanded to one row per project,
 - `measurement_id` and `firebase_app_id` **extracted out of** GA4 resolved
-  secret payloads into plain config rows, leaving `api_secret` as the only
-  genuinely secret field.
+  secret payloads into each instance's `destinations.config`, leaving
+  `api_secret` as the only genuinely secret field.
 
 That last item shrinks the secret surface as a side effect and is the clearest
 demonstration that the mechanism is doing its job.
@@ -653,16 +783,19 @@ Big-bang is only safe with a gate that runs *before* the rollout, and CI cannot
 be that gate — a PR pipeline has no access to production's `project_config`
 table, so it can only check things that live in the repo. The two are split:
 
-1. **In CI, per PR:** manifest well-formedness and the additive-only
-   compatibility rule (§3.4). Catches "this manifest change would break an
-   existing project" at review time.
+1. **In CI, per PR:** generated-schema drift (`polaris config generate-schemas
+   --check`, the `openapi:check` pattern) and the additive-only compatibility
+   rule (§3.4). Catches "this schema change would break an existing project"
+   at review time.
 2. **As a pre-deploy job in the target environment:**
    `polaris config validate --env <env> [--component <ns>]`, run against that
    environment's own database with the rollout blocked on its exit code. It
-   enumerates projects *and* destination instances — an instance-scoped
-   namespace is only complete when every active instance has its required keys,
-   so validating per project would miss a newly created second pixel entirely.
-   It lists missing `namespace[.instance].key` triples. `--resolve` additionally
+   enumerates projects *and* active destination rows — a consumer with an
+   instance schema is only complete when every active instance's
+   `destinations.config` satisfies it, so validating per project would miss a
+   newly created second pixel entirely. It lists missing
+   `namespace[.instance].key` triples and warns (exit 0) on keys unknown to
+   every schema (§3.1). `--resolve` additionally
    dereferences secret refs against the live provider; it is opt-in because the
    plain check only needs the ref to be present and well-formed, and requiring
    Vault credentials for every validation run would be its own problem.
@@ -701,12 +834,12 @@ covers both mechanisms failing.
 
 | # | Workstream | Depends on | Parallel? |
 |---|---|---|---|
-| C0 | Single-source the environment enum (§15) | — | — |
-| C1 | `project_config`, `project_config_versions`, `delivery_records.config_version` migrations; rewrite the two prohibition comments and their tests | C0 | — |
-| C2 | `packages/shared-project-config`: store, LRU, sweep, LISTEN/NOTIFY listener + reconnect, single-flight, monotonic guard, `Secret<T>` | C1 | — |
-| C3 | Manifest `config:` block schema + parser incl. `scope` (§3.3) + `service.manifest.yaml` for the two apps; manifest-compat lint (§3.4) | C1 | with C2 |
+| C0 | Single-source the environment enum (§15) — card `8KY5SKZX` (ready) | — | — |
+| C1 | `project_config`, `project_config_versions`, `delivery_records.config_version`, `destinations.config` migrations; rewrite the two prohibition comments and their tests — card `WDKNARYV` | C0 | — |
+| C2 | `packages/shared-project-config`: store, LRU, sweep, LISTEN/NOTIFY listener + reconnect, single-flight, monotonic guard, `Secret<T>` — card `Q54PQL99` | C1 | — |
+| C3 | `polaris config generate-schemas` / `--check` (Zod → JSON artifact per component, `openapi:check` pattern); additive-only compat check (§3.4) | C1 | with C2 |
 | C4 | `polaris config get/set/unset/list/validate/invalidate`, audit writes, `projects sync` post-sync report, pre-deploy validate job | C2, C3 | — |
-| C5 | Admin UI per-environment config editor on the project detail page | C4 | yes |
+| C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
 | C6 | Wire Vault as production secret provider; restrict `env:` to bootstrap; split transient vs. permanent secret-resolution failure (§6) | C2 | yes |
 | C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
 | C8 | Fan-out project filter + pre-merge blast-radius query | C2 | yes |
@@ -747,12 +880,12 @@ config resolution fails closed at startup. Merging them silently changes a
 gate's failure semantics, so it is a follow-up card with that change made
 explicit — not a quiet consequence of this work.
 
-**A manifest change can invalidate every project.** Adding a `required: true`
-key with no default makes every existing project invalid and blocks every
-deploy. The additive-only rule in §3.4 is what prevents it, enforced by the
-manifest-compat lint in CI — the one check that *can* run in a PR, since it
-compares two manifests in the repo and needs no database. A manifest PR that
-would break an existing project fails its own build.
+**A schema change can invalidate every project.** Adding a required key with
+no default makes every existing project invalid and blocks every deploy. The
+additive-only rule in §3.4 is what prevents it, enforced by diffing the
+generated artifacts in CI — the one check that *can* run in a PR, since it
+compares two checked-in files and needs no database. A schema PR that would
+break an existing project fails its own build.
 
 **Config is not a security perimeter.** `docs/README.md:45` states project
 boundaries are an operational scoping device, and authorization remains by
@@ -809,9 +942,16 @@ Cheap now, expensive once there is data.
 | Cache bound | 4096 LRU, evictions alerted | Far above realistic fleet size; eviction means the bound is wrong |
 | Secrets in snapshot | Resolved values, boxed in `Secret<T>` | Operator's call; boxing removes the serialization leak class |
 | Namespace scheme | Component name, additive-only evolution | `destinations` has no version pin; v1/v2 coexist and share a namespace |
-| Config scope | `project` or `destination_instance`, via `instance_ref` | Two Meta CAPI instances per project+env are explicitly supported; a project-only key cannot hold two `pixel_id`s |
-| Instance fallback | Instance row falls back to the project row | Shared settings set once; only distinguishing values repeated per instance |
-| `destinations` columns | Stay put; nothing migrates | Shared-runtime knobs vs. consumer-interpreted values is the boundary — moving working columns is churn with no gain |
+| Declaration model | Zod schema in each component's code; JSON artifact generated + CI drift-checked | The repo's stated doctrine ("if it drifts, the schemas win") and its `openapi:check` precedent; hand-written manifest YAML would be a second source of truth |
+| Free-form project keys | Allowed; validate warns, never blocks | The original requirement ("declare … variables" on the project page) and the client-owned-consumer future both need keys no repo schema knows; strip-mode parsing keeps them inert |
+| Per-instance values | `destinations.config jsonb`, merged over the project slice | Supersedes the earlier `instance_ref`-in-PK design: the instance row already exists with its own cache, audited mutations, and lifecycle — no sentinel, no conditional FK, no pin-after-fan-out |
+| Slice parsing mode | Strip, never `.strict()` | A `.strict()` consumer would quarantine every project the moment one free-form key was declared |
+| `destinations` typed columns | Stay put; nothing migrates | Shared-runtime knobs vs. consumer-interpreted values is the boundary — moving working columns is churn with no gain |
+| Value types | Whatever the component's Zod schema expresses | Enum values are CHECK-constrained today; the schema keeps that validation, and coercion helpers make string inputs parse like env vars |
+| UI write path | The CLI's shared mutation functions, verbatim | Two surfaces that could disagree means one is broken; the UI gets no SQL of its own |
+| UI mutation friction | Reason always; typed confirmation only for unset-required and production secret changes | The house ritual exists for rare destructive acts; applying it to every value edit teaches operators to click through it |
+| UI authorization | Gate on the row's environment, in the handler | `admin/actions/authorize.ts` documents why the service-env gate is a non-protection here; production rows escalate to `POLARIS_ADMIN_PRODUCTION_MIN_ROLE` |
+| Bulk `.env` import | Excluded | Invites pasting live credentials as plain values past the secret-ref enforcement; the backfill job (§10) is the migration path |
 | Replay config | Current config, version stamped | Rotated credentials would fail the job; stale config resurrects abandoned setup |
 | Startup failure mode | Start and quarantine the project | Refusing to boot turns one project's typo into a fleet-wide outage |
 | Quarantine vs. `/readyz` | Body field and metric only; never affects readiness | Folding it into readiness recreates the same outage one indirection away |
