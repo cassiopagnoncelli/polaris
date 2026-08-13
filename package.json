@@ -44,6 +44,8 @@
     "rabbitmq:destroy": "node scripts/rabbitmq-provision.mjs --destroy",
     "openapi": "pnpm -r --if-present --filter @polaris/ingester-api... run build && node scripts/openapi-generate.mjs",
     "openapi:check": "pnpm -r --if-present --filter @polaris/ingester-api... run build && node scripts/openapi-generate.mjs --check",
+    "config-schemas": "node scripts/project-config-schemas-generate.mjs",
+    "config-schemas:check": "node scripts/project-config-schemas-generate.mjs --check",
     "smoke:vertical-slice": "node scripts/smoke/vertical-slice.mjs",
     "test:smoke": "POLARIS_SMOKE_DOCKER=1 vitest run --root . tests/smoke",
     "test:integration": "POLARIS_INTEGRATION=1 vitest run --root . tests/integration",
@@ -62,6 +64,7 @@
     "tsx": "^4.20.3",
     "typescript": "6.0.3",
     "vitest": "4.1.6",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
   }
 }

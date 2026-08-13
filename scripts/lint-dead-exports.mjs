@@ -59,6 +59,9 @@ const ALLOW = new Map([
   // separate cards, so the store has no in-repo caller until they land.
   // Remove this entry once the first service consumes it.
   ["packages/shared-project-config", "store lands before the services that wire it"],
+  // Generated schema surface, consumed by control-plane-api and `polaris
+  // config validate` in later cards.
+  ["packages/project-config-schemas", "generated schema artifacts land before their consumers"],
 ]);
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);

@@ -1,0 +1,30 @@
+{
+  "name": "@polaris/project-config-schemas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generated JSON Schema artifacts for per-component project configuration. Produced by `pnpm config-schemas` from each participating component's exported Zod schemas; consumed by the control plane (typed admin forms, `polaris config validate`). Only package.json and tsconfig.json are hand-written — everything else is generated.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "schemas"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src",
+    "format": "biome format --write src"
+  }
+}

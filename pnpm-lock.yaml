@@ -38,6 +38,9 @@ importers:
       yaml:
         specifier: 2.9.0
         version: 2.9.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   apps/control-plane-api:
     dependencies:
@@ -410,6 +413,8 @@ importers:
       jose:
         specifier: ^6.2.2
         version: 6.2.8
+
+  packages/project-config-schemas: {}
 
   packages/shared-clickhouse:
     dependencies:
