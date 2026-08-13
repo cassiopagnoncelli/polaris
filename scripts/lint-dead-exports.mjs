@@ -60,6 +60,19 @@ const ALLOW = new Map([
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
 const SOURCE_EXT = new Set([".ts", ".mts", ".tsx"]);
 
+/**
+ * Extensions scanned when looking for USES of a symbol.
+ *
+ * Wider than `SOURCE_EXT` on purpose. Exports are declared in TypeScript, but
+ * they are consumed by plain scripts too: `scripts/rabbitmq-provision.mjs`
+ * imports `declareSuperStream`, `deleteSuperStream`, `deleteComponentQueues`
+ * and `DEFAULT_STREAM_MAX_BYTES` from `@polaris/shared-transport`, and it is
+ * the ONLY caller of several of them. Scanning references as TypeScript-only
+ * reported all four as dead — the provisioner that creates every stream in
+ * the platform was invisible to the check.
+ */
+const REFERENCE_EXT = new Set([".ts", ".mts", ".tsx", ".mjs", ".cjs", ".js"]);
+
 // Values only. A type with no external reference is weak evidence — it may
 // simply describe an internal shape — whereas an exported FUNCTION that
 // nothing calls is either missing wiring or dead code. Every instance this
@@ -67,7 +80,7 @@ const SOURCE_EXT = new Set([".ts", ".mts", ".tsx"]);
 const DECLARATION =
   /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|class|const)\s+([A-Za-z_$][\w$]*)/gm;
 
-function walk(dir, out = []) {
+function walk(dir, out = [], extensions = SOURCE_EXT) {
   let entries;
   try {
     entries = readdirSync(dir);
@@ -83,8 +96,8 @@ function walk(dir, out = []) {
     } catch {
       continue;
     }
-    if (stat.isDirectory()) walk(full, out);
-    else if (SOURCE_EXT.has(entry.slice(entry.lastIndexOf(".")))) out.push(full);
+    if (stat.isDirectory()) walk(full, out, extensions);
+    else if (extensions.has(entry.slice(entry.lastIndexOf(".")))) out.push(full);
   }
   return out;
 }
@@ -126,7 +139,7 @@ export function findDeadExports(root = DEFAULT_ROOT) {
   // toward calling things live, so a report here is worth investigating.
   const referenced = new Set();
   for (const dir of CONSUMER_DIRS) {
-    for (const file of walk(join(root, dir))) {
+    for (const file of walk(join(root, dir), [], REFERENCE_EXT)) {
       if (isTestFile(file)) continue;
       const rel = relative(root, file);
       const pkg = rel.split(sep).slice(0, 2).join("/");

@@ -54,6 +54,24 @@ describe("findDeadExports", () => {
     expect(names()).toEqual([]);
   });
 
+  it("counts a plain .mjs script as a caller", () => {
+    // `scripts/rabbitmq-provision.mjs` is the only caller of
+    // `declareSuperStream`, `deleteSuperStream`, `deleteComponentQueues` and
+    // `DEFAULT_STREAM_MAX_BYTES` — it provisions every stream on the
+    // platform. Scanning references as TypeScript-only reported all four as
+    // dead, so the baseline carried eight symbols whose caller the check
+    // simply could not see.
+    seed(
+      "packages/shared-thing/src/topology.ts",
+      "export function declareSuperStream(): number {\n  return 1;\n}\n",
+    );
+    seed(
+      "scripts/provision.mjs",
+      'import { declareSuperStream } from "@polaris/shared-thing";\ndeclareSuperStream();\n',
+    );
+    expect(names()).toEqual([]);
+  });
+
   it("still reports a symbol only its own tests use", () => {
     // The exact shape of every mechanism this check was written for: a unit
     // test proves the helper works, and no production code ever calls it.
