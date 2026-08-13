@@ -468,6 +468,9 @@ importers:
       '@polaris/shared-environments':
         specifier: workspace:*
         version: link:../shared-environments
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../shared-secrets
       kysely:
         specifier: ^0.29.0
         version: 0.29.0

@@ -97,6 +97,14 @@ export {
   type ProcessorRunScope,
 } from "./queries/processor-runs.js";
 export {
+  findProjectConfigValue,
+  type ListProjectConfigInput,
+  listProjectConfig,
+  type ProjectConfigRow,
+  type ProjectConfigValueRef,
+  readProjectConfigVersion,
+} from "./queries/project-config.js";
+export {
   fetchAllProjects,
   fetchAllSources,
   fetchSourcesById,
@@ -194,6 +202,17 @@ export {
   processorTargetId,
   toProcessorSnapshot,
 } from "./mutations/processor-activations.js";
+export {
+  type InvalidateProjectConfigInput,
+  invalidateProjectConfigWithAudit,
+  PlaintextSecretError,
+  type ProjectConfigAuditSnapshot,
+  type SetProjectConfigInput,
+  setProjectConfigValueWithAudit,
+  toProjectConfigSnapshot,
+  type UnsetProjectConfigInput,
+  unsetProjectConfigValueWithAudit,
+} from "./mutations/project-config.js";
 export {
   cancelReplayJobWithAudit,
   createReplayJobWithAudit,

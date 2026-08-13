@@ -8,66 +8,29 @@
  *   `consumers/<vendor>/v<n>/mappers/` — NEVER in PostgreSQL.
  *
  * This module enforces that contract before any value reaches the DB
- * repository. The rejection list of disallowed flag/argument names lives
- * here so every command in the group enforces the same gate.
+ * repository, for the CLI's flag surface.
+ *
+ * The token list itself moved to `@polaris/shared-control-plane` when
+ * `destinations.config` and `project_config.value` landed: those are `jsonb`,
+ * so the rule now has to be enforced on the KEYS of a bag at the database
+ * layer too, and the database layer cannot import from `apps/`. It is
+ * re-exported here under its original name so existing imports and the
+ * structural tests in `destinations-commands.test.ts` keep working.
  *
  * @see docs/architecture/06-destinations.md "Mapping Semantics"
+ * @see packages/shared-control-plane/src/mapping-tokens.ts
  * @see docs/implementation/tasks/P6-004-destination-instance-cli.md
  */
+import {
+  FORBIDDEN_MAPPING_FLAG_TOKENS,
+  normaliseMappingToken,
+} from "@polaris/shared-control-plane";
 import { UsageError } from "../../errors.js";
 
-/**
- * Flag and argument tokens that look like an attempt to declare mapping
- * semantics. If the CLI ever receives one of these, every destinations
- * command rejects with a usage error BEFORE any DB write happens.
- *
- * The match is case-insensitive and matches both the flag form
- * (`--field-map`) and the underlying option name commander stores
- * (`fieldMap`).
- */
-export const FORBIDDEN_MAPPING_FLAG_TOKENS: readonly string[] = [
-  "map",
-  "maps",
-  "mapping",
-  "mappings",
-  "field-map",
-  "field_map",
-  "fieldmap",
-  "field-mapping",
-  "field_mapping",
-  "fieldmapping",
-  "event-map",
-  "event_map",
-  "eventmap",
-  "event-mapping",
-  "event_mapping",
-  "eventmapping",
-  "target-field",
-  "target_field",
-  "targetfield",
-  "vendor-field",
-  "vendor_field",
-  "vendorfield",
-  "canonical-field",
-  "canonical_field",
-  "canonicalfield",
-  "property-map",
-  "property_map",
-  "propertymap",
-];
+export { FORBIDDEN_MAPPING_FLAG_TOKENS };
 
-/**
- * Normalise a flag/option name into the same shape as
- * {@link FORBIDDEN_MAPPING_FLAG_TOKENS}. commander stores option names in
- * camelCase (`--field-map` -> `fieldMap`), so we lowercase and convert
- * camelCase boundaries to hyphens before comparing.
- */
-function normaliseFlagName(name: string): string {
-  return name
-    .replace(/^--?/, "")
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase();
-}
+/** @deprecated Use `normaliseMappingToken` from `@polaris/shared-control-plane`. */
+const normaliseFlagName = normaliseMappingToken;
 
 /**
  * Reject any flag/argument token that looks like an attempt to define

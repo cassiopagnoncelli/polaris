@@ -20,6 +20,7 @@
 import type { CommandDefinition } from "../command.js";
 import { auditCommand } from "./audit/index.js";
 import { clickhouseRebuildCommand } from "./clickhouse-rebuild/index.js";
+import { configCommand } from "./config/index.js";
 import { deliveriesCommand } from "./deliveries/index.js";
 import { destinationsCommand } from "./destinations/index.js";
 import { dlqCommand } from "./dlq/index.js";
@@ -40,6 +41,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   keysCommand,
   destinationsCommand,
   processorsCommand,
+  configCommand,
   operatorsCommand,
   auditCommand,
   exportCommand,
@@ -53,6 +55,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
 export {
   auditCommand,
   clickhouseRebuildCommand,
+  configCommand,
   deliveriesCommand,
   destinationsCommand,
   dlqCommand,

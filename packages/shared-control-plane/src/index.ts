@@ -47,6 +47,13 @@ export {
   ProductionMutationRefusedError,
 } from "./gate.js";
 export {
+  assertNoMappingSemantics,
+  FORBIDDEN_MAPPING_FLAG_TOKENS,
+  isMappingToken,
+  MappingSemanticsError,
+  normaliseMappingToken,
+} from "./mapping-tokens.js";
+export {
   METRIC_OPERATOR_GATE_DENIED_TOTAL,
   type OperatorGateDenialLabels,
   type OperatorGateMetricsSink,
