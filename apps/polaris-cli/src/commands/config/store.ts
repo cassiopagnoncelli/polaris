@@ -14,6 +14,7 @@ import {
   type AuditActorSource,
   type AuditEnvironment,
   connectDb,
+  fetchAllProjects,
   invalidateProjectConfigWithAudit,
   listProjectConfig,
   type MutationOutcome,
@@ -39,6 +40,8 @@ export interface ConfigScope {
 
 export interface ConfigStore {
   list(scope: ConfigScope, namespace?: string): Promise<readonly ProjectConfigRow[]>;
+  /** Every project id, for validating a whole environment at once. */
+  listProjectIds(): Promise<readonly string[]>;
   version(scope: ConfigScope): Promise<bigint>;
   set(
     input: ConfigScope & {
@@ -81,6 +84,7 @@ export function defaultConfigStore(env: NodeJS.ProcessEnv): ConfigStore {
         environment: scope.environment,
         ...(namespace !== undefined ? { namespace } : {}),
       }),
+    listProjectIds: async () => (await fetchAllProjects(handle.db)).map((row) => row.project_id),
     version: (scope) => readProjectConfigVersion(handle.db, scope.projectId, scope.environment),
     set: (input, audit) => setProjectConfigValueWithAudit(handle.db, toAudit(audit), input),
     unset: (input, audit) => unsetProjectConfigValueWithAudit(handle.db, toAudit(audit), input),

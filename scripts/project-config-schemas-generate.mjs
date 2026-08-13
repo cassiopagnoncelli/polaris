@@ -242,7 +242,8 @@ function buildIndexSource(entries) {
     " *",
     " * Generated from each participating component's exported Zod schemas;",
     " * secret-typed keys carry `secret: true` and are listed in `secretKeys`.",
-    " * Empty until the first per-service cutover (sessionizer) lands.",
+    " * One entry per component that has cut over to project configuration;",
+    " * empty before the first cutover lands.",
     " */",
   ];
   if (entries.length === 0) {

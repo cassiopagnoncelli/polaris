@@ -13,6 +13,7 @@
  * separate workflow because removal would cascade through every FK referencing
  * the row. That capability is out of scope here.
  */
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
@@ -153,5 +154,39 @@ function renderHuman(plan: ProjectsSyncPlan, meta: { readonly applied: boolean }
   if (plan.unchanged.length > 0) {
     lines.push(`  ${plan.unchanged.length} unchanged`);
   }
+  lines.push(...renderConfigReminder(plan));
   return lines.join("\n");
+}
+
+/**
+ * Tell the operator what a newly-created project still needs.
+ *
+ * A project exists the moment this command creates its row, but it has no
+ * configuration — so every component reading it falls back to defaults, and a
+ * required key with no default leaves that project quarantined at runtime
+ * (plan §5). Nothing else would say so until a metric moved or someone read a
+ * log, which is a poor way to learn that the project you just created is not
+ * running.
+ *
+ * The reminder is printed, not enforced: `polaris config validate` is the
+ * gate, and it runs against the environment being deployed to. This is the
+ * pointer to it, at the moment the gap is created.
+ */
+function renderConfigReminder(plan: ProjectsSyncPlan): string[] {
+  if (plan.to_create.length === 0) return [];
+  const namespaces = Object.keys(PROJECT_CONFIG_SCHEMAS).sort();
+  if (namespaces.length === 0) return [];
+
+  const created = plan.to_create.map((row) => row.project_id);
+  const lines = ["", "New projects have no configuration yet. Components reading them"];
+  lines.push(`(${namespaces.join(", ")}) will use their own defaults until values are set.`);
+  lines.push("");
+  lines.push("Check what each environment still needs:");
+  for (const projectId of created.slice(0, 5)) {
+    lines.push(`  polaris config validate --env <environment> --project ${projectId}`);
+  }
+  if (created.length > 5) {
+    lines.push(`  … and ${String(created.length - 5)} more`);
+  }
+  return lines;
 }

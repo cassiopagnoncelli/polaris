@@ -32,8 +32,10 @@ import { configInvalidateCommand } from "./invalidate.js";
 import { configListCommand } from "./list.js";
 import { configSetCommand } from "./set.js";
 import { configUnsetCommand } from "./unset.js";
+import { configValidateCommand } from "./validate.js";
 
 const CHILDREN: readonly CommandDefinition[] = [
+  configValidateCommand,
   configListCommand,
   configGetCommand,
   configSetCommand,
@@ -63,6 +65,13 @@ export { buildConfigListRunner } from "./list.js";
 export { buildConfigSetRunner } from "./set.js";
 export type { ConfigAuditPayload, ConfigHooks, ConfigScope, ConfigStore } from "./store.js";
 export { buildConfigUnsetRunner } from "./unset.js";
+export {
+  buildConfigValidateRunner,
+  configValidateCommand,
+  type MissingKey,
+  type UnknownKey,
+  validateProject,
+} from "./validate.js";
 export {
   configGetCommand,
   configInvalidateCommand,
