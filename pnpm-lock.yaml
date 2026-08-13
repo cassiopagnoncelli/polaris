@@ -583,6 +583,31 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  packages/shared-project-config:
+    dependencies:
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../shared-db
+      '@polaris/shared-environments':
+        specifier: workspace:*
+        version: link:../shared-environments
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../shared-logger
+      '@polaris/shared-secrets':
+        specifier: workspace:*
+        version: link:../shared-secrets
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.20.0
+
   packages/shared-replay:
     dependencies:
       '@polaris/shared-environments':

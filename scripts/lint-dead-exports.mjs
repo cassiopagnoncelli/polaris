@@ -55,6 +55,10 @@ const ALLOW = new Map([
   ["packages/browser-sdk", "published SDK surface"],
   // Generated or contract types re-exported for downstream typing.
   ["packages/shared-schemas", "event contract types are the public schema surface"],
+  // Built ahead of its callers: the 16 per-service cutovers that wire it are
+  // separate cards, so the store has no in-repo caller until they land.
+  // Remove this entry once the first service consumes it.
+  ["packages/shared-project-config", "store lands before the services that wire it"],
 ]);
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);

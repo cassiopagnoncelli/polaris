@@ -1,0 +1,42 @@
+{
+  "name": "@polaris/shared-project-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Read side of per-(project, environment) configuration: snapshot assembly, in-process cache, LISTEN/NOTIFY invalidation, and redaction-safe secret boxing.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-environments": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-secrets": "workspace:*",
+    "kysely": "^0.29.0",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  }
+}
