@@ -108,20 +108,19 @@ const ALLOW = new Map([
   ["packages/web-sdk/src/index.ts", "published SDK; bundler-replaced build flag"],
   ["packages/web-sdk/src/sdk.ts", "published SDK; bundler-replaced build flag"],
 
-  // --- known violations, to be removed by the cutovers -------------------
-  // Each entry here is DEBT, not approval. Delete it in the PR that moves the
-  // service onto project configuration; the check then prevents regression.
+  // --- known debt --------------------------------------------------------
+  // Entries here are DEBT, not approval, and neither is a project-config
+  // cutover: both read ClickHouse CONNECTION settings, which are deployment
+  // facts like the Postgres DSN, not per-project values. They are listed
+  // because each bypasses the sanctioned reader rather than because a cutover
+  // will delete them.
   [
     "processors/analytics-projector/v1/src/app.ts",
-    "TODO(C11): parses process.env directly for ClickHouse config; delete on cutover",
+    "TODO: calls clickhouseEnvSchema.parse(process.env) directly; should take a loadEnv() snapshot",
   ],
   [
     "consumers/clickhouse-sink/v1/src/config.ts",
-    "TODO(C11): default processEnv parameter; delete on cutover",
-  ],
-  [
-    "packages/shared-clickhouse/src/config.ts",
-    "TODO(C11): ClickHouse env defaults read at module scope",
+    "TODO: defaults its processEnv parameter to process.env; should require the snapshot",
   ],
 ]);
 
