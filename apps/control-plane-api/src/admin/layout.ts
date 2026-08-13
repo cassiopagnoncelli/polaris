@@ -557,6 +557,34 @@ form.filters label { display: flex; flex-direction: column; gap: 4px;
 }
 .action-form.danger { border-color: var(--bad-line); }
 .action-form p { margin: 0; }
+/* The Variables panel.
+
+   \`.inline\` is the everyday edit: a value, a reason, a button on one row
+   inside a table cell, rather than the boxed grid a full mutation form uses.
+   Without it every row would open a 620px card in the Actions column. */
+.action-form.inline {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  max-width: none; padding: 0; margin: 0 0 6px; background: none; border: 0;
+}
+.action-form.inline input { width: auto; min-width: 96px; flex: 0 1 auto; }
+.action-form.inline input[type="number"] { min-width: 84px; }
+.action-form.inline button { padding: 4px 10px; font-size: 12px; }
+.action-form label.checkbox {
+  grid-template-columns: auto 1fr; align-items: center; gap: 8px; color: var(--text);
+}
+.action-form label.checkbox input { width: auto; }
+.panel { margin: 24px 0; }
+.panel > p { max-width: 78ch; }
+/* Environment tabs. Server-rendered links, not controls: the panel ships no
+   JavaScript, so switching environment is a navigation. */
+.env-tabs { display: flex; gap: 6px; margin: 12px 0 14px; flex-wrap: wrap; }
+.env-tab {
+  padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+  text-decoration: none;
+}
+.env-tab:hover { color: var(--text); }
+.env-tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .action-form .notice { margin-bottom: 0; }
 .action-form label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
 .action-form input { width: 100%; min-width: 0; }

@@ -160,6 +160,7 @@ function makeQueries(overrides: Partial<AdminQueries> = {}): AdminQueries {
     }),
     listProjects: async () => [project],
     findProject: async (id) => (id === project.project_id ? project : null),
+    listProjectConfig: async () => [],
     listSources: async () => [
       {
         project_id: "storefront",

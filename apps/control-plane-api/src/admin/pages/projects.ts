@@ -18,6 +18,7 @@ import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } fr
 import type { ApiKeyRow, DestinationRow, ProjectRow, SourceRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
 import { formatInstant } from "./format.js";
+import { type ProjectConfigPanelInput, renderProjectConfigPanel } from "./project-config.js";
 
 export function renderProjectsPage(input: {
   ctx: AdminPageContext;
@@ -78,6 +79,7 @@ export function renderProjectDetailPage(input: {
   sources: readonly SourceRow[];
   destinations: readonly DestinationRow[];
   apiKeys: readonly ApiKeyRow[];
+  config: ProjectConfigPanelInput;
 }): string {
   const { project } = input;
 
@@ -146,6 +148,8 @@ export function renderProjectDetailPage(input: {
         <dt>Created</dt>
         <dd>${formatInstant(project.created_at)}</dd>
       </dl>
+
+      ${renderProjectConfigPanel(input.config)}
 
       <h2>Sources</h2>
       <div class="table-wrap">

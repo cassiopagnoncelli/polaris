@@ -19,10 +19,12 @@
  */
 
 import fastifyCookie from "@fastify/cookie";
+import { MappingSemanticsError } from "@polaris/shared-control-plane";
+import { PlaintextSecretError } from "@polaris/shared-control-plane-db";
+import type { PolarisEnvironment } from "@polaris/shared-environments";
 import { ProblemError } from "@polaris/shared-service-bootstrap";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
-
 import {
   checkMutation,
   describeRefusal,
@@ -72,6 +74,7 @@ import {
   renderActivationDetailPage,
   renderProcessorsPage,
 } from "./pages/processors.js";
+import { parseConfigEnvironment, parseConfigFormValue } from "./pages/project-config.js";
 import { renderProjectDetailPage, renderProjectsPage } from "./pages/projects.js";
 import {
   type PlatformRoleName,
@@ -690,10 +693,12 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           const project = await deps.queries.findProject(projectId);
           if (project === null) return notFound(reply, `No project "${projectId}".`);
 
-          const [sources, destinations, apiKeys] = await Promise.all([
+          const environment = parseConfigEnvironment(queryString(request, "env"));
+          const [sources, destinations, apiKeys, configRows] = await Promise.all([
             deps.queries.listSources(projectId),
             deps.queries.listDestinations({ projectId }),
             deps.queries.listApiKeys({ projectId, includeRevoked: false }),
+            deps.queries.listProjectConfig({ projectId, environment }),
           ]);
           return sendHtml(
             reply,
@@ -704,10 +709,211 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
               sources,
               destinations,
               apiKeys,
+              config: { projectId, environment, rows: configRows },
             }),
           );
         },
       );
+
+      /**
+       * Project-configuration writes.
+       *
+       * All three delegate to `deps.mutations`, which calls the same
+       * `*WithAudit` functions the polaris CLI uses — one transaction
+       * carrying the value, the version bump, the pg_notify and the audit
+       * row. The admin layer holds no SQL of its own.
+       *
+       * The two refusals that matter are raised inside that write path,
+       * before any database access: a key resembling mapping semantics, and a
+       * plaintext value on a secret-typed key. Both surface here as a
+       * re-rendered page with the message, never a stack trace.
+       */
+      const configPage = async (
+        request: FastifyRequest,
+        projectId: string,
+        environment: PolarisEnvironment,
+        extra: { refusal?: MutationRefusal; conflictKey?: string; error?: string },
+      ): Promise<string | null> => {
+        const project = await deps.queries.findProject(projectId);
+        if (project === null) return null;
+        const [sources, destinations, apiKeys, configRows] = await Promise.all([
+          deps.queries.listSources(projectId),
+          deps.queries.listDestinations({ projectId }),
+          deps.queries.listApiKeys({ projectId, includeRevoked: false }),
+          deps.queries.listProjectConfig({ projectId, environment }),
+        ]);
+        return renderProjectDetailPage({
+          ctx: context(request),
+          project,
+          sources,
+          destinations,
+          apiKeys,
+          config: {
+            projectId,
+            environment,
+            rows: configRows,
+            ...(extra.refusal !== undefined ? { refusal: extra.refusal } : {}),
+            ...(extra.conflictKey !== undefined ? { conflictKey: extra.conflictKey } : {}),
+            ...(extra.error !== undefined ? { error: extra.error } : {}),
+          },
+        });
+      };
+
+      const configWrite = (
+        action: "set" | "unset" | "add",
+      ): ((
+        request: FastifyRequest<{
+          Params: { projectId: string; environment: string };
+          Body: Record<string, unknown>;
+        }>,
+        reply: FastifyReply,
+      ) => Promise<unknown>) => {
+        return async (request, reply) => {
+          const origin = verifySameOrigin(request);
+          if (!origin.ok) {
+            request.log.warn({ reason: origin.reason }, "admin mutation refused: cross-origin");
+            return sendHtml(reply, 403, renderOriginRefusedPage());
+          }
+
+          const projectId = request.params.projectId;
+          const project = await deps.queries.findProject(projectId);
+          if (project === null) return notFound(reply, `No project "${projectId}".`);
+
+          const environment = parseConfigEnvironment(request.params.environment);
+          const namespace = formField(request, "namespace").trim();
+          const key = formField(request, "key").trim();
+          const rawReason = formField(request, "reason");
+          const label = `${namespace}.${key}`;
+
+          // Inline forms carry no typed confirmation; the ritual forms do.
+          // Passing the label as both sides makes checkMutation enforce role
+          // and reason while treating confirmation as satisfied, so one code
+          // path covers both shapes.
+          const typed = formField(request, "confirm");
+          const check = checkMutation(config, {
+            rowEnvironment: environment,
+            role: request.adminContext?.role ?? "none",
+            confirmation: typed === "" ? label : typed,
+            expectedConfirmation: label,
+            reason: rawReason,
+          });
+
+          if (!check.ok) {
+            request.log.warn(
+              {
+                event: "admin.mutation_refused",
+                action: `config.${action}`,
+                target: `${projectId}/${environment}/${label}`,
+                refusal: check.refusal.kind,
+              },
+              describeRefusal(check.refusal),
+            );
+            const body = await configPage(request, projectId, environment, {
+              refusal: check.refusal,
+            });
+            if (body === null) return notFound(reply, `No project "${projectId}".`);
+            return sendHtml(reply, check.refusal.kind === "role" ? 403 : 400, body);
+          }
+
+          const mutations = deps.mutations;
+          if (mutations === undefined) {
+            // Same posture as every other write here: a panel built without a
+            // mutations facade is read-only, and a POST that reaches it is a
+            // wiring error rather than an operator one.
+            return notFound(reply, "This admin panel is read-only.");
+          }
+
+          const actor = adminActor(request);
+          try {
+            if (action === "unset") {
+              await mutations.unsetProjectConfig(
+                { projectId, environment, namespace, configKey: key },
+                check.reason,
+                actor,
+              );
+            } else {
+              const isSecretRef = formField(request, "secret_ref") === "true";
+              const raw = formField(request, "value");
+              // Compare-and-set: the form carries the row's updated_at as it
+              // was rendered. A mismatch means another operator wrote first,
+              // and the write is refused rather than clobbering them.
+              const expected = formField(request, "expected_updated_at");
+              if (action === "set") {
+                const current = await deps.queries.listProjectConfig({ projectId, environment });
+                const existing = current.find(
+                  (row) => row.namespace === namespace && row.config_key === key,
+                );
+                if ((existing?.updated_at ?? "") !== expected) {
+                  const body = await configPage(request, projectId, environment, {
+                    conflictKey: label,
+                  });
+                  if (body === null) return notFound(reply, `No project "${projectId}".`);
+                  return sendHtml(reply, 409, body);
+                }
+              }
+              await mutations.setProjectConfig(
+                {
+                  projectId,
+                  environment,
+                  namespace,
+                  configKey: key,
+                  value: parseConfigFormValue(raw, isSecretRef),
+                  isSecretRef,
+                },
+                check.reason,
+                actor,
+              );
+            }
+          } catch (err) {
+            // The write path's own gates. An operator mistake, not a fault:
+            // re-render with the message rather than a 500.
+            if (err instanceof MappingSemanticsError || err instanceof PlaintextSecretError) {
+              const message = err.message;
+              request.log.warn(
+                { event: "admin.mutation_refused", action: `config.${action}`, err },
+                "project-config write refused",
+              );
+              const body = await configPage(request, projectId, environment, {
+                error: message,
+              });
+              if (body === null) return notFound(reply, `No project "${projectId}".`);
+              return sendHtml(reply, 400, body);
+            }
+            throw err;
+          }
+
+          request.log.info(
+            {
+              event: "admin.mutation",
+              action: `config.${action}`,
+              target: `${projectId}/${environment}/${label}`,
+              environment,
+              actor: actor.actorLabel,
+            },
+            "admin mutation applied",
+          );
+
+          return reply.redirect(
+            `${ADMIN_PREFIX}/projects/${encodeURIComponent(projectId)}?env=${environment}`,
+            303,
+          );
+        };
+      };
+
+      guarded.post<{
+        Params: { projectId: string; environment: string };
+        Body: Record<string, unknown>;
+      }>("/projects/:projectId/config/:environment/set", configWrite("set"));
+
+      guarded.post<{
+        Params: { projectId: string; environment: string };
+        Body: Record<string, unknown>;
+      }>("/projects/:projectId/config/:environment/unset", configWrite("unset"));
+
+      guarded.post<{
+        Params: { projectId: string; environment: string };
+        Body: Record<string, unknown>;
+      }>("/projects/:projectId/config/:environment/add", configWrite("add"));
 
       guarded.get("/destinations", async (request, reply) => {
         const filters = {

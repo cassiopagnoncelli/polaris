@@ -95,6 +95,7 @@ function buildQueries(db: Kysely<Database> | undefined): AdminQueries {
     counts: unavailable,
     listProjects: unavailable,
     findProject: unavailable,
+    listProjectConfig: unavailable,
     listSources: unavailable,
     listDestinations: unavailable,
     findDestination: unavailable,

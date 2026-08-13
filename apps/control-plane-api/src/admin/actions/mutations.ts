@@ -38,10 +38,16 @@ import {
   findActivationByKey,
   findApiKeyById,
   findDestinationById,
+  type InvalidateProjectConfigInput,
+  invalidateProjectConfigWithAudit,
   type MutationOutcome,
   markDlqResolvedWithAudit,
   type ProcessorActivationKey,
   revokeApiKeyWithAudit,
+  type SetProjectConfigInput,
+  setProjectConfigValueWithAudit,
+  type UnsetProjectConfigInput,
+  unsetProjectConfigValueWithAudit,
 } from "@polaris/shared-control-plane-db";
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
@@ -96,6 +102,21 @@ export interface AdminMutations {
     reason: string,
     actor: AdminActor,
   ): Promise<MutationOutcome>;
+  setProjectConfig(
+    input: SetProjectConfigInput,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  unsetProjectConfig(
+    input: UnsetProjectConfigInput,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
+  invalidateProjectConfig(
+    input: InvalidateProjectConfigInput,
+    reason: string,
+    actor: AdminActor,
+  ): Promise<MutationOutcome>;
 }
 
 /** Thrown when the target row vanished between the page render and the POST. */
@@ -122,6 +143,22 @@ export function createKyselyAdminMutations(db: Kysely<Database>): AdminMutations
   });
 
   return {
+    // The three below hold no SQL of their own: they delegate to the same
+    // *WithAudit functions the polaris CLI calls, which own the single
+    // transaction carrying the value write, the version bump, the pg_notify
+    // and the audit row. Two surfaces that could disagree means one is wrong.
+    async setProjectConfig(input, reason, actor) {
+      return setProjectConfigValueWithAudit(db, context(actor, reason), input);
+    },
+
+    async unsetProjectConfig(input, reason, actor) {
+      return unsetProjectConfigValueWithAudit(db, context(actor, reason), input);
+    },
+
+    async invalidateProjectConfig(input, reason, actor) {
+      return invalidateProjectConfigWithAudit(db, context(actor, reason), input);
+    },
+
     async disableDestination(destinationId, reason, actor) {
       const row = await findDestinationById(db, destinationId);
       if (row === null) throw new MutationTargetMissing("destination");

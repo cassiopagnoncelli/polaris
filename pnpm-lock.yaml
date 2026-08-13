@@ -50,6 +50,9 @@ importers:
       '@polaris/idp':
         specifier: workspace:*
         version: link:../../packages/polaris-idp
+      '@polaris/project-config-schemas':
+        specifier: workspace:*
+        version: link:../../packages/project-config-schemas
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config

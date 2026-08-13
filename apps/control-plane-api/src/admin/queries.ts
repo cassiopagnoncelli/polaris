@@ -26,6 +26,11 @@
  *     moment either copy is edited.
  */
 
+import {
+  type AuditEnvironment,
+  listProjectConfig,
+  type ProjectConfigRow,
+} from "@polaris/shared-control-plane-db";
 import type { Database } from "@polaris/shared-db";
 import { type Kysely, sql } from "kysely";
 
@@ -204,6 +209,10 @@ export interface AdminQueries {
   counts(): Promise<OverviewCounts>;
   listProjects(): Promise<readonly ProjectRow[]>;
   findProject(projectId: string): Promise<ProjectRow | null>;
+  listProjectConfig(input: {
+    projectId: string;
+    environment: AuditEnvironment;
+  }): Promise<readonly ProjectConfigRow[]>;
   listSources(projectId?: string): Promise<readonly SourceRow[]>;
   listDestinations(filter: DestinationFilter): Promise<readonly DestinationRow[]>;
   findDestination(destinationId: string): Promise<DestinationRow | null>;
@@ -269,6 +278,12 @@ export function createKyselyAdminQueries(db: Kysely<Database>): AdminQueries {
         .select(["project_id", "display_name", "owner", "description", "status", "created_at"])
         .orderBy("project_id")
         .execute();
+    },
+
+    // Delegates to the shared read rather than hand-rolling the query here,
+    // so the panel and the CLI cannot disagree about what a stored value is.
+    async listProjectConfig(input): Promise<readonly ProjectConfigRow[]> {
+      return listProjectConfig(db, input);
     },
 
     async findProject(projectId: string): Promise<ProjectRow | null> {

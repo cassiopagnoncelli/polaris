@@ -193,6 +193,9 @@ function stubMutations(spy: ReturnType<typeof vi.fn>): AdminMutations {
     markDlqResolved: spy as never,
     enableProcessor: spy as never,
     disableProcessor: spy as never,
+    setProjectConfig: spy as never,
+    unsetProjectConfig: spy as never,
+    invalidateProjectConfig: spy as never,
   };
 }
 
@@ -219,6 +222,7 @@ async function buildApp(harness: Harness) {
     }),
     listProjects: async () => [],
     findProject: async () => null,
+    listProjectConfig: async () => [],
     listSources: async () => [],
     listDestinations: async () => [],
     findDestination: async (id: string) => (id === harness.row.destination_id ? harness.row : null),
