@@ -32,9 +32,14 @@
  */
 import type { CommandDefinition } from "../../command.js";
 import { profilesLinksCommand } from "./links.js";
+import { profilesRebuildCommand } from "./rebuild.js";
 import { profilesShowCommand } from "./show.js";
 
-const CHILDREN: readonly CommandDefinition[] = [profilesShowCommand, profilesLinksCommand];
+const CHILDREN: readonly CommandDefinition[] = [
+  profilesRebuildCommand,
+  profilesShowCommand,
+  profilesLinksCommand,
+];
 
 export const profilesCommand: CommandDefinition = {
   id: "profiles",

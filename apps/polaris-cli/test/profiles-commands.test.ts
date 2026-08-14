@@ -16,11 +16,11 @@ import {
   type CommandContext,
   ExitCode,
   type OutputStreams,
+  type ProfilesLinksStore,
+  type ProfilesShowStore,
   profilesCommand,
   profilesLinksCommand,
   profilesShowCommand,
-  type ProfilesLinksStore,
-  type ProfilesShowStore,
   run,
 } from "../src/index.js";
 

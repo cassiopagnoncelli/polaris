@@ -9,9 +9,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-
-import { buildDestinationsSetConfigRunner } from "../src/commands/destinations/set-config.js";
 import type { CommandContext } from "../src/command.js";
+import { buildDestinationsSetConfigRunner } from "../src/commands/destinations/set-config.js";
 
 const ROW = {
   destination_id: "polaris_dst_1",
