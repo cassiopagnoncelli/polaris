@@ -1,0 +1,42 @@
+{
+  "event_id": "018f1b9e-7b50-7b12-cccc-000000000001",
+  "event": "session.started",
+  "schema_version": 1,
+  "project_id": "checkout",
+  "environment": "production",
+  "occurred_at": "2026-05-12T12:00:00.000Z",
+  "ingested_at": "2026-05-12T12:00:00.600Z",
+  "source": {
+    "type": "internal",
+    "id": "sessionizer",
+    "sdk": null,
+    "sdk_version": null
+  },
+  "identity": {
+    "anonymous_id": "anon_X",
+    "session_id": null,
+    "customer_id": null,
+    "device_id": null
+  },
+  "context": {
+    "ip": null,
+    "user_agent": null,
+    "locale": null,
+    "page": null,
+    "campaign": null
+  },
+  "properties": {
+    "session_id": "sess_34a6c0b943a4387cf02d142775ac19ed",
+    "primary_identifier_kind": "profile_id",
+    "primary_identifier_value": "01a00000-0000-7000-8000-00000000f001",
+    "started_at": "2026-05-12T12:00:00.000Z"
+  },
+  "processor": {
+    "name": "sessionizer",
+    "version": "v2",
+    "ran_at": "2026-05-12T12:00:00.600Z",
+    "run_id": "run_fixture"
+  },
+  "processor_name": "sessionizer",
+  "processor_version": "v2"
+}

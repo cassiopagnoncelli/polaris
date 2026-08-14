@@ -86,6 +86,11 @@ const services = [
     image: "polaris/processor-sessionizer-v1",
   },
   {
+    name: "sessionizer-v2",
+    dockerfile: "async/computation/sessionizer/v2/Dockerfile",
+    image: "polaris/processor-sessionizer-v2",
+  },
+  {
     name: "geoip-enricher",
     dockerfile: "sync/legacy/geoip-enricher/v1/Dockerfile",
     image: "polaris/processor-geoip-enricher-v1",

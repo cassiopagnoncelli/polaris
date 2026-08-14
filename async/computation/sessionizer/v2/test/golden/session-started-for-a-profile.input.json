@@ -1,0 +1,38 @@
+{
+  "event_id": "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+  "event": "page.viewed",
+  "schema_version": 2,
+  "project_id": "checkout",
+  "environment": "production",
+  "occurred_at": "2026-05-12T12:00:00.000Z",
+  "ingested_at": "2026-05-12T12:00:01.000Z",
+  "source": {
+    "type": "browser",
+    "id": "web",
+    "sdk": "web",
+    "sdk_version": "1.0.0"
+  },
+  "identity": {
+    "anonymous_id": "anon_X",
+    "session_id": null,
+    "customer_id": null,
+    "device_id": null
+  },
+  "profile": {
+    "profile_id": "01a00000-0000-7000-8000-00000000f001",
+    "canonical_customer_id": null
+  },
+  "context": {
+    "ip": null,
+    "user_agent": null,
+    "locale": null,
+    "page": null,
+    "campaign": null
+  },
+  "properties": {
+    "path": "/",
+    "search": null,
+    "title": "Home",
+    "referrer": null
+  }
+}
