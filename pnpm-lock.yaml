@@ -321,6 +321,42 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  async/computation/sessionizer/v2:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.10.1(supports-color@7.2.0)
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   async/warehouse/clickhouse-sink/v1:
     dependencies:
       '@polaris/shared-clickhouse':
