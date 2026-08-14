@@ -27,11 +27,26 @@
   // the workspace symlinks — the same precondition the per-package
   // typechecks already have.
   //
-  // RATCHET: the excludes below are pre-existing debt (382 errors at the
-  // time of writing), not a design choice. They are mostly index-signature
-  // access (TS4111), fixtures missing fields their type has since gained,
-  // and `.mjs` script imports without declarations. Fix a tree, delete its
-  // line. Do not add lines.
+  // RATCHET: the excludes below are pre-existing debt, not a design choice.
+  // They are mostly index-signature access (TS4111), fixtures missing fields
+  // their type has since gained, and `.mjs` script imports without
+  // declarations. Fix a tree, delete its line. Do not add lines.
+  //
+  // WE77L4R8 took six trees off the list — `packages/shared-destinations` and
+  // all five destination consumers — and what they were hiding is the case
+  // for shrinking the rest:
+  //
+  //   - `makeFakeKafkaPayload` still built a KafkaJS `EachMessage` (topic,
+  //     offset, attributes, heartbeat, pause) with no `stream` or `family`,
+  //     a leftover of the RabbitMQ migration this header already describes.
+  //   - `MessageHeaders` was used in four places and never imported.
+  //   - `consumer.handler` was called with one argument; it takes two.
+  //   - Five instance fixtures were missing `replay_opt_in`, added by a card
+  //     several months old, and every destination fixture was missing the
+  //     seven `app_*` context slots.
+  //
+  // None of it failed a test. Vitest transpiles without checking types, so
+  // a fixture drifts from its type in silence until the exact line runs.
   // ---------------------------------------------------------------
   "include": [
     "apps/*/test/**/*.ts",
@@ -49,14 +64,8 @@
 
     "apps/ingester-api/test",
     "apps/polaris-cli/test",
-    "sync/destinations/braze/v1/test",
-    "sync/destinations/ga4/v1/test",
-    "sync/destinations/meta-capi/v1/test",
-    "sync/destinations/tiktok/v1/test",
-    "sync/destinations/webhook-sink/v1/test",
     "packages/shared-clickhouse/test",
     "packages/shared-config/test",
-    "packages/shared-destinations/test",
     "packages/shared-logger/test",
     "packages/shared-policy/test",
     "packages/shared-service-bootstrap/test",

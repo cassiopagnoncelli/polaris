@@ -19,7 +19,6 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// @ts-expect-error -- plain .mjs script, no type declarations by design.
 import { findMetricNameProblems } from "../lint-metric-names.mjs";
 
 let root: string;

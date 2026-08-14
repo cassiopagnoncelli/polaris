@@ -289,6 +289,8 @@ describe("buildUserData", () => {
   it("omits hashed fields whose source is null", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,

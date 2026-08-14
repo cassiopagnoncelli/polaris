@@ -149,7 +149,7 @@ describe("@polaris/shared-destinations public surface", () => {
 
   it("constructors / factories are callable without throwing", () => {
     expect(() => new InMemoryDeliveryRecordRepository()).not.toThrow();
-    expect(() => new InMemoryDestinationInstanceReader([])).not.toThrow();
+    expect(() => new InMemoryDestinationInstanceReader()).not.toThrow();
     expect(() => new InMemoryDestinationDedupe()).not.toThrow();
     expect(() => new DestinationRateLimiter()).not.toThrow();
     expect(typeof createDestinationConsumer).toBe("function");

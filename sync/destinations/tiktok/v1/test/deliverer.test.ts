@@ -150,7 +150,10 @@ describe("buildTikTokDeliverer — accepted path", () => {
     const baseCtx = fixtureDelivererContext();
     const ctx = {
       ...baseCtx,
-      payload: { ...baseCtx.payload, page: undefined },
+      // The key is OMITTED, not set to `undefined`: with
+      // `exactOptionalPropertyTypes` those are different states, and the
+      // one this test means is "the mapper produced no page context".
+      payload: (({ page: _page, ...rest }) => rest)(baseCtx.payload),
     };
     await deliver(ctx);
 

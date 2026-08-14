@@ -115,6 +115,8 @@ describe("checkoutStartedMapper", () => {
   it("emits a user_alias entry when only email is present (BJPQSPE5)", () => {
     const ctx = fixtureMapperContext({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: "buyer@storefront.example",
@@ -136,6 +138,8 @@ describe("checkoutStartedMapper", () => {
   it("skips when no identifier (external_id / email / phone) can be resolved", () => {
     const ctx = fixtureMapperContext({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -246,6 +250,8 @@ describe("paymentApprovedMapper", () => {
     const ctx = fixtureMapperContext({
       event: "payment.approved",
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -269,6 +275,8 @@ describe("paymentApprovedMapper", () => {
     const ctx = fixtureMapperContext({
       event: "payment.approved",
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -307,6 +315,8 @@ describe("userIdentifiedMapper", () => {
     const ctx = fixtureMapperContext({
       event: "user.identified",
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: "cust_456",
         anonymous_id: null,
         email: null,
@@ -327,6 +337,8 @@ describe("userIdentifiedMapper", () => {
     const ctx = fixtureMapperContext({
       event: "user.identified",
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: "buyer@storefront.example",
@@ -352,6 +364,8 @@ describe("userIdentifiedMapper", () => {
     const ctx = fixtureMapperContext({
       event: "user.identified",
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -376,6 +390,8 @@ describe("resolveExternalId", () => {
   it("falls back to anonymous_id when user_id is null", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: "anon_xyz",
         email: null,
@@ -390,6 +406,8 @@ describe("resolveExternalId", () => {
   it("lowercases + trims the resolved id (Braze documents case-insensitive comparison)", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: "  CUST_UPPER  ",
         anonymous_id: null,
         email: null,
@@ -404,6 +422,8 @@ describe("resolveExternalId", () => {
   it("returns null when both user_id and anonymous_id are null", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: "buyer@storefront.example",
@@ -420,6 +440,8 @@ describe("resolveUserAlias (BJPQSPE5)", () => {
   it("prefers email over phone", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: "buyer@storefront.example",
@@ -437,6 +459,8 @@ describe("resolveUserAlias (BJPQSPE5)", () => {
   it("falls back to phone when email is null", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -454,6 +478,8 @@ describe("resolveUserAlias (BJPQSPE5)", () => {
   it("returns null when neither email nor phone is present", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -468,6 +494,8 @@ describe("resolveUserAlias (BJPQSPE5)", () => {
   it("trims + lowercases the email alias name", () => {
     const normalized = fixtureNormalizedEvent({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: "  BUYER@STOREFRONT.example  ",
@@ -591,6 +619,8 @@ describe("app-channel mapping (5UCTHNCR)", () => {
   it("uses device_id as the PRIMARY identifier when no external_id / user_alias resolves on an app-source event", () => {
     const ctx = fixtureMapperContext({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,
@@ -621,6 +651,8 @@ describe("app-channel mapping (5UCTHNCR)", () => {
   it("still skips when neither external_id nor user_alias nor device_id resolves", () => {
     const ctx = fixtureMapperContext({
       identity: {
+        canonical_customer_id: null,
+        profile_id: null,
         user_id: null,
         anonymous_id: null,
         email: null,

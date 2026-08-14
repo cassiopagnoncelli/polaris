@@ -41,11 +41,16 @@ export function fixtureDestinationInstance(secretValue = ""): DestinationInstanc
     max_rps: 100,
     retry_policy: "standard",
     dead_letter_threshold: 8,
+    replay_opt_in: true,
+    config: {},
   };
 }
 
 export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {}): NormalizedEvent {
   const base: NormalizedEvent = {
+    traits: null,
+    traits_version: null,
+    enrichment: { geo: null },
     destination_id: "polaris_dst_test_meta",
     event_id: "evt_01HZZA0YJK0M2R8D8VYV4QH4XR",
     event: "checkout.started",
@@ -56,6 +61,8 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
     occurred_at_epoch_ms: Date.parse("2026-05-14T12:00:00.000Z"),
     ingested_at: "2026-05-14T12:00:00.500Z",
     identity: {
+      canonical_customer_id: null,
+      profile_id: null,
       user_id: "cust_12345",
       anonymous_id: "anon_abc",
       email: null,
@@ -78,6 +85,13 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
       campaign_term: null,
       campaign_content: null,
       campaign_click_id: null,
+      app_bundle_id: null,
+      app_version: null,
+      app_namespace: null,
+      app_build: null,
+      app_idfa: null,
+      app_idfv: null,
+      app_gaid: null,
     },
     properties: {
       cart_id: "cart_42",

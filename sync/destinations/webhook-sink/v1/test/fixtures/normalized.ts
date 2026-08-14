@@ -39,11 +39,16 @@ export function fixtureDestinationInstance(secretValue = ""): DestinationInstanc
     max_rps: 50,
     retry_policy: "standard",
     dead_letter_threshold: 8,
+    replay_opt_in: true,
+    config: {},
   };
 }
 
 export function fixtureNormalizedEvent(): NormalizedEvent {
   return {
+    traits: null,
+    traits_version: null,
+    enrichment: { geo: null },
     destination_id: "polaris_dst_test_webhook_1",
     event_id: "evt_01HZZA0YJK0M2R8D8VYV4QH4XR",
     event: "payment.approved",
@@ -54,6 +59,8 @@ export function fixtureNormalizedEvent(): NormalizedEvent {
     occurred_at_epoch_ms: Date.parse("2026-05-14T12:00:00.000Z"),
     ingested_at: "2026-05-14T12:00:00.500Z",
     identity: {
+      canonical_customer_id: null,
+      profile_id: null,
       user_id: "cust_12345",
       anonymous_id: "anon_abc",
       email: null,

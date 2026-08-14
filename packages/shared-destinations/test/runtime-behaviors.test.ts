@@ -17,6 +17,7 @@
 
 import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
+import type { MessageHeaders, TransportMessagePayload } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -39,6 +40,14 @@ import {
 // ---------------------------------------------------------------------------
 // Test harness
 // ---------------------------------------------------------------------------
+
+/**
+ * The transport hands every handler a context alongside the payload. The
+ * destination runtime reads nothing from it, which is why these tests called
+ * `handler` with one argument for as long as this tree sat on the
+ * `tsconfig.tests.json` ratchet.
+ */
+const TEST_MESSAGE_CONTEXT = {} as const;
 
 const noopLogger: Logger = {
   fatal: () => {},
@@ -263,35 +272,29 @@ function lastRecord(env: TestEnv): DeliveryRecord | undefined {
  * the DLQ (and to persist a `dlq_records` row); tests that exercise the
  * DLQ branch wire one through.
  */
-function makeFakeKafkaPayload(): {
-  topic: string;
-  partition: number;
-  message: {
-    value: Buffer;
-    headers: MessageHeaders;
-    offset: string;
-    timestamp: string;
-    attributes: number;
-    size: number;
-    key: null;
-  };
-  heartbeat: () => Promise<void>;
-  pause: () => () => void;
-} {
+/**
+ * A `TransportMessagePayload` for the DLQ path.
+ *
+ * Was `makeFakeKafkaPayload` and was shaped like a KafkaJS `EachMessage` —
+ * `topic`, `offset`, `attributes`, `heartbeat`, `pause` — none of which the
+ * RabbitMQ transport has, and missing `stream` and `family`, which it
+ * requires. It compiled because this tree sat on the `tsconfig.tests.json`
+ * ratchet and vitest transpiles without checking types. The DLQ publisher
+ * only reads `message.value`, so nothing failed at runtime either.
+ */
+function makeFakeTransportPayload(): TransportMessagePayload {
   return {
-    topic: "analytics.events",
+    stream: "analytics.events-0",
+    family: "analytics.events",
     partition: 0,
     message: {
       value: Buffer.from('{"event":"payment.approved"}', "utf8"),
       headers: {},
+      key: null,
       offset: "12345",
       timestamp: "0",
-      attributes: 0,
-      size: 0,
-      key: null,
+      redelivered: false,
     },
-    heartbeat: async () => {},
-    pause: () => () => {},
   };
 }
 
@@ -399,7 +402,7 @@ describe("destination runtime — fan-out to active instances", () => {
     env.instances.set(secondInstance());
     const consumer = buildConsumer(env);
 
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
 
     expect(env.delivererCalls).toHaveLength(2);
     expect(
@@ -418,7 +421,7 @@ describe("destination runtime — fan-out to active instances", () => {
     );
     const consumer = buildConsumer(env);
 
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
 
     expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test1"]);
   });
@@ -439,7 +442,7 @@ describe("destination runtime — fan-out to active instances", () => {
     );
     const consumer = buildConsumer(env);
 
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
 
     expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test1"]);
     expect(env.delivererCalls).toHaveLength(1);
@@ -457,10 +460,11 @@ describe("destination runtime — fan-out to active instances", () => {
     const consumer = buildConsumer(env);
 
     // storefront first, populating the cache under whatever key it uses.
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
     // Then checkout, inside the same TTL window.
     await consumer.handler(
       makeStreamPayloadFor(makeEnvelope({ project_id: "checkout", event_id: "second-event-id" })),
+      TEST_MESSAGE_CONTEXT,
     );
 
     const byDestination = env.records.snapshot().map((r) => r.destination_id);
@@ -472,7 +476,10 @@ describe("destination runtime — fan-out to active instances", () => {
     env.instances.set(secondInstance());
     const consumer = buildConsumer(env);
 
-    await consumer.handler(makeStreamPayload({ "polaris-destination-id": "polaris_dst_test2" }));
+    await consumer.handler(
+      makeStreamPayload({ "polaris-destination-id": "polaris_dst_test2" }),
+      TEST_MESSAGE_CONTEXT,
+    );
 
     expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test2"]);
   });
@@ -481,7 +488,7 @@ describe("destination runtime — fan-out to active instances", () => {
     const env = makeEnv({ instance: { ...SEED_INSTANCE, status: "disabled" } });
     const consumer = buildConsumer(env);
 
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
 
     expect(env.delivererCalls).toHaveLength(0);
     expect(env.records.snapshot()).toHaveLength(0);
@@ -498,9 +505,18 @@ describe("destination runtime — fan-out to active instances", () => {
   it("one failing target does not stop the others, and still re-throws for redelivery", async () => {
     const env = makeEnv({
       deliverer: async (ctx) => {
-        env.delivererCalls.push({ payload: ctx.payload, attempt: ctx.attempt, secretLength: 0 });
+        env.delivererCalls.push({
+          payload: ctx.payload,
+          attempt: ctx.attempt,
+          secretLength: 0,
+          projectConfig: ctx.projectConfig,
+        });
         if (ctx.instance.destination_id === "polaris_dst_test1") {
-          return { kind: "failed_retryable", vendor_response_summary: "503" };
+          return {
+            kind: "failed_retryable",
+            error_class: "transient",
+            vendor_response_summary: "503",
+          };
         }
         return { kind: "accepted", vendor_response_code: "200", vendor_response_summary: "ok" };
       },
@@ -508,7 +524,7 @@ describe("destination runtime — fan-out to active instances", () => {
     env.instances.set(secondInstance());
     const consumer = buildConsumer(env);
 
-    await expect(consumer.handler(makeStreamPayload())).rejects.toThrow();
+    await expect(consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT)).rejects.toThrow();
 
     // The healthy instance was still delivered to; the throw is what asks
     // the transport to redeliver, and the dedupe window is what keeps the
@@ -532,18 +548,18 @@ describe("destination runtime — fan-out to active instances", () => {
       now: () => new Date(nowMs),
     });
 
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
     expect(env.records.snapshot()).toHaveLength(1);
 
     // A destination created after the first message is invisible until
     // the TTL lapses — the cache is what keeps the fan-out from querying
     // PostgreSQL on every event.
     env.instances.set(secondInstance());
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
     expect(env.records.snapshot()).toHaveLength(2);
 
     nowMs += 10_001;
-    await consumer.handler(makeStreamPayload());
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
     expect(
       env.records.snapshot().filter((r) => r.destination_id === "polaris_dst_test2"),
     ).toHaveLength(1);
@@ -738,7 +754,7 @@ describe("destination runtime — dlq_records persistence", () => {
     await consumer.handleEvent({
       envelope: makeEnvelope(),
       destination_id: SEED_INSTANCE.destination_id,
-      payload: makeFakeKafkaPayload(),
+      payload: makeFakeTransportPayload(),
     });
     const rows = dlqRecords.snapshot();
     expect(rows).toHaveLength(1);
@@ -778,7 +794,7 @@ describe("destination runtime — dlq_records persistence", () => {
       consumer.handleEvent({
         envelope: makeEnvelope(),
         destination_id: SEED_INSTANCE.destination_id,
-        payload: makeFakeKafkaPayload(),
+        payload: makeFakeTransportPayload(),
         attempt: 1,
       }),
     ).rejects.toThrow();
@@ -788,7 +804,7 @@ describe("destination runtime — dlq_records persistence", () => {
       consumer.handleEvent({
         envelope: makeEnvelope(),
         destination_id: SEED_INSTANCE.destination_id,
-        payload: makeFakeKafkaPayload(),
+        payload: makeFakeTransportPayload(),
         attempt: SEED_INSTANCE.dead_letter_threshold,
       }),
     ).rejects.toThrow();
@@ -810,7 +826,7 @@ describe("destination runtime — dlq_records persistence", () => {
     await consumer.handleEvent({
       envelope: makeEnvelope(),
       destination_id: SEED_INSTANCE.destination_id,
-      payload: makeFakeKafkaPayload(),
+      payload: makeFakeTransportPayload(),
     });
     // The Kafka publish landed (one DLQ producer send observed).
     expect(env.producerSends.length).toBeGreaterThanOrEqual(1);
@@ -1312,7 +1328,13 @@ describe("destination runtime — the routing gate", () => {
     // prove nothing about traits.
     const filters = [{ path: "profile.traits.tier", op: "equals", value: "gold" }];
     const withTier = (tier: string) =>
-      makeEnvelope({ profile: { profile_id: "01a0-0000-7000-8000-0000f001", traits: { tier } } });
+      makeEnvelope({
+        profile: {
+          profile_id: "01a0-0000-7000-8000-0000f001",
+          canonical_customer_id: null,
+          traits: { tier },
+        },
+      });
 
     const matching = makeEnv({ projectConfig: gated({ filters }) });
     await buildConsumer(matching).handleEvent({
