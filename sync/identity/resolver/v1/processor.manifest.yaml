@@ -1,0 +1,172 @@
+# Polaris processor manifest — sync/identity/resolver v1
+#
+# The SEMANTIC definition of the identity stage, version 1. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are
+# immutable: anything that changes emitted event meaning, identity links,
+# or output schema requires a new version directory.
+#
+# PostgreSQL stores runtime activation state (enabled/disabled, project
+# and environment scope, consumer group) — never semantic rules.
+
+name: sync-identity-resolver
+version: v1
+owner: platform-identity
+release_status: released
+description: |
+  Stage 2 of the main pipeline, and the profile store's ONLY sync-path
+  writer.
+
+  Consumes `raw.events` and, in one transaction per event:
+
+  1. collects the strong identifiers on the envelope (`customer_id`,
+     `anonymous_id`), skipping any value on the identifier denylist;
+
+  2. resolves them against `profile_identifiers` with row locks taken in
+     canonical (kind, value) order, then either creates a profile, binds
+     the unbound identifiers to the one it found, or MERGES two profiles
+     that turn out to be one person;
+
+  3. merge-patches traits into `profiles.traits` when the event is
+     identify-family, bumping `traits_version`;
+
+  4. stamps `profile.profile_id` and `profile.canonical_customer_id` onto
+     the envelope and emits it on `identified.events`, partitioned by
+     profile id.
+
+  Unlike the legacy identity-resolver (sync/legacy/identity-resolver/v1),
+  which recorded pairwise links nobody read, this stage produces a PERSON
+  every downstream stage can key on. Its pairwise semantics — including
+  the dead branch and the partial-supersede-on-double-conflict defect —
+  are deliberately not carried forward; find-or-create replaces them
+  wholesale.
+
+  Derived facts emitted alongside the spine event:
+    - identity.linked v2          an identifier was bound to a profile
+    - identity.merged v2          two profiles collapsed into one
+    - identity.link_rejected v1   a safeguard refused a binding
+    - identity.merge_suspended v1 the merge-rate breaker tripped
+    - profile.updated v1          traits changed
+
+  Events carrying no strong identifier are stamped `profile: null` and
+  forwarded unchanged. The spine never drops an event for being
+  unidentifiable — destinations already classify that per instance.
+
+  COMMIT-BEFORE-PUBLISH is an invariant, not an implementation detail:
+  the transaction commits before the event is published, so the
+  enrichment stage downstream can never read a profile that does not yet
+  exist.
+
+mode: streaming
+
+inputs:
+  - family: raw.events
+    schema_versions: "*"   # the stage does not gate on event schema version
+outputs:
+  - family: identified.events
+    schema_versions: "*"   # forwards the source event's own schema version
+  - family: identity.events
+    schema_versions: [1, 2]
+  - family: profile.events
+    schema_versions: [1]
+
+state_stores:
+  - postgres:profiles
+  - postgres:profile_identifiers
+  - postgres:profile_merges
+  - postgres:identity_links
+
+defaults:
+  consumer_group: polaris-sync-identity-v1
+
+# ---------------------------------------------------------------------
+# Semantic parameters.
+#
+# These change EMITTED EVENTS, so they live here and not in
+# `project_config` — per docs/architecture/05-processors-and-replay.md
+# § "Per-Project Semantic Parameters", a project may narrow them via
+# `catalog/projects/<id>.yaml` but never widen them, and introducing the
+# capability at all is a new processor version.
+#
+# They exist because an identity graph without bounds has a known failure
+# mode: one promiscuous identifier (a kiosk device, `customer_id:
+# "guest"`, a bot's anonymous id) chain-merges thousands of profiles into
+# a single mega-profile. Both guards ship in v1 rather than later,
+# because adding them afterwards would change emitted events and force a
+# v2.
+# ---------------------------------------------------------------------
+semantic_parameters:
+  # Maximum identifier bindings of one kind per profile. At the cap the
+  # binding is refused with `identity.link_rejected`, and the profile is
+  # left intact — a runaway producer cannot inflate one profile into a
+  # hot row that stalls its partition.
+  max_identifiers_per_kind:
+    default: 100
+    min: 1
+    max: 10000
+  # Merge-rate breaker. A profile that absorbs more than this many merges
+  # inside the window stops accepting merges and emits
+  # `identity.merge_suspended` for operator review. Committed merges are
+  # NOT unwound: repair is a profile rebuild under a corrected denylist,
+  # because merges are derived state.
+  max_merges_per_window:
+    default: 50
+    min: 1
+    max: 100000
+  merge_window_seconds:
+    default: 3600
+    min: 60
+    max: 86400
+  # Trait snapshot size guard, in bytes. Over-cap snapshots are stored but
+  # the ENRICHMENT stage stamps `traits: null` downstream; this stage
+  # bounds what it will merge-patch in one write.
+  max_traits_bytes:
+    default: 32768
+    min: 1024
+    max: 1048576
+
+replay:
+  supported: true
+  restrictions: []
+
+replay_notes: |
+  Replays re-run find-or-create against the source `raw.events` range.
+  Every step is an upsert or a no-op on re-execution, so a replayed slice
+  converges on the same graph rather than duplicating it: a rewound merge
+  finds the identifiers already repointed and emits nothing new. This is
+  a real improvement over the legacy resolver, where a replayed merge
+  downgraded to `identity.linked` because the emit happened before the
+  state settled.
+
+  Replay is also the REPAIR path. A bad merge — a support agent logging
+  into customer accounts, a denylist gap — is undone by rebuilding the
+  project's profiles from `raw.events` under corrected policy
+  (`polaris profiles rebuild`), not by an inverse operation. The store is
+  derived state; the computation is the source of truth.
+
+  Rebuild depth is bounded by `raw.events` retention until the archive
+  lands (R10).
+
+fixtures:
+  - name: creates-profile-for-anonymous-only
+    input: test/golden/creates-profile-for-anonymous-only.input.json
+    output: test/golden/creates-profile-for-anonymous-only.output.json
+    description: |
+      An event carrying only `anonymous_id`. No profile exists yet, so
+      one is created and the identifier bound to it; the emitted spine
+      event carries the new profile id with a null canonical customer id.
+  - name: binds-customer-to-existing-profile
+    input: test/golden/binds-customer-to-existing-profile.input.json
+    output: test/golden/binds-customer-to-existing-profile.output.json
+    description: |
+      A login: the same `anonymous_id` now arrives alongside a
+      `customer_id`. The customer identifier binds to the profile the
+      anonymous id already resolves to, and `canonical_customer_id` is
+      stamped — this is the transition the whole redesign exists to make
+      survivable.
+  - name: no-strong-identifier-passes-through
+    input: test/golden/no-strong-identifier-passes-through.input.json
+    output: test/golden/no-strong-identifier-passes-through.output.json
+    description: |
+      An event with neither strong identifier. It is stamped
+      `profile: null` and forwarded unchanged rather than dropped.

@@ -1,0 +1,88 @@
+[
+  {
+    "family": "identified.events",
+    "partition_key": "storefront:development:019ffe00-0000-7000-8000-0000000f0001",
+    "event": {
+      "event_id": "019ffe00-0000-7000-8000-00000000ee01",
+      "event": "page.viewed",
+      "schema_version": 1,
+      "project_id": "storefront",
+      "environment": "development",
+      "occurred_at": "2026-08-14T00:00:00.000Z",
+      "ingested_at": "2026-08-14T00:00:01.000Z",
+      "source": {
+        "type": "browser",
+        "id": "storefront-web",
+        "sdk": "web",
+        "sdk_version": "0.1.0"
+      },
+      "identity": {
+        "anonymous_id": "anon_1",
+        "session_id": null,
+        "customer_id": null,
+        "device_id": null
+      },
+      "context": {
+        "ip": null,
+        "user_agent": null,
+        "locale": null,
+        "page": null,
+        "campaign": null
+      },
+      "properties": {},
+      "processor": {
+        "name": "sync-identity-resolver",
+        "version": "v1",
+        "ran_at": "2026-08-14T00:00:00.000Z",
+        "run_id": "run_fixture"
+      },
+      "processor_name": "sync-identity-resolver",
+      "processor_version": "v1",
+      "profile": {
+        "profile_id": "019ffe00-0000-7000-8000-0000000f0001",
+        "canonical_customer_id": null
+      }
+    }
+  },
+  {
+    "family": "identity.events",
+    "partition_key": "storefront:development:019ffe00-0000-7000-8000-0000000f0001",
+    "event": {
+      "event_id": "2732f6aa-fd94-50b7-bb79-c1f0fc2a3179",
+      "event": "identity.linked",
+      "schema_version": 2,
+      "project_id": "storefront",
+      "environment": "development",
+      "occurred_at": "2026-08-14T00:00:00.000Z",
+      "ingested_at": "2026-08-14T00:00:00.000Z",
+      "source": {
+        "type": "internal",
+        "id": "sync-identity-resolver"
+      },
+      "identity": {
+        "anonymous_id": "anon_1",
+        "session_id": null,
+        "customer_id": null,
+        "device_id": null
+      },
+      "context": {},
+      "properties": {
+        "profile_id": "019ffe00-0000-7000-8000-0000000f0001",
+        "identifier": "anonymous_id:anon_1",
+        "profile_created": true,
+        "link_id": "anonymous_id:anon_1",
+        "evidence_type": "explicit_overlap",
+        "source_event_id": "019ffe00-0000-7000-8000-00000000ee01",
+        "run_id": "run_fixture"
+      },
+      "processor": {
+        "name": "sync-identity-resolver",
+        "version": "v1",
+        "ran_at": "2026-08-14T00:00:00.000Z",
+        "run_id": "run_fixture"
+      },
+      "processor_name": "sync-identity-resolver",
+      "processor_version": "v1"
+    }
+  }
+]

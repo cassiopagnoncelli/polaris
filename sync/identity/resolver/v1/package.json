@@ -1,0 +1,43 @@
+{
+  "name": "@polaris/sync-identity-resolver-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris identity stage (sync pipeline, stage 2). Consumes raw.events, resolves each event to a profile via find-or-create/merge against the profile store, stamps profile ids onto the envelope, and emits identified.events plus identity.* v2 and profile.updated facts. The profile store's only sync-path writer.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "processor.manifest.yaml",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=sync-identity POLARIS_HTTP_PORT=4014 tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "kysely": "^0.29.0",
+    "uuid": "^14.0.0",
+    "zod": "^4.4.3"
+  }
+}

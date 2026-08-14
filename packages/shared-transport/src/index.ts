@@ -145,7 +145,9 @@ export {
   createTransportLogHooks,
 } from "./log-hooks.js";
 export {
+  buildProfilePartitionKey,
   buildRawEventsPartitionKey,
+  resolveProfilePartitionKey,
   type PartitionKeyIdentity,
   type PartitionKeyIdentitySource,
   type PartitionKeyInput,
@@ -210,8 +212,11 @@ export {
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
   STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,
   streamExchangeName,
 } from "./streams.js";

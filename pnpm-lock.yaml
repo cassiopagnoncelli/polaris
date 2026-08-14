@@ -210,7 +210,7 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  sync/destinations/braze/v1:
+  async/computation/attribution-engine/v1:
     dependencies:
       '@polaris/shared-config':
         specifier: workspace:*
@@ -218,21 +218,18 @@ importers:
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../../../../packages/shared-db
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destination-normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destinations
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../../../packages/shared-logger
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../../packages/shared-metrics
-      '@polaris/shared-project-config':
+      '@polaris/shared-processor':
         specifier: workspace:*
-        version: link:../../../../packages/shared-project-config
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../../packages/shared-service-bootstrap
@@ -242,6 +239,81 @@ importers:
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  async/computation/attribution-engine/v2:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  async/computation/sessionizer/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.10.1(supports-color@7.2.0)
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -263,150 +335,6 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../../packages/shared-metrics
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  sync/destinations/ga4/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destination-normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  sync/destinations/meta-capi/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destination-normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  sync/destinations/tiktok/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destination-normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  sync/destinations/webhook-sink/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destination-normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-project-config
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../../packages/shared-service-bootstrap
@@ -716,6 +644,222 @@ importers:
         specifier: ^15.11.7
         version: 15.11.7
 
+  sync/destinations/braze/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destinations
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-project-config
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/destinations/ga4/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destinations
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-project-config
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/destinations/meta-capi/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destinations
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-project-config
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/destinations/tiktok/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destinations
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-project-config
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/destinations/webhook-sink/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-destination-normalize':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destination-normalize
+      '@polaris/shared-destinations':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-destinations
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-project-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-project-config
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/identity/resolver/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   sync/legacy/analytics-projector/v1:
     dependencies:
       '@polaris/shared-clickhouse':
@@ -742,78 +886,6 @@ importers:
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../../../../packages/shared-transport
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  async/computation/attribution-engine/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-processor
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-schemas
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      uuid:
-        specifier: ^14.0.0
-        version: 14.0.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  async/computation/attribution-engine/v2:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-processor
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-schemas
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      kysely:
-        specifier: ^0.29.0
-        version: 0.29.0
-      uuid:
-        specifier: ^14.0.0
-        version: 14.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -880,42 +952,6 @@ importers:
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
-      uuid:
-        specifier: ^14.0.0
-        version: 14.0.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
-  async/computation/sessionizer/v1:
-    dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-db
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-processor
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-schemas
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../packages/shared-transport
-      ioredis:
-        specifier: ^5.4.2
-        version: 5.10.1(supports-color@7.2.0)
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
