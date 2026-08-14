@@ -41,9 +41,38 @@ There is one mapper for every canonical event: the passthrough mapper. The outpu
 | `delivery.consumer.consumer_version` | manifest `v1` | pinned |
 | `delivery.consumer.mapper_version` | manifest `v1` | pinned |
 | `delivery.consumer.deliverer_version` | manifest `v1` | pinned |
+| `delivery.consumer.normalize_version` | manifest `v2` | see "The resolved.events flip" below |
 | `event` | the full normalized event | byte-for-byte; the receiver picks what it needs |
 
 The mapper produces the payload with empty placeholders for the runtime-supplied delivery fields; the deliverer overwrites them per attempt via `stampDelivery` so the wire payload carries authoritative values.
+
+## The resolved.events flip (WE77L4R8)
+
+Webhook-sink reads `resolved.events`, the output of the identity and enrichment stages, rather than `analytics.events`. It is the first consumer to move and for a while the only one: it is the transparency exemplar, so a receiver pointed at it sees exactly what a vendor mapper sees, with nothing vendor-shaped in the way.
+
+**Added to `event`:**
+
+| Field | Meaning |
+|---|---|
+| `event.identity.profile_id` | Polaris's identifier for the person. Stable across devices and sessions. |
+| `event.identity.canonical_customer_id` | The customer id the identity stage resolved, which may differ from the one this event's producer sent. |
+| `event.traits` | Profile traits as of enrichment. **Redacted and hashed on the same rules as `properties`** — a `traits.email` arrives as `traits.email_sha256`, never in the clear. `null` covers both "no traits" and "snapshot over the size guard". |
+| `event.traits_version` | Version of that snapshot; what keeps a historical delivery explainable after the profile has moved on. |
+| `event.enrichment.geo` | Country/region/city derived from the IP, plus a `source` naming the backend — or `no_ip` / `no_lookup`, so a null geo is never ambiguous between "not attempted" and "found nothing". |
+
+**Changed in `event` — read this one:**
+
+`event.best_identity` now answers "who is this event about?" with the platform's conclusion instead of the producer's observation. Both halves move:
+
+```
+  before                        after
+  user_id      "cus_1"     ->   canonical_customer_id  "cus_1"
+  anonymous_id "anon_1"    ->   profile_id             "0193...aa"
+```
+
+The first is a relabelling — same value, more accurate name. The second is a **different key**: an anonymous visitor seen on three devices used to be three `best_identity` values and is now one. A receiver deduplicating on `best_identity.value` will see its keys change shape at the flip. That is the intended improvement, but it is a change, not an addition, and it is why webhook-sink flipped first and alone.
+
+Nothing else in the payload moves. `test/dual-run-diff.test.ts` runs four representative envelopes down both paths and fails on any difference outside the two lists above, so this section cannot quietly go stale.
 
 ## Normalization rules
 

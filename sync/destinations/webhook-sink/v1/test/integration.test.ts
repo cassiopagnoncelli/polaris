@@ -149,7 +149,7 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
     expect(record?.consumer_version).toBe("v1");
     expect(record?.mapper_version).toBe("v1");
     expect(record?.deliverer_version).toBe("v1");
-    expect(record?.normalize_version).toBe("v1");
+    expect(record?.normalize_version).toBe("v2");
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("https://hooks.example/receiver");
 

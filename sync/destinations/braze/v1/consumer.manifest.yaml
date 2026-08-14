@@ -41,7 +41,11 @@ outputs:
 mode: streaming
 
 # Per-stage versions stamped onto every delivery_records row.
-normalize_version: v1
+# v2 (WE77L4R8): shared normalize gained traits / enrichment and a
+# profile-first identity preference. This consumer still reads
+# analytics.events, where there is no profile block, so its OUTPUT is
+# unchanged — but it runs the v2 code and must not claim otherwise.
+normalize_version: v2
 mapper_version: v1
 deliverer_version: v1
 

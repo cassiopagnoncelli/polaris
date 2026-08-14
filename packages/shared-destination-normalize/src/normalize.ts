@@ -129,6 +129,39 @@ export interface NormalizableEnvelope {
   readonly properties: Readonly<Record<string, unknown>>;
   readonly consent?: EnvelopeConsent | null | undefined;
   readonly privacy?: Readonly<Record<string, unknown>> | null | undefined;
+  /**
+   * Platform resolution of the person, written by the identity stage and
+   * completed by enrichment. Optional because it is absent on every
+   * envelope that has not been through the spine — `analytics.events`
+   * traffic, and any replay of history.
+   */
+  readonly profile?: EnvelopeProfile | null | undefined;
+  /** Platform-derived context, written by the enrichment stage. */
+  readonly enrichment?: EnvelopeEnrichment | null | undefined;
+}
+
+/** Mirrors `profileBlockSchema` in `@polaris/shared-schemas`. */
+export interface EnvelopeProfile {
+  readonly profile_id: string;
+  readonly canonical_customer_id: string | null;
+  /**
+   * Snapshot taken when the event was enriched, not a live view. `null`
+   * covers both "no traits" and "snapshot over the size guard", which the
+   * envelope schema deliberately makes the same shape.
+   */
+  readonly traits?: Readonly<Record<string, unknown>> | null | undefined;
+  readonly traits_version?: number | undefined;
+}
+
+/** Mirrors `enrichmentBlockSchema` in `@polaris/shared-schemas`. */
+export interface EnvelopeEnrichment {
+  readonly geo?: {
+    readonly country: string | null;
+    readonly region: string | null;
+    readonly city: string | null;
+    /** Backend id, or `no_ip` / `no_lookup`. Never absent. */
+    readonly source: string;
+  } | null;
 }
 
 /**
@@ -193,6 +226,37 @@ export interface NormalizedEvent {
 
   /** Consent evaluation snapshot for observability. */
   readonly consent: ConsentEvaluation;
+
+  /**
+   * Profile traits as of enrichment, redacted and hashed on exactly the
+   * same rules as `properties`.
+   *
+   * That equality is the point. Traits reach a vendor through the same
+   * boundary as producer properties and carry the same kind of data — an
+   * email in `traits.email` is the same email as in `properties.email` —
+   * so a weaker rule here would be a hole cut in the redaction policy by
+   * way of the profile store. `null` when the envelope carries no traits.
+   */
+  readonly traits: Readonly<Record<string, unknown>> | null;
+  /** Version of the traits snapshot; `null` when there are no traits. */
+  readonly traits_version: number | null;
+
+  /**
+   * Platform-derived context. Exposed so a mapper can send a vendor a
+   * country without the consumer re-deriving one from an IP that
+   * normalization has already redacted.
+   */
+  readonly enrichment: NormalizedEnrichment;
+}
+
+/** The enrichment surface handed to mappers. */
+export interface NormalizedEnrichment {
+  readonly geo: {
+    readonly country: string | null;
+    readonly region: string | null;
+    readonly city: string | null;
+    readonly source: string;
+  } | null;
 }
 
 /** Successful outcome of `normalizeForDestination`. */
@@ -265,7 +329,10 @@ export function normalizeForDestination(
   // optional `identityFromProperties` hook; default is to read from the
   // canonical `identity` block only.
   const propsIdentity = options.identityFromProperties?.(redactedEnvelope.properties);
+  const profile = redactedEnvelope.profile ?? null;
   const identityInput: RawIdentityInput = {
+    canonical_customer_id: profile?.canonical_customer_id ?? null,
+    profile_id: profile?.profile_id ?? null,
     user_id: redactedEnvelope.identity.customer_id ?? null,
     anonymous_id: redactedEnvelope.identity.anonymous_id ?? null,
     ...(propsIdentity ?? {}),
@@ -301,9 +368,83 @@ export function normalizeForDestination(
     context,
     properties: redactedEnvelope.properties,
     consent: consentEval,
+    traits: normalizeTraits(profile?.traits ?? null, options.identityHashing ?? {}),
+    traits_version:
+      profile?.traits === undefined || profile.traits === null
+        ? null
+        : (profile.traits_version ?? null),
+    enrichment: { geo: redactedEnvelope.enrichment?.geo ?? null },
   };
 
   return { kind: "normalized", normalized };
+}
+
+/**
+ * Trait keys carrying PII the identity layer knows how to hash.
+ *
+ * Deliberately the same two the identity layer handles and no more. A
+ * broader guess — hashing anything whose key contains "mail", say — would
+ * hash a `mailing_preference` string into noise, and an operator would have
+ * no way to tell a hashed trait from a genuinely opaque one.
+ */
+const HASHABLE_TRAIT_KEYS = { email: "email", phone: "phone" } as const;
+
+/**
+ * Apply the identity layer's hashing rules to a traits snapshot.
+ *
+ * `traits.email` is the same class of value as an `identity.email`, so it
+ * obeys the same per-destination toggle: a vendor that receives hashed
+ * email in its identity block must not receive the plaintext of the same
+ * address one field over, which is exactly what a passthrough would do.
+ *
+ * A value that fails to hash (a non-E.164 phone) is DROPPED from the
+ * output rather than passed through raw. Traits are a convenience surface;
+ * leaking a plaintext phone because it was badly formatted is not a
+ * trade-off worth making, and the raw value remains available on
+ * `identity.phone` when a mapper genuinely needs to re-attempt it.
+ */
+function normalizeTraits(
+  traits: Readonly<Record<string, unknown>> | null,
+  hashing: IdentityHashingOptions,
+): Readonly<Record<string, unknown>> | null {
+  if (traits === null) return null;
+
+  const prepared = prepareIdentity(
+    {
+      email:
+        typeof traits[HASHABLE_TRAIT_KEYS.email] === "string"
+          ? (traits[HASHABLE_TRAIT_KEYS.email] as string)
+          : null,
+      phone:
+        typeof traits[HASHABLE_TRAIT_KEYS.phone] === "string"
+          ? (traits[HASHABLE_TRAIT_KEYS.phone] as string)
+          : null,
+    },
+    hashing,
+  );
+
+  const out: Record<string, unknown> = { ...traits };
+  applyHashedTrait(out, HASHABLE_TRAIT_KEYS.email, prepared.email_sha256, hashing.email !== false);
+  applyHashedTrait(out, HASHABLE_TRAIT_KEYS.phone, prepared.phone_sha256, hashing.phone !== false);
+  return out;
+}
+
+function applyHashedTrait(
+  out: Record<string, unknown>,
+  key: string,
+  hashed: string | null,
+  enabled: boolean,
+): void {
+  if (!enabled) return;
+  if (out[key] === undefined) return;
+  if (hashed === null) {
+    // Present but unhashable. Removing it is the conservative branch: see
+    // `normalizeTraits`.
+    delete out[key];
+    return;
+  }
+  delete out[key];
+  out[`${key}_sha256`] = hashed;
 }
 
 /**

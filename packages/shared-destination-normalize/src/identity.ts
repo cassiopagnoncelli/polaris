@@ -12,10 +12,16 @@
  * email/phone helpers in this package) so a vendor-side bug cannot drift
  * from another vendor's hashing.
  *
- * "Best-available identity" mirrors the partition-key picker rule from
- * `@polaris/shared-transport/buildRawEventsPartitionKey`:
+ * "Best-available identity" leads with what the platform RESOLVED and falls
+ * back to what the producer OBSERVED:
  *
- *   user_id > email_sha256 > phone_sha256 > anonymous_id
+ *   canonical_customer_id > profile_id > user_id > email_sha256
+ *     > phone_sha256 > anonymous_id
+ *
+ * The tail mirrors the partition-key picker rule from
+ * `@polaris/shared-transport/buildRawEventsPartitionKey`; the two platform
+ * identifiers at the head come from the envelope's profile block and are
+ * absent until the identity stage has run.
  *
  * Vendor mappers that need a single identity value (Meta's `external_id`
  * deduplication key, TikTok's `external_id`, Reddit's `external_id`) call
@@ -34,6 +40,26 @@ import { hashPhoneE164 } from "./phone.js";
  * treated as missing.
  */
 export interface RawIdentityInput {
+  /**
+   * The platform's resolved customer id for this person, from
+   * `envelope.profile.canonical_customer_id`.
+   *
+   * Different in kind from `user_id` below, and that difference is the
+   * reason it outranks it: `user_id` is what THIS event's producer said,
+   * while this is what the identity stage concluded after reconciling every
+   * identifier ever seen for the person. Two producers spelling the same
+   * customer differently converge here and nowhere else.
+   */
+  readonly canonical_customer_id?: string | null | undefined;
+  /**
+   * The platform's own identifier for the person, from
+   * `envelope.profile.profile_id`.
+   *
+   * Present on every resolved envelope even when the person has no customer
+   * id at all, which is what makes it the reliable fallback: an anonymous
+   * visitor on three devices is one `profile_id` and three `anonymous_id`s.
+   */
+  readonly profile_id?: string | null | undefined;
   /** Producer-controlled stable user id (e.g. `customer_id`). */
   readonly user_id?: string | null | undefined;
   /** SDK-issued anonymous id (browser cookie / SDK-generated). */
@@ -67,6 +93,10 @@ export interface IdentityHashingOptions {
  * attempt a country-aware reformat before re-hashing.
  */
 export interface PreparedIdentity {
+  /** Platform-resolved customer id. `null` on an unresolved envelope. */
+  readonly canonical_customer_id: string | null;
+  /** Platform-issued person id. `null` on an unresolved envelope. */
+  readonly profile_id: string | null;
   readonly user_id: string | null;
   readonly anonymous_id: string | null;
   readonly email: string | null;
@@ -76,7 +106,13 @@ export interface PreparedIdentity {
 }
 
 /** Identifier the `pickBestIdentity` helper actually chose. */
-export type BestIdentityKind = "user_id" | "email_sha256" | "phone_sha256" | "anonymous_id";
+export type BestIdentityKind =
+  | "canonical_customer_id"
+  | "profile_id"
+  | "user_id"
+  | "email_sha256"
+  | "phone_sha256"
+  | "anonymous_id";
 
 /** Result of `pickBestIdentity`. */
 export interface BestIdentity {
@@ -138,6 +174,8 @@ export function prepareIdentity(
   }
 
   return {
+    canonical_customer_id: nonEmpty(input.canonical_customer_id),
+    profile_id: nonEmpty(input.profile_id),
     user_id,
     anonymous_id,
     email,
@@ -150,16 +188,41 @@ export function prepareIdentity(
 /**
  * Pick the highest-priority usable identity from `PreparedIdentity`. Order:
  *
- *   1. user_id
- *   2. email_sha256
- *   3. phone_sha256
- *   4. anonymous_id
+ *   1. canonical_customer_id   platform-resolved, cross-producer
+ *   2. profile_id              platform-issued, present whenever resolved
+ *   3. user_id                 what this event's producer said
+ *   4. email_sha256
+ *   5. phone_sha256
+ *   6. anonymous_id
+ *
+ * The two platform identifiers lead because they are conclusions drawn from
+ * every identifier ever seen for the person, where the rest are single
+ * observations from one event. Between them, `canonical_customer_id` wins
+ * when present because a vendor can match on it; `profile_id` means nothing
+ * outside Polaris but is stable and always there once resolved.
+ *
+ * `user_id` is RETAINED below them rather than replaced by
+ * `canonical_customer_id`, which the redesign plan's ordering could be read
+ * as implying. An envelope that has not been through the identity stage —
+ * every vendor not yet flipped, and every replay of historical traffic —
+ * carries no profile block at all, and dropping `user_id` from the chain
+ * would silently demote those events to `email_sha256`. That is a live
+ * behaviour change for destinations keying on a customer id today, in
+ * exchange for nothing: on a resolved envelope a producer-supplied
+ * `customer_id` is what the resolver wrote `canonical_customer_id` from, so
+ * the higher rung is already occupied and this one is never reached.
  *
  * Returns `undefined` when no identity field has a usable value. The
  * mapper layer typically uses the returned `kind` as the source label on
  * a per-destination identity metric.
  */
 export function pickBestIdentity(identity: PreparedIdentity): BestIdentity | undefined {
+  if (identity.canonical_customer_id !== null) {
+    return { kind: "canonical_customer_id", value: identity.canonical_customer_id };
+  }
+  if (identity.profile_id !== null) {
+    return { kind: "profile_id", value: identity.profile_id };
+  }
   if (identity.user_id !== null) {
     return { kind: "user_id", value: identity.user_id };
   }

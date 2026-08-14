@@ -154,7 +154,7 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(record?.consumer_version).toBe("v1");
     expect(record?.mapper_version).toBe("v1");
     expect(record?.deliverer_version).toBe("v1");
-    expect(record?.normalize_version).toBe("v1");
+    expect(record?.normalize_version).toBe("v2");
     // For begin_checkout, dedupe_key falls through to canonical event_id
     // (GA4 only dedupes purchases via transaction_id).
     expect(record?.dedupe_key).toBe("evt_int_ga4_001");
@@ -231,7 +231,11 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("writes mapped_failed for unsupported canonical events", async () => {
+  it("writes skipped_unmapped for unsupported canonical events", async () => {
+    // Was `mapped_failed` until H05QEWIB. This vendor registers mappers for
+    // the events it models; one it does not model is routine operation, not
+    // a mapping fault, and `error_class` stays null so the two remain
+    // distinguishable in delivery_records and on the dashboards.
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
     const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
@@ -253,8 +257,8 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       destination_id: instance.destination_id,
     });
 
-    expect(record?.status).toBe("mapped_failed");
-    expect(record?.error_class).toBe("mapping");
+    expect(record?.status).toBe("skipped_unmapped");
+    expect(record?.error_class).toBeNull();
     expect(record?.vendor_response_summary).toContain("page.viewed");
     expect(calls).toHaveLength(0);
   });

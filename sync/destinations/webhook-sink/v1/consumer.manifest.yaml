@@ -21,7 +21,12 @@ description: |
   consumers (Meta CAPI, GA4, TikTok, Braze) clone from.
 
 inputs:
-  - analytics.events
+  # WE77L4R8: the spine's OUTPUT, not the legacy fan-out stream. This
+  # consumer is the transparency exemplar, so it reads the family that
+  # carries the profile and enrichment blocks the identity and enrichment
+  # stages wrote — a receiver pointed here sees what a vendor mapper sees.
+  # The other four vendors stay on analytics.events until MVKUP64R.
+  - resolved.events
 
 outputs:
   # Webhook sinks do not emit canonical Polaris events back into the
@@ -35,7 +40,11 @@ mode: streaming
 # downstream consumer (audit dashboard, replay tooling) can scope to
 # "all records produced with mapper/v1 against deliverer/v1" without
 # bumping the whole consumer version.
-normalize_version: v1
+# v2: the normalized event gained traits / traits_version / enrichment, and
+# best_identity now leads with the platform's resolution. Bumped on every
+# consumer, not only the flipped one, because the version stamps the
+# normalize LOGIC and all six run the same code.
+normalize_version: v2
 mapper_version: v1
 deliverer_version: v1
 

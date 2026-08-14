@@ -83,6 +83,7 @@ export interface ProjectConfigLookup {
 const EMPTY_CONFIG: Readonly<Record<string, unknown>> = Object.freeze({});
 
 import {
+  type CanonicalStreamFamily,
   consumerFamiliesFor,
   decodeEvent,
   type PolarisConsumer,
@@ -137,8 +138,19 @@ import type {
 export interface DestinationConsumerOptions<Payload> {
   /** Static vendor + per-stage version descriptor. */
   readonly descriptor: DestinationDescriptor<Payload>;
-  /** Connected PolarisConsumer for `analytics.events`. */
+  /** Connected PolarisConsumer for the input family. */
   readonly consumer: PolarisConsumer;
+  /**
+   * Stream family this consumer reads. Defaults to `analytics.events`.
+   *
+   * The flip to `resolved.events` is per-vendor and staged, so this is an
+   * option rather than a constant: a consumer that has moved reads the
+   * spine's output with the profile and enrichment blocks populated, and
+   * one that has not reads exactly what it read yesterday. Defaulting
+   * rather than requiring it is what keeps the four unflipped vendors from
+   * needing a change in the same commit as the first flipped one.
+   */
+  readonly inputFamily?: CanonicalStreamFamily | undefined;
   /**
    * Connected PolarisProducer used to republish DLQ messages. The runtime
    * does not own its lifecycle.
@@ -526,7 +538,7 @@ export function createDestinationConsumer<Payload>(
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const families = consumerFamiliesFor(STREAM_FAMILY_ANALYTICS_EVENTS, []);
+    const families = consumerFamiliesFor(options.inputFamily ?? STREAM_FAMILY_ANALYTICS_EVENTS, []);
     // The redelivery queue carries messages the broker parked in a retry
     // tier and released when the tier's TTL expired. Consuming it here is
     // what makes the retry path close: under Kafka the consumer had to

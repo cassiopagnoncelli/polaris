@@ -26,7 +26,22 @@ export const CONSUMER_VENDOR = "braze" as const;
  */
 export const CONSUMER_COMPONENT = "braze" as const;
 export const CONSUMER_VERSION = "v1" as const;
-export const NORMALIZE_VERSION = "v1" as const;
+/**
+ * Normalize v2 (WE77L4R8): the normalized event gained `traits`,
+ * `traits_version` and `enrichment`, and the identity preference now leads
+ * with the platform's resolution — `canonical_customer_id` then
+ * `profile_id`, ahead of the producer's `user_id`.
+ *
+ * Bumped on EVERY consumer, not only the ones reading `resolved.events`,
+ * because the version stamps the normalize LOGIC and all six run the same
+ * code from this commit forward. A consumer stamping v1 while running v2
+ * would put a false claim on every delivery row, which is worse than a
+ * stamp that moves without a visible output change: on an
+ * `analytics.events` envelope there is no profile block, so the new fields
+ * are null and the preference falls straight through to `user_id` exactly
+ * as before.
+ */
+export const NORMALIZE_VERSION = "v2" as const;
 export const MAPPER_VERSION = "v1" as const;
 export const DELIVERER_VERSION = "v1" as const;
 

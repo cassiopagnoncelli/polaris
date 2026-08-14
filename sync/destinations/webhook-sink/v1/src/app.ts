@@ -63,6 +63,7 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -184,7 +185,7 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
 
   // ---- consumer + producer ------------------------------------------
   // One AMQP connection per process, shared by the DLQ producer and the
-  // analytics.events consumer. Checkpoints live in PostgreSQL because
+  // resolved.events consumer. Checkpoints live in PostgreSQL because
   // RabbitMQ streams consumed over AMQP have no server-side offset store.
   const connection = createTransportConnection({
     rabbitmq: config.rabbitmq,
@@ -254,6 +255,14 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
 
   const runtime = createDestinationConsumer({
     descriptor,
+    // R3B: the exemplar flip. Webhook-sink reads the spine's OUTPUT, so its
+    // passthrough payload carries the profile and enrichment blocks the
+    // identity and enrichment stages wrote — which is the whole point of
+    // this consumer existing. A receiver pointed at webhook-sink now sees
+    // exactly what a vendor mapper sees, with nothing vendor-shaped in the
+    // way. The other four vendors stay on `analytics.events` until
+    // MVKUP64R flips them one at a time.
+    inputFamily: STREAM_FAMILY_RESOLVED_EVENTS,
     consumerBuildVersion:
       config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
