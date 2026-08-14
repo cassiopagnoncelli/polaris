@@ -5,8 +5,15 @@
  *
  *   --status <status>          accepted | delivered | dropped_consent |
  *                              dropped_no_identity | dropped_invalid |
+ *                              skipped_filtered | skipped_unmapped |
  *                              mapped_failed | failed_retryable |
  *                              failed_permanent
+ *
+ *     The two `skipped_` values are PLANNED non-deliveries and carry a null
+ *     error_class: `skipped_filtered` means the routing gate refused the
+ *     event for this instance, `skipped_unmapped` means the vendor has no
+ *     mapper for it. Neither is a failure. `mapped_failed` now means only
+ *     what its name says — a mapper that ran and did not produce a payload.
  *   --error-class <class>      consent | identity | mapping | auth |
  *                              rate_limit | transient | permanent |
  *                              timeout | policy

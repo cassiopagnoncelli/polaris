@@ -26,10 +26,13 @@
  *      - drop if the mode is `test` (no network delivery),
  *      - acquire the rate-limit lease,
  *      - decode the canonical envelope from the message value,
+ *      - evaluate the routing GATE (subscriptions -> property filters ->
+ *        instance consent) -> `skipped_filtered` if this instance was
+ *        configured not to want the event,
  *      - check destination-side dedupe (skip + log if already delivered),
  *      - call `normalizeForDestination` (P9-000),
  *      - on `drop` outcome -> record + return,
- *      - look up the per-event mapper -> `mapped_failed` if missing,
+ *      - look up the per-event mapper -> `skipped_unmapped` if missing,
  *      - call the mapper -> `mapped_failed` on throw or `skip` outcome,
  *      - call the deliverer with `(payload, instance, secret, ...)`,
  *      - on `accepted` outcome -> record + mark dedupe + return,
@@ -102,6 +105,7 @@ import type { DestinationInstance, DestinationInstanceReader } from "./db/destin
 import type { DlqRecordRepository } from "./db/dlq-records.js";
 import { type DestinationDedupe, InMemoryDestinationDedupe } from "./dedupe.js";
 import { publishToDestinationDlq } from "./dlq.js";
+import { evaluateGate, parseRoutingGateConfig, ROUTING_GATE_CONFIG_KEY } from "./gate.js";
 import { buildDeliveryKey } from "./idempotency.js";
 import { DestinationMetrics } from "./metrics.js";
 import { DestinationRateLimiter } from "./rate-limiter.js";
@@ -334,7 +338,10 @@ export function createDestinationConsumer<Payload>(
       projectId,
     );
     const ids = rows.map((row) => row.destination_id);
-    activeTargets.set(cacheKey, { ids, expiresAt: nowMs + activeInstanceTtlMs });
+    activeTargets.set(cacheKey, {
+      ids,
+      expiresAt: nowMs + activeInstanceTtlMs,
+    });
     return ids;
   }
 
@@ -532,7 +539,10 @@ export function createDestinationConsumer<Payload>(
     // a queue provisioning has never declared, and died on boot with
     // NOT_FOUND while the other five worked by coincidence.
     const redeliver = redeliverQueueName(options.descriptor.identity.component);
-    await options.consumer.subscribe({ families: [...families], queues: [redeliver] });
+    await options.consumer.subscribe({
+      families: [...families],
+      queues: [redeliver],
+    });
     options.logger.info(
       {
         component: "destination.runtime",
@@ -753,12 +763,57 @@ async function processOne<Payload>(
     });
   }
 
-  // 3. Destination-side dedupe.
   const delivery_key = buildDeliveryKey({
     destination_id: instance.destination_id,
     event_id: envelope.event_id,
     identity,
   });
+
+  // Resolved ONCE, here, and reused by the deliverer below. Two separate
+  // `valuesFor` calls could straddle a config invalidation and hand the gate
+  // and the deliverer different slices for the same event.
+  const projectConfigValues =
+    projectConfig?.valuesFor(envelope.project_id, envelope.environment) ?? EMPTY_CONFIG;
+
+  // 3. Gate: is this event FOR this instance at all?
+  //
+  // Ahead of dedupe rather than after it, on cost: an instance subscribed to
+  // one event type should not pay a dedupe round trip for the nineteen it
+  // does not want. Nothing is lost by the ordering — the dedupe window is
+  // only ever marked on an accepted delivery, so a gated event was never
+  // going to consume it.
+  const gateDecision = evaluateGate({
+    envelope,
+    config: parseRoutingGateConfig(projectConfigValues[ROUTING_GATE_CONFIG_KEY]),
+    vendorConsent: descriptor.requiredConsent,
+  });
+  if (gateDecision.kind === "skip") {
+    return recordOutcome({
+      ...outcomeBuildVersion,
+      records,
+      metrics,
+      logger,
+      identity,
+      instance,
+      envelope,
+      attempt,
+      startedAt,
+      now,
+      status: "skipped_filtered",
+      // Null, and the whole point of the status. Nothing failed: the
+      // instance is configured not to want this event.
+      error_class: null,
+      vendor_response_code: null,
+      vendor_response_summary: gateDecision.detail,
+      dedupe_key: null,
+      delivery_key,
+      skipReason: gateDecision.reason,
+      logLine: `destination gate skip: ${gateDecision.reason}`,
+      labels: instanceLabels,
+    });
+  }
+
+  // 4. Destination-side dedupe.
   const dedupedAt = await dedupe.seen(instance.destination_id, delivery_key);
   if (dedupedAt !== undefined) {
     metrics.incrementDeduped(instanceLabels);
@@ -775,7 +830,7 @@ async function processOne<Payload>(
     return null;
   }
 
-  // 4. Normalize.
+  // 5. Normalize.
   const normalizeOutcome = normalizeForDestination(envelope, {
     destinationId: instance.destination_id,
     requiredConsent: descriptor.requiredConsent,
@@ -806,7 +861,7 @@ async function processOne<Payload>(
 
   const normalized: NormalizedEvent = normalizeOutcome.normalized;
 
-  // 5. Map.
+  // 6. Map.
   const mapper: Mapper<Payload> | undefined = descriptor.mappers[normalized.event];
   if (mapper === undefined) {
     return recordOutcome({
@@ -820,13 +875,21 @@ async function processOne<Payload>(
       attempt,
       startedAt,
       now,
-      status: "mapped_failed",
-      error_class: "mapping",
+      // NOT `mapped_failed`. A vendor registers mappers for the events it
+      // has semantics for; every other event reaching a passing gate is
+      // simply one this vendor does not model. Recording that as a mapping
+      // FAILURE is the planned-skip-looks-like-failure defect: it put
+      // routine operation into the error class, so a dashboard counting
+      // `mapped_failed` counted a healthy consumer as broken, and a real
+      // mapper fault had nowhere quiet to stand out from.
+      status: "skipped_unmapped",
+      error_class: null,
       vendor_response_code: null,
       vendor_response_summary: `no mapper for event '${normalized.event}'`,
       dedupe_key: null,
       delivery_key,
-      logLine: "no mapper registered for event — mapped_failed",
+      skipReason: "unmapped",
+      logLine: "no mapper registered for event — skipped_unmapped",
       labels: instanceLabels,
     });
   }
@@ -888,7 +951,7 @@ async function processOne<Payload>(
 
   const vendor_dedupe_key = mapResult.dedupe_key ?? null;
 
-  // 6. Rate limit + deliver.
+  // 7. Rate limit + deliver.
   //
   // No secret-resolution step precedes this any more. It used to sit here and
   // could fail on its own — a provider unreachable, a reference nobody
@@ -916,8 +979,7 @@ async function processOne<Payload>(
         // Empty when no store is wired or the scope is cold. Deliverers fall
         // back to their constructed defaults, which is what the migrated
         // environment variable meant.
-        projectConfig:
-          projectConfig?.valuesFor(envelope.project_id, envelope.environment) ?? EMPTY_CONFIG,
+        projectConfig: projectConfigValues,
       },
     });
   } catch (err) {
@@ -1073,6 +1135,15 @@ interface RecordOutcomeInput {
     readonly environment: string;
   };
   readonly logErr?: unknown;
+  /**
+   * `reason` label for a `skipped_*` status.
+   *
+   * Every other outcome takes its metric reason from `error_class`, but a
+   * planned skip has none by design — nothing failed. Without this the skip
+   * counter would carry no reason at all and "why did this instance go
+   * quiet?" would be unanswerable from metrics alone.
+   */
+  readonly skipReason?: string;
   /** Operational build version (M0DROHV3) stamped on the row. Forwarded by the runtime from `DestinationConsumerOptions.consumerBuildVersion`. */
   readonly consumerBuildVersion?: string;
   /** When set, the runtime publishes the original payload to the DLQ. */
@@ -1120,6 +1191,16 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
   if (input.suppressMetric !== true) {
     if (input.status === "accepted" || input.status === "delivered") {
       input.metrics.incrementDelivered(input.labels);
+    } else if (input.status.startsWith("skipped_")) {
+      // Ahead of the `dropped_` branch and, more importantly, ahead of the
+      // `else`. Routing here is by status PREFIX, so a status that matched
+      // neither would be counted as a failure — which is precisely the
+      // defect these statuses exist to close, reproduced one layer down in
+      // the metrics. A planned skip is not an error anywhere.
+      input.metrics.incrementSkipped({
+        ...input.labels,
+        ...(input.skipReason !== undefined ? { reason: input.skipReason } : {}),
+      });
     } else if (input.status.startsWith("dropped_")) {
       input.metrics.incrementDropped({
         ...input.labels,

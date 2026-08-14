@@ -59,11 +59,32 @@ packages/shared-destination-normalize/
 
 Each consumer's `normalize/` directory composes from the shared package and adds vendor-specific rules (Meta's `em`/`ph`/`external_id` field requirements, TikTok's similar but distinct rules, GA4's measurement-protocol-specific shape).
 
-## Three Stages
+## Four Stages
+
+### Routing gate
+
+The gate runs first and answers a question the other three stages assume has already been settled: is this event **for this destination instance at all?**
+
+Before it existed, every event that reached a consumer was normalized, mapped and delivered. A vendor that only cared about purchases still received page views, and the only place to refuse them was the mapper — which put a routing decision inside vendor-specific code, made "why did this event reach Braze?" a code-reading exercise, and recorded the refusal as a mapping *failure*.
+
+The gate is three checks in a fixed order:
+
+    subscription  ->  property filters  ->  consent  ->  (normalize)
+
+Order does not change **which** events pass — all three must pass — but it decides the **reason** recorded for those that do not, and the reason is the whole operational value of the row. An event that is both unsubscribed and consent-denied is reported as unsubscribed, because that is the fact an operator can act on.
+
+Rules:
+
+- The gate is **configuration, not code**: it reads the `routing` key of the project's config slice through the same cache-only `peek` seam the deliverer uses, resolved once per event and shared between them.
+- **Absent or malformed configuration subscribes to everything.** An unconfigured project behaves exactly as it did before the gate existed, which is what makes it safe to land ahead of the vendor cutovers. Degrading open is safe here for one specific reason: the gate can only ever *subtract* deliveries, and normalization still applies the vendor's declared consent independently — so a broken config can never cause an event to be sent that would not have been sent anyway.
+- **Filters address a closed set of roots**: `event`, `properties`, `context`, `profile`, `enrichment`. `identity` is deliberately absent — routing on who someone *is* rather than on what they *did* is both a privacy hazard and, with the profile plane one hop upstream, the wrong tool. Filter on a trait instead. A filter naming an unaddressable root is refused when the config is read, not silently unmatched at runtime.
+- **Configuration may require more consent than the vendor declares, never less.** Instance requirements union with the descriptor's; a database row cannot undo a compliance decision made in versioned code.
+- Comparison is **strictly typed**: `"1"` is not `1`. A coercing comparison would make a filter's behaviour depend on how a producer happened to serialise a value.
+- A refusal records `skipped_filtered` with a **null `error_class`** and a detail naming the path and operator — never the envelope's value, which may be customer data on a widely readable row.
 
 ### Normalization
 
-Normalization runs first. It takes the canonical event and produces a vendor-shaped intermediate that is safe to map.
+Normalization runs second. It takes the canonical event and produces a vendor-shaped intermediate that is safe to map.
 
 Responsibilities:
 

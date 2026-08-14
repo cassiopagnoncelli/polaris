@@ -616,7 +616,12 @@ describe("destination runtime — mapper failure paths", () => {
     expect(rec?.vendor_response_summary).toMatch(/event_excluded/);
   });
 
-  it("no mapper registered for event → mapped_failed", async () => {
+  it("no mapper registered for event → skipped_unmapped, NOT a failure", async () => {
+    // This assertion used to read `mapped_failed`, and that was the defect:
+    // a vendor registers mappers for the events it models, so an event with
+    // no mapper is routine operation, not a mapping fault. The two now have
+    // different statuses, and the one that matters most is `error_class` —
+    // it is what makes "was this an error?" a single-column question.
     const env = makeEnv();
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
@@ -625,7 +630,8 @@ describe("destination runtime — mapper failure paths", () => {
     });
     expect(env.delivererCalls).toHaveLength(0);
     const rec = lastRecord(env);
-    expect(rec?.status).toBe("mapped_failed");
+    expect(rec?.status).toBe("skipped_unmapped");
+    expect(rec?.error_class).toBeNull();
   });
 });
 
@@ -1202,5 +1208,102 @@ describe("destination runtime — per-project configuration", () => {
       destination_id: SEED_INSTANCE.destination_id,
     });
     expect(env.delivererCalls[0]?.projectConfig).toEqual({});
+  });
+});
+
+describe("destination runtime — the routing gate", () => {
+  // `gate.test.ts` covers the decision itself exhaustively. What can only be
+  // tested here is the WIRING: that a decision reaches a delivery row, stops
+  // the pipeline at the right point, and does not fire when unconfigured.
+
+  function gated(config: unknown) {
+    return { valuesFor: () => ({ routing: config }) };
+  }
+
+  it("does not gate when the project has no routing config", async () => {
+    // The landing property. Every destination shipping today runs this path.
+    const env = makeEnv({ projectConfig: { valuesFor: () => ({}) } });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls).toHaveLength(1);
+  });
+
+  it("records skipped_filtered and never reaches the deliverer", async () => {
+    const env = makeEnv({
+      projectConfig: gated({ subscriptions: { events: ["something.else"] } }),
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls).toHaveLength(0);
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("skipped_filtered");
+    expect(rec?.error_class).toBeNull();
+    expect(rec?.vendor_response_summary).toMatch(/subscriptions/);
+  });
+
+  it("runs BEFORE dedupe, so a gated event costs no dedupe round trip", async () => {
+    // Ordering is the whole reason the gate sits where it does. An instance
+    // subscribed to one event type should not pay a lookup for the ones it
+    // has said it does not want.
+    const env = makeEnv({
+      projectConfig: gated({ subscriptions: { events: ["something.else"] } }),
+    });
+    const seen: string[] = [];
+    const inner = env.dedupe.seen.bind(env.dedupe);
+    env.dedupe.seen = async (destinationId: string, key: string) => {
+      seen.push(key);
+      return inner(destinationId, key);
+    };
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("treats a malformed routing config as unconfigured", async () => {
+    // Fail-open is safe here for one specific reason: the gate can only ever
+    // SUBTRACT deliveries, and normalize still applies the vendor's own
+    // consent independently. So a broken config degrades to yesterday's
+    // behaviour rather than muting a destination over a typo.
+    const env = makeEnv({ projectConfig: gated({ subscriptions: { events: "not-a-list" } }) });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls).toHaveLength(1);
+  });
+
+  it("gates on a profile trait, which only works before normalize", async () => {
+    // Both directions deliberately. Asserting only the skip would pass just
+    // as well against an envelope carrying no profile at all — the filter
+    // would resolve to `undefined` and refuse everything, and the test would
+    // prove nothing about traits.
+    const filters = [{ path: "profile.traits.tier", op: "equals", value: "gold" }];
+    const withTier = (tier: string) =>
+      makeEnvelope({ profile: { profile_id: "01a0-0000-7000-8000-0000f001", traits: { tier } } });
+
+    const matching = makeEnv({ projectConfig: gated({ filters }) });
+    await buildConsumer(matching).handleEvent({
+      envelope: withTier("gold"),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(matching.delivererCalls).toHaveLength(1);
+
+    const other = makeEnv({ projectConfig: gated({ filters }) });
+    await buildConsumer(other).handleEvent({
+      envelope: withTier("bronze"),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(other.delivererCalls).toHaveLength(0);
+    expect(lastRecord(other)?.status).toBe("skipped_filtered");
   });
 });

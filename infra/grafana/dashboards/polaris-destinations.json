@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -21,8 +24,16 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "content": "# Polaris Destinations\n\nMetrics from `packages/shared-destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `packages/shared-destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_destination_delivery_duration_seconds` is a histogram (CSH8YAL6); the p50/p99 panel at the bottom of the dashboard uses it. The legacy `_ms_last` gauge is kept alongside during the transition for the `max` / `lastNotNull` panel.\n\n**DLQ backlog.** DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `dlq_records` table via the DLQ triage runbook (P10-006).",
@@ -33,27 +44,51 @@
       "type": "text"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
       "id": 2,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{vendor}} — delivered",
+          "legendFormat": "{{vendor}} \u2014 delivered",
           "refId": "A"
         }
       ],
@@ -61,37 +96,63 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.95 },
-              { "color": "green", "value": 0.99 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.95
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
             ]
           },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
       "id": 3,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto",
         "wideLayout": true
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])) / (sum by (vendor) (rate(polaris_destination_events_delivered_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])) + sum by (vendor) (rate(polaris_destination_events_failed_total{vendor=~\"$vendor\", environment=\"$environment\"}[15m])))",
           "legendFormat": "{{vendor}}",
           "refId": "A"
@@ -101,30 +162,52 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
             "fillOpacity": 10,
-            "stacking": { "mode": "normal" }
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
       "id": 4,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor, reason) (rate(polaris_destination_events_failed_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
           "legendFormat": "{{vendor}} / {{reason}}",
           "refId": "A"
@@ -134,33 +217,60 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
       "id": 5,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor) (rate(polaris_destination_events_retry_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{vendor}} — retry",
+          "legendFormat": "{{vendor}} \u2014 retry",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor) (rate(polaris_destination_events_dlq_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{vendor}} — DLQ",
+          "legendFormat": "{{vendor}} \u2014 DLQ",
           "refId": "B"
         }
       ],
@@ -168,30 +278,52 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
             "fillOpacity": 10,
-            "stacking": { "mode": "normal" }
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
       "id": 6,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum by (vendor, reason) (rate(polaris_destination_events_dropped_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
           "legendFormat": "{{vendor}} / {{reason}}",
           "refId": "A"
@@ -201,53 +333,101 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "ms"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
       "id": 7,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "lastNotNull"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "max by (vendor) (polaris_destination_delivery_duration_ms_last{vendor=~\"$vendor\", environment=\"$environment\"})",
           "legendFormat": "{{vendor}}",
           "refId": "A"
         }
       ],
-      "title": "Delivery duration (ms, last observed; gauge — see About panel)",
+      "title": "Delivery duration (ms, last observed; gauge \u2014 see About panel)",
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "ms"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
       "id": 8,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max", "lastNotNull"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "max by (vendor) (polaris_destination_rate_limit_wait_ms_last{vendor=~\"$vendor\", environment=\"$environment\"})",
           "legendFormat": "{{vendor}}",
           "refId": "A"
@@ -257,37 +437,120 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
       "id": 9,
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "histogram_quantile(0.5, sum by (le, vendor) (rate(polaris_destination_delivery_duration_seconds_bucket{vendor=~\"$vendor\", environment=\"$environment\"}[5m])))",
           "legendFormat": "p50 {{vendor}}",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "histogram_quantile(0.99, sum by (le, vendor) (rate(polaris_destination_delivery_duration_seconds_bucket{vendor=~\"$vendor\", environment=\"$environment\"}[5m])))",
           "legendFormat": "p99 {{vendor}}",
           "refId": "B"
         }
       ],
       "title": "Delivery duration p50/p99 per vendor (5m, seconds)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Planned non-deliveries. These are NOT failures and never were, but until the routing gate landed the unmapped ones were recorded as mapped_failed and counted against the success rate above \u2014 a vendor that simply does not model page.viewed looked broken. Reasons: unsubscribed / filtered / consent come from the gate, unmapped means the gate passed and the vendor has no mapper, no_active_destinations means nobody has enabled this vendor for the project. A step change here after a config edit is the expected signal; a step change WITHOUT one is a config that changed underneath you.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (vendor, reason) (rate(polaris_destination_events_skipped_total{vendor=~\"$vendor\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{vendor}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Planned skips by reason (gate / unmapped, 5m, ops)",
       "type": "timeseries"
     }
   ],
@@ -297,7 +560,10 @@
   "templating": {
     "list": [
       {
-        "current": { "text": "Prometheus", "value": "polaris-prometheus" },
+        "current": {
+          "text": "Prometheus",
+          "value": "polaris-prometheus"
+        },
         "name": "DS_PROMETHEUS",
         "label": "Datasource",
         "type": "datasource",
@@ -307,11 +573,24 @@
         "refresh": 1
       },
       {
-        "current": { "text": "production", "value": "production" },
+        "current": {
+          "text": "production",
+          "value": "production"
+        },
         "options": [
-          { "text": "development", "value": "development" },
-          { "text": "staging", "value": "staging" },
-          { "text": "production", "value": "production", "selected": true }
+          {
+            "text": "development",
+            "value": "development"
+          },
+          {
+            "text": "staging",
+            "value": "staging"
+          },
+          {
+            "text": "production",
+            "value": "production",
+            "selected": true
+          }
         ],
         "label": "Environment",
         "name": "environment",
@@ -319,14 +598,36 @@
         "type": "custom"
       },
       {
-        "current": { "text": "All", "value": ".*" },
+        "current": {
+          "text": "All",
+          "value": ".*"
+        },
         "options": [
-          { "text": "All", "value": ".*", "selected": true },
-          { "text": "webhook-sink", "value": "webhook-sink" },
-          { "text": "meta-capi", "value": "meta-capi" },
-          { "text": "tiktok", "value": "tiktok" },
-          { "text": "ga4", "value": "ga4" },
-          { "text": "braze", "value": "braze" }
+          {
+            "text": "All",
+            "value": ".*",
+            "selected": true
+          },
+          {
+            "text": "webhook-sink",
+            "value": "webhook-sink"
+          },
+          {
+            "text": "meta-capi",
+            "value": "meta-capi"
+          },
+          {
+            "text": "tiktok",
+            "value": "tiktok"
+          },
+          {
+            "text": "ga4",
+            "value": "ga4"
+          },
+          {
+            "text": "braze",
+            "value": "braze"
+          }
         ],
         "label": "Vendor",
         "name": "vendor",
@@ -336,10 +637,13 @@
       }
     ]
   },
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "utc",
-  "title": "Polaris — Destinations",
+  "title": "Polaris \u2014 Destinations",
   "uid": "polaris-destinations",
   "version": 1,
   "weekStart": ""

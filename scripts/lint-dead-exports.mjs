@@ -187,10 +187,19 @@ function main() {
   const ids = dead.map(({ name, file }) => `${file}::${name}`);
 
   if (process.argv.includes("--update-baseline")) {
-    writeFileSync(
-      BASELINE_PATH,
-      `${JSON.stringify({ note: "Frozen debt. Shrink it; do not grow it.", symbols: ids }, null, 2)}\n`,
-    );
+    // Carry the existing note forward. It is hand-written and names which
+    // card is expected to consume each banked symbol — the only thing that
+    // makes this file readable as debt rather than as a list. Regenerating
+    // it from a constant silently deleted that, which is how the note came
+    // to be rewritten by a routine `--update-baseline` run.
+    let note = "Frozen debt. Shrink it; do not grow it.";
+    try {
+      const existing = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+      if (typeof existing.note === "string" && existing.note.length > 0) note = existing.note;
+    } catch {
+      // No baseline yet, or unreadable: the default note is correct.
+    }
+    writeFileSync(BASELINE_PATH, `${JSON.stringify({ note, symbols: ids }, null, 2)}\n`);
     console.log(`dead-export check: baseline updated with ${ids.length} symbol(s)`);
     return;
   }

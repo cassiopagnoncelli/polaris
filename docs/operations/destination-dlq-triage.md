@@ -21,12 +21,29 @@ The migration creating `dlq_records` is
 
 **`delivery_records`** is the per-attempt log line. One row is written
 for every delivery attempt the destination runtime executes against an
-envelope — whether the attempt succeeded (`status='accepted'`), dropped
+envelope — whether the attempt succeeded (`status='accepted'`), was
+skipped by design (`skipped_filtered` / `skipped_unmapped`), dropped
 in normalize (`dropped_consent` / `dropped_no_identity` /
 `dropped_invalid`), failed in the mapper (`mapped_failed`), or failed
 in the deliverer (`failed_retryable` / `failed_permanent`). The row is
 **immutable**. Operators do NOT mutate `delivery_records`; everything
 mutable lives on `dlq_records`.
+
+The two `skipped_` statuses are **planned non-deliveries** and are the
+only ones that carry a NULL `error_class`, which is what keeps "was this
+an error?" a single-column question. `skipped_filtered` means the
+routing gate refused the event for this instance; `skipped_unmapped`
+means the gate passed and the vendor registers no mapper for the event.
+Neither reaches a DLQ and neither is worth an alert.
+
+Both used to be recorded as `mapped_failed`, so a vendor that simply
+does not model `page.viewed` was indistinguishable from a mapper that
+threw — routine operation counted against the delivery success rate, and
+a genuine mapper fault had nothing quiet to stand out from. Rows written
+before this split keep their old status; there was no backfill, because
+the distinction is not recoverable from data that never carried it.
+`deliverer_version` on each row is how you tell which side of the change
+a row was written on.
 
 **`dlq_records`** is the active triage queue. The destination runtime
 writes one row per DLQ publish, alongside the canonical broker

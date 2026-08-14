@@ -73,9 +73,25 @@ export function normaliseMappingToken(name: string): string {
     .toLowerCase();
 }
 
+/**
+ * Segment words that make a name a map regardless of what precedes them.
+ *
+ * The exact-name list above cannot cover the space: it was written by
+ * enumerating the names someone had reached for, so `field_map` is refused
+ * while `routing_map` — same semantics, coined later — was accepted. Any
+ * name whose LAST `_`/`-` segment is one of these is a map by construction,
+ * and no legitimate parameter ends that way (`sitemap` and `heatmap` are
+ * single words, not segments, and are unaffected).
+ */
+const MAPPING_SUFFIX_SEGMENTS: readonly string[] = ["map", "maps", "mapping", "mappings"];
+
 /** Whether a single name is a forbidden mapping token. */
 export function isMappingToken(name: string): boolean {
-  return FORBIDDEN_MAPPING_FLAG_TOKENS.includes(normaliseMappingToken(name));
+  const normalised = normaliseMappingToken(name);
+  if (FORBIDDEN_MAPPING_FLAG_TOKENS.includes(normalised)) return true;
+  const segments = normalised.split(/[-_]/);
+  const last = segments[segments.length - 1];
+  return segments.length > 1 && last !== undefined && MAPPING_SUFFIX_SEGMENTS.includes(last);
 }
 
 /** Raised when a write would have stored mapping semantics. */

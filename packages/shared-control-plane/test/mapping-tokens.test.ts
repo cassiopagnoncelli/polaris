@@ -69,4 +69,18 @@ describe("assertNoMappingSemantics", () => {
   it("passes a clean key set", () => {
     expect(() => assertNoMappingSemantics(["pixel_id", "graph_host"], "x")).not.toThrow();
   });
+
+  it("admits the routing gate's key but not a mapping-shaped sibling", () => {
+    // The gate decides WHETHER an event goes to a vendor; `routing` is that
+    // question and is legitimate configuration. The names below are the ones
+    // someone would reach for while trying to make it decide WHAT the event
+    // looks like on arrival, which is versioned mapper code and must stay
+    // unstorable — a config bag would otherwise become a payload rewriter.
+    expect(() => assertNoMappingSemantics(["routing"], "project configuration")).not.toThrow();
+    for (const key of ["routing_map", "event_map", "field_map", "property_map"]) {
+      expect(() => assertNoMappingSemantics([key], "project configuration")).toThrow(
+        MappingSemanticsError,
+      );
+    }
+  });
 });

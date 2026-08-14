@@ -57,6 +57,20 @@ import { v7 as uuidv7 } from "uuid";
  *   - `dropped_no_identity`  no usable identity field after normalize.
  *   - `dropped_invalid`      defensive second-pass redaction rejected the
  *                            event, or the envelope was malformed.
+ *   - `skipped_filtered`     the routing gate refused the event for this
+ *                            instance: an unsubscribed event name, a
+ *                            property filter that did not match, or a
+ *                            consent requirement the envelope did not
+ *                            satisfy. Nothing was attempted and nothing
+ *                            went wrong — the instance is configured not
+ *                            to want this event.
+ *   - `skipped_unmapped`     the gate PASSED and the vendor has no mapper
+ *                            for the event. Formerly recorded as
+ *                            `mapped_failed`, which made "this vendor does
+ *                            not care about page.viewed" indistinguishable
+ *                            from "the mapper threw" — so every dashboard
+ *                            counting mapping failures was counting normal
+ *                            operation too.
  *   - `mapped_failed`        the vendor mapper threw.
  *   - `failed_retryable`     transient failure; the runtime republishes
  *                            to `<vendor>.retry`.
@@ -69,6 +83,8 @@ export const DELIVERY_RECORD_STATUSES = [
   "dropped_consent",
   "dropped_no_identity",
   "dropped_invalid",
+  "skipped_filtered",
+  "skipped_unmapped",
   "mapped_failed",
   "failed_retryable",
   "failed_permanent",
