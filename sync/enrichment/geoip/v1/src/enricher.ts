@@ -29,7 +29,7 @@
  */
 
 import { hashIp, parseIp } from "./ip.js";
-import { type IPLookup, SOURCE_NO_IP } from "./lookup.js";
+import { type IPLookup, SOURCE_NO_IP, SOURCE_NO_LOOKUP } from "./lookup.js";
 
 /** This enricher's identity. Pinned by the runtime's manifest. */
 export const ENRICHER_NAME = "sync-enrichment-geoip" as const;
@@ -58,8 +58,22 @@ export interface GeoBlock {
 export interface GeoOutcome {
   readonly geo: GeoBlock;
   readonly ipHash: string | null;
-  /** `hit` resolved a location; `miss` consulted a backend and found none; `no_ip` had nothing to consult. */
-  readonly kind: "hit" | "miss" | "no_ip";
+  /**
+   * Four outcomes, and the last two are the ones that get conflated:
+   *
+   *   hit         a backend resolved a location
+   *   miss        a wired backend was consulted and had no record
+   *   no_backend  no geo database is wired at all — every event misses
+   *   no_ip       the event carried nothing to look up
+   *
+   * `miss` and `no_backend` both produce an all-null block, and telling
+   * them apart is the difference between "these addresses are unknown"
+   * and "geo is down". The `source` field carries the same distinction
+   * on the wire (a version-stamped backend id vs `no_lookup`); this
+   * makes it countable, so a geo outage is visible on a dashboard
+   * instead of only in a query.
+   */
+  readonly kind: "hit" | "miss" | "no_backend" | "no_ip";
 }
 
 /**
@@ -68,6 +82,7 @@ export interface GeoOutcome {
  * The decision table, complete:
  *
  *   no/invalid address      → all fields null, `source: "no_ip"`
+ *   no backend wired        → all fields null, `source: "no_lookup"`
  *   valid, backend missed   → all fields null, `source: <backend id>`
  *   valid, backend hit      → fields from the result, `source` from the
  *                             RESULT (not the backend), so a database
@@ -84,8 +99,14 @@ export function enrichGeo(input: { readonly ip: unknown; readonly lookup: IPLook
   const found = input.lookup.lookup(address);
   if (found === null) {
     // The backend's own id, so a fail-open no-op ("no_lookup") reads
-    // differently from a wired database that simply had no record.
-    return { geo: emptyGeo(input.lookup.id), ipHash, kind: "miss" };
+    // differently from a wired database that simply had no record — and
+    // the OUTCOME distinguishes them too, so the difference survives
+    // into metrics rather than living only on the emitted event.
+    return {
+      geo: emptyGeo(input.lookup.id),
+      ipHash,
+      kind: input.lookup.id === SOURCE_NO_LOOKUP ? "no_backend" : "miss",
+    };
   }
 
   return {

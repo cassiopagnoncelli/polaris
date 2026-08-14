@@ -86,7 +86,7 @@ export interface EnrichmentStageDeps {
 export interface EnrichmentResult {
   readonly profileId: string | null;
   readonly traitsKind: "resolved" | "over_cap" | "empty" | "missing" | "unprofiled";
-  readonly geoKind: "hit" | "miss" | "no_ip";
+  readonly geoKind: "hit" | "miss" | "no_backend" | "no_ip";
   readonly partitionKey: string;
 }
 

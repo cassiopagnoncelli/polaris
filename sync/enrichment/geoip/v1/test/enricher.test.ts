@@ -1,7 +1,7 @@
 /**
  * Geo enricher tests.
  *
- * Two things are being protected here. The decision table — the three
+ * Two things are being protected here. The decision table — the four
  * ways a lookup can end and the provenance each carries — and the
  * privacy posture, which is the reason this enricher exists in the
  * shape it does rather than passing an address straight through.
@@ -65,13 +65,16 @@ describe("geo enrichment", () => {
 
   it("distinguishes a wired backend's miss from having no backend", () => {
     // Both produce a null geo, and an operator needs to tell them apart:
-    // one is a normal unknown address, the other is a geo outage.
+    // one is a normal unknown address, the other is a geo outage. The
+    // distinction lives in BOTH the source (on the wire) and the kind
+    // (countable), because a dashboard cannot read a field it does not
+    // aggregate.
     const miss = enrichGeo({ ip: "203.0.113.7", lookup: DB });
     expect(miss.kind).toBe("miss");
     expect(miss.geo.source).toBe("maxmind:GeoLite2-City:2026-08-01");
 
     const unwired = enrichGeo({ ip: "203.0.113.7", lookup: new NoOpIPLookup() });
-    expect(unwired.kind).toBe("miss");
+    expect(unwired.kind).toBe("no_backend");
     expect(unwired.geo.source).toBe("no_lookup");
   });
 

@@ -182,7 +182,10 @@ describe("enrichment stage: geo", () => {
 
     const result = await handleEvent(deps, event());
 
-    expect(result.geoKind).toBe("miss");
+    // `no_backend`, not `miss`: "geo is down" and "this address is
+    // unknown" are different operational facts, and the outcome is what
+    // makes the first one countable.
+    expect(result.geoKind).toBe("no_backend");
     expect(
       (
         (producer.eventsOn(RESOLVED)[0]?.["enrichment"] as Record<string, unknown>)[

@@ -255,7 +255,7 @@ invisible in throughput and error panels and visible only in
 | Handler duration p99 | `histogram_quantile(0.99, sum by (processor_name, le) (rate(polaris_processor_handler_duration_seconds_bucket{...}[5m])))` |
 | Identity resolution mix (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-identity-resolver"}[5m]))` — outcome ∈ `created`, `bound`, `merged`, `unidentified` |
 | Merge rate (5m) | the same series filtered to `outcome="merged"` |
-| Enrichment outcomes (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-enrichment-runtime"}[5m]))` — outcome ∈ `traits:*`, `geo:*` |
+| Enrichment outcomes (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-enrichment-runtime"}[5m]))` — outcome ∈ `traits:resolved|over_cap|empty|missing|unprofiled`, `geo:hit|miss|no_backend|no_ip`. `geo:no_backend` means no database is wired at all (a geo outage); `geo:miss` means a wired database had no record for the address. Conflating them would hide the outage. |
 | Safeguards and degradations (15m) | `sum by (processor_name, reason) (rate(polaris_processor_events_skipped_total{...}[15m]))` — reason ∈ `merge_suspended`, `link_rejected_denylisted`, `link_rejected_identifier_cap`, `traits_over_cap`, `profile_missing` |
 
 **Known gaps.**
@@ -266,10 +266,10 @@ invisible in throughput and error panels and visible only in
 - Neither stage sets `concrete_topic` on its metric labels (no processor
   does — see the Processors section), so panels cannot break down by
   concrete topic.
-- The enrichment stage's `geo:miss` does not distinguish "the database
-  had no record" from "no database is wired". The `geo.source` field on
-  the emitted event does (`no_lookup` vs a version-stamped backend id),
-  but that is a ClickHouse question, not a Prometheus one.
+- The enrichment stage's `traits:missing` counts events naming a profile
+  row that is gone. It is normal in small numbers after a rebuild and
+  never normal in large ones; there is no threshold on it yet, because
+  what counts as large is project-shaped.
 
 ## Adding a new dashboard
 
