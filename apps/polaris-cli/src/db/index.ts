@@ -59,8 +59,16 @@ export {
   findOperatorTokenAuthRowById,
   findOperatorTokenById,
   findProcessorRunById,
+  // ---- profile plane (read-only) ----------------------------------------
+  // The identity stage is the profile store's only sync-path writer, so the
+  // CLI reads and never writes. `polaris profiles rebuild` lands with R4 as
+  // an audited mutation, not as a query.
+  findProfileById,
+  findProfileByIdentifier,
+  findProfilesByIdentifierValue,
   findReplayJobById,
   findTopicIsolationById,
+  type IdentityLinkRow,
   type InsertApiKeyInput,
   type InsertClickhouseRebuildJobInput,
   type InsertDestinationInput,
@@ -85,8 +93,11 @@ export {
   listAuditRecords,
   listClickhouseRebuildJobs,
   listDestinationsByProjectEnv,
+  listIdentityLinks,
   listOperatorTokens,
   listProcessorRuns,
+  listProfileIdentifiers,
+  listProfileMerges,
   listProjectConfig,
   listReplayJobs,
   type MarkReplayJobRunningInput,
@@ -104,6 +115,9 @@ export {
   type ProcessorActivationRow,
   type ProcessorRunRow,
   type ProcessorRunScope,
+  type ProfileIdentifierRow,
+  type ProfileMergeRow,
+  type ProfileRow,
   type ProjectConfigAuditSnapshot,
   type ProjectConfigRow,
   type ProjectConfigValueRef,
@@ -142,21 +156,8 @@ export {
   type UnsetProjectConfigInput,
   type UpdateDestinationOpsInput,
   unsetProjectConfigValueWithAudit,
+  updateDestinationConfigWithAudit,
   updateDestinationOpsWithAudit,
-  // ---- profile plane (read-only) ----------------------------------------
-  // The identity stage is the profile store's only sync-path writer, so the
-  // CLI reads and never writes. `polaris profiles rebuild` lands with R4 as
-  // an audited mutation, not as a query.
-  findProfileById,
-  findProfileByIdentifier,
-  findProfilesByIdentifierValue,
-  type IdentityLinkRow,
-  listIdentityLinks,
-  listProfileIdentifiers,
-  listProfileMerges,
-  type ProfileIdentifierRow,
-  type ProfileMergeRow,
-  type ProfileRow,
 } from "@polaris/shared-control-plane-db";
 
 // ---- executor progress --------------------------------------------------

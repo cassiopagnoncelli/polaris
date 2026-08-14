@@ -69,6 +69,13 @@ export interface DestinationRow {
   readonly dead_letter_threshold: number;
   readonly disabled_reason: string | null;
   readonly replay_opt_in: boolean;
+  /**
+   * Per-instance configuration bag, the narrow half of the precedence chain
+   * the routing gate reads. Parameters only — never mapping semantics, which
+   * `updateDestinationConfigWithAudit` refuses at its write path, and never
+   * credentials, which live in `secret_value`.
+   */
+  readonly config: Readonly<Record<string, unknown>>;
   readonly replay_opt_in_reason: string | null;
   readonly replay_opt_in_at: string | null;
   readonly created_at: string;
@@ -133,6 +140,7 @@ const DESTINATION_READ_COLUMNS = [
   "dead_letter_threshold",
   "disabled_reason",
   "replay_opt_in",
+  "config",
   "replay_opt_in_reason",
   "replay_opt_in_at",
   "created_at",
@@ -416,6 +424,32 @@ export async function updateDestinationOps(
   return Number(result.numUpdatedRows ?? 0) > 0;
 }
 
+/**
+ * Replace one destination instance's `config` bag.
+ *
+ * Whole-bag replacement rather than a merge. A merge would make removing a
+ * key impossible through this path, and the bag is small enough that an
+ * operator can restate it — the routing gate reads it as a unit anyway.
+ *
+ * The mapping guard is applied by the caller, before any database access,
+ * so a refused write leaves no trace. It is not applied here because this
+ * function is the mechanical write and the guard belongs where the audit
+ * record is decided.
+ */
+export async function updateDestinationConfig(
+  db: Kysely<Database>,
+  destinationId: string,
+  config: Readonly<Record<string, unknown>>,
+  now: Date,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("destinations")
+    .set({ updated_at: now, config })
+    .where("destination_id", "=", destinationId)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
+}
+
 function toRow(row: {
   readonly destination_id: string;
   readonly project_id: string;
@@ -430,6 +464,7 @@ function toRow(row: {
   readonly dead_letter_threshold: number;
   readonly disabled_reason: string | null;
   readonly replay_opt_in: boolean;
+  readonly config: Readonly<Record<string, unknown>>;
   readonly replay_opt_in_reason: string | null;
   readonly replay_opt_in_at: Date | null;
   readonly created_at: Date;
@@ -449,6 +484,7 @@ function toRow(row: {
     dead_letter_threshold: row.dead_letter_threshold,
     disabled_reason: row.disabled_reason,
     replay_opt_in: row.replay_opt_in,
+    config: row.config,
     replay_opt_in_reason: row.replay_opt_in_reason,
     replay_opt_in_at: row.replay_opt_in_at === null ? null : row.replay_opt_in_at.toISOString(),
     created_at: row.created_at.toISOString(),

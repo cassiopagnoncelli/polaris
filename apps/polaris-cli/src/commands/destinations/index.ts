@@ -8,6 +8,7 @@
  *   - `polaris destinations create ...`                        mutates: true
  *   - `polaris destinations enable <destination_id>`           mutates: true
  *   - `polaris destinations disable <destination_id> ...`      mutates: true
+ *   - `polaris destinations set-config <destination_id>`       mutates: true
  *   - `polaris destinations update-ops <destination_id>`       mutates: true
  *   - `polaris destinations rotate-secret <destination_id> ...`  mutates: true
  *   - `polaris destinations enable-replay <destination_id> ...`  mutates: true  (P7-004)
@@ -57,6 +58,7 @@ import { destinationsEnableCommand } from "./enable.js";
 import { destinationsEnableReplayCommand } from "./enable-replay.js";
 import { destinationsListCommand } from "./list.js";
 import { destinationsRotateSecretCommand } from "./rotate-secret.js";
+import { destinationsSetConfigCommand } from "./set-config.js";
 import { destinationsShowCommand } from "./show.js";
 import { destinationsUpdateOpsCommand } from "./update-ops.js";
 
@@ -66,6 +68,7 @@ const CHILDREN: readonly CommandDefinition[] = [
   destinationsCreateCommand,
   destinationsEnableCommand,
   destinationsDisableCommand,
+  destinationsSetConfigCommand,
   destinationsUpdateOpsCommand,
   destinationsRotateSecretCommand,
   destinationsEnableReplayCommand,

@@ -14,6 +14,7 @@
  * in ../queries/destinations.ts do not select `secret_value`.
  */
 
+import { assertNoMappingSemantics } from "@polaris/shared-control-plane";
 import type { Database } from "@polaris/shared-db";
 import type { Kysely } from "kysely";
 
@@ -28,6 +29,7 @@ import {
   type InsertDestinationInput,
   insertDestination,
   type UpdateDestinationOpsInput,
+  updateDestinationConfig,
   updateDestinationOps,
   updateDestinationSecret,
 } from "../queries/destinations.js";
@@ -224,6 +226,48 @@ export async function updateDestinationOpsWithAudit(
       after: { ...before, ...input.patch },
     },
     (trx) => updateDestinationOps(trx, input.row.destination_id, input.patch, audit.occurredAt),
+  );
+}
+
+/**
+ * Replace one destination instance's `config` bag.
+ *
+ * `destinations.config` is the per-instance half of the configuration
+ * precedence chain the routing gate reads. Until now it had NO write path at
+ * all — the column existed, the runtime read it, and the only way to set it
+ * was direct SQL. That is also why the mapping guard below matters more here
+ * than anywhere else: `project_config` has been guarded at its write path
+ * since it shipped, so an unguarded `destinations.config` was the one
+ * remaining place in the system where a field map could be stored.
+ *
+ * The guard runs FIRST, before the row is read and before any write, so a
+ * refused call leaves no trace — the same ordering
+ * `setProjectConfigValueWithAudit` uses.
+ */
+export async function updateDestinationConfigWithAudit(
+  db: Kysely<Database>,
+  input: { row: DestinationRow; config: Readonly<Record<string, unknown>> },
+  audit: AuditContext,
+): Promise<MutationOutcome> {
+  assertNoMappingSemantics(Object.keys(input.config), "destination configuration");
+
+  const before = toDestinationSnapshot(input.row);
+  return withAudit(
+    db,
+    audit,
+    {
+      action: "destinations.update-config",
+      targetType: "destination",
+      targetId: input.row.destination_id,
+      projectId: input.row.project_id,
+      environment: input.row.environment as AuditEnvironment,
+      // The bag itself, both sides. It holds parameters, never credentials —
+      // the vendor secret lives in `secret_value` and never passes here — so
+      // recording it is safe and is what makes a routing change reviewable.
+      before: { ...before, config: input.row.config },
+      after: { ...before, config: input.config },
+    },
+    (trx) => updateDestinationConfig(trx, input.row.destination_id, input.config, audit.occurredAt),
   );
 }
 

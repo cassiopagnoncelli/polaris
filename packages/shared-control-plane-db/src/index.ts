@@ -97,6 +97,19 @@ export {
   type ProcessorRunScope,
 } from "./queries/processor-runs.js";
 export {
+  findProfileById,
+  findProfileByIdentifier,
+  findProfilesByIdentifierValue,
+  type IdentifierLookup,
+  type IdentityLinkRow,
+  listIdentityLinks,
+  listProfileIdentifiers,
+  listProfileMerges,
+  type ProfileIdentifierRow,
+  type ProfileMergeRow,
+  type ProfileRow,
+} from "./queries/profiles.js";
+export {
   findProjectConfigValue,
   type ListProjectConfigInput,
   listProjectConfig,
@@ -115,19 +128,6 @@ export {
   type SourceFile,
   type SourceRow,
 } from "./queries/projects.js";
-export {
-  findProfileById,
-  findProfileByIdentifier,
-  findProfilesByIdentifierValue,
-  type IdentifierLookup,
-  type IdentityLinkRow,
-  listIdentityLinks,
-  listProfileIdentifiers,
-  listProfileMerges,
-  type ProfileIdentifierRow,
-  type ProfileMergeRow,
-  type ProfileRow,
-} from "./queries/profiles.js";
 export {
   type CompleteReplayJobInput,
   type FailReplayJobInput,
@@ -200,6 +200,7 @@ export {
   rotateDestinationSecretWithAudit,
   setDestinationReplayOptInWithAudit,
   toDestinationSnapshot,
+  updateDestinationConfigWithAudit,
   updateDestinationOpsWithAudit,
 } from "./mutations/destinations.js";
 export {
