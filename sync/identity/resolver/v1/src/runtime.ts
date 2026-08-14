@@ -56,23 +56,59 @@ export interface PublishTarget {
 }
 
 /**
+ * Per-event scope every metric this stage emits carries.
+ *
+ * Read off the EVENT, never off the service config. One deployment can
+ * see events from more than one project, and the activation gate is
+ * already consulted per event with the event's own
+ * `(project_id, environment)` — a counter labelled from
+ * `config.service.environment` would disagree with the gate that decided
+ * whether the event was processed at all.
+ *
+ * `docs/architecture/03-rabbitmq-streams.md` § "Per-Project
+ * Observability" is the rule this satisfies: the per-event scope travels
+ * on every emission, so a dashboard can ask "which project is merging"
+ * without a code change.
+ */
+export interface StageMetricScope {
+  readonly project_id: string;
+  readonly environment: string;
+  readonly topic_family: string;
+  readonly partition?: number | string | undefined;
+}
+
+/**
  * The slice of processor metrics this stage reports.
  *
- * Declared structurally rather than importing `ProcessorMetrics` whole:
- * the runtime needs two counters, and depending on the full interface
- * would make every test construct a metrics object it does not exercise.
- * `app.ts` passes the real one.
+ * Declared structurally rather than importing `ProcessorMetrics` whole,
+ * so a test constructs only what it exercises; `app.ts` passes adapters
+ * onto the real registry.
+ *
+ * Every callback takes the scope. It used to be absent, which made every
+ * series this stage produced unlabelled — and a Prometheus matcher like
+ * `environment="production"` does not match a series with no
+ * `environment` label at all, so the spine dashboard's panels were
+ * silently empty while looking perfectly healthy. An empty panel reads
+ * as "nothing is happening", which is exactly the wrong conclusion.
  */
 export interface IdentityStageMetrics {
-  readonly onEmitted?: () => void;
-  readonly onSkipped?: (reason: string) => void;
+  /** One inbound event the stage acted on. */
+  readonly onConsumed?: (scope: StageMetricScope) => void;
+  readonly onEmitted?: (scope: StageMetricScope) => void;
+  readonly onSkipped?: (scope: StageMetricScope, reason: string) => void;
+  /** The handler threw; the transport will retry or dead-letter. */
+  readonly onFailed?: (scope: StageMetricScope, reason: string) => void;
+  /** Wall time for one handler invocation, for the duration histogram. */
+  readonly onHandlerDurationMs?: (scope: StageMetricScope, ms: number) => void;
+  /** Delivery lag, computed downstream from the event's `ingested_at`. */
+  readonly onLag?: (scope: StageMetricScope, ingestedAt: string) => void;
   /**
    * What the stage DECIDED for this event: `created`, `bound`, `merged`
    * or `unidentified`. Distinct from `onEmitted` because a merge and an
    * ordinary bind both emit one spine event, and only one of them is the
    * failure mode the safeguards exist to catch.
    */
-  readonly onOutcome?: (outcome: string) => void;
+  readonly onOutcome?: (scope: StageMetricScope, outcome: string) => void;
 }
 
 export interface IdentityStageDeps {
@@ -94,10 +130,19 @@ export interface IdentityStageDeps {
 export async function handleEvent(
   deps: IdentityStageDeps,
   raw: Record<string, unknown>,
+  scope?: StageMetricScope,
 ): Promise<ResolutionResult> {
   const projectId = String(raw["project_id"] ?? "");
   const environment = String(raw["environment"] ?? "");
   const eventId = String(raw["event_id"] ?? "");
+  // Callers driving one event without a broker (the behavioural suite)
+  // pass no scope; derive it from the envelope so every emission is
+  // labelled either way.
+  const labels: StageMetricScope = scope ?? {
+    project_id: projectId,
+    environment,
+    topic_family: STREAM_FAMILY_RAW_EVENTS,
+  };
   const policy = deps.policyFor(projectId, environment);
   const now = deps.now();
   const runId = deps.runId();
@@ -114,7 +159,7 @@ export async function handleEvent(
       { event_id: eventId, project_id: projectId, max_bytes: policy.maxTraitsBytes },
       "identify traits exceeded the size guard; identifiers still bound, traits dropped",
     );
-    deps.metrics?.onSkipped?.("traits_over_cap");
+    deps.metrics?.onSkipped?.(labels, "traits_over_cap");
   }
 
   // ---- resolve (transaction commits before anything is published) ----
@@ -155,10 +200,10 @@ export async function handleEvent(
     event: spine,
     partitionKey,
   });
-  deps.metrics?.onEmitted?.();
+  deps.metrics?.onEmitted?.(labels);
   // The decision, recorded after the spine publish so a failed publish
   // does not book an outcome the pipeline never saw.
-  deps.metrics?.onOutcome?.(resolution.kind);
+  deps.metrics?.onOutcome?.(labels, resolution.kind);
 
   // ---- publish derived facts ----
   //
@@ -177,6 +222,7 @@ export async function handleEvent(
     runId,
     now,
     partitionKey,
+    labels,
   );
 
   return resolution;
@@ -191,6 +237,7 @@ async function publishDerived(
   runId: string | null,
   now: Date,
   partitionKey: string,
+  labels: StageMetricScope,
 ): Promise<void> {
   const identityEvents: Record<string, unknown>[] = [];
   const profileEvents: Record<string, unknown>[] = [];
@@ -205,7 +252,7 @@ async function publishDerived(
     // The breaker tripped. Recorded as a skipped-with-reason so an alert
     // can fire on it: a merge that did not happen is exactly a skip, and
     // it is the signal that a merge storm is underway.
-    deps.metrics?.onSkipped?.("merge_suspended");
+    deps.metrics?.onSkipped?.(labels, "merge_suspended");
     identityEvents.push(
       buildMergeSuspendedEvent({
         source: raw,
@@ -243,7 +290,7 @@ async function publishDerived(
   // same way so an operator sees one stream of "a binding did not
   // happen, here is why".
   for (const rejected of denylisted) {
-    deps.metrics?.onSkipped?.("link_rejected_denylisted");
+    deps.metrics?.onSkipped?.(labels, "link_rejected_denylisted");
     identityEvents.push(
       buildLinkRejectedEvent({
         source: raw,
@@ -255,7 +302,7 @@ async function publishDerived(
     );
   }
   for (const rejected of resolution.rejected) {
-    deps.metrics?.onSkipped?.(`link_rejected_${rejected.reason}`);
+    deps.metrics?.onSkipped?.(labels, `link_rejected_${rejected.reason}`);
     identityEvents.push(
       buildLinkRejectedEvent({
         source: raw,
@@ -286,7 +333,7 @@ async function publishDerived(
       event,
       partitionKey,
     });
-    deps.metrics?.onEmitted?.();
+    deps.metrics?.onEmitted?.(labels);
   }
   for (const event of profileEvents) {
     await deps.producer.publishEvent({
@@ -294,7 +341,7 @@ async function publishDerived(
       event,
       partitionKey,
     });
-    deps.metrics?.onEmitted?.();
+    deps.metrics?.onEmitted?.(labels);
   }
 }
 
@@ -352,15 +399,46 @@ export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRunt
     if (value === null) return;
     const raw = decodeEvent(value) as Record<string, unknown>;
 
+    // The scope comes off the EVENT for project/environment and off the
+    // DELIVERY for the topic labels. Both halves are needed: a dashboard
+    // asking "which project is merging" reads the first, and the
+    // per-partition skew dashboard reads the second.
+    const labels: StageMetricScope = {
+      project_id: String(raw["project_id"] ?? ""),
+      environment: String(raw["environment"] ?? ""),
+      topic_family: payload.family,
+      partition: payload.partition,
+    };
+
     if (deps.isEnabled !== undefined) {
-      const enabled = await deps.isEnabled(
-        String(raw["project_id"] ?? ""),
-        String(raw["environment"] ?? ""),
-      );
-      if (!enabled) return;
+      const enabled = await deps.isEnabled(labels.project_id, labels.environment);
+      if (!enabled) {
+        // Counted BEFORE consumed, so "consumed" keeps meaning "acted
+        // on" rather than "received" — the same distinction the legacy
+        // processors draw.
+        deps.metrics?.onSkipped?.(labels, "processor_disabled");
+        return;
+      }
     }
 
-    await handleEvent(deps, raw);
+    // Records WHEN the event was ingested, not the lag itself: the
+    // reporter's timer computes `now - this`, so the reading keeps
+    // climbing when messages stop arriving instead of going quiet.
+    const ingestedAt = raw["ingested_at"];
+    if (typeof ingestedAt === "string") deps.metrics?.onLag?.(labels, ingestedAt);
+    deps.metrics?.onConsumed?.(labels);
+
+    const startedAt = Date.now();
+    try {
+      await handleEvent(deps, raw, labels);
+    } catch (err) {
+      // Counted, then rethrown: the transport owns retry and dead-letter,
+      // and swallowing here would strand the message as silently handled.
+      deps.metrics?.onFailed?.(labels, "handler_error");
+      throw err;
+    } finally {
+      deps.metrics?.onHandlerDurationMs?.(labels, Date.now() - startedAt);
+    }
   };
 
   let started = false;

@@ -150,6 +150,35 @@ without waiting for the merge.
 
 ---
 
+## Repairing a warehouse row
+
+Worth knowing before you reach for a replay, because the obvious move is
+the wrong one.
+
+Replay repairs the **stream**: destinations consume the corrected event
+as the next delivery, and that is the end of it. It does not reliably
+repair `analytics_raw`. The sink derives `_version` from
+`(stage, ingested_at)`, both of which the spine preserves verbatim — so a
+repair replay produces the same `event_id` and the same `_version` with
+different content, and ReplacingMergeTree breaks a version tie
+arbitrarily. The corrected row may or may not win.
+
+That purity is deliberate: it is what makes an ordinary redelivery
+collapse onto the original row instead of ratcheting the version forward
+on every retry. The warehouse repair is explicit instead:
+
+1. Establish the affected range (`occurred_at` partitions —
+   `analytics_raw` is `PARTITION BY toYYYYMM(occurred_at)`).
+2. Drop those partitions, or delete the affected `event_id` set.
+3. Replay the range through the spine.
+
+Deleting first makes the replayed rows the only rows, so no tie-break
+happens. This mirrors what `polaris clickhouse-rebuild` already does for
+projections — see `docs/development/clickhouse-rebuilds.md`.
+
+**Rule of thumb:** replaying to fix a destination needs no delete;
+replaying to fix a number on a dashboard does.
+
 ## Exit checklist for R2C (retiring the legacy feed)
 
 - [ ] Parity holds for seven consecutive days at production volume.

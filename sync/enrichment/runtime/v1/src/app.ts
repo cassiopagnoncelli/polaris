@@ -60,7 +60,7 @@ import type { Kysely } from "kysely";
 import type { SyncEnrichmentRuntimeConfig } from "./config.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./pins.js";
 import { createPolicyResolver, type ProjectEnrichmentOverride } from "./policy.js";
-import { createRuntime, type EnrichmentStageRuntime } from "./runtime.js";
+import { createRuntime, type EnrichmentStageRuntime, type StageMetricScope } from "./runtime.js";
 
 export interface BuildAppOptions {
   readonly config: SyncEnrichmentRuntimeConfig;
@@ -212,26 +212,35 @@ export async function buildSyncEnrichmentApp(
     policyFor,
     runId: () => run.run_id,
     now: options.now ?? (() => new Date()),
+    // Every adapter stamps the per-event scope; see the identity stage's
+    // note on why an unlabelled series makes a dashboard read empty.
     metrics: {
-      onEmitted: () => {
-        metrics.incrementEmitted({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
+      onConsumed: (scope) => {
+        metrics.incrementConsumed({ ...enrichmentLabels(scope) });
+      },
+      onEmitted: (scope) => {
+        metrics.incrementEmitted({ ...enrichmentLabels(scope) });
+      },
+      onSkipped: (scope, reason) => {
+        metrics.incrementSkipped({ ...enrichmentLabels(scope), reason });
+      },
+      onFailed: (scope, reason) => {
+        metrics.incrementFailed({ ...enrichmentLabels(scope), reason });
+      },
+      onHandlerDurationMs: (scope, ms) => {
+        metrics.observeHandlerDurationMs(enrichmentLabels(scope), ms);
+      },
+      onLag: (scope, ingestedAt) => {
+        lag.observe({
+          family: scope.topic_family,
+          partition: typeof scope.partition === "number" ? scope.partition : 0,
+          project_id: scope.project_id,
+          environment: scope.environment,
+          ingestedAt,
         });
       },
-      onSkipped: (reason: string) => {
-        metrics.incrementSkipped({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
-          reason,
-        });
-      },
-      onOutcome: (outcome: string) => {
-        metrics.incrementOutcome({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
-          outcome,
-        });
+      onOutcome: (scope, outcome) => {
+        metrics.incrementOutcome({ ...enrichmentLabels(scope), outcome });
       },
     },
     isEnabled: async (projectId: string, environment: string) =>
@@ -240,7 +249,6 @@ export async function buildSyncEnrichmentApp(
       ? { isolatedProjects: options.isolatedProjects }
       : {}),
   });
-  void lag;
 
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
@@ -419,6 +427,25 @@ function openConfiguredLookup(config: SyncEnrichmentRuntimeConfig, logger: Logge
     "geoip database loaded",
   );
   return outcome.lookup;
+}
+
+/** This processor's identity plus the event's own scope. */
+function enrichmentLabels(scope: StageMetricScope): {
+  processor_name: string;
+  processor_version: string;
+  project_id: string;
+  environment: string;
+  topic_family: string;
+  partition: number | string;
+} {
+  return {
+    processor_name: PROCESSOR_NAME,
+    processor_version: PROCESSOR_VERSION,
+    project_id: scope.project_id,
+    environment: scope.environment,
+    topic_family: scope.topic_family,
+    partition: scope.partition ?? 0,
+  };
 }
 
 function buildDb(

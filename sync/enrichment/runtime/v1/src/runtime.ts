@@ -57,9 +57,26 @@ export interface PublishTarget {
  * structurally so tests need not construct a metrics object they do not
  * exercise; `app.ts` passes the real one.
  */
+/**
+ * Per-event scope every metric this stage emits carries. Same contract
+ * and same reasoning as the identity stage's: read off the EVENT, never
+ * off the service config, because one deployment can see more than one
+ * project and the activation gate already decides per event.
+ */
+export interface StageMetricScope {
+  readonly project_id: string;
+  readonly environment: string;
+  readonly topic_family: string;
+  readonly partition?: number | string | undefined;
+}
+
 export interface EnrichmentStageMetrics {
-  readonly onEmitted?: () => void;
-  readonly onSkipped?: (reason: string) => void;
+  readonly onConsumed?: (scope: StageMetricScope) => void;
+  readonly onEmitted?: (scope: StageMetricScope) => void;
+  readonly onSkipped?: (scope: StageMetricScope, reason: string) => void;
+  readonly onFailed?: (scope: StageMetricScope, reason: string) => void;
+  readonly onHandlerDurationMs?: (scope: StageMetricScope, ms: number) => void;
+  readonly onLag?: (scope: StageMetricScope, ingestedAt: string) => void;
   /**
    * What each enricher resolved, as `<enricher>:<kind>` — e.g.
    * `traits:resolved`, `geo:no_ip`. Both enrichers fail open, so their
@@ -67,7 +84,7 @@ export interface EnrichmentStageMetrics {
    * the only place a geo outage is distinguishable from a population of
    * server-side events with no IP.
    */
-  readonly onOutcome?: (outcome: string) => void;
+  readonly onOutcome?: (scope: StageMetricScope, outcome: string) => void;
 }
 
 export interface EnrichmentStageDeps {
@@ -101,10 +118,16 @@ export interface EnrichmentResult {
 export async function handleEvent(
   deps: EnrichmentStageDeps,
   raw: Record<string, unknown>,
+  scope?: StageMetricScope,
 ): Promise<EnrichmentResult> {
   const projectId = String(raw["project_id"] ?? "");
   const environment = String(raw["environment"] ?? "");
   const eventId = String(raw["event_id"] ?? "");
+  const labels: StageMetricScope = scope ?? {
+    project_id: projectId,
+    environment,
+    topic_family: STREAM_FAMILY_IDENTIFIED_EVENTS,
+  };
   const policy = deps.policyFor(projectId, environment);
 
   const profile = raw["profile"] as Record<string, unknown> | null | undefined;
@@ -130,7 +153,7 @@ export async function handleEvent(
       },
       "profile traits exceeded the snapshot guard; event enriched with traits: null",
     );
-    deps.metrics?.onSkipped?.("traits_over_cap");
+    deps.metrics?.onSkipped?.(labels, "traits_over_cap");
   }
   if (traits.kind === "missing") {
     // The identity stage commits before publishing, so this is not a
@@ -140,7 +163,7 @@ export async function handleEvent(
       { event_id: eventId, project_id: projectId, profile_id: profileId },
       "no profile row for the stamped profile_id; event enriched without traits",
     );
-    deps.metrics?.onSkipped?.("profile_missing");
+    deps.metrics?.onSkipped?.(labels, "profile_missing");
   }
 
   const resolved = buildResolvedEvent(
@@ -164,9 +187,9 @@ export async function handleEvent(
     event: resolved,
     partitionKey,
   });
-  deps.metrics?.onEmitted?.();
-  deps.metrics?.onOutcome?.(`traits:${traits.kind}`);
-  deps.metrics?.onOutcome?.(`geo:${geo.kind}`);
+  deps.metrics?.onEmitted?.(labels);
+  deps.metrics?.onOutcome?.(labels, `traits:${traits.kind}`);
+  deps.metrics?.onOutcome?.(labels, `geo:${geo.kind}`);
 
   return {
     profileId,
@@ -221,15 +244,34 @@ export function createRuntime(deps: EnrichmentStageRuntimeDeps): EnrichmentStage
     if (value === null) return;
     const raw = decodeEvent(value) as Record<string, unknown>;
 
+    const labels: StageMetricScope = {
+      project_id: String(raw["project_id"] ?? ""),
+      environment: String(raw["environment"] ?? ""),
+      topic_family: payload.family,
+      partition: payload.partition,
+    };
+
     if (deps.isEnabled !== undefined) {
-      const enabled = await deps.isEnabled(
-        String(raw["project_id"] ?? ""),
-        String(raw["environment"] ?? ""),
-      );
-      if (!enabled) return;
+      const enabled = await deps.isEnabled(labels.project_id, labels.environment);
+      if (!enabled) {
+        deps.metrics?.onSkipped?.(labels, "processor_disabled");
+        return;
+      }
     }
 
-    await handleEvent(deps, raw);
+    const ingestedAt = raw["ingested_at"];
+    if (typeof ingestedAt === "string") deps.metrics?.onLag?.(labels, ingestedAt);
+    deps.metrics?.onConsumed?.(labels);
+
+    const startedAt = Date.now();
+    try {
+      await handleEvent(deps, raw, labels);
+    } catch (err) {
+      deps.metrics?.onFailed?.(labels, "handler_error");
+      throw err;
+    } finally {
+      deps.metrics?.onHandlerDurationMs?.(labels, Date.now() - startedAt);
+    }
   };
 
   let started = false;

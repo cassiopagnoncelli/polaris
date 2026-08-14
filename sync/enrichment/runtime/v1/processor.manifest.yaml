@@ -142,6 +142,35 @@ replay_notes: |
   snapshot: fix the input, replay the range. There is no inverse
   operation to apply, because the stage holds no state of its own.
 
+  WHERE A REPAIR REPLAY LANDS, AND WHERE IT DOES NOT. Destinations see
+  the corrected event immediately — they consume the stream, and the
+  replayed event is simply the next delivery. The WAREHOUSE is the
+  exception, and it is the one an operator will get wrong.
+
+  `analytics_raw` is a ReplacingMergeTree keyed on
+  `(project_id, environment, event, event_id)` and versioned by
+  `_version`, which the sink derives from `(stage, ingested_at)` — see
+  packages/shared-clickhouse/src/version.ts. That derivation is
+  deliberately pure so a REDELIVERY collapses onto the original row
+  instead of ratcheting the version forward on every retry. The cost of
+  that choice: a REPAIR replay produces the same `event_id` and the same
+  `_version` with DIFFERENT content, and ReplacingMergeTree breaks a
+  version tie arbitrarily. So a repair replay is not guaranteed to
+  replace the warehouse row it was meant to correct.
+
+  The fix is not a cleverer `_version`. A replay-generation counter
+  would have to be threaded through the stream, survive restarts, and be
+  agreed by both feeds during the dual-run — machinery to make a rare
+  operator action implicit. Instead the warehouse repair is EXPLICIT:
+  delete the affected partition range and re-run, which is exactly what
+  `polaris clickhouse-rebuild` already does for projections
+  (docs/development/clickhouse-rebuilds.md). Deleting first makes the
+  replayed rows the only rows, and no tie-break is involved.
+
+  Rule of thumb: replay repairs the STREAM; the warehouse needs a
+  delete-then-replay. Anyone replaying to fix a number on a dashboard
+  wants the second.
+
 fixtures:
   - name: profiled-event-with-traits-and-geo
     input: test/golden/profiled-event-with-traits-and-geo.input.json

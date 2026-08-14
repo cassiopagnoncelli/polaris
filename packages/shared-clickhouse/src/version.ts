@@ -44,6 +44,24 @@
  *     original row instead of ratcheting a version forward on every
  *     rerun — which is what makes replay-as-repair safe to run twice.
  *
+ * ## What this scheme deliberately does NOT solve
+ *
+ * A REPAIR replay — re-enriching after a profile rebuild, which the
+ * enrichment manifest names as its repair path — produces the same
+ * `event_id` and the same `_version` with different content, because the
+ * value is pure in `(stage, ingested_at)` and both are preserved across
+ * the spine. ReplacingMergeTree breaks a version tie arbitrarily, so the
+ * corrected row is not guaranteed to win.
+ *
+ * That is the accepted cost of purity, not an oversight. The alternative
+ * — a replay-generation counter in the high bits — would have to be
+ * threaded through the stream, survive restarts, and be agreed by both
+ * feeds during the dual-run, all to make a rare operator action
+ * implicit. Warehouse repair is explicit instead: delete the affected
+ * partition range, then replay, so the replayed rows are the only rows
+ * and no tie-break happens. See the enrichment manifest's `replay_notes`
+ * and docs/development/clickhouse-rebuilds.md.
+ *
  * ## Why the sink computes this, and not the spine
  *
  * The plan sketched the enrichment stage stamping `_version` onto the

@@ -116,6 +116,40 @@ scrape_configs:
           polaris_component: processor
 
   # ---------------------------------------------------------------
+  # Sessionizer, BOTH versions.
+  #
+  # v1 keys session windows on whichever identifier an event carried; v2
+  # keys them on the person the identity stage resolved. They run side by
+  # side until R2C retires v1, and the whole point of watching them
+  # together is the comparison — v1's session count should fall as v2's
+  # holds steady across logins.
+  #
+  # Two jobs rather than one because they are two processes on two ports.
+  # Every series they emit already carries `processor_version`, so a
+  # dashboard can also separate them without the job labels; the labels
+  # are here for consistency with the jobs above.
+  # ---------------------------------------------------------------
+  - job_name: polaris-sessionizer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4012"]
+        labels:
+          polaris_service: sessionizer
+          polaris_processor_name: sessionizer
+          polaris_processor_version: v1
+          polaris_component: processor
+
+  - job_name: polaris-sessionizer-v2
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4017"]
+        labels:
+          polaris_service: sessionizer
+          polaris_processor_name: sessionizer
+          polaris_processor_version: v2
+          polaris_component: processor
+
+  # ---------------------------------------------------------------
   # RabbitMQ. The `rabbitmq_prometheus` plugin (enabled in
   # infra/rabbitmq/enabled_plugins) serves Prometheus metrics on
   # :15692/metrics. `polaris-rabbitmq` is the container name from

@@ -60,7 +60,7 @@ import type { Kysely } from "kysely";
 
 import type { SyncIdentityRuntimeConfig } from "./config.js";
 import { createKyselyProfileRepository, type ProfileRepository } from "./repository.js";
-import { createRuntime, type IdentityStageRuntime } from "./runtime.js";
+import { createRuntime, type IdentityStageRuntime, type StageMetricScope } from "./runtime.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./emit.js";
 import { createPolicyResolver, type ProjectIdentityOverride } from "./policy.js";
 
@@ -254,26 +254,39 @@ export async function buildSyncIdentityApp(
     policyFor,
     runId: () => run.run_id,
     now: options.now ?? (() => new Date()),
+    // Every adapter stamps the per-event scope. Omitting it made each
+    // series unlabelled, and a Prometheus matcher such as
+    // `environment="production"` does not match a series with no
+    // `environment` label — so the spine dashboard's panels read empty
+    // while the stage was healthy, which is the most misleading state a
+    // dashboard can be in.
     metrics: {
-      onEmitted: () => {
-        metrics.incrementEmitted({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
+      onConsumed: (scope) => {
+        metrics.incrementConsumed({ ...identityLabels(scope) });
+      },
+      onEmitted: (scope) => {
+        metrics.incrementEmitted({ ...identityLabels(scope) });
+      },
+      onSkipped: (scope, reason) => {
+        metrics.incrementSkipped({ ...identityLabels(scope), reason });
+      },
+      onFailed: (scope, reason) => {
+        metrics.incrementFailed({ ...identityLabels(scope), reason });
+      },
+      onHandlerDurationMs: (scope, ms) => {
+        metrics.observeHandlerDurationMs(identityLabels(scope), ms);
+      },
+      onLag: (scope, ingestedAt) => {
+        lag.observe({
+          family: scope.topic_family,
+          partition: typeof scope.partition === "number" ? scope.partition : 0,
+          project_id: scope.project_id,
+          environment: scope.environment,
+          ingestedAt,
         });
       },
-      onSkipped: (reason: string) => {
-        metrics.incrementSkipped({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
-          reason,
-        });
-      },
-      onOutcome: (outcome: string) => {
-        metrics.incrementOutcome({
-          processor_name: PROCESSOR_NAME,
-          processor_version: PROCESSOR_VERSION,
-          outcome,
-        });
+      onOutcome: (scope, outcome) => {
+        metrics.incrementOutcome({ ...identityLabels(scope), outcome });
       },
     },
     // The activation gate closes the WHOLE stage for a scope, spine
@@ -286,7 +299,6 @@ export async function buildSyncIdentityApp(
       : {}),
   });
   // Lag is reported by the transport hooks and the reporter's own timer.
-  void lag;
 
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
@@ -438,6 +450,30 @@ export async function buildSyncIdentityApp(
     ownsConsumer,
     ownsDb,
     run,
+  };
+}
+
+/**
+ * The label tuple every emission carries: this processor's identity plus
+ * the event's own scope. `concrete_topic` is deliberately absent — the
+ * runtime knows the family and the partition, and inventing a concrete
+ * topic name it did not resolve would be worse than omitting the label.
+ */
+function identityLabels(scope: StageMetricScope): {
+  processor_name: string;
+  processor_version: string;
+  project_id: string;
+  environment: string;
+  topic_family: string;
+  partition: number | string;
+} {
+  return {
+    processor_name: PROCESSOR_NAME,
+    processor_version: PROCESSOR_VERSION,
+    project_id: scope.project_id,
+    environment: scope.environment,
+    topic_family: scope.topic_family,
+    partition: scope.partition ?? 0,
   };
 }
 

@@ -29,7 +29,9 @@
     "session_id": "sess_34a6c0b943a4387cf02d142775ac19ed",
     "primary_identifier_kind": "profile_id",
     "primary_identifier_value": "01a00000-0000-7000-8000-00000000f001",
-    "started_at": "2026-05-12T12:00:00.000Z"
+    "started_at": "2026-05-12T12:00:00.000Z",
+    "source_event_id": "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+    "run_id": "run_fixture"
   },
   "processor": {
     "name": "sessionizer",
