@@ -122,9 +122,15 @@ export {
 } from "./metrics.js";
 export {
   DestinationRateLimiter,
+  type DestinationRateLimiterLike,
   type DestinationRateLimiterOptions,
   type RateLease,
 } from "./rate-limiter.js";
+export {
+  createRedisDestinationRateLimiter,
+  type RateLimiterRedisClient,
+  type RedisRateLimiterOptions,
+} from "./rate-limiter-redis.js";
 export {
   type ApplyReplayPolicyInput,
   applyReplayPolicy,

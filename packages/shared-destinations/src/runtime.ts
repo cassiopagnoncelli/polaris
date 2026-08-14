@@ -110,7 +110,7 @@ import { publishToDestinationDlq } from "./dlq.js";
 import { evaluateGate, resolveRoutingGateConfig } from "./gate.js";
 import { buildDeliveryKey } from "./idempotency.js";
 import { DestinationMetrics } from "./metrics.js";
-import { DestinationRateLimiter } from "./rate-limiter.js";
+import { DestinationRateLimiter, type DestinationRateLimiterLike } from "./rate-limiter.js";
 import { applyReplayPolicy, readReplayContext } from "./replay-suppression.js";
 import { retryDelayMsFor } from "./retry-policy.js";
 import type {
@@ -204,7 +204,7 @@ export interface DestinationConsumerOptions<Payload> {
    * Per-destination rate limiter. Defaults to a fresh `DestinationRateLimiter`.
    * Hosts that want to share a limiter across consumers pass one in.
    */
-  readonly rateLimiter?: DestinationRateLimiter;
+  readonly rateLimiter?: DestinationRateLimiterLike;
   /**
    * Destination-side dedupe window. Defaults to a fresh
    * `InMemoryDestinationDedupe`. Hosts that want a different window
@@ -264,7 +264,7 @@ export interface DestinationConsumer {
   /** Metrics registry the runtime is wired to. */
   readonly metrics: DestinationMetrics;
   /** Rate limiter the runtime is wired to. */
-  readonly rateLimiter: DestinationRateLimiter;
+  readonly rateLimiter: DestinationRateLimiterLike;
   /** Dedupe window the runtime is wired to. */
   readonly dedupe: DestinationDedupe;
 }
@@ -598,7 +598,7 @@ interface ProcessOneInput<Payload> {
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   readonly now: () => Date;
-  readonly rateLimiter: DestinationRateLimiter;
+  readonly rateLimiter: DestinationRateLimiterLike;
   readonly dedupe: DestinationDedupe;
   readonly metrics: DestinationMetrics;
   readonly allowReplay: boolean;

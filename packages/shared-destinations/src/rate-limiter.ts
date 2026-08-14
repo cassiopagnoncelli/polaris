@@ -53,6 +53,17 @@ export interface DestinationRateLimiterOptions {
  * destination id so the runtime can stamp the duration onto the
  * `DestinationMetrics.observeRateLimitWaitMs` gauge.
  */
+/**
+ * What the runtime needs from a limiter.
+ *
+ * An interface rather than the class, so a Redis-backed limiter can take its
+ * place. The class stays as the default and as the test adapter — it is also
+ * still the CONCURRENCY half of the Redis one, which composes with it.
+ */
+export interface DestinationRateLimiterLike {
+  acquire(instance: DestinationInstance): Promise<RateLease>;
+}
+
 export interface RateLease {
   readonly destination_id: string;
   /** Wall-clock ms the lease was acquired. */
