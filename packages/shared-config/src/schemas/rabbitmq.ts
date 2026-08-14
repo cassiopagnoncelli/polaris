@@ -38,6 +38,46 @@ import {
  */
 
 /**
+ * Parse `family=count` pairs into a map, collecting problems rather than
+ * throwing, so both callers can report them in their own idiom.
+ *
+ * Exported because the partition width of a family is a WIRE CONTRACT: the
+ * publisher hashes the partition key modulo the width, so a provisioner and
+ * a running service that disagree about it break per-identity ordering
+ * outright. `scripts/rabbitmq-provision.mjs` used to carry its own copy of
+ * this logic — the two happened to agree, but nothing made them, and the
+ * value they parse is the one thing that must never diverge.
+ */
+export function parsePartitionOverrides(raw: string): {
+  readonly overrides: Readonly<Record<string, number>>;
+  readonly problems: readonly string[];
+} {
+  const overrides: Record<string, number> = {};
+  const problems: string[] = [];
+  const trimmedRaw = raw.trim();
+  if (trimmedRaw.length === 0) {
+    return { overrides: Object.freeze({}), problems: Object.freeze([]) };
+  }
+  for (const entry of trimmedRaw.split(",")) {
+    const trimmed = entry.trim();
+    if (trimmed.length === 0) continue;
+    const separator = trimmed.lastIndexOf("=");
+    if (separator <= 0) {
+      problems.push(`partition override "${trimmed}" must use the form <family>=<count>`);
+      continue;
+    }
+    const family = trimmed.slice(0, separator).trim();
+    const count = Number(trimmed.slice(separator + 1).trim());
+    if (family.length === 0 || !Number.isInteger(count) || count < 1) {
+      problems.push(`partition override "${trimmed}" must use the form <family>=<count>`);
+      continue;
+    }
+    overrides[family] = count;
+  }
+  return { overrides: Object.freeze(overrides), problems: Object.freeze(problems) };
+}
+
+/**
  * Parse `family=count` pairs into a map. Invalid entries fail the whole
  * config load: a typo here would silently publish to the wrong partition
  * count and break per-identity ordering.
@@ -47,31 +87,14 @@ const partitionOverridesSchema = z
   .trim()
   .default("")
   .transform((raw, ctx): Readonly<Record<string, number>> => {
-    if (raw.length === 0) return Object.freeze({});
-    const out: Record<string, number> = {};
-    for (const entry of raw.split(",")) {
-      const trimmed = entry.trim();
-      if (trimmed.length === 0) continue;
-      const separator = trimmed.lastIndexOf("=");
-      if (separator <= 0) {
-        ctx.addIssue({
-          code: "custom",
-          message: `partition override "${trimmed}" must use the form <family>=<count>`,
-        });
-        continue;
-      }
-      const family = trimmed.slice(0, separator).trim();
-      const count = Number(trimmed.slice(separator + 1).trim());
-      if (family.length === 0 || !Number.isInteger(count) || count < 1) {
-        ctx.addIssue({
-          code: "custom",
-          message: `partition override "${trimmed}" must use the form <family>=<positive integer>`,
-        });
-        continue;
-      }
-      out[family] = count;
+    // Delegates to the exported parser so the provisioning script and the
+    // running services cannot drift on a wire contract — see
+    // `parsePartitionOverrides`.
+    const { overrides, problems } = parsePartitionOverrides(raw);
+    for (const message of problems) {
+      ctx.addIssue({ code: "custom", message });
     }
-    return Object.freeze(out);
+    return overrides;
   });
 
 /**

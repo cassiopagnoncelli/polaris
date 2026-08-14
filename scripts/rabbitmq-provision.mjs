@@ -52,6 +52,7 @@ import {
   declareComponentQueues,
   declareSuperStream,
   defaultRetentionDaysForFamily,
+  parsePartitionOverrides,
   deleteComponentQueues,
   deleteSuperStream,
   POLARIS_COMPONENTS,
@@ -70,23 +71,21 @@ function envOr(key, fallback) {
   return value !== undefined && value !== "" ? value : fallback;
 }
 
+/**
+ * Parse the override string via the SAME parser the running services use.
+ *
+ * This script used to carry its own copy. Partition width is a wire
+ * contract — the publisher hashes the key modulo the width — so a
+ * provisioner that parsed the string even slightly differently from the
+ * services would create streams of one width while producers addressed
+ * another, breaking per-identity ordering with no error anywhere.
+ */
 function parseOverrides(raw) {
-  const out = {};
-  for (const entry of raw.split(",")) {
-    const trimmed = entry.trim();
-    if (trimmed.length === 0) continue;
-    const separator = trimmed.lastIndexOf("=");
-    if (separator <= 0) {
-      throw new Error(`invalid partition override "${trimmed}" (expected <family>=<count>)`);
-    }
-    const family = trimmed.slice(0, separator).trim();
-    const count = Number(trimmed.slice(separator + 1).trim());
-    if (!Number.isInteger(count) || count < 1) {
-      throw new Error(`invalid partition count in "${trimmed}"`);
-    }
-    out[family] = count;
+  const { overrides, problems } = parsePartitionOverrides(raw);
+  if (problems.length > 0) {
+    throw new Error(problems.join("; "));
   }
-  return out;
+  return overrides;
 }
 
 export function buildPlan(options = {}) {

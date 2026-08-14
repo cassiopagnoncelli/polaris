@@ -5,6 +5,7 @@ import {
   csvListSchema,
   environmentSchema,
   httpEnvSchema,
+  parsePartitionOverrides,
   partitionsForFamily,
   portSchema,
   postgresEnvSchema,
@@ -382,5 +383,60 @@ describe("httpEnvSchema", () => {
     });
     expect(config.port).toBe(8081);
     expect(config.bodyLimitBytes).toBe(2048);
+  });
+});
+
+describe("parsePartitionOverrides (shared with the provisioning script)", () => {
+  // Partition width is a wire contract: the publisher hashes the key modulo
+  // the width, so a provisioner parsing this string even slightly
+  // differently from the services would create streams of one width while
+  // producers addressed another — broken per-identity ordering, no error
+  // anywhere. `scripts/rabbitmq-provision.mjs` carried its own copy until
+  // the spine families were added; these cases pin the single implementation
+  // both now use.
+  it("parses the shipped default covering raw and both spine families", () => {
+    const { overrides, problems } = parsePartitionOverrides(
+      "raw.events=6,identified.events=6,resolved.events=6",
+    );
+    expect(problems).toEqual([]);
+    expect(overrides).toEqual({
+      "raw.events": 6,
+      "identified.events": 6,
+      "resolved.events": 6,
+    });
+  });
+
+  it("returns an empty map for an empty string rather than failing", () => {
+    expect(parsePartitionOverrides("").overrides).toEqual({});
+    expect(parsePartitionOverrides("   ").problems).toEqual([]);
+  });
+
+  it("tolerates whitespace and a trailing separator", () => {
+    const { overrides, problems } = parsePartitionOverrides(" raw.events = 6 , ");
+    expect(problems).toEqual([]);
+    expect(overrides).toEqual({ "raw.events": 6 });
+  });
+
+  it("reports malformed entries instead of silently dropping them", () => {
+    // Silently ignoring a typo is the dangerous behaviour: the family would
+    // quietly fall back to the default width while the operator believes
+    // the override applied.
+    for (const bad of ["raw.events", "=6", "raw.events=0", "raw.events=two", "raw.events=1.5"]) {
+      expect(parsePartitionOverrides(bad).problems.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("splits on the last equals sign", () => {
+    expect(parsePartitionOverrides("weird=family=4").overrides).toEqual({ "weird=family": 4 });
+  });
+
+  it("agrees with the Zod schema it backs", () => {
+    const raw = "raw.events=6,resolved.events=6";
+    const viaSchema = rabbitmqEnvSchema.parse({
+      POLARIS_RABBITMQ_URL: "amqp://polaris:polaris@rabbitmq:5672/%2F",
+      POLARIS_RABBITMQ_CLIENT_ID: "test-client",
+      POLARIS_RABBITMQ_PARTITION_OVERRIDES: raw,
+    });
+    expect(viaSchema.partitionOverrides).toEqual(parsePartitionOverrides(raw).overrides);
   });
 });
