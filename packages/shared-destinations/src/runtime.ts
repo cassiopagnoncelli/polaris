@@ -89,6 +89,7 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   redeliverQueueName,
+  republishToRetry,
   STREAM_FAMILY_ANALYTICS_EVENTS,
   type StreamStartPosition,
   type TransportMessageHandler,
@@ -111,6 +112,7 @@ import { buildDeliveryKey } from "./idempotency.js";
 import { DestinationMetrics } from "./metrics.js";
 import { DestinationRateLimiter } from "./rate-limiter.js";
 import { applyReplayPolicy, readReplayContext } from "./replay-suppression.js";
+import { retryDelayMsFor } from "./retry-policy.js";
 import type {
   ConsumerIdentity,
   Deliverer,
@@ -1081,12 +1083,36 @@ async function processOne<Payload>(
       delivery_key,
       logLine: "destination delivery failed_retryable",
       labels: instanceLabels,
-      // Retryable failures re-throw so KafkaJS surfaces the error through
-      // its own retry semantics. The host may also republish to a retry
-      // topic when KafkaJS' retry budget is exhausted.
-      rethrow: buildRetryableError(deliveryResult),
-      // When the attempt counter is at-or-above the destination's
-      // dead-letter threshold, also publish to the DLQ.
+      // Two paths, and which one applies is decided by whether we hold the
+      // original transport message.
+      //
+      // With a payload, the failure is PARKED: republished to the retry tier
+      // this instance's `retry_policy` selects, with the attempt counter
+      // bumped, and the broker holds it for the tier's TTL before releasing
+      // it to `<component>.redeliver`. No rethrow — rethrowing as well would
+      // make the broker requeue the same message we just parked, delivering
+      // it twice.
+      //
+      // Without one (`handleEvent`, driven directly by tests and by replay
+      // tooling) there is nothing to republish, so the previous behaviour
+      // stands: rethrow and let the caller decide.
+      //
+      // This is what makes `dead_letter_threshold` reachable at all. Nothing
+      // republished to a retry tier before this, so `polaris-retry-attempts`
+      // never incremented, `attempt` was always 1, and a threshold of 5 could
+      // not be crossed by any sequence of failures.
+      ...(payload !== undefined
+        ? {
+            retryPark: {
+              payload,
+              component: identity.component,
+              delayMs: retryDelayMsFor(instance.retry_policy, attempt),
+            },
+          }
+        : { rethrow: buildRetryableError(deliveryResult) }),
+      // At-or-above the threshold the message goes to the DLQ instead of
+      // another tier — `recordOutcome` prefers `payloadForDlq` over
+      // `retryPark` when both are set.
       ...(attempt >= instance.dead_letter_threshold && payload !== undefined
         ? { payloadForDlq: payload }
         : {}),
@@ -1163,6 +1189,16 @@ interface RecordOutcomeInput {
   readonly consumerBuildVersion?: string;
   /** When set, the runtime publishes the original payload to the DLQ. */
   readonly payloadForDlq?: TransportMessagePayload;
+  /**
+   * When set, the runtime parks the original message in a retry tier instead
+   * of rethrowing. `payloadForDlq` wins when both are present: at the
+   * dead-letter threshold the message stops going round.
+   */
+  readonly retryPark?: {
+    readonly payload: TransportMessagePayload;
+    readonly component: string;
+    readonly delayMs: number;
+  };
   /** PolarisProducer required when `payloadForDlq` is set. */
   readonly producer?: PolarisProducer;
   /**
@@ -1296,6 +1332,46 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
       ...input.labels,
       reason: dlqReason,
     });
+  }
+
+  if (
+    input.retryPark !== undefined &&
+    input.producer !== undefined &&
+    input.payloadForDlq === undefined
+  ) {
+    const { payload, component, delayMs } = input.retryPark;
+    await republishToRetry(input.producer, {
+      component,
+      value: payload.message.value,
+      key: payload.message.key ?? null,
+      headers: payload.message.headers,
+      sourceTopic: payload.stream,
+      sourcePartition: payload.partition,
+      reason: input.error_class ?? "transient",
+      ...(input.vendor_response_summary !== null
+        ? { errorMessage: input.vendor_response_summary }
+        : {}),
+      failedAt: input.now().toISOString(),
+      // The attempt this delivery WAS, so the helper's own increment lands
+      // on the next one. Passing it explicitly rather than letting the
+      // helper read the header keeps one source of truth for the count —
+      // the runtime already parsed it, and a second parse could disagree.
+      attempts: input.attempt + 1,
+    });
+    input.logger.info(
+      {
+        component: "destination.runtime",
+        ...input.labels,
+        event_id: input.envelope.event_id,
+        delivery_key: input.delivery_key,
+        attempt: input.attempt,
+        retry_policy: input.instance.retry_policy,
+        delay_ms: delayMs,
+      },
+      "destination delivery parked in a retry tier",
+    );
+    input.metrics.incrementRetry({ ...input.labels, reason: input.error_class ?? "transient" });
+    return record;
   }
 
   if (input.rethrow !== undefined) {

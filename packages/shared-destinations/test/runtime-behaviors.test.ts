@@ -502,7 +502,7 @@ describe("destination runtime — fan-out to active instances", () => {
     expect(skipped?.labels["reason"]).toBe("no_active_destinations");
   });
 
-  it("one failing target does not stop the others, and still re-throws for redelivery", async () => {
+  it("one failing target does not stop the others, and parks the message for retry", async () => {
     const env = makeEnv({
       deliverer: async (ctx) => {
         env.delivererCalls.push({
@@ -524,13 +524,20 @@ describe("destination runtime — fan-out to active instances", () => {
     env.instances.set(secondInstance());
     const consumer = buildConsumer(env);
 
-    await expect(consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT)).rejects.toThrow();
+    // Used to reject. The retryable failure now PARKS in a backoff tier
+    // instead of rethrowing — rethrowing as well would make the broker
+    // requeue the same message the runtime just parked, delivering it twice.
+    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
 
-    // The healthy instance was still delivered to; the throw is what asks
-    // the transport to redeliver, and the dedupe window is what keeps the
-    // redelivery from double-sending to this one.
+    // The healthy instance was still delivered to. The parked copy comes back
+    // through fan-out when its tier expires, and the dedupe window is what
+    // keeps that from double-sending to this one.
     const delivered = env.records.snapshot().find((r) => r.destination_id === "polaris_dst_test2");
     expect(delivered?.status).toBe("accepted");
+
+    // Parked, not dead-lettered: attempt 1 is far below the threshold.
+    const parked = env.producerSends.filter((send) => send.topic.includes(".retry."));
+    expect(parked).toHaveLength(1);
   });
 
   it("re-reads the active list once the TTL expires", async () => {
@@ -788,27 +795,31 @@ describe("destination runtime — dlq_records persistence", () => {
       logger: noopLogger,
       dedupe: env.dedupe,
     });
-    // Attempt below threshold (SEED_INSTANCE.dead_letter_threshold=5) →
-    // rethrow but no DLQ row.
-    await expect(
-      consumer.handleEvent({
-        envelope: makeEnvelope(),
-        destination_id: SEED_INSTANCE.destination_id,
-        payload: makeFakeTransportPayload(),
-        attempt: 1,
-      }),
-    ).rejects.toThrow();
+    // Attempt below threshold (SEED_INSTANCE.dead_letter_threshold=5) → the
+    // message is PARKED in a backoff tier. No DLQ row, and no throw: the
+    // runtime has taken responsibility for the message, so asking the broker
+    // to requeue it as well would deliver it twice.
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      payload: makeFakeTransportPayload(),
+      attempt: 1,
+    });
     expect(dlqRecords.snapshot()).toHaveLength(0);
-    // Attempt at threshold → rethrow + DLQ row.
-    await expect(
-      consumer.handleEvent({
-        envelope: makeEnvelope(),
-        destination_id: SEED_INSTANCE.destination_id,
-        payload: makeFakeTransportPayload(),
-        attempt: SEED_INSTANCE.dead_letter_threshold,
-      }),
-    ).rejects.toThrow();
+    expect(env.producerSends.filter((s) => s.topic.includes(".retry."))).toHaveLength(1);
+
+    // Attempt at threshold → DLQ row, and no further parking. This is the
+    // branch that could not be reached before the retry ladder was wired:
+    // nothing incremented `polaris-retry-attempts`, so `attempt` was always
+    // 1 and a threshold of 5 was unreachable by any sequence of failures.
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+      payload: makeFakeTransportPayload(),
+      attempt: SEED_INSTANCE.dead_letter_threshold,
+    });
     expect(dlqRecords.snapshot()).toHaveLength(1);
+    expect(env.producerSends.filter((s) => s.topic.includes(".retry."))).toHaveLength(1);
     const row = dlqRecords.snapshot()[0];
     expect(row?.attempts).toBe(SEED_INSTANCE.dead_letter_threshold);
     expect(row?.reason).toBe("transient");

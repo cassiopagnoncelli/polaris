@@ -254,6 +254,42 @@ Vendor-specific notes:
 
 ## Retry and DLQ Policy
 
+> **Wired as of WE77L4R8's successor (60L16ALA).** Before that commit
+> `republishToRetry` had no caller anywhere in the repo: nothing incremented
+> `polaris-retry-attempts`, so a delivery's attempt count was always 1 and
+> `dead_letter_threshold` could not be crossed by any sequence of failures.
+> The column was set, shown by `polaris destinations show`, and unreachable.
+
+A retryable failure is **parked**, not rethrown. The runtime republishes the
+original message to the retry tier its instance's `retry_policy` selects, with
+`polaris-retry-attempts` incremented; the broker holds it for that queue's TTL
+and releases it to `<component>.redeliver`, which the runtime also consumes.
+It does not additionally rethrow — that would make the broker requeue the same
+message the runtime just parked, delivering it twice.
+
+At or above `dead_letter_threshold` the message goes to the DLQ instead of
+another tier, and is not parked again.
+
+`retry_policy` selects WHICH of the five provisioned tiers an attempt lands
+in. The tiers are queues declared by `pnpm rabbitmq:provision` from
+`RETRY_BACKOFF_TIERS_MS`, and the broker owns each delay through the queue's
+message TTL — a policy that computed an arbitrary backoff would have to
+publish to a queue nobody declared.
+
+| attempt | 1 | 2 | 3 | 4 | 5 | 6+ |
+|---|---|---|---|---|---|---|
+| `standard` | 5s | 30s | 2m | 10m | 30m | 30m |
+| `aggressive` | 5s | 5s | 30s | 30s | 2m | 2m |
+| `conservative` | 30s | 2m | 10m | 30m | 30m | 30m |
+
+`standard` reproduces the previously hardcoded ladder exactly, so an instance
+that never set the column saw no change when this began to be read. That
+matters more than usual here: the ladder was unwired, so every operator's
+stored setting is untested in production.
+
+An unrecognised policy falls back to `standard` rather than throwing — a
+delivery must not fail because its backoff table is unfamiliar.
+
 Each consumer owns retry and DLQ topics, named after the consumer's component — the same names `POLARIS_COMPONENTS` declares, not the vendor and not the consumer version:
 
 ```text

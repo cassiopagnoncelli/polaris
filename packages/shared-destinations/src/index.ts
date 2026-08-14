@@ -129,6 +129,7 @@ export {
   type ReplaySuppressionReason,
   readReplayContext,
 } from "./replay-suppression.js";
+export { retryDelayMsFor } from "./retry-policy.js";
 export {
   createDestinationConsumer,
   type DestinationConsumer,
