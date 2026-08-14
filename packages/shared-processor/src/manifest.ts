@@ -21,7 +21,7 @@
  * manifest fails at boot rather than silently being ignored.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -79,7 +79,7 @@ export type ProcessorTopicSpec = z.infer<typeof processorTopicSpecSchema>;
 
 /**
  * Replay metadata block. Mirrors the manifest in
- * `processors/analytics-projector/v1/processor.manifest.yaml`.
+ * `sync/legacy/analytics-projector/v1/processor.manifest.yaml`.
  */
 export const processorReplaySchema = z
   .object({
@@ -203,12 +203,55 @@ export class ProcessorManifestError extends Error {
 
 /** Options accepted by `loadProcessorManifest`. */
 export interface LoadProcessorManifestOptions {
-  /** Repository root. The loader resolves `processors/<name>/<version>/...` underneath. */
+  /**
+   * Repository root. The loader resolves
+   * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`
+   * underneath — see `docs/implementation/pipeline-redesign-plan.md` §2.3.
+   */
   readonly root: string;
-  /** Processor name (matches the directory under `processors/`). */
+  /** Processor name (matches the directory under its stage). */
   readonly name: string;
-  /** Version label (matches the directory under `processors/<name>/`). */
+  /** Version label (matches the directory under `<stage>/<name>/`). */
   readonly version: string;
+}
+
+/**
+ * The two pipeline planes. A unit's path encodes which pipeline and which
+ * stage owns it, so `(name, version)` alone no longer determines a
+ * location — the loader searches the stages under both planes.
+ */
+const PIPELINE_PLANES = ["sync", "async"] as const;
+
+/**
+ * Resolve `<root>/{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`.
+ *
+ * Returns the first existing path, or `null` with the list of locations
+ * searched so the caller can report something actionable.
+ */
+function resolveManifestPath(
+  root: string,
+  name: string,
+  version: string,
+): { readonly path: string | null; readonly searched: readonly string[] } {
+  const searched: string[] = [];
+  for (const plane of PIPELINE_PLANES) {
+    const planeDir = join(root, plane);
+    let stages: string[];
+    try {
+      stages = readdirSync(planeDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name)
+        .sort();
+    } catch {
+      continue; // plane absent — fine, try the other
+    }
+    for (const stage of stages) {
+      const candidate = join(planeDir, stage, name, version, "processor.manifest.yaml");
+      searched.push(candidate);
+      if (existsAsFile(candidate)) return { path: candidate, searched };
+    }
+  }
+  return { path: null, searched };
 }
 
 /** Result of loading one manifest by `(name, version)`. */
@@ -244,20 +287,19 @@ export function loadProcessorManifest(
 export function tryLoadProcessorManifest(
   options: LoadProcessorManifestOptions,
 ): { ok: true; value: LoadedProcessorManifest } | { ok: false; path: string; reason: string } {
-  const manifestPath = join(
-    options.root,
-    "processors",
-    options.name,
-    options.version,
-    "processor.manifest.yaml",
-  );
-  if (!existsAsFile(manifestPath)) {
+  const resolved = resolveManifestPath(options.root, options.name, options.version);
+  if (resolved.path === null) {
+    const where = join(options.root, "{sync,async}", "<stage>", options.name, options.version);
     return {
       ok: false,
-      path: manifestPath,
-      reason: `no manifest at ${manifestPath} — check the (name, version) pair against the on-disk processors/ tree`,
+      path: where,
+      reason:
+        `no manifest for (${options.name}, ${options.version}) under ` +
+        `${options.root}/{sync,async}/ — check the pair against the on-disk pipeline tree ` +
+        `(searched ${resolved.searched.length} stage location(s))`,
     };
   }
+  const manifestPath = resolved.path;
 
   let text: string;
   try {

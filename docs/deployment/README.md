@@ -181,4 +181,4 @@ The recovery-objective table is also reproduced in
 - **GeoIP database.** `POLARIS_GEOIP_DB_PATH` is reserved in
   `.env.example` but the v1 enricher does not read it (the MaxMind
   adapter is a future task; see
-  [`processors/geoip-enricher/v1/src/config.ts`](../../processors/geoip-enricher/v1/src/config.ts)).
+  [`sync/legacy/geoip-enricher/v1/src/config.ts`](../../sync/legacy/geoip-enricher/v1/src/config.ts)).

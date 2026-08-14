@@ -389,7 +389,7 @@ describe("expandClientMacros", () => {
   });
 
   it("no longer substitutes {kafka_brokers} — ClickHouse consumes nothing now", () => {
-    // The Kafka Engine table is gone; consumers/clickhouse-sink pushes
+    // The Kafka Engine table is gone; async/warehouse/clickhouse-sink pushes
     // rows in. A leftover macro would silently survive into the DDL, so
     // the absence is asserted rather than assumed.
     expect(expandClientMacros("kafka_broker_list = '{kafka_brokers}'")).toBe(

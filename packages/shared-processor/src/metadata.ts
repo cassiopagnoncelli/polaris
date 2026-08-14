@@ -11,7 +11,7 @@
  *
  * The helper exposed here is the SINGLE source of truth for the dual shape:
  * processors must not hand-roll the literal again. Tests against the
- * golden-fixture in `processors/analytics-projector/v1` lock the wire shape.
+ * golden-fixture in `sync/legacy/analytics-projector/v1` lock the wire shape.
  *
  * The helper is intentionally synchronous and free of I/O: it can be called
  * from the streaming runtime, from replay tooling, and from unit tests

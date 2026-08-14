@@ -22,7 +22,7 @@ RabbitMQ **4.1.x**, two queue types with distinct roles:
 | Per-project isolation (`raw.events.<project_id>`) | Dedicated super stream, resolver-selected | Dedicated topic |
 | Retry with backoff (per consumer/processor) | **Quorum queue** `retry.<name>` with per-message TTL + DLX → `redeliver.<name>` | Retry topics |
 | Dead letters | **Quorum queue** `dlq.<name>` + existing Postgres `dlq_records` / `processor_dlq_records` (unchanged) | DLQ topics |
-| ClickHouse ingestion | New consumer service `consumers/clickhouse-sink` → batched inserts into a `Null`-engine staging table; existing MVs unchanged | ClickHouse Kafka Engine |
+| ClickHouse ingestion | New consumer service `async/warehouse/clickhouse-sink` → batched inserts into a `Null`-engine staging table; existing MVs unchanged | ClickHouse Kafka Engine |
 | Replay source | Stream attach by `x-stream-offset` (timestamp), read to window end | `seek` + offset-range reads |
 | Consumer checkpoint | Postgres `transport_checkpoints (group_name, stream, partition, last_offset)` — authoritative | Kafka committed offsets |
 
@@ -85,7 +85,7 @@ strictly better:
 No ClickHouse engine exists for streams (and the AMQP engine loses
 offsets), so ingestion becomes a Polaris-owned consumer:
 
-- `consumers/clickhouse-sink/v1`: consumes `analytics.events` partitions,
+- `async/warehouse/clickhouse-sink/v1`: consumes `analytics.events` partitions,
   batches by size/time, `INSERT ... FORMAT JSONEachRow` into
   `analytics_events_queue` re-declared as **`ENGINE = Null`** with the
   same columns plus explicit `_topic/_partition/_offset` (previously
@@ -125,7 +125,7 @@ offsets), so ingestion becomes a Polaris-owned consumer:
 | **R1** | Local infra + config | Compose service `rabbitmq:4.1-management` (+ `rabbitmq_stream`, `rabbitmq_prometheus`), ports 5672/15672/5552/15692, healthcheck; `scripts/rabbitmq-provision.mjs` (super streams, retention policies, retry/redeliver/dlq queues — replaces topic auto-creation); `shared-config` `rabbitmq.ts` schema (`POLARIS_RABBITMQ_URL`, `_MANAGEMENT_URL`, TLS, prefetch, partition map); env examples | S (1d) | `make up` + provision idempotent |
 | **R2** | RabbitMQ driver | amqplib driver for the R0 port: confirm-channel producer with client-side partition hashing; stream consumer (per-partition channels, prefetch, ack); Postgres `transport_checkpoints` migration + store; retry/redeliver/DLQ helpers; headers mapping (AMQP headers table); hooks/metrics parity | L (3–5d) | Driver test suite + smoke vs live broker |
 | **R3** | Spine cutover | `ingester-api` + 5 processors switch driver; static partition assignment wiring; `processor_runs.last_offset` stays informational; **throughput gate**: sustained publish/consume benchmark vs current acceptance baseline | M (2–3d) | Acceptance suite green on RabbitMQ |
-| **R4** | ClickHouse sink | `consumers/clickhouse-sink/v1`; SQL migration `10_` → Null engine + explicit lineage columns, `21_`/`31_`/`20_` touch-ups, `roles/01_grants.sql` Kafka grant removal; rebuild runbook update | M (2–3d) | CH counts match producer counts in acceptance |
+| **R4** | ClickHouse sink | `async/warehouse/clickhouse-sink/v1`; SQL migration `10_` → Null engine + explicit lineage columns, `21_`/`31_`/`20_` touch-ups, `roles/01_grants.sql` Kafka grant removal; rebuild runbook update | M (2–3d) | CH counts match producer counts in acceptance |
 | **R5** | Destinations | `shared-destinations/runtime.ts` onto port + new retry topology; 5 consumers; `shared-processor/dlq.ts`; CLI `dlq`/`processors dlq` commands (Postgres paths unchanged, republish targets redeliver queues) | M (2–3d) | DLQ acceptance scenarios green |
 | **R6** | Replay | `stream-range-reader`, executor wiring, CLI `replay execute` (drop admin offset resolution), isolation-cutover flow against dedicated super streams | M (2–3d) | Replay acceptance scenario green |
 | **R7** | Observability | Prometheus scrape of broker; `polaris-redpanda.json` → `polaris-rabbitmq.json` (stream bytes, publish rates, queue depths, consumer presence); alert rules swap broker-level rules; `polaris_processor_lag_ms_last` (timestamp-based) survives as the primary lag signal — per-project dashboards keep working | S–M (1–2d) | Dashboards render, alerts fire in smoke |
@@ -192,7 +192,7 @@ processor-lag alerting signal, CI shape.
 | # | Decision | Default |
 |---|---|---|
 | 1 | Prod partition counts per family | `raw.events` 6, others 3 |
-| 2 | Sink placement | `consumers/clickhouse-sink/v1` |
+| 2 | Sink placement | `async/warehouse/clickhouse-sink/v1` |
 | 3 | Package name | new `@polaris/shared-transport`, `shared-kafka` deleted at R9 |
 | 4 | Dual-write phase | No (pre-GA assumption) — confirm |
 | 5 | Broker HA target for prod (3-node quorum/stream replication) | 3-node, RF=3, mirrors current prod posture |

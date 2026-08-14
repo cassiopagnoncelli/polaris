@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * `enriched.geoip` v1 — ACTIVE.
  *
- * Emitted by `processors/geoip-enricher/v1/` once per source `raw.events`
+ * Emitted by `sync/legacy/geoip-enricher/v1/` once per source `raw.events`
  * record. The enricher reads `envelope.context.ip` from the source event,
  * looks the address up in a local IP-to-geo database, and republishes the
  * geo result on `enriched.events` keyed back to the source `event_id`.

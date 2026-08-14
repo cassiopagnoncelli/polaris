@@ -8,7 +8,7 @@ import {
 /**
  * `attribution.first_touch_assigned` v1 — ACTIVE.
  *
- * Emitted by `processors/attribution-engine/v1/` the first time a
+ * Emitted by `async/computation/attribution-engine/v1/` the first time a
  * campaign-tagged observation is seen for a
  * `(project_id, environment, primary_identifier)` tuple. v1 applies the
  * conservative deterministic rule: "the first observed touchpoint in

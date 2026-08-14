@@ -2,7 +2,7 @@
 --
 -- Create the `identity_links` table.
 --
--- Polaris's canonical identity graph is built by `processors/identity-resolver/v1/`.
+-- Polaris's canonical identity graph is built by `sync/legacy/identity-resolver/v1/`.
 -- Per `docs/architecture/05-processors-and-replay.md` § "Identity Resolution",
 -- the canonical graph is an explicit-link graph: rows here represent
 -- authoritative links between two identifiers (e.g. `anonymous_id + customer_id`
@@ -18,7 +18,7 @@
 --     `text` column is intentional — it stays open by design.
 --
 --   - `evidence` is `jsonb` so each `evidence_type` defines its own shape.
---     A small registry in code (`processors/identity-resolver/v1/src/evidence.ts`)
+--     A small registry in code (`sync/legacy/identity-resolver/v1/src/evidence.ts`)
 --     documents the expected shape per type.
 --
 --   - `confidence` is a closed enum-shaped CHECK because the *vocabulary* of

@@ -68,7 +68,7 @@ All 15 alert rules now reference real metrics; none use a
   `polaris_ingest_publish_success_total` (MKEF1I9G).
 - **ClickHouse** (`PolarisClickHouseIngestionLagWarn`/`...Page`,
   `PolarisClickHouseSinkRowsSkipped`): emitted by
-  `consumers/clickhouse-sink`. Lag and consumed-row series carry a
+  `async/warehouse/clickhouse-sink`. Lag and consumed-row series carry a
   `table` label, so the two ingestion paths — source events into
   `analytics_events_queue`, derived events into
   `analytics_processed_queue` — are alerted independently by the same

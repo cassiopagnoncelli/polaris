@@ -75,7 +75,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** `consumers/ga4/v1/dist/project-config.js` -> `consumers/ga4/v1/src`. */
+/** `sync/destinations/ga4/v1/dist/project-config.js` -> `sync/destinations/ga4/v1/src`. */
 export function sourceDirForDistEntry(distEntry) {
   const parts = distEntry.split("/");
   const distIndex = parts.lastIndexOf("dist");

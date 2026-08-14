@@ -15,7 +15,7 @@
 -- virtual columns are `_channel_id` / `_delivery_tag` rather than the
 -- `_topic` / `_partition` / `_offset` lineage the ingest log records.
 --
--- So Polaris owns the delivery instead: `consumers/clickhouse-sink/v1`
+-- So Polaris owns the delivery instead: `async/warehouse/clickhouse-sink/v1`
 -- consumes the `analytics.events` partition streams and INSERTs batches
 -- here. The engine is `Null`, which stores nothing and exists purely to
 -- fan INSERTs into the materialized views — the same role the Kafka

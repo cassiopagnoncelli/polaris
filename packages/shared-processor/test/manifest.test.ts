@@ -2,7 +2,7 @@
  * Tests for the processor manifest loader.
  *
  * Uses a temp directory layout mimicking the on-disk
- * `processors/<name>/<version>/processor.manifest.yaml` convention.
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml` convention.
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -51,7 +51,7 @@ describe("loadProcessorManifest", () => {
   });
 
   function writeManifest(name: string, version: string, content: string): void {
-    const dir = join(root, "processors", name, version);
+    const dir = join(root, "sync", "legacy", name, version);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "processor.manifest.yaml"), content, "utf8");
   }
@@ -63,7 +63,7 @@ describe("loadProcessorManifest", () => {
       name: "analytics-projector",
       version: "v1",
     });
-    expect(loaded.path).toContain("processors/analytics-projector/v1/processor.manifest.yaml");
+    expect(loaded.path).toContain("sync/legacy/analytics-projector/v1/processor.manifest.yaml");
     expect(loaded.manifest.name).toBe("analytics-projector");
     expect(loaded.manifest.version).toBe("v1");
     expect(loaded.manifest.mode).toBe("streaming");
@@ -125,7 +125,7 @@ describe("tryLoadProcessorManifest", () => {
   });
 
   it("returns ok=true with the typed value on success", () => {
-    const dir = join(root, "processors", "analytics-projector", "v1");
+    const dir = join(root, "sync", "legacy", "analytics-projector", "v1");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "processor.manifest.yaml"), VALID_YAML, "utf8");
     const result = tryLoadProcessorManifest({
@@ -146,8 +146,8 @@ describe("tryLoadProcessorManifest", () => {
     });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected ok=false");
-    expect(result.reason).toContain("no manifest at");
-    expect(result.path).toContain("processors/missing/v1/processor.manifest.yaml");
+    expect(result.reason).toContain("no manifest for (missing, v1)");
+    expect(result.reason).toContain("no manifest for (missing, v1)");
   });
 });
 
@@ -283,11 +283,11 @@ describe("validateProcessorFixtures", () => {
   }
 
   it("resolves fixture paths relative to the manifest file and reports no issues when files parse", () => {
-    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    const manifestPath = join(root, "sync", "legacy", "demo", "v1", "processor.manifest.yaml");
     mkdirSync(join(manifestPath, ".."), { recursive: true });
     writeFileSync(manifestPath, "# placeholder", "utf8");
-    writeFixture("processors/demo/v1/test/golden/case.input.json", { ok: true });
-    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.input.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.output.json", { ok: true });
 
     const result = validateProcessorFixtures({
       manifestPath,
@@ -309,10 +309,10 @@ describe("validateProcessorFixtures", () => {
   });
 
   it("reports a structured issue when the input file is missing", () => {
-    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    const manifestPath = join(root, "sync", "legacy", "demo", "v1", "processor.manifest.yaml");
     mkdirSync(join(manifestPath, ".."), { recursive: true });
     writeFileSync(manifestPath, "# placeholder", "utf8");
-    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.output.json", { ok: true });
 
     const result = validateProcessorFixtures({
       manifestPath,
@@ -333,16 +333,16 @@ describe("validateProcessorFixtures", () => {
   });
 
   it("reports a structured issue when the JSON does not parse", () => {
-    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    const manifestPath = join(root, "sync", "legacy", "demo", "v1", "processor.manifest.yaml");
     mkdirSync(join(manifestPath, ".."), { recursive: true });
     writeFileSync(manifestPath, "# placeholder", "utf8");
-    mkdirSync(join(root, "processors", "demo", "v1", "test", "golden"), { recursive: true });
+    mkdirSync(join(root, "sync", "legacy", "demo", "v1", "test", "golden"), { recursive: true });
     writeFileSync(
-      join(root, "processors", "demo", "v1", "test", "golden", "case.input.json"),
+      join(root, "sync", "legacy", "demo", "v1", "test", "golden", "case.input.json"),
       "{ not valid",
       "utf8",
     );
-    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.output.json", { ok: true });
 
     const result = validateProcessorFixtures({
       manifestPath,
@@ -362,11 +362,11 @@ describe("validateProcessorFixtures", () => {
   });
 
   it("flags duplicate fixture names", () => {
-    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    const manifestPath = join(root, "sync", "legacy", "demo", "v1", "processor.manifest.yaml");
     mkdirSync(join(manifestPath, ".."), { recursive: true });
     writeFileSync(manifestPath, "# placeholder", "utf8");
-    writeFixture("processors/demo/v1/test/golden/case.input.json", { ok: true });
-    writeFixture("processors/demo/v1/test/golden/case.output.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.input.json", { ok: true });
+    writeFixture("sync/legacy/demo/v1/test/golden/case.output.json", { ok: true });
 
     const result = validateProcessorFixtures({
       manifestPath,
@@ -390,7 +390,7 @@ describe("validateProcessorFixtures", () => {
   });
 
   it("returns an empty result when the manifest has no fixtures block", () => {
-    const manifestPath = join(root, "processors", "demo", "v1", "processor.manifest.yaml");
+    const manifestPath = join(root, "sync", "legacy", "demo", "v1", "processor.manifest.yaml");
     mkdirSync(join(manifestPath, ".."), { recursive: true });
     writeFileSync(manifestPath, "# placeholder", "utf8");
 

@@ -185,7 +185,7 @@ The `identity-resolver` is the only one that also composes **postgres** today.
 
 #### analytics-projector v1
 
-Source: [`processors/analytics-projector/v1/src/config.ts`](../../processors/analytics-projector/v1/src/config.ts).
+Source: [`sync/legacy/analytics-projector/v1/src/config.ts`](../../sync/legacy/analytics-projector/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |
@@ -194,7 +194,7 @@ Source: [`processors/analytics-projector/v1/src/config.ts`](../../processors/ana
 
 #### identity-resolver v1
 
-Source: [`processors/identity-resolver/v1/src/config.ts`](../../processors/identity-resolver/v1/src/config.ts).
+Source: [`sync/legacy/identity-resolver/v1/src/config.ts`](../../sync/legacy/identity-resolver/v1/src/config.ts).
 
 Also composes **postgres** (writes `identity_links`).
 
@@ -205,7 +205,7 @@ Also composes **postgres** (writes `identity_links`).
 
 #### sessionizer v1
 
-Source: [`processors/sessionizer/v1/src/config.ts`](../../processors/sessionizer/v1/src/config.ts).
+Source: [`async/computation/sessionizer/v1/src/config.ts`](../../async/computation/sessionizer/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |
@@ -219,7 +219,7 @@ processor directory + manifest, not a deployment override.
 
 #### geoip-enricher v1
 
-Source: [`processors/geoip-enricher/v1/src/config.ts`](../../processors/geoip-enricher/v1/src/config.ts).
+Source: [`sync/legacy/geoip-enricher/v1/src/config.ts`](../../sync/legacy/geoip-enricher/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |
@@ -231,8 +231,8 @@ processor does not read it; the follow-up MaxMind adapter task will.
 
 #### attribution-engine v1 / v2
 
-Source: [`processors/attribution-engine/v1/src/config.ts`](../../processors/attribution-engine/v1/src/config.ts),
-[`processors/attribution-engine/v2/src/config.ts`](../../processors/attribution-engine/v2/src/config.ts).
+Source: [`async/computation/attribution-engine/v1/src/config.ts`](../../async/computation/attribution-engine/v1/src/config.ts),
+[`async/computation/attribution-engine/v2/src/config.ts`](../../async/computation/attribution-engine/v2/src/config.ts).
 
 | Variable | Status | Default (v1) | Default (v2) |
 | --- | --- | --- | --- |
@@ -253,7 +253,7 @@ their own block.
 
 #### webhook-sink v1
 
-Source: [`consumers/webhook-sink/v1/src/config.ts`](../../consumers/webhook-sink/v1/src/config.ts).
+Source: [`sync/destinations/webhook-sink/v1/src/config.ts`](../../sync/destinations/webhook-sink/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |
@@ -264,7 +264,7 @@ Source: [`consumers/webhook-sink/v1/src/config.ts`](../../consumers/webhook-sink
 
 #### meta-capi v1
 
-Source: [`consumers/meta-capi/v1/src/config.ts`](../../consumers/meta-capi/v1/src/config.ts).
+Source: [`sync/destinations/meta-capi/v1/src/config.ts`](../../sync/destinations/meta-capi/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |
@@ -276,7 +276,7 @@ Source: [`consumers/meta-capi/v1/src/config.ts`](../../consumers/meta-capi/v1/sr
 
 #### tiktok v1
 
-Source: [`consumers/tiktok/v1/src/config.ts`](../../consumers/tiktok/v1/src/config.ts).
+Source: [`sync/destinations/tiktok/v1/src/config.ts`](../../sync/destinations/tiktok/v1/src/config.ts).
 
 | Variable | Status | Default |
 | --- | --- | --- |

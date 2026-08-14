@@ -127,7 +127,7 @@ analytics_events_queue
 ENGINE = Null
 ```
 
-`consumers/clickhouse-sink` INSERTs batches into it as `JSONEachRow`,
+`async/warehouse/clickhouse-sink` INSERTs batches into it as `JSONEachRow`,
 stamping the transport lineage columns (`_topic`, `_partition`,
 `_offset`) that used to be Kafka Engine virtual columns.
 

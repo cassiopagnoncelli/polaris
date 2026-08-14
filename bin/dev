@@ -202,7 +202,7 @@ function describePackage(pkg) {
   return {
     name: pkg.name,
     dir,
-    // `processors/attribution-engine/v2` and `.../v1` are one family; an
+    // `async/computation/attribution-engine/v2` and `.../v1` are one family; an
     // unversioned package (`apps/ingester-api`) is a family of its own.
     family: versionMatch === null ? dir : dirname(dir),
     version: versionMatch === null ? 0 : Number.parseInt(versionMatch[1], 10),

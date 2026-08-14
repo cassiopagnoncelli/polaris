@@ -5,7 +5,7 @@ import { sessionPrimaryIdentifierKindSchema } from "./started.v1.js";
 /**
  * `session.ended` v1 — ACTIVE.
  *
- * Emitted by `processors/sessionizer/v1/` when a session window expires
+ * Emitted by `async/computation/sessionizer/v1/` when a session window expires
  * by inactivity. v1 detects expiration lazily: when a new `raw.events`
  * envelope arrives for a `(project_id, environment, primary_identifier)`
  * key whose current session's `last_seen_at` is older than the

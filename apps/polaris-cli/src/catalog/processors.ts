@@ -9,7 +9,7 @@
  * processor task cards (P4-001, P8-*).
  *
  * Schema mirrors the manifest produced by P4-001
- * (`processors/analytics-projector/v1/processor.manifest.yaml`):
+ * (`sync/legacy/analytics-projector/v1/processor.manifest.yaml`):
  *
  *   name: analytics-projector
  *   version: v1
@@ -31,7 +31,7 @@
  *
  * See:
  *   - docs/architecture/05-processors-and-replay.md
- *   - processors/analytics-projector/v1/processor.manifest.yaml
+ *   - sync/legacy/analytics-projector/v1/processor.manifest.yaml
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -90,7 +90,7 @@ export type ProcessorTopicSpec = z.infer<typeof processorTopicSpecSchema>;
 
 /**
  * Replay metadata block. Mirrors the manifest in
- * `processors/analytics-projector/v1/processor.manifest.yaml`.
+ * `sync/legacy/analytics-projector/v1/processor.manifest.yaml`.
  */
 export const processorReplaySchema = z
   .object({
@@ -209,7 +209,7 @@ export interface ProcessorManifestWarning {
 }
 
 /**
- * Result of walking `processors/<name>/v<n>/processor.manifest.yaml` files.
+ * Result of walking `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`.
  *
  * `manifests` is sorted by `(name, version)` for stable rendering. The
  * loader does NOT throw on a per-manifest parse failure — it appends to
@@ -221,45 +221,60 @@ export interface ProcessorManifestScan {
 }
 
 export interface LoadProcessorManifestsOptions {
-  /** Repository root. The loader resolves `processors/` underneath. */
+  /** Repository root. The loader resolves the pipeline planes underneath. */
   readonly root: string;
 }
 
 /**
- * Walk `<root>/processors/<name>/v<n>/processor.manifest.yaml`, parse and
- * validate each one. Returns `(manifests, warnings)` — malformed files
- * surface as warnings, not exceptions, so `processors list` keeps working
- * after one bad manifest lands.
+ * The two pipeline planes. A stream-attached unit lives at
+ * `<plane>/<stage>/<name>/<version>/`, so the tree says which pipeline and
+ * which stage owns it — see `docs/implementation/pipeline-redesign-plan.md`
+ * §2.3. The loader walks both planes and does not care which stage a
+ * manifest turned up under: `(name, version)` remains the identity.
+ */
+const PIPELINE_PLANES = ["sync", "async"] as const;
+
+/**
+ * Walk `<root>/{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`,
+ * parse and validate each one. Returns `(manifests, warnings)` — malformed
+ * files surface as warnings, not exceptions, so `processors list` keeps
+ * working after one bad manifest lands.
  */
 export function loadProcessorManifests(
   options: LoadProcessorManifestsOptions,
 ): ProcessorManifestScan {
-  const processorsDir = join(options.root, "processors");
-  if (!existsAsDir(processorsDir)) {
-    return { manifests: [], warnings: [] };
-  }
-
   const manifests: DiscoveredProcessorManifest[] = [];
   const warnings: ProcessorManifestWarning[] = [];
 
-  for (const nameEntry of readdirSync(processorsDir).sort()) {
-    if (nameEntry.startsWith(".")) continue;
-    const nameDir = join(processorsDir, nameEntry);
-    if (!existsAsDir(nameDir)) continue;
+  for (const plane of PIPELINE_PLANES) {
+    const planeDir = join(options.root, plane);
+    if (!existsAsDir(planeDir)) continue;
 
-    for (const versionEntry of readdirSync(nameDir).sort()) {
-      if (versionEntry.startsWith(".")) continue;
-      const versionDir = join(nameDir, versionEntry);
-      if (!existsAsDir(versionDir)) continue;
+    for (const stageEntry of readdirSync(planeDir).sort()) {
+      if (stageEntry.startsWith(".")) continue;
+      const stageDir = join(planeDir, stageEntry);
+      if (!existsAsDir(stageDir)) continue;
 
-      const manifestPath = join(versionDir, "processor.manifest.yaml");
-      if (!existsAsFile(manifestPath)) continue;
+      for (const nameEntry of readdirSync(stageDir).sort()) {
+        if (nameEntry.startsWith(".")) continue;
+        const nameDir = join(stageDir, nameEntry);
+        if (!existsAsDir(nameDir)) continue;
 
-      const parsed = readAndParseManifest(manifestPath);
-      if (parsed.ok) {
-        manifests.push({ path: manifestPath, manifest: parsed.value });
-      } else {
-        warnings.push({ path: manifestPath, reason: parsed.reason });
+        for (const versionEntry of readdirSync(nameDir).sort()) {
+          if (versionEntry.startsWith(".")) continue;
+          const versionDir = join(nameDir, versionEntry);
+          if (!existsAsDir(versionDir)) continue;
+
+          const manifestPath = join(versionDir, "processor.manifest.yaml");
+          if (!existsAsFile(manifestPath)) continue;
+
+          const parsed = readAndParseManifest(manifestPath);
+          if (parsed.ok) {
+            manifests.push({ path: manifestPath, manifest: parsed.value });
+          } else {
+            warnings.push({ path: manifestPath, reason: parsed.reason });
+          }
+        }
       }
     }
   }
@@ -291,24 +306,30 @@ export interface LoadOneProcessorManifestOptions {
 export function loadProcessorManifest(
   options: LoadOneProcessorManifestOptions,
 ): { ok: true; value: DiscoveredProcessorManifest } | { ok: false; reason: string } {
-  const manifestPath = join(
-    options.root,
-    "processors",
-    options.name,
-    options.version,
-    "processor.manifest.yaml",
+  // A processor's path no longer follows from its name: the stage sits
+  // between the plane and the name (`{sync,async}/<stage>/<name>/<version>/`),
+  // and a unit may move stage without changing identity. So resolve by
+  // scanning and matching `(name, version)` from the manifests themselves —
+  // the directory name is a convention, the manifest is the truth.
+  const scan = loadProcessorManifests({ root: options.root });
+  const hit = scan.manifests.find(
+    (m) => m.manifest.name === options.name && m.manifest.version === options.version,
   );
-  if (!existsAsFile(manifestPath)) {
-    return {
-      ok: false,
-      reason: `no manifest at ${manifestPath} — check the (name, version) pair against the on-disk processors/ tree`,
-    };
+  if (hit !== undefined) {
+    return { ok: true, value: hit };
   }
-  const parsed = readAndParseManifest(manifestPath);
-  if (parsed.ok) {
-    return { ok: true, value: { path: manifestPath, manifest: parsed.value } };
+  const malformed = scan.warnings.find((w) =>
+    w.path.includes(`/${options.name}/${options.version}/`),
+  );
+  if (malformed !== undefined) {
+    return { ok: false, reason: malformed.reason };
   }
-  return { ok: false, reason: parsed.reason };
+  return {
+    ok: false,
+    reason:
+      `no manifest for (${options.name}, ${options.version}) under ` +
+      `${options.root}/{sync,async}/ — check the pair against the on-disk pipeline tree`,
+  };
 }
 
 function readAndParseManifest(

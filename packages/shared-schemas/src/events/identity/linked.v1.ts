@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * `identity.linked` v1 — ACTIVE.
  *
- * Emitted by `processors/identity-resolver/v1/` the first time an authoritative
+ * Emitted by `sync/legacy/identity-resolver/v1/` the first time an authoritative
  * overlap is observed between two identifiers — for example, a single event
  * carrying both `anonymous_id` and `customer_id`. v1 of the resolver only
  * recognizes the **explicit-overlap** rule from

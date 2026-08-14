@@ -1,6 +1,6 @@
 # Catalog entry: attribution.touchpoint_captured v1 (ACTIVE)
 #
-# Emitted by `processors/attribution-engine/v1/` once per source
+# Emitted by `async/computation/attribution-engine/v1/` once per source
 # `analytics.events` envelope whose `context.campaign` block carries at
 # least one non-null field (`source`, `medium`, `name`, `term`, `content`,
 # or `click_id`). The event records that a campaign-tagged observation

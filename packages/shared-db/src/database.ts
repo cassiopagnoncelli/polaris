@@ -514,7 +514,7 @@ export interface ProcessorRunsTable {
  * `identity_links_confidence_allowed` CHECK constraint in
  * `db/migrations/20260512000010_create_identity_links.sql`.
  *
- * v1 of `processors/identity-resolver/v1/` only emits `authoritative` from
+ * v1 of `sync/legacy/identity-resolver/v1/` only emits `authoritative` from
  * the explicit-overlap rule. `candidate` is reserved for future heuristic
  * processors; the default identity-resolver view filters on
  * `confidence = 'authoritative'` so candidate rows never enter the canonical

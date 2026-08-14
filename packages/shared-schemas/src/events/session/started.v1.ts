@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * `session.started` v1 — ACTIVE.
  *
- * Emitted by `processors/sessionizer/v1/` the first time the sessionizer
+ * Emitted by `async/computation/sessionizer/v1/` the first time the sessionizer
  * observes a `raw.events` envelope for a `(project_id, environment,
  * primary_identifier)` key whose prior session has expired (or never
  * existed). Subsequent events inside the inactivity window do NOT

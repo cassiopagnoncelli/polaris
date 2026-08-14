@@ -1,0 +1,44 @@
+{
+  "name": "@polaris/consumer-meta-capi-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris Meta Conversions API destination consumer v1. Maps canonical Polaris events into Meta's CAPI payload shape (user_data/custom_data with hashed identifiers) and POSTs them to graph.facebook.com/<version>/<pixel_id>/events with Bearer auth. First real-vendor consumer; clones the directory shape established by sync/destinations/webhook-sink/v1.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "consumer.manifest.yaml",
+    "SPEC.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=meta-capi POLARIS_HTTP_PORT=5001 tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-destination-normalize": "workspace:*",
+    "@polaris/shared-destinations": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-project-config": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "kysely": "^0.29.0",
+    "zod": "^4.4.3"
+  }
+}

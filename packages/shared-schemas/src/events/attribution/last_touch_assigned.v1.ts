@@ -8,7 +8,7 @@ import {
 /**
  * `attribution.last_touch_assigned` v1 — ACTIVE.
  *
- * Emitted by `processors/attribution-engine/v1/` whenever the
+ * Emitted by `async/computation/attribution-engine/v1/` whenever the
  * most-recently-observed campaign tuple for a `(project_id, environment,
  * primary_identifier)` tuple changes. The first observed touchpoint
  * also emits a last-touch event because "no prior" is treated as

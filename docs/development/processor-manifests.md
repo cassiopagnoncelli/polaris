@@ -50,11 +50,11 @@ processors/
 The five v1 processors released against this contract are:
 
 ```text
-processors/analytics-projector/v1/
-processors/identity-resolver/v1/
-processors/sessionizer/v1/
-processors/geoip-enricher/v1/
-processors/attribution-engine/v1/
+sync/legacy/analytics-projector/v1/
+sync/legacy/identity-resolver/v1/
+async/computation/sessionizer/v1/
+sync/legacy/geoip-enricher/v1/
+async/computation/attribution-engine/v1/
 ```
 
 ## Manifest schema

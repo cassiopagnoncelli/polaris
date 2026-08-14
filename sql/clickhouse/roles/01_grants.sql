@@ -147,7 +147,7 @@ REVOKE ON CLUSTER '{cluster}'
 -- polaris_sink: write-only access to the ingestion interface.
 -- ---------------------------------------------------------------
 --
--- The ClickHouse sink (consumers/clickhouse-sink) is the only writer
+-- The ClickHouse sink (async/warehouse/clickhouse-sink) is the only writer
 -- into ClickHouse. It needs INSERT on the two ingestion interface
 -- tables and nothing else: the materialized views carry
 -- `SQL SECURITY NONE` so their SELECT is not checked against the

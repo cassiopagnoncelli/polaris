@@ -40,8 +40,8 @@ function fixture(files: Record<string, string>): string[] {
 
 describe("sourceDirForDistEntry", () => {
   it("maps a built entry back to its source directory", () => {
-    expect(sourceDirForDistEntry("consumers/ga4/v1/dist/project-config.js")).toBe(
-      "consumers/ga4/v1/src",
+    expect(sourceDirForDistEntry("sync/destinations/ga4/v1/dist/project-config.js")).toBe(
+      "sync/destinations/ga4/v1/src",
     );
     expect(sourceDirForDistEntry("apps/ingester-api/dist/project-config.js")).toBe(
       "apps/ingester-api/src",
@@ -51,7 +51,7 @@ describe("sourceDirForDistEntry", () => {
   it("returns null when there is no dist segment to swap", () => {
     // A registry entry the check cannot locate must be reported, not silently
     // skipped — a namespace nobody checks is the state this lint exists to end.
-    expect(sourceDirForDistEntry("consumers/ga4/v1/project-config.js")).toBeNull();
+    expect(sourceDirForDistEntry("sync/destinations/ga4/v1/project-config.js")).toBeNull();
   });
 
   it("uses the LAST dist segment", () => {

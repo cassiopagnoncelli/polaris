@@ -22,7 +22,7 @@
  *
  * ## The delivery path this encodes
  *
- *   raw.events ──(processors/analytics-projector)──▶ analytics.events
+ *   raw.events ──(sync/legacy/analytics-projector)──▶ analytics.events
  *                                                          │
  *                                     (consumers/{braze,ga4,meta-capi,
  *                                      tiktok,webhook-sink})
@@ -32,7 +32,7 @@
  * Destination consumers subscribe to `analytics.events`
  * (`packages/shared-destinations/src/runtime.ts`). `analytics-projector`
  * reads `raw.events` and writes `analytics.events`
- * (`processors/analytics-projector/v1/src/runtime.ts`). So both families
+ * (`sync/legacy/analytics-projector/v1/src/runtime.ts`). So both families
  * reach vendors; the other derived families have no destination consumer.
  *
  * This is deliberately conservative: it asks whether delivery is *possible*,

@@ -1,6 +1,6 @@
 # Phase 7 — View it in analytics
 
-Polaris feeds ClickHouse through `consumers/clickhouse-sink`. The flow is:
+Polaris feeds ClickHouse through `async/warehouse/clickhouse-sink`. The flow is:
 
 ```text
 RabbitMQ analytics.events

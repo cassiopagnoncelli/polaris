@@ -48,8 +48,8 @@ const ESCAPE_FORM = `${String.fromCharCode(92)}u0000`;
 const SCAN_DIRS = [
   "apps",
   "packages",
-  "processors",
-  "consumers",
+  "sync",
+  "async",
   "catalog",
   "scripts",
   "sql",

@@ -1,6 +1,6 @@
 # Catalog entry: attribution.first_touch_assigned v1 (ACTIVE)
 #
-# Emitted by `processors/attribution-engine/v1/` the FIRST TIME a
+# Emitted by `async/computation/attribution-engine/v1/` the FIRST TIME a
 # campaign-tagged observation is seen for a `(project_id, environment,
 # primary_identifier)` tuple. Subsequent touchpoints for the same
 # identifier do NOT re-emit this — only the first observation does.

@@ -9,16 +9,16 @@ next to each service:
 | `ingester-api`                           | `apps/ingester-api/Dockerfile`                        | `polaris/ingester-api`                           | 4000 |
 | `control-plane-api`                      | `apps/control-plane-api/Dockerfile`                   | `polaris/control-plane-api`                      | 4001 |
 | `polaris-cli`                            | `apps/polaris-cli/Dockerfile`                         | `polaris/polaris-cli`                            | —    |
-| `analytics-projector v1`                 | `processors/analytics-projector/v1/Dockerfile`        | `polaris/processor-analytics-projector-v1`       | 4010 |
-| `identity-resolver v1`                   | `processors/identity-resolver/v1/Dockerfile`          | `polaris/processor-identity-resolver-v1`         | 4011 |
-| `sessionizer v1`                         | `processors/sessionizer/v1/Dockerfile`                | `polaris/processor-sessionizer-v1`               | 4012 |
-| `geoip-enricher v1`                      | `processors/geoip-enricher/v1/Dockerfile`             | `polaris/processor-geoip-enricher-v1`            | 4013 |
-| `attribution-engine v1`                  | `processors/attribution-engine/v1/Dockerfile`         | `polaris/processor-attribution-engine-v1`        | 4014 |
-| `webhook-sink v1`                        | `consumers/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
-| `meta-capi v1`                           | `consumers/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
-| `tiktok v1`                              | `consumers/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
-| `ga4 v1`                                 | `consumers/ga4/v1/Dockerfile`                         | `polaris/consumer-ga4-v1`                        | 5002 |
-| `braze v1`                               | `consumers/braze/v1/Dockerfile`                       | `polaris/consumer-braze-v1`                      | 5004 |
+| `analytics-projector v1`                 | `sync/legacy/analytics-projector/v1/Dockerfile`        | `polaris/processor-analytics-projector-v1`       | 4010 |
+| `identity-resolver v1`                   | `sync/legacy/identity-resolver/v1/Dockerfile`          | `polaris/processor-identity-resolver-v1`         | 4011 |
+| `sessionizer v1`                         | `async/computation/sessionizer/v1/Dockerfile`                | `polaris/processor-sessionizer-v1`               | 4012 |
+| `geoip-enricher v1`                      | `sync/legacy/geoip-enricher/v1/Dockerfile`             | `polaris/processor-geoip-enricher-v1`            | 4013 |
+| `attribution-engine v1`                  | `async/computation/attribution-engine/v1/Dockerfile`         | `polaris/processor-attribution-engine-v1`        | 4014 |
+| `webhook-sink v1`                        | `sync/destinations/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
+| `meta-capi v1`                           | `sync/destinations/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
+| `tiktok v1`                              | `sync/destinations/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
+| `ga4 v1`                                 | `sync/destinations/ga4/v1/Dockerfile`                         | `polaris/consumer-ga4-v1`                        | 5002 |
+| `braze v1`                               | `sync/destinations/braze/v1/Dockerfile`                       | `polaris/consumer-braze-v1`                      | 5004 |
 
 The polaris-cli image is a CLI bin, not a long-running server — it has no
 exposed port and no `HEALTHCHECK`.
@@ -256,4 +256,4 @@ find apps processors consumers -name Dockerfile -print0 \
 ## Known gaps
 
 - **GeoIP `.mmdb`** files are mounted at runtime, not baked into the image.
-  See `processors/geoip-enricher/v1/Dockerfile` and the operator runbook.
+  See `sync/legacy/geoip-enricher/v1/Dockerfile` and the operator runbook.

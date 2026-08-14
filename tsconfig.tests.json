@@ -36,8 +36,8 @@
   "include": [
     "apps/*/test/**/*.ts",
     "packages/*/test/**/*.ts",
-    "processors/*/*/test/**/*.ts",
-    "consumers/*/*/test/**/*.ts",
+    "sync/*/*/*/test/**/*.ts",
+    "async/*/*/*/test/**/*.ts",
     "scripts/__tests__/**/*.ts"
   ],
   "exclude": [
@@ -49,11 +49,11 @@
 
     "apps/ingester-api/test",
     "apps/polaris-cli/test",
-    "consumers/braze/v1/test",
-    "consumers/ga4/v1/test",
-    "consumers/meta-capi/v1/test",
-    "consumers/tiktok/v1/test",
-    "consumers/webhook-sink/v1/test",
+    "sync/destinations/braze/v1/test",
+    "sync/destinations/ga4/v1/test",
+    "sync/destinations/meta-capi/v1/test",
+    "sync/destinations/tiktok/v1/test",
+    "sync/destinations/webhook-sink/v1/test",
     "packages/shared-clickhouse/test",
     "packages/shared-config/test",
     "packages/shared-destinations/test",
@@ -61,10 +61,10 @@
     "packages/shared-policy/test",
     "packages/shared-service-bootstrap/test",
     "packages/web-sdk/test",
-    "processors/analytics-projector/v1/test",
-    "processors/attribution-engine/v1/test",
-    "processors/identity-resolver/v1/test",
-    "processors/sessionizer/v1/test",
+    "sync/legacy/analytics-projector/v1/test",
+    "async/computation/attribution-engine/v1/test",
+    "sync/legacy/identity-resolver/v1/test",
+    "async/computation/sessionizer/v1/test",
     "scripts/__tests__"
   ]
 }

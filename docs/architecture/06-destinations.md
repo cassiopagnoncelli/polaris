@@ -85,9 +85,9 @@ Rules:
 Mapping takes the normalized intermediate and produces the vendor's payload schema for a specific event name and consumer version.
 
 ```text
-consumers/meta-capi/v1/mappers/payment-approved.ts
-consumers/meta-capi/v1/mappers/checkout-started.ts
-consumers/ga4/v1/mappers/payment-approved.ts
+sync/destinations/meta-capi/v1/mappers/payment-approved.ts
+sync/destinations/meta-capi/v1/mappers/checkout-started.ts
+sync/destinations/ga4/v1/mappers/payment-approved.ts
 ```
 
 Rules:

@@ -25,7 +25,7 @@
  * that owns the write. A future scheduled job, the control-plane API, or
  * a second CLI surface all inherit the refusal for free.
  *
- * @see processors/attribution-engine/v2/CHANGELOG.md
+ * @see async/computation/attribution-engine/v2/CHANGELOG.md
  * @see docs/operations/backup-and-retention.md "Attribution chain retention"
  */
 

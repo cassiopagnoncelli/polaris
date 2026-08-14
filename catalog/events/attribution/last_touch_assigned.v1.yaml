@@ -1,6 +1,6 @@
 # Catalog entry: attribution.last_touch_assigned v1 (ACTIVE)
 #
-# Emitted by `processors/attribution-engine/v1/` whenever the
+# Emitted by `async/computation/attribution-engine/v1/` whenever the
 # most-recently-observed campaign tuple changes for a
 # `(project_id, environment, primary_identifier)` tuple. The first
 # touchpoint also emits a last-touch event (since "no prior" != "same as

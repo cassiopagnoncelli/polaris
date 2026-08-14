@@ -40,7 +40,7 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 const PACKAGE_ROOT = "packages";
 
 /** Where a call site counts from. */
-const CONSUMER_DIRS = ["apps", "packages", "processors", "consumers", "scripts"];
+const CONSUMER_DIRS = ["apps", "packages", "sync", "async", "scripts"];
 
 /**
  * Symbols that are deliberately unreferenced and must stay.

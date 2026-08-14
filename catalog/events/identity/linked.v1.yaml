@@ -1,6 +1,6 @@
 # Catalog entry: identity.linked v1 (ACTIVE)
 #
-# Emitted by `processors/identity-resolver/v1/` whenever the resolver records
+# Emitted by `sync/legacy/identity-resolver/v1/` whenever the resolver records
 # a new authoritative link between two identifiers (the first time a
 # `<left, right>` pair is observed with `confidence = authoritative`).
 #

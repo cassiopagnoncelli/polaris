@@ -181,17 +181,17 @@ confirms each row matches the live consumer code.
   is closed (`checkout.started`, `payment.approved`, `user.identified`,
   `signup.completed`, `subscription.renewed`) and mobile-source
   detection lands `action_source: "app"` on the wire. See
-  [`consumers/meta-capi/v1/SPEC.md`](../../consumers/meta-capi/v1/SPEC.md).
+  [`sync/destinations/meta-capi/v1/SPEC.md`](../../sync/destinations/meta-capi/v1/SPEC.md).
 - **TikTok v1:** No outstanding v1 caveats — same event-matrix and
   mobile-source coverage as Meta CAPI; `event_source: "app"` lands on
   the request wrapper. See
-  [`consumers/tiktok/v1/SPEC.md`](../../consumers/tiktok/v1/SPEC.md).
+  [`sync/destinations/tiktok/v1/SPEC.md`](../../sync/destinations/tiktok/v1/SPEC.md).
 - **Webhook sink v1:** Passthrough mapper only; per-event vendor-style
   mappers are the structural template for future vendors but the
   webhook sink itself stays event-agnostic. No app-channel branching by
   design — receivers consume `event.context.app_*` directly off the
   canonical envelope. See
-  [`consumers/webhook-sink/v1/SPEC.md`](../../consumers/webhook-sink/v1/SPEC.md).
+  [`sync/destinations/webhook-sink/v1/SPEC.md`](../../sync/destinations/webhook-sink/v1/SPEC.md).
 - **GA4 v1:** Uses GA4 Measurement Protocol with API-secret
   URL-redaction defense in the deliverer summary. GA4 has no
   recommended event for recurring billing, so `subscription.renewed`
@@ -202,12 +202,12 @@ confirms each row matches the live consumer code.
   app id; without it, app-source events flow through the web-stream
   URL with the synthesized `client_id`. Operators have a path:
   [GA4 Firebase app-stream rotation](../operations/ga4-firebase-app-stream-rotation.md).
-  See [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
+  See [`sync/destinations/ga4/v1/SPEC.md`](../../sync/destinations/ga4/v1/SPEC.md).
 - **Braze v1:** Braze provides no vendor-side event dedupe; the
   Polaris-side `(destination_id, delivery_key)` defense in
   `@polaris/shared-destinations` is the canonical idempotency guard.
   No first/last-name slots (canonical envelope lacks them). See
-  [`consumers/braze/v1/SPEC.md`](../../consumers/braze/v1/SPEC.md).
+  [`sync/destinations/braze/v1/SPEC.md`](../../sync/destinations/braze/v1/SPEC.md).
 
 ### Open production decisions (wait-for-data)
 

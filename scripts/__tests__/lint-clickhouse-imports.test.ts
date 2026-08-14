@@ -138,7 +138,7 @@ describe("lintWorkspace", () => {
 
   it("flags a disallowed import from a processor", () => {
     seedFile(
-      "processors/sessionizer/v1/src/bad.ts",
+      "async/computation/sessionizer/v1/src/bad.ts",
       `const ch = require("@clickhouse/client");\nexport const c = ch;\n`,
     );
 

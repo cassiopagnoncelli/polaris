@@ -261,8 +261,8 @@ Vendor-specific dedupe notes (from
 
 - **Meta CAPI / TikTok**: Polaris maps the stable delivery id into the
   vendor's `event_id` field for second-line dedupe. Cross-reference:
-  [`consumers/meta-capi/v1/SPEC.md`](../../consumers/meta-capi/v1/SPEC.md),
-  [`consumers/tiktok/v1/SPEC.md`](../../consumers/tiktok/v1/SPEC.md).
+  [`sync/destinations/meta-capi/v1/SPEC.md`](../../sync/destinations/meta-capi/v1/SPEC.md),
+  [`sync/destinations/tiktok/v1/SPEC.md`](../../sync/destinations/tiktok/v1/SPEC.md).
 - **GA4**: stable `transaction_id` is used as the vendor-side dedupe
   key when present in the canonical event.
 - **Braze and Braze-style integrations**: assume weak or no vendor
@@ -409,9 +409,9 @@ This is enforced at three layers:
    resolved access token from the vendor response BEFORE writing it
    into `delivery_records.vendor_response_summary` or the matching
    `dlq_records` row. References:
-   - [`consumers/tiktok/v1/src/deliverer.ts`](../../consumers/tiktok/v1/src/deliverer.ts)
+   - [`sync/destinations/tiktok/v1/src/deliverer.ts`](../../sync/destinations/tiktok/v1/src/deliverer.ts)
      — `redactToken` defense.
-   - [`consumers/meta-capi/v1/src/deliverer.ts`](../../consumers/meta-capi/v1/src/deliverer.ts)
+   - [`sync/destinations/meta-capi/v1/src/deliverer.ts`](../../sync/destinations/meta-capi/v1/src/deliverer.ts)
      — `redactToken` defense.
 
 If a DLQ record's `vendor_response_summary` looks suspicious

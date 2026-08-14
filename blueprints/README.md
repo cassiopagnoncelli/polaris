@@ -185,7 +185,7 @@ own at startup.
 The next event arrives on 4321 within a few seconds, and `select * from
 delivery_records` in PostgreSQL records the attempt. Note `--vendor webhook`,
 not `webhook-sink`: the vendor literal is the one in
-`consumers/webhook-sink/v1/consumer.manifest.yaml`, and it is what the
+`sync/destinations/webhook-sink/v1/consumer.manifest.yaml`, and it is what the
 consumer matches its destination rows on.
 
 ## How the blueprint depends on the SDKs

@@ -1,8 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
-  - "processors/*/*"
-  - "consumers/*/*"
+  - "sync/*/*/*"
+  - "async/*/*/*"
   - "tests"
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only

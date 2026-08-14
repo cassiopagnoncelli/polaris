@@ -6,7 +6,7 @@ from the web data stream onto a Firebase data stream, by adding
 
 Binding references:
 
-- [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md) — "Known divergences from canonical"
+- [`sync/destinations/ga4/v1/SPEC.md`](../../sync/destinations/ga4/v1/SPEC.md) — "Known divergences from canonical"
 - [Secret rotation runbook](secret-rotation.md) — the generic procedure this specialises
 
 ## When to rotate
@@ -39,7 +39,7 @@ anything else                  →  ?measurement_id=…&api_secret=…    wrappe
 Polaris will not half-route: an app-source envelope on a credential without
 `firebase_app_id` stays on the web stream, because GA4 Web rejects
 `app_instance_id` requests. See `buildRequestBody` in
-[`consumers/ga4/v1/src/deliverer.ts`](../../consumers/ga4/v1/src/deliverer.ts).
+[`sync/destinations/ga4/v1/src/deliverer.ts`](../../sync/destinations/ga4/v1/src/deliverer.ts).
 
 ## 1. Find the Firebase app id
 

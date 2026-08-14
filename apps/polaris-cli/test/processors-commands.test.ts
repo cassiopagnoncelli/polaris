@@ -339,19 +339,27 @@ function buildManifestYaml(name: string, version: string): string {
 }
 
 /**
- * Stand up a temp directory with `processors/<name>/<version>/processor.manifest.yaml`
- * so the on-disk loader has something real to read.
+ * Stand up a temp directory with
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml` so the
+ * on-disk loader has something real to read.
+ *
+ * The plane/stage a manifest lands under is deliberately arbitrary here:
+ * the loader walks both planes and keys off `(name, version)` from the
+ * manifest body, not the directory, so these fixtures prove that a unit
+ * is found wherever the pipeline tree puts it.
  */
 function setupTempProcessorsRoot(
   manifests: ReadonlyArray<{
     readonly name: string;
     readonly version: string;
     readonly content?: string;
+    /** Defaults to `sync/legacy`; set to exercise the other plane. */
+    readonly stagePath?: string;
   }>,
 ): string {
   const root = mkdtempSync(join(tmpdir(), "polaris-p6-005-"));
   for (const m of manifests) {
-    const dir = join(root, "processors", m.name, m.version);
+    const dir = join(root, m.stagePath ?? join("sync", "legacy"), m.name, m.version);
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, "processor.manifest.yaml"),
@@ -1372,7 +1380,22 @@ describe("loadProcessorManifests / loadProcessorManifest", () => {
     const result = loadProcessorManifest({ root, name: "not-there", version: "v1" });
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected ok=false");
-    expect(result.reason).toContain("no manifest at");
+    // The reason names the (name, version) pair and the planes searched
+    // rather than one path: since the stage sits between plane and name,
+    // a missing manifest has no single expected location to quote.
+    expect(result.reason).toContain("no manifest for (not-there, v1)");
+    expect(result.reason).toContain("{sync,async}");
+  });
+
+  it("finds a manifest regardless of which plane and stage it sits under", () => {
+    const root = setupTempProcessorsRoot([
+      { name: "sessionizer", version: "v2", stagePath: join("async", "computation") },
+    ]);
+    createdRoots.push(root);
+    const result = loadProcessorManifest({ root, name: "sessionizer", version: "v2" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok=true");
+    expect(result.value.path).toContain(join("async", "computation", "sessionizer", "v2"));
   });
 
   it("loadProcessorManifests returns warnings for malformed files and continues", () => {

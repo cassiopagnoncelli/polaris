@@ -244,7 +244,7 @@ groups:
     interval: 30s
     rules:
       # `polaris_clickhouse_sink_lag_seconds{table}` is emitted by
-      # consumers/clickhouse-sink: now - the envelope's `ingested_at`
+      # async/warehouse/clickhouse-sink: now - the envelope's `ingested_at`
       # for the last row it wrote.
       #
       # It replaces `polaris_clickhouse_kafka_ingestion_lag_seconds`,

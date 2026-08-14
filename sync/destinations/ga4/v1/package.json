@@ -1,0 +1,44 @@
+{
+  "name": "@polaris/consumer-ga4-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris Google Analytics 4 destination consumer v1. Maps canonical Polaris events into GA4 Measurement Protocol payload shape (client_id / user_id, events[] with name + params) and POSTs them to https://www.google-analytics.com/mp/collect with measurement_id + api_secret query string auth. Third real-vendor consumer; clones the directory shape established by sync/destinations/meta-capi/v1 and sync/destinations/tiktok/v1.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "consumer.manifest.yaml",
+    "SPEC.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=ga4 POLARIS_HTTP_PORT=5002 tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-destination-normalize": "workspace:*",
+    "@polaris/shared-destinations": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-project-config": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "kysely": "^0.29.0",
+    "zod": "^4.4.3"
+  }
+}

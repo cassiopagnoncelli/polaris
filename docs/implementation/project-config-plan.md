@@ -55,7 +55,7 @@ decided and why; there is no open-questions section.
 The last two are the tell. `apps/ingester-api/src/config.ts:88,176` hand-parses
 `"project=value,project=value"` strings, so adding a project means editing a
 global env var and redeploying, with no validation, no audit, and no per-key
-history. And `consumers/ga4/v1/src/deliverer.ts:232` stuffs `measurement_id`
+history. And `sync/destinations/ga4/v1/src/deliverer.ts:232` stuffs `measurement_id`
 and `firebase_app_id` — neither of which is a secret — inside the resolved
 secret payload, because the secret store was the only per-`(project,
 environment)` value store that existed.
@@ -741,7 +741,7 @@ never regress, and the allowlist reaching empty is the completion signal for
 the whole programme.
 
 That mechanism also closes six pre-existing holes:
-`processors/analytics-projector/v1/src/app.ts:209` parses `process.env`
+`sync/legacy/analytics-projector/v1/src/app.ts:209` parses `process.env`
 directly, and all five consumers pass raw `process.env` into
 `EnvSecretProvider`, bypassing the frozen snapshot its own doc comment asks for.
 
@@ -754,7 +754,7 @@ at a service with nothing to migrate:
   runtime accepts the variable and ignores it, pinning the window to the
   manifest constant, because changing it alters which events v1 emits for the
   same input — that is a v2, not a deployment flag
-  (`processors/sessionizer/v1/src/app.ts:511`). Moving it into
+  (`async/computation/sessionizer/v1/src/app.ts:511`). Moving it into
   `project_config` would let an operator change session semantics from a web
   form, which is precisely what §2's narrowed rule forbids.
 - `attribution-engine` has no window variable at all.

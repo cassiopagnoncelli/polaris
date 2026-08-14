@@ -307,7 +307,7 @@ in the [Audit and Export runbook](./audit-and-export.md).
 ```
 
 The CLI verifies the manifest exists on disk
-(`processors/analytics-projector/v1/processor.manifest.yaml`) before it
+(`sync/legacy/analytics-projector/v1/processor.manifest.yaml`) before it
 upserts the activation row. Enables are idempotent. See "Versioned-processor
 workflow" below for how to introduce a new version.
 

@@ -6,7 +6,7 @@ The vertical-slice smoke proves the canonical Polaris event path end-to-end:
 curl POST /v1/events
   -> apps/ingester-api
   -> RabbitMQ raw.events
-  -> processors/analytics-projector/v1
+  -> sync/legacy/analytics-projector/v1
   -> RabbitMQ analytics.events
   -> clickhouse-sink (analytics_events_queue)
   -> analytics_raw

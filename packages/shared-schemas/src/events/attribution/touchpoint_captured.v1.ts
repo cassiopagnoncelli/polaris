@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * `attribution.touchpoint_captured` v1 — ACTIVE.
  *
- * Emitted by `processors/attribution-engine/v1/` once per source
+ * Emitted by `async/computation/attribution-engine/v1/` once per source
  * `analytics.events` envelope whose `context.campaign` block carries at
  * least one non-null field. The event records that a campaign-tagged
  * observation was seen for a `(project_id, environment,

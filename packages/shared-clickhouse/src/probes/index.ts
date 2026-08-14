@@ -18,7 +18,7 @@
  * table is permanently empty and the probe would have reported a
  * confident zero forever — the worst possible failure mode for a lag
  * signal. Ingestion lag is now `polaris_clickhouse_sink_lag_seconds`,
- * emitted by `consumers/clickhouse-sink` from the envelope's
+ * emitted by `async/warehouse/clickhouse-sink` from the envelope's
  * `ingested_at`.
  *
  * Each helper executes a parameter-bound SQL string against the underlying

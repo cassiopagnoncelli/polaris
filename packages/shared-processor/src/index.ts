@@ -38,7 +38,7 @@
  *   - expose a Prometheus exposition format (P10-002 swaps the
  *     `ProcessorMetrics` backend without touching the call sites).
  *
- * @see processors/analytics-projector/v1/src/ — first consumer of the helpers
+ * @see sync/legacy/analytics-projector/v1/src/ — first consumer of the helpers
  */
 
 export {

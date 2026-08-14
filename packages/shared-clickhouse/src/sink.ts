@@ -19,7 +19,7 @@
  *     a single row of customer data — which is the correct blast radius
  *     for a process whose whole job is to move bytes in one direction.
  *
- * @see consumers/clickhouse-sink/v1
+ * @see async/warehouse/clickhouse-sink/v1
  * @see sql/clickhouse/roles/01_grants.sql
  */
 

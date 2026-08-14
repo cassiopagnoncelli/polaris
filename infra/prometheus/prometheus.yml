@@ -68,7 +68,7 @@ scrape_configs:
           polaris_component: ingester
 
   # ---------------------------------------------------------------
-  # Analytics projector — `processors/analytics-projector/v1`.
+  # Analytics projector — `sync/legacy/analytics-projector/v1`.
   # Exposes /metrics with the `polaris_processor_*` counters and
   # gauges defined in packages/shared-processor/src/metrics.ts.
   # ---------------------------------------------------------------

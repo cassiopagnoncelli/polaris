@@ -57,52 +57,52 @@ const services = [
   },
   {
     name: "analytics-projector",
-    dockerfile: "processors/analytics-projector/v1/Dockerfile",
+    dockerfile: "sync/legacy/analytics-projector/v1/Dockerfile",
     image: "polaris/processor-analytics-projector-v1",
   },
   {
     name: "identity-resolver",
-    dockerfile: "processors/identity-resolver/v1/Dockerfile",
+    dockerfile: "sync/legacy/identity-resolver/v1/Dockerfile",
     image: "polaris/processor-identity-resolver-v1",
   },
   {
     name: "sessionizer",
-    dockerfile: "processors/sessionizer/v1/Dockerfile",
+    dockerfile: "async/computation/sessionizer/v1/Dockerfile",
     image: "polaris/processor-sessionizer-v1",
   },
   {
     name: "geoip-enricher",
-    dockerfile: "processors/geoip-enricher/v1/Dockerfile",
+    dockerfile: "sync/legacy/geoip-enricher/v1/Dockerfile",
     image: "polaris/processor-geoip-enricher-v1",
   },
   {
     name: "attribution-engine",
-    dockerfile: "processors/attribution-engine/v1/Dockerfile",
+    dockerfile: "async/computation/attribution-engine/v1/Dockerfile",
     image: "polaris/processor-attribution-engine-v1",
   },
   {
     name: "webhook-sink",
-    dockerfile: "consumers/webhook-sink/v1/Dockerfile",
+    dockerfile: "sync/destinations/webhook-sink/v1/Dockerfile",
     image: "polaris/consumer-webhook-sink-v1",
   },
   {
     name: "meta-capi",
-    dockerfile: "consumers/meta-capi/v1/Dockerfile",
+    dockerfile: "sync/destinations/meta-capi/v1/Dockerfile",
     image: "polaris/consumer-meta-capi-v1",
   },
   {
     name: "tiktok",
-    dockerfile: "consumers/tiktok/v1/Dockerfile",
+    dockerfile: "sync/destinations/tiktok/v1/Dockerfile",
     image: "polaris/consumer-tiktok-v1",
   },
   {
     name: "ga4",
-    dockerfile: "consumers/ga4/v1/Dockerfile",
+    dockerfile: "sync/destinations/ga4/v1/Dockerfile",
     image: "polaris/consumer-ga4-v1",
   },
   {
     name: "braze",
-    dockerfile: "consumers/braze/v1/Dockerfile",
+    dockerfile: "sync/destinations/braze/v1/Dockerfile",
     image: "polaris/consumer-braze-v1",
   },
 ];

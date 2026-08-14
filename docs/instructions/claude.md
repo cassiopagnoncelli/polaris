@@ -31,7 +31,7 @@ SDKs/producers
 - Keep raw events immutable.
 - Keep processors and consumers independent and versioned.
 - Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `packages/shared-destination-normalize/`.
-- Feed ClickHouse through `consumers/clickhouse-sink` from `analytics.events`.
+- Feed ClickHouse through `async/warehouse/clickhouse-sink` from `analytics.events`.
 - Persist ingested rows before querying.
 - `analytics_raw` is never queried without explicit dedupe (`argMax(_version)`, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
 - Preserve replayability within the operational retention window as a primary architectural constraint.

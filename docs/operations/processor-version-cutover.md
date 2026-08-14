@@ -268,7 +268,7 @@ Keep dual-runs short, and prefer a low-volume project for the first one.
 
 ## Cross-references
 
-- [`processors/attribution-engine/v2/CHANGELOG.md`](../../processors/attribution-engine/v2/CHANGELOG.md)
+- [`async/computation/attribution-engine/v2/CHANGELOG.md`](../../async/computation/attribution-engine/v2/CHANGELOG.md)
   — what changed and what to expect
 - [Backup and Retention / Attribution chain retention](./backup-and-retention.md)
   — pruning v2's chains on an ongoing basis

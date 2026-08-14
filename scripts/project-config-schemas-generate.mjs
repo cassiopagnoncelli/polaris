@@ -76,7 +76,7 @@ export const REGISTRY = [
   {
     namespace: "meta-capi",
     packageName: "@polaris/consumer-meta-capi-v1",
-    distEntry: "consumers/meta-capi/v1/dist/project-config.js",
+    distEntry: "sync/destinations/meta-capi/v1/dist/project-config.js",
   },
   {
     namespace: "ingest",
@@ -86,22 +86,22 @@ export const REGISTRY = [
   {
     namespace: "ga4",
     packageName: "@polaris/consumer-ga4-v1",
-    distEntry: "consumers/ga4/v1/dist/project-config.js",
+    distEntry: "sync/destinations/ga4/v1/dist/project-config.js",
   },
   {
     namespace: "tiktok",
     packageName: "@polaris/consumer-tiktok-v1",
-    distEntry: "consumers/tiktok/v1/dist/project-config.js",
+    distEntry: "sync/destinations/tiktok/v1/dist/project-config.js",
   },
   {
     namespace: "braze",
     packageName: "@polaris/consumer-braze-v1",
-    distEntry: "consumers/braze/v1/dist/project-config.js",
+    distEntry: "sync/destinations/braze/v1/dist/project-config.js",
   },
   {
     namespace: "webhook-sink",
     packageName: "@polaris/consumer-webhook-sink-v1",
-    distEntry: "consumers/webhook-sink/v1/dist/project-config.js",
+    distEntry: "sync/destinations/webhook-sink/v1/dist/project-config.js",
   },
 ];
 

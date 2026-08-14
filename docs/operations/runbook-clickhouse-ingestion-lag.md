@@ -40,7 +40,7 @@ process, connection and batch timer means an isolated lag is upstream —
 that family's processor — not the sink. Lag on both is the sink, the
 connection, or ClickHouse itself.
 
-**Where the lag signal comes from.** `consumers/clickhouse-sink`
+**Where the lag signal comes from.** `async/warehouse/clickhouse-sink`
 emits `polaris_clickhouse_sink_lag_seconds{table}` — now minus the
 envelope's `ingested_at` for the last row it wrote. This replaced
 `polaris_clickhouse_kafka_ingestion_lag_seconds`, which the

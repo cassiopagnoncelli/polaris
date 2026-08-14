@@ -114,7 +114,7 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  *
  *      The broker list used to be the canonical case here. It is gone:
  *      ClickHouse no longer connects to the broker at all, since
- *      consumers/clickhouse-sink pushes rows in.
+ *      async/warehouse/clickhouse-sink pushes rows in.
  *
  * Other macros (e.g. `{cluster}` inside `ON CLUSTER '{cluster}'`) stay
  * in string-literal position and remain server-side.
@@ -127,7 +127,7 @@ const NON_MIGRATION_SUFFIXES = ["_rebuild.sql"];
  *   POLARIS_CLICKHOUSE_REPLICATED       default '' (local; prod = 'Replicated')
  *
  * The `kafka_brokers` macro is gone: ClickHouse no longer consumes
- * anything. `consumers/clickhouse-sink` pushes rows in instead, so the
+ * anything. `async/warehouse/clickhouse-sink` pushes rows in instead, so the
  * ingestion interface table has no broker address to substitute.
  *
  * Add new entries to CLIENT_MACROS when introducing a new client-side

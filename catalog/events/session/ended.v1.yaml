@@ -1,6 +1,6 @@
 # Catalog entry: session.ended v1 (ACTIVE)
 #
-# Emitted by `processors/sessionizer/v1/` when a session window expires
+# Emitted by `async/computation/sessionizer/v1/` when a session window expires
 # without further activity. The window is the manifest's
 # `session.inactivity_seconds` value (default 1800 seconds / 30 minutes
 # per `docs/architecture/10-sdk-standards.md`).

@@ -5,7 +5,7 @@ import { identityIdentifierSchema } from "./linked.v1.js";
 /**
  * `identity.rotated` v1 — ACTIVE.
  *
- * Emitted by `processors/identity-resolver/v1/` when an authoritative event
+ * Emitted by `sync/legacy/identity-resolver/v1/` when an authoritative event
  * tells the resolver that an `anonymous_id` (or other rotating identifier)
  * has rolled while the strong identifier (typically `customer_id`) stayed
  * stable. The canonical trigger is the Web SDK's `reset()` flow described in

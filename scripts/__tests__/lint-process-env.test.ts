@@ -55,12 +55,12 @@ describe("stripComments", () => {
 describe("findDirectEnvReads", () => {
   it("reports a read in service code, with its line", () => {
     seed(
-      "consumers/thing/v1/src/app.ts",
+      "sync/destinations/thing/v1/src/app.ts",
       ["export function go(): string {", '  return process.env["SECRET"] ?? "";', "}"].join("\n"),
     );
     const violations = findDirectEnvReads(root);
     expect(violations).toHaveLength(1);
-    expect(violations[0]?.file).toBe("consumers/thing/v1/src/app.ts");
+    expect(violations[0]?.file).toBe("sync/destinations/thing/v1/src/app.ts");
     expect(violations[0]?.line).toBe(2);
   });
 
@@ -107,7 +107,7 @@ describe("findDirectEnvReads", () => {
 
   it("reports every read in a file, not just the first", () => {
     seed(
-      "processors/thing/v1/src/app.ts",
+      "async/computation/thing/v1/src/app.ts",
       ['const a = process.env["A"];', 'const b = process.env["B"];'].join("\n"),
     );
     expect(findDirectEnvReads(root)).toHaveLength(2);

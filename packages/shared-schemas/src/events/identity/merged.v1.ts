@@ -5,7 +5,7 @@ import { identityIdentifierSchema } from "./linked.v1.js";
 /**
  * `identity.merged` v1 — ACTIVE.
  *
- * Emitted by `processors/identity-resolver/v1/` when an authoritative overlap
+ * Emitted by `sync/legacy/identity-resolver/v1/` when an authoritative overlap
  * collapses two previously-separate canonical identities onto one. The
  * canonical example: an `anonymous_id` was previously linked to one
  * `customer_id`, and the resolver now observes the same `anonymous_id`

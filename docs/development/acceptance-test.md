@@ -151,11 +151,11 @@ Concretely:
 | --- | --- |
 | Ingester request validation, per-event reject codes | `apps/ingester-api/test/**` (unit + behavioural). |
 | Node SDK retry policy, queue overflow, drop reasons | `packages/node-sdk/test/**` (unit). |
-| `analytics-projector` v1 emit shape | `processors/analytics-projector/v1/test/**`. |
+| `analytics-projector` v1 emit shape | `sync/legacy/analytics-projector/v1/test/**`. |
 | Replay planner deterministic output | `packages/shared-replay/test/**`. |
 | CLI argument parsing per command | `apps/polaris-cli/test/**`. |
 | Single-event ingester-to-ClickHouse path | `tests/smoke/vertical-slice.test.ts`. |
-| Destination-runtime behavioural tests | `consumers/webhook-sink/v1/test/**`, `packages/shared-destinations/test/**`. |
+| Destination-runtime behavioural tests | `sync/destinations/webhook-sink/v1/test/**`, `packages/shared-destinations/test/**`. |
 
 The acceptance test asserts these capabilities **are wired together**.
 A unit-level fix is the right response when a step fails because of a

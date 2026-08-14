@@ -42,7 +42,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
 /** Where service code lives. */
-const SCAN_DIRS = ["apps", "packages", "processors", "consumers"];
+const SCAN_DIRS = ["apps", "packages", "sync", "async"];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
 const SOURCE_EXT = new Set([".ts", ".mts"]);

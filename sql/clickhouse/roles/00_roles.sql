@@ -17,7 +17,7 @@
 --
 --   polaris_sink      INSERT on the ingestion interface table and
 --                     NOTHING else — no SELECT anywhere. Used only by
---                     consumers/clickhouse-sink, which came into
+--                     async/warehouse/clickhouse-sink, which came into
 --                     existence when the RabbitMQ migration removed
 --                     ClickHouse's ability to consume for itself.
 --                     Write-only is the correct blast radius for a
