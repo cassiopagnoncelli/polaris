@@ -22,6 +22,7 @@
     "format:check": "biome format .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
+    "pretest": "pnpm build",
     "test": "vitest run --passWithNoTests && pnpm test:scripts",
     "test:watch": "vitest",
     "test:scripts": "vitest run --root scripts --passWithNoTests",
