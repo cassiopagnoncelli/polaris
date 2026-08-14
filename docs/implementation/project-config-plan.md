@@ -927,16 +927,16 @@ covers both mechanisms failing.
 | C1 | **LANDED** `611e496` — migrations, Kysely types, narrowed prohibition. Card `WDKNARYV` | C0 | — |
 | C2 | **LANDED** `1442a2d` — read store: LRU, sweep, LISTEN/NOTIFY, single-flight, monotonic guard, `Secret<T>`. Card `Q54PQL99` | C1 | — |
 | C3 | **LANDED** `88b8db9` — `pnpm config-schemas` / `--check`, additive-only compat check (§3.4). Registry empty until the first service exports a schema. Card `WFHTKR4A` | C1 | with C2 |
-| C4 | `polaris config get/set/unset/list/invalidate` + audited write path — card `VCJ896JN` (landed). `validate`, the `projects sync` post-sync report, and the pre-deploy validate job remain, unblocked once C3 lands | C2, C3 | — |
-| C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
+| C4 | **LANDED** `ba34527` — `polaris config get/set/unset/list/invalidate` + audited write path (card `VCJ896JN`); `99fbcfe` — `validate` and the projects-sync report (card `K8XNVW4T`). The pre-deploy validate job is NOT built: it gates a rollout, and there is no deploy pipeline to gate | C2, C3 | — |
+| C5 | **LANDED** `f0a2692`, hardened in `8082ecd` — admin UI Variables panel per §3.6: three mutation routes, env tabs, effective view, free-form add, CAS conflict handling, server-decided ritual. Card `MEW685DZ` | C4 | yes |
 | C6 | **LANDED then REVERSED.** `07eb4cb` shipped `createSecretResolver`, the transient/permanent split and five consumers off `process.env` (card `FR74FN42`). Superseded when per-project secrets became stored values: the resolver, its adapters and the Vault client had no callers left and were deleted (§6). The `process.env` half of the work stands. | C2 | yes |
-| C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
+| C7 | **LANDED** `e394682`, corrected in `9af465d`. Card `R3Q68W3E`. The allowlist's debt section is empty as of `b813e10` — both ClickHouse-connection readers were fixed rather than baselined | C2 | yes |
 | C8 | **LANDED.** Fan-out project filter — `findActiveByVendorAndProject`, and the target cache keyed by project as well as environment. The pre-merge blast-radius query it was gated on is gone with it: the gate existed to enumerate live deliveries the filter would stop, and a pre-production platform has none | C2 | yes |
-| C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke fixture migration. **Partly landed:** `tests/integration/project-config.test.ts` covers write → NOTIFY → store against real PostgreSQL | C4 | yes |
-| C10 | `scripts/backfill-project-config.mjs` | C4 | yes |
+| C9 | **LANDED** `db0d231` — `seedProjectConfig` and the acceptance scenario's `control_plane_project_config` step (card `H2VXR9DP`), plus `tests/integration/project-config.test.ts` covering write → NOTIFY → store against real PostgreSQL. The smoke harness seeds no project config and needs none: it asserts the vertical slice, and every key falls back to a deployment default | C4 | yes |
+| C10 | **LANDED** `29c9892` — `scripts/backfill-project-config.mjs`, registry-driven, `--env` checked against `POLARIS_ENV`, audited writes, idempotent, dry by default. Card `T7BNQK52` | C4 | yes |
 | C11 | Per-service cutover: config path in, env path out, allowlist entry deleted, backfill run. **All six participating components landed** — ingest, meta-capi, ga4, tiktok, braze, webhook-sink. The other ten services have no per-project configuration to move (§7); a cutover card for them would have had nothing in it | C7, C9, C10 | 6-way |
 | C12 | **LANDED.** The two per-project override strings are out of `docs/deployment/config-reference.md`, replaced by a note naming what they became and how to migrate an environment that still sets one. The one-release delay §11 specifies was rollback insurance for a deployed fleet; there is none | C11 | — |
-| C13 | Docs: architecture 02/05/06/11, secret-rotation runbooks, `.env.example` rewrite, `docs/README.md:45` perimeter wording | C11 | — |
+| C13 | **LANDED** `7e9ff07` (architecture 02/11, deployment, operations, onboarding, release checklist, `.env.example` rewrite, `secret-rotation.md` rewritten end to end), `b813e10` (`docs/README.md` perimeter wording), `bd6387f` (the GA4 app-stream rotation runbook, card `MRFBR8X3`) | C11 | — |
 
 Critical path is C0 → C1 → C2 → C4 → C11. C3 runs alongside C2; C5–C10 all
 unblock at C4 and run in parallel; C11 is 16 independent PRs and is where the
