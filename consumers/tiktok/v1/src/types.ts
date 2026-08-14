@@ -137,9 +137,9 @@ export interface TikTokPageContext {
 export type TikTokEventSource = "web" | "app" | "crm" | "offline";
 
 /**
- * Resolved TikTok secret. Pulled from `@polaris/shared-secrets` per
- * delivery attempt; lives in memory only for the duration of one
- * deliverer call.
+ * The TikTok credential, read from `destinations.secret_value` and handed to
+ * the deliverer as `DelivererContext.secret`. Stored plaintext in the control
+ * plane; this consumer only ever parses and uses it.
  *
  * Shape: a JSON document
  *

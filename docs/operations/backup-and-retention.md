@@ -32,7 +32,7 @@ This is the canonical table. It mirrors and binds to
 | ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly `BACKUP TABLE`, monthly cold archive |
 | RabbitMQ | canonical event topics | 0 (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster replication factor; tiered storage future work |
 | Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss is acceptable transient duplicate increase, downstream idempotency handles |
-| Secret provider | references only (no plaintext) | provider-managed | provider-managed | out of scope; Vault / equivalent owns its own backup |
+| Per-project secrets | plaintext in PostgreSQL (`destinations.secret_value`, `project_config`) | covered by the PostgreSQL row above | covered above | no separate backup — but see the credential-material warning below |
 
 Rules baked into the runbook:
 
@@ -46,8 +46,13 @@ Rules baked into the runbook:
 - ClickHouse projection tables are deliberately not backed up. The
   rebuild path runs through the standard replay/rebuild workflow
   ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)).
-- Secret values never appear in backups. PostgreSQL stores
-  `secret_provider` and `secret_ref`, not secret values
+- **PostgreSQL backups contain live credentials.** This inverts what
+  this runbook used to say. Per-project secrets — destination vendor
+  tokens and sensitive `project_config` values — are stored as
+  plaintext, so every `pg_dump`, every WAL archive and every replica
+  carries them. Encrypt backups at rest, restrict who can restore one,
+  and treat a leaked backup as a credential compromise requiring
+  rotation of every affected destination
   ([Production Readiness / Secret Management](../architecture/11-production-readiness.md#secret-management)).
 
 ## PostgreSQL

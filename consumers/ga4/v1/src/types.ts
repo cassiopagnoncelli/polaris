@@ -106,9 +106,9 @@ export interface Ga4RequestBody {
 }
 
 /**
- * Resolved GA4 secret. Pulled from `@polaris/shared-secrets` per
- * delivery attempt; lives in memory only for the duration of one
- * deliverer call.
+ * The GA4 credential, read from `destinations.secret_value` and handed to
+ * the deliverer as `DelivererContext.secret`. Stored plaintext in the control
+ * plane; this consumer only ever parses and uses it.
  *
  * Shape: a JSON document
  *
@@ -126,8 +126,8 @@ export interface ResolvedGa4Secret {
   /**
    * Firebase app id (`1:NNN:PLATFORM:HASH`) for routing mobile-app
    * events to a Firebase / app data stream (KCS3ATPC). Optional —
-   * operators opt in by rotating their `destinations.secret_ref` to
-   * include the field. When absent, app-source events fall back to
+   * operators opt in with `polaris destinations rotate-secret`, passing a
+   * credential that includes the field. When absent, app-source events fall back to
    * the web-stream URL with the synthesized `client_id`; when present
    * AND the mapper produced an `app_instance_id` hint, the deliverer
    * routes via `?firebase_app_id=...&api_secret=...` and stamps

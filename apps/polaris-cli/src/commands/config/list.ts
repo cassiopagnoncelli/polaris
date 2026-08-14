@@ -69,7 +69,7 @@ function emit(ctx: CommandContext, rows: readonly ProjectConfigRow[], version: b
           namespace: row.namespace,
           config_key: row.config_key,
           value: row.value,
-          is_secret_ref: row.is_secret_ref,
+          is_secret: row.is_secret,
           updated_at: row.updated_at,
           updated_by: row.updated_by,
         })),
@@ -84,7 +84,7 @@ function renderHuman(rows: readonly ProjectConfigRow[], version: bigint): string
   }
   const lines = [`version ${version.toString()}`, ""];
   for (const row of rows) {
-    const marker = row.is_secret_ref ? " [secret-ref]" : "";
+    const marker = row.is_secret ? " [secret]" : "";
     lines.push(
       `${row.namespace}.${row.config_key}${marker} = ${JSON.stringify(row.value)}  (${row.updated_by})`,
     );

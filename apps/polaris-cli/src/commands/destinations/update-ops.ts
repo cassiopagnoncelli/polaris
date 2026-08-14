@@ -289,7 +289,6 @@ function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
     environment: row.environment,
     vendor: row.vendor,
     instance_label: row.instance_label,
-    secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
     max_concurrency: row.max_concurrency,

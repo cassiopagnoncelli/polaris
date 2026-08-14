@@ -186,10 +186,11 @@ polaris export sources  --project your_project --env production
 polaris export destinations --project your_project --env production
 ```
 
-These commands return JSON. The `api-keys` export **never** includes the
-argon2id hash or the on-wire token — only metadata. The `destinations`
-export emits the `secret_ref` literal (`env:META_CAPI_TOKEN_...`) but
-never the resolved secret value.
+These commands return JSON, and neither carries a credential. The
+`api-keys` export includes no argon2id hash and no on-wire token — only
+metadata. The `destinations` export includes no credential field at all:
+`destinations.secret_value` holds the vendor credential in plaintext, and
+the repository behind the export does not select the column.
 
 Full operator-facing reference: [Audit and Export](../development/audit-and-export.md).
 

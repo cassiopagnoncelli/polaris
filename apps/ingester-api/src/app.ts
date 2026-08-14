@@ -1,4 +1,3 @@
-import { loadEnvWithDefaults } from "@polaris/shared-config";
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
 import { createLogger, type Logger } from "@polaris/shared-logger";
@@ -10,7 +9,6 @@ import {
   type ProjectConfigStore,
 } from "@polaris/shared-project-config";
 import type { EventCatalog } from "@polaris/shared-schemas";
-import { createSecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -214,12 +212,6 @@ export async function buildIngesterApp(
     (db !== undefined
       ? createProjectConfigStore({
           db,
-          secrets: createSecretResolver({
-            config: config.secretProvider,
-            env: loadEnvWithDefaults(),
-            logger,
-            deploymentEnvironment: config.service.environment,
-          }),
           listener: createPgListenerTransport({
             connectionString: postgresConnectionString(config.postgres),
             logger,

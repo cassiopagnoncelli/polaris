@@ -1,6 +1,10 @@
 /**
- * Hand-rolled fakes for the store's three seams: the database, the secret
- * resolver, and the notification transport.
+ * Hand-rolled fakes for the store's two seams: the database and the
+ * notification transport.
+ *
+ * There were three. A secret-resolver double sat here while a secret was a
+ * `provider:ref` pointer the store resolved on every cold assembly; stored
+ * secrets removed that seam along with the network call behind it.
  *
  * No real PostgreSQL and no Docker — mirroring the stubbing approach in
  * `packages/shared-destinations/test/runtime-behaviors.test.ts`. The fake db
@@ -9,7 +13,6 @@
  */
 
 import type { Database } from "@polaris/shared-db";
-import type { SecretResolver } from "@polaris/shared-secrets";
 import type { Kysely } from "kysely";
 import type { ListenerHandlers, ListenerTransport } from "../src/listener.js";
 
@@ -19,7 +22,7 @@ export interface FakeRow {
   readonly namespace: string;
   readonly config_key: string;
   readonly value: unknown;
-  readonly is_secret_ref: boolean;
+  readonly is_secret: boolean;
 }
 
 /**
@@ -119,23 +122,6 @@ export class FakeDb {
     };
 
     return { selectFrom: builder } as unknown as Kysely<Database>;
-  }
-}
-
-/** Resolver double: maps refs to values, counts calls, can be made to fail. */
-export class FakeSecrets {
-  values = new Map<string, string>();
-  calls = 0;
-  failWith: Error | undefined;
-
-  asResolver(): SecretResolver {
-    return {
-      resolve: async (ref: unknown): Promise<string> => {
-        this.calls += 1;
-        if (this.failWith !== undefined) throw this.failWith;
-        return this.values.get(String(ref)) ?? `resolved(${String(ref)})`;
-      },
-    } as unknown as SecretResolver;
   }
 }
 

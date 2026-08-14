@@ -13,7 +13,6 @@ describe("public surface", () => {
       "CONFIG_NOTIFY_CHANNEL",
       "DEFAULT_CACHE_CAPACITY",
       "DEFAULT_SWEEP_INTERVAL_MS",
-      "SECRET_REFRESH_DEADLINE_MS",
       "SWEEP_JITTER_RATIO",
       "PinMissingError",
       "ProjectConfigAssemblyError",
@@ -42,9 +41,15 @@ describe("public surface", () => {
     expect(api.DEFAULT_CACHE_CAPACITY).toBe(4096);
     expect(api.DEFAULT_SWEEP_INTERVAL_MS).toBe(10_000);
     expect(api.SWEEP_JITTER_RATIO).toBe(0.2);
-    // Matches DEFAULT_VAULT_CACHE_TTL_MS so rotation propagates no slower
-    // than it does today.
-    expect(api.SECRET_REFRESH_DEADLINE_MS).toBe(300_000);
+  });
+
+  it("no longer exports a secret-refresh deadline", () => {
+    // Removed with the move from `provider:ref` pointers to stored secrets:
+    // a wall-clock re-resolution deadline existed to catch rotations that
+    // happened outside the database, and there are none. Asserted rather than
+    // simply deleted so re-adding one is a deliberate act with a test to
+    // change, not a quiet reintroduction of a periodic no-op refetch.
+    expect(Object.keys(api)).not.toContain("SECRET_REFRESH_DEADLINE_MS");
   });
 });
 

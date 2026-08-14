@@ -370,7 +370,7 @@ describe("export api-keys runner (CRITICAL: hash/plaintext redaction)", () => {
   });
 });
 
-describe("export destinations runner (CRITICAL: emits secret_ref literal, never resolved value)", () => {
+describe("export destinations runner (CRITICAL: emits no credential at all)", () => {
   function fakeDestinationRow(overrides: Partial<DestinationRow> = {}): DestinationRow {
     return {
       destination_id: "polaris_dst_listed",
@@ -378,7 +378,6 @@ describe("export destinations runner (CRITICAL: emits secret_ref literal, never 
       environment: "production",
       vendor: "meta-capi",
       instance_label: "storefront-prod",
-      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
       status: "active",
       mode: "live",
       max_concurrency: 4,
@@ -396,7 +395,12 @@ describe("export destinations runner (CRITICAL: emits secret_ref literal, never 
     };
   }
 
-  it("emits the `secret_ref` literal (provider:ref) on every row", async () => {
+  it("emits no credential field on any row", async () => {
+    // Inverted from what it asserted before. Emitting `secret_ref` was
+    // correct while the column named a vault entry rather than holding a
+    // credential; the same line would now write a live vendor token into a
+    // file on disk. `DestinationRow` has nothing to emit — the repository
+    // does not select the column — and this pins the observable half of that.
     const store: ExportDestinationsStore = {
       list: async () => [fakeDestinationRow()],
       close: async () => {},
@@ -405,13 +409,17 @@ describe("export destinations runner (CRITICAL: emits secret_ref literal, never 
     const runner = buildExportDestinationsRunner({ openStore: () => store });
     await runner({ project: "storefront", env: "production" }, makeContext(capture.streams));
     const parsed = JSON.parse(capture.stdout.join(""));
-    expect(parsed.destinations[0].secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    const row = parsed.destinations[0];
+    expect(row.destination_id).toBe("polaris_dst_listed");
+    for (const field of ["secret_ref", "secret_value", "secret", "token", "password"]) {
+      expect(row).not.toHaveProperty(field);
+    }
   });
 
   it("never emits anything that looks like a resolved secret value", async () => {
-    // The repository surface only carries `secret_ref`. This test pins the
-    // observable contract — no field on the emit shape resembles a
-    // resolved-value name.
+    // The structural guarantee is in the repository, which does not select
+    // the column. This test pins the observable half — no field on the emit
+    // shape resembles a credential name.
     const store: ExportDestinationsStore = {
       list: async () => [fakeDestinationRow()],
       close: async () => {},

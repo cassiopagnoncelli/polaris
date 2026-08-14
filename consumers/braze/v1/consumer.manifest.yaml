@@ -4,7 +4,7 @@
 # consumers/tiktok/v1/consumer.manifest.yaml. The manifest is the SEMANTIC
 # config — what canonical events this consumer delivers, which vendor
 # versions, which normalization profile. Runtime state (per-instance
-# enable/disable, secret_ref, max_rps, retry_policy) lives in the
+# enable/disable, secret_value, max_rps, retry_policy) lives in the
 # PostgreSQL `destinations` table managed by `polaris destinations` CLI
 # commands. The manifest never carries runtime knobs.
 

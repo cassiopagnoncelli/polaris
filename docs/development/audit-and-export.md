@@ -116,12 +116,15 @@ Use this export for:
 
 ### `polaris export destinations --project <id> --env <env>`
 
-Emits destination instance rows. Each row carries the `secret_ref`
-**literal** (e.g. `env:META_CAPI_TOKEN_STOREFRONT_PROD`,
-`secret_manager:polaris/production/.../meta-capi`). The CLI never resolves
-the secret value at export time (or anywhere else outside the destination
-consumer runtime); the reference itself names where the secret lives, not
-what it is.
+Emits destination instance rows, carrying **no credential at all**.
+
+This inverted with the move to plaintext secrets. The export used to emit
+the `secret_ref` literal, which was safe while it named where a secret
+lived rather than holding it; `destinations.secret_value` holds the
+credential itself, and an export is the worst possible carrier for one —
+a file, written wherever the operator redirected, easily mailed or
+committed. `DestinationRow` has nothing to emit because the repository
+does not select the column.
 
 ```bash
 polaris export destinations --project storefront --env production
@@ -208,12 +211,19 @@ Two consequences worth knowing:
   which credential produced it, so rewriting them would have meant
   guessing inside an audit table.
 
-The `before`/`after` snapshots NEVER contain plaintext secrets. The
-recorder is the choke point — callers pass JSON shapes that have already
-been scrubbed of resolved-value fields. For destination rows, that means
-the snapshot carries the `secret_ref` literal but never the resolved
-value. For API keys, the snapshot carries metadata but never the argon2id
-hash or the on-wire plaintext.
+The `before`/`after` snapshots NEVER contain secrets, and this matters
+more now that the database stores them in plaintext: an `audit_records`
+row outlives the row it describes, gets exported, and is read by more
+people.
+
+Two mechanisms, not one convention. For destination rows the snapshot
+type has no credential field to fill, because `DestinationRow` does not
+carry one — `polaris destinations rotate-secret` records that a rotation
+happened, by whom and why, with identical `before` and `after`. For
+`project_config` rows the `before` snapshot arrives already masked from
+the query layer, and the `after` snapshot masks caller input explicitly.
+For API keys, the snapshot carries metadata but never the argon2id hash
+or the on-wire plaintext.
 
 ## Indexes (and the queries they support)
 

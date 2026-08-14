@@ -8,8 +8,9 @@
  * Audit trail: when the transition lands, this command INSERTs a row into
  * `audit_records` inside the SAME transaction as the status UPDATE. The
  * `before` snapshot is the row state pre-UPDATE; the `after` snapshot is
- * the row state post-UPDATE. Neither contains a resolved secret value —
- * the destination row stores `secret_ref` only.
+ * the row state post-UPDATE. Neither contains the destination's credential:
+ * `DestinationRow` has no `secret_value` field to snapshot, because the
+ * repository readers do not select the column.
  *
  * The structured INFO log line stays because operators may still want a
  * local trail, but the persisted audit row is the source of truth.
@@ -50,7 +51,6 @@ export interface DestinationAuditSnapshot {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
   readonly status: string;
   readonly mode: string;
   readonly max_concurrency: number;
@@ -231,7 +231,6 @@ function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
     environment: row.environment,
     vendor: row.vendor,
     instance_label: row.instance_label,
-    secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
     max_concurrency: row.max_concurrency,

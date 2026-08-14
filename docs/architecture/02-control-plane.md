@@ -262,29 +262,25 @@ Rules:
 
 ## Secrets
 
-Polaris uses provider-based secret references.
+Secrets split in two, and the split is the whole design.
 
-PostgreSQL stores:
-
-```text
-secret_provider
-secret_ref
-optional owner/status/rotation metadata
-```
-
-PostgreSQL never stores plaintext secrets. Repo files never store plaintext secrets.
-
-Examples:
+**Per-project secrets** — a destination's vendor credential, and a project's own sensitive configuration values — are stored in the control-plane database as plaintext:
 
 ```text
-secret_provider = env
-secret_ref = META_CAPI_TOKEN_STOREFRONT_PROD
+destinations.secret_value    the vendor credential itself
+project_config.value         with is_secret = true
 ```
 
-```text
-secret_provider = secret_manager
-secret_ref = polaris/production/storefront/meta-capi
-```
+This reverses the platform's earlier rule. PostgreSQL used to store `(secret_provider, secret_ref)` pairs that an adapter resolved at the point of use, and "PostgreSQL never stores plaintext secrets" was load-bearing. The reversal buys one storage mechanism for everything a project declares, editable from the admin UI, with no external dependency in the read path — and it costs exactly what it sounds like: **access to the control-plane database is access to every project's vendor accounts.** Its backups and replicas are credential material. Restrict them accordingly.
 
-Local/dev may use environment variables or `.env`. Production can use an external secret manager later. Secrets must never be logged, exported in delivery records, or written to audit payloads.
+**App and deployment secrets** — the Postgres DSN, the broker password, ClickHouse credentials — are unchanged and never went through a provider either. A service reads them from its environment at bootstrap, before it can reach any store.
+
+Repo files never store plaintext secrets.
+
+What storing plaintext does NOT relax is handling. A secret is still forbidden from logs, delivery records, DLQ payloads, audit payloads and exports, and two mechanisms keep it out rather than one convention:
+
+- **Masking, at the data layer.** `listProjectConfig` returns `[redacted]` for a secret row; the destination readers do not select `secret_value` at all. A caller that needs plaintext asks by name — `revealProjectConfigSecret`, one function, greppable. There is no equivalent for destination credentials: they are write-only through every Polaris surface, set at create, replaced with `polaris destinations rotate-secret`, never printed back.
+- **Boxing, at the point of use.** A value a consumer legitimately holds arrives wrapped in `Secret<T>`, whose `toString`, `toJSON` and inspect hooks all yield `[redacted]`. Disclosure requires an explicit `.expose()`.
+
+Rotation is a database write that announces itself through `LISTEN/NOTIFY`; see the [secret rotation runbook](../operations/secret-rotation.md).
 

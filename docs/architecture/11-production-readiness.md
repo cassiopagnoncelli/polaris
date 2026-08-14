@@ -32,17 +32,15 @@ PII residency is **not a v1 constraint**. Polaris does not promise per-region st
 
 ## Secret Management
 
-Polaris uses provider-based secret references.
-
-Production secret storage is not fully locked yet. Vault is the preferred candidate direction unless implementation-time constraints point elsewhere.
+Per-project secrets are stored in the control-plane database as plaintext. There is no external secret provider and no resolution step.
 
 Rules:
 
-- PostgreSQL stores `secret_provider` and `secret_ref`, not secret values.
-- Local/dev can use the `env` provider.
-- Production should use an external secret provider.
-- The provider interface must be compatible with Vault-style secret lookup.
-- Secret values must never appear in logs, audit records, DLQs, delivery records, or exports.
+- `destinations.secret_value` holds a vendor credential; `project_config.value` with `is_secret = true` holds a project's own sensitive values.
+- App and deployment credentials stay in the process environment, read at bootstrap.
+- Secret values must never appear in logs, audit records, DLQs, delivery records, or exports. Masking at the data layer and `Secret<T>` boxing at the point of use are what enforce this — see [Control Plane — Secrets](02-control-plane.md).
+- The control-plane database is therefore credential material. Its access controls, backups and replicas carry the same sensitivity as the credentials themselves, and this is the single largest security consequence of the design.
+- Argon2id hashes (`api_keys.hash`, `operator_tokens.hash`) remain one-way and are not affected.
 
 ## Control-Plane Permissions
 
@@ -302,7 +300,7 @@ These are not single decisions — they are processes that produce decisions per
 
 ## Locked Decisions That Previously Sat Here
 
-- Production secret manager: **HashiCorp Vault** (see [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md)).
+- Production secret manager: **none.** Vault was implemented (P11-004) and then removed: per-project secrets moved into the control-plane database as plaintext, which were its only callers. See [Control Plane — Secrets](02-control-plane.md) for what that trades away.
 - ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
 - Identity graph schema: file-flexible (see [P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)).
 - Regional posture: single-region in v1; PII residency not a v1 constraint.

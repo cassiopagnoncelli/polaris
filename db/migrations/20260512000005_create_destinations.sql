@@ -31,6 +31,11 @@
 --     used in CLI output and audit records. Unique within a (project,
 --     environment, vendor) tuple so operators can tell two Meta CAPI
 --     destinations apart on the same project.
+--   NOTE (added later, not a rewrite): `secret_ref` was renamed to
+--   `secret_value` and now holds the credential ITSELF in plaintext. See
+--   20260813000004_plaintext_project_secrets.sql. Everything the bullet below
+--   says was true when this migration ran and is no longer.
+--
 --   - `secret_ref` is the provider-namespaced reference (e.g.
 --     `env:META_CAPI_TOKEN_STOREFRONT_PROD` or
 --     `secret_manager:polaris/production/storefront/meta-capi`). PostgreSQL

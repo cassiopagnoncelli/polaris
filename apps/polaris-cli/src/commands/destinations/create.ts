@@ -1,6 +1,6 @@
 /**
  * `polaris destinations create --project <id> --env <env> --vendor <vendor>
- *   --instance-label <label> --secret-ref <provider:ref>
+ *   --instance-label <label> --secret-value <credential>
  *   [--mode <live|sandbox|test>] [--max-concurrency <n>] [--max-rps <n>]
  *   [--retry-policy <profile>] [--dead-letter-threshold <n>] [--reason <text>]`
  *
@@ -16,11 +16,15 @@
  *
  * Audit trail: when the insert lands, this command writes an `audit_records`
  * row in the SAME transaction as the INSERT. `before` is null (no prior row).
- * `after` is a snapshot of the inserted row — including the operational
- * tuning columns and the `secret_ref` literal, never a resolved secret. The
- * `--reason` flag is optional; when omitted the runner stamps a default
+ * `after` is a snapshot of the inserted row's operational columns and NOT its
+ * credential — `--secret-value` is the vendor credential itself, so an audit
+ * row carrying it would be a permanent, exportable copy. The `--reason` flag
+ * is optional; when omitted the runner stamps a default
  * `destinations.create: <vendor> instance <label>` reason so the audit row
  * always carries non-null context.
+ *
+ * The credential also never reaches this command's own output: `emit` names
+ * the fields it prints, and the credential is not among them.
  *
  * `mutates: true` so the P6-007 production gate picks this command up
  * automatically.
@@ -40,7 +44,7 @@ import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import type { DestinationAuditSnapshot } from "./enable.js";
 import { generateDestinationId } from "./id.js";
-import { rejectMappingArguments, validateSecretRef } from "./validation.js";
+import { rejectMappingArguments, validateSecretValue } from "./validation.js";
 
 const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
@@ -92,7 +96,7 @@ interface DestinationsCreateArgs {
   readonly env?: string;
   readonly vendor?: string;
   readonly instanceLabel?: string;
-  readonly secretRef?: string;
+  readonly secretValue?: string;
   readonly mode?: string;
   readonly maxConcurrency?: string;
   readonly maxRps?: string;
@@ -125,9 +129,9 @@ export const destinationsCreateCommand: CommandDefinition = {
       )
       .requiredOption("--instance-label <label>", "Operator-supplied short label.")
       .requiredOption(
-        "--secret-ref <provider:ref>",
-        "Provider-namespaced secret reference (e.g. env:META_CAPI_TOKEN_STOREFRONT_PROD). " +
-          "Plaintext is never accepted.",
+        "--secret-value <credential>",
+        "The vendor credential itself. Shape is the consumer's — meta-capi wants " +
+          '{"pixel_id":"…","access_token":"…"} JSON. Stored as given; never printed back.',
       )
       .option("--mode <mode>", `Delivery mode: ${SUPPORTED_MODES.join(" | ")} (default: live).`)
       .option(
@@ -178,7 +182,7 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
       environment: validated.env,
       vendor: validated.vendor,
       instance_label: validated.instanceLabel,
-      secret_ref: validated.secretRef,
+      secret_value: validated.secretValue,
       mode: validated.mode,
       ...(validated.maxConcurrency !== undefined
         ? { max_concurrency: validated.maxConcurrency }
@@ -201,7 +205,6 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
       environment: validated.env,
       vendor: validated.vendor,
       instance_label: validated.instanceLabel,
-      secret_ref: validated.secretRef,
       status: "active",
       mode: validated.mode,
       max_concurrency: validated.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
@@ -241,7 +244,21 @@ export function buildDestinationsCreateRunner(hooks: DestinationsCreateHooks = {
         "destination created (audit row persisted)",
       );
 
-      emit(ctx, { ...validated, destinationId, secretProvider: validated.secretProvider });
+      // Field by field rather than `{ ...validated }`: a spread would carry
+      // the credential into the object handed to `emit`, and the only thing
+      // keeping it off stdout would be `emit` continuing not to name it.
+      emit(ctx, {
+        destinationId,
+        project: validated.project,
+        env: validated.env,
+        vendor: validated.vendor,
+        instanceLabel: validated.instanceLabel,
+        mode: validated.mode,
+        maxConcurrency: validated.maxConcurrency,
+        maxRps: validated.maxRps,
+        retryPolicy: validated.retryPolicy,
+        deadLetterThreshold: validated.deadLetterThreshold,
+      });
     } finally {
       await store.close();
     }
@@ -274,8 +291,7 @@ interface ValidatedArgs {
   readonly env: SupportedEnvironment;
   readonly vendor: string;
   readonly instanceLabel: string;
-  readonly secretRef: string;
-  readonly secretProvider: string;
+  readonly secretValue: string;
   readonly mode: DestinationMode;
   readonly maxConcurrency: number | undefined;
   readonly maxRps: number | undefined;
@@ -289,7 +305,7 @@ function validate(args: DestinationsCreateArgs): ValidatedArgs {
   const env = requireTrim(args.env, "--env");
   const vendor = requireTrim(args.vendor, "--vendor");
   const instanceLabel = requireTrim(args.instanceLabel, "--instance-label");
-  const secretRef = requireTrim(args.secretRef, "--secret-ref");
+  const secretValue = validateSecretValue(requireTrim(args.secretValue, "--secret-value"));
 
   if (!(SUPPORTED_ENVIRONMENTS as readonly string[]).includes(env)) {
     throw new UsageError(
@@ -308,8 +324,6 @@ function validate(args: DestinationsCreateArgs): ValidatedArgs {
         "Allowed shape: lowercase alphanumeric with underscores or hyphens, 2-64 chars.",
     );
   }
-  const parsedSecret = validateSecretRef(secretRef);
-
   const mode = parseMode(args.mode);
   const maxConcurrency = parsePositiveInt(args.maxConcurrency, "--max-concurrency", 1, 1024);
   const maxRps = parsePositiveInt(args.maxRps, "--max-rps", 1, 100_000);
@@ -327,8 +341,7 @@ function validate(args: DestinationsCreateArgs): ValidatedArgs {
     env: env as SupportedEnvironment,
     vendor,
     instanceLabel,
-    secretRef,
-    secretProvider: parsedSecret.provider,
+    secretValue,
     mode,
     maxConcurrency,
     maxRps,
@@ -402,8 +415,6 @@ interface EmitInput {
   readonly env: string;
   readonly vendor: string;
   readonly instanceLabel: string;
-  readonly secretRef: string;
-  readonly secretProvider: string;
   readonly mode: DestinationMode;
   readonly maxConcurrency: number | undefined;
   readonly maxRps: number | undefined;
@@ -421,8 +432,6 @@ function emit(ctx: CommandContext, input: EmitInput): void {
         environment: input.env,
         vendor: input.vendor,
         instance_label: input.instanceLabel,
-        secret_ref: input.secretRef,
-        secret_provider: input.secretProvider,
         mode: input.mode,
         max_concurrency: input.maxConcurrency ?? null,
         max_rps: input.maxRps ?? null,
@@ -441,7 +450,6 @@ function renderHuman(input: EmitInput): string {
     `  environment     ${input.env}`,
     `  vendor          ${input.vendor}`,
     `  instance_label  ${input.instanceLabel}`,
-    `  secret_ref      ${input.secretRef}`,
     `  mode            ${input.mode}`,
   ];
   if (input.maxConcurrency !== undefined) {

@@ -42,7 +42,7 @@ function row(namespace: string, key: string, value: unknown = "x"): ProjectConfi
     namespace,
     config_key: key,
     value,
-    is_secret_ref: false,
+    is_secret: false,
     updated_at: "2026-08-13T12:00:00.000Z",
     updated_by: "cassio@example.com",
   };

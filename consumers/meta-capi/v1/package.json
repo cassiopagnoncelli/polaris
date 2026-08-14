@@ -37,7 +37,6 @@
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
     "@polaris/shared-project-config": "workspace:*",
-    "@polaris/shared-secrets": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "kysely": "^0.29.0",
     "zod": "^4.4.3"

@@ -195,20 +195,26 @@ binding to a specific interface.
 
 ## Secrets
 
-Secrets never enter the image. They are referenced at runtime by the
-secret-provider abstraction in `@polaris/shared-secrets`:
+Secrets never enter the image.
+
+App and deployment credentials are injected as environment variables at
+container start:
 
 ```bash
 docker run \
-  -e POLARIS_SECRET_PROVIDER=env \
   -e POLARIS_POSTGRES_PASSWORD=... \
   polaris/ingester-api:dev
 ```
 
-In Kubernetes, the standard pattern is Vault Agent or CSI driver
-injecting referenced secrets as files / environment variables at pod
-start. See `docs/architecture/11-production-readiness.md` "Secret
-Management" and `docs/implementation/tasks/P11-004-production-secret-provider.md`.
+Per-project credentials — a destination's vendor token, a project's
+sensitive configuration values — are not environment variables at all.
+They live in the control-plane database, which the container reaches
+with the Postgres credentials above. See
+`docs/architecture/02-control-plane.md` "Secrets".
+
+In Kubernetes, inject the environment variables from a Secret object as
+usual. There is no secret-provider sidecar to run: nothing in the image
+resolves secret references any more.
 
 ## Image size budget
 

@@ -18,7 +18,6 @@
  * ```ts
  * const store = createProjectConfigStore({
  *   db,
- *   secrets,
  *   listener: createPgListenerTransport({ connectionString, logger }),
  *   logger,
  * });
@@ -39,7 +38,6 @@ export {
   CONFIG_NOTIFY_CHANNEL,
   DEFAULT_CACHE_CAPACITY,
   DEFAULT_SWEEP_INTERVAL_MS,
-  SECRET_REFRESH_DEADLINE_MS,
   SWEEP_JITTER_RATIO,
 } from "./constants.js";
 export {

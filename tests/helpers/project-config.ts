@@ -32,8 +32,8 @@ export interface SeedValue {
   readonly namespace: string;
   readonly configKey: string;
   readonly value: unknown;
-  /** When true, `value` must be a `<provider>:<ref>` string. */
-  readonly isSecretRef?: boolean;
+  /** When true, `value` is stored as a secret and must be a string. */
+  readonly isSecret?: boolean;
 }
 
 /**
@@ -64,7 +64,7 @@ export async function seedProjectConfigValue(scope: SeedScope, value: SeedValue)
     namespace: value.namespace,
     configKey: value.configKey,
     value: value.value,
-    isSecretRef: value.isSecretRef === true,
+    isSecret: value.isSecret === true,
   });
 }
 

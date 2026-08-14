@@ -1,88 +1,45 @@
 /**
- * `@polaris/shared-secrets` — provider-based secret reference resolver and
- * platform-standard hashing primitive.
+ * `@polaris/shared-secrets` — the workspace's argon2id hashing primitive.
  *
- * Polaris stores `(secret_provider, secret_ref)` pairs in PostgreSQL and
- * resolves them through pluggable provider adapters. v1 ships the `env`
- * adapter; the Vault adapter lands in P11-004 through the same interface.
+ * Both the ingester (which verifies API keys on every request) and the polaris
+ * CLI (which issues keys and operator tokens) consume {@link hashSecret} /
+ * {@link verifySecret}; no parallel hashing library is permitted.
  *
- * The package also owns the workspace's argon2id hashing primitive
- * ({@link hashSecret} / {@link verifySecret}). Both the ingester and the
- * polaris CLI consume it; no parallel hashing library is permitted.
+ * ## What used to be here
  *
- * Hard rules baked in:
+ * This package was a provider-based secret RESOLVER: PostgreSQL stored
+ * `(provider, ref)` pairs, and adapters for `env`, `vault` and
+ * `aws-secrets-manager` turned them into plaintext at the point of use. Its
+ * hard rule was "PostgreSQL stores references, never plaintext".
  *
- *   - PostgreSQL stores references, never plaintext.
- *   - Adapters implement exactly one method: `getSecret(ref) -> Promise<string>`.
- *   - Resolved secret values must never appear in logs, audit records, DLQ
- *     payloads, delivery records, error messages, or exports.
- *   - Provider slots for future adapters (`vault`, `aws-secrets-manager`,
- *     `gcp-secret-manager`, `azure-keyvault`) are reserved in the type so
- *     PostgreSQL columns and CLI flags accept them on day one. References to
- *     an unwired slot throw `SecretProviderNotConfiguredError`.
+ * That rule no longer holds, deliberately. Per-project secrets — a project's
+ * own sensitive variables and its destination credentials — are stored in the
+ * control-plane database as plaintext
+ * (`db/migrations/20260813000004_plaintext_project_secrets.sql`). Those two
+ * were the resolver's ONLY callers, so the adapters, the reference format, the
+ * failure classifier and the Vault client had nothing left to serve and were
+ * removed rather than kept as unreachable code.
  *
- * Typical usage:
+ * App and deployment secrets are unaffected and never went through the
+ * resolver either: a service reads its Postgres and broker credentials from
+ * the process environment at bootstrap, before it can reach any store.
  *
- * ```ts
- * import { loadEnv } from "@polaris/shared-config";
- * import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
+ * What survived the change is the HANDLING discipline, which never depended on
+ * where a secret came from:
  *
- * const source = loadEnv();
- * const resolver = new SecretResolver({
- *   adapters: { env: new EnvSecretProvider({ source }) },
- * });
- *
- * const token = await resolver.resolve({
- *   provider: "env",
- *   ref: "META_CAPI_TOKEN_STOREFRONT_PROD",
- * });
- * // hand `token` straight to the destination client; do not log it.
- * ```
+ *   - `Secret<T>` in `@polaris/shared-project-config` boxes a value a consumer
+ *     legitimately holds, so it cannot be stringified into a log line, a DLQ
+ *     payload or a delivery record by accident;
+ *   - `maskIfSecret` in `@polaris/shared-control-plane` keeps stored secrets
+ *     out of list views, exports and audit snapshots in the first place.
  *
  * @see docs/architecture/02-control-plane.md "Secrets"
- * @see docs/architecture/11-production-readiness.md "Secret Management"
- * @see docs/implementation/tasks/P11-004-production-secret-provider.md
+ * @see docs/implementation/project-config-plan.md "Secrets"
  */
 
-export { classifySecretFailure, type SecretFailureClass } from "./classify.js";
-export {
-  SecretError,
-  SecretNotFoundError,
-  SecretProviderError,
-  SecretProviderNotConfiguredError,
-  SecretReferenceParseError,
-} from "./errors.js";
-export {
-  type CreateSecretResolverOptions,
-  createSecretResolver,
-  InsecureSecretProviderError,
-  SECRET_PROVIDER_STRICT_ENV_VAR,
-} from "./factory.js";
 export {
   hashSecret,
   POLARIS_HASH_ALGORITHM,
   type PolarisHashAlgorithm,
   verifySecret,
 } from "./hashing.js";
-export {
-  createVaultProvider,
-  DEFAULT_K8S_SA_TOKEN_PATH,
-  DEFAULT_VAULT_CACHE_TTL_MS,
-  DEFAULT_VAULT_K8S_AUTH_MOUNT,
-  DEFAULT_VAULT_KV_MOUNT,
-  EnvSecretProvider,
-  type EnvSecretProviderOptions,
-  type VaultProbeResult,
-  type VaultProviderOptions,
-  VaultSecretProvider,
-} from "./providers/index.js";
-export { formatSecretReference, parseSecretReference } from "./reference.js";
-export { SecretResolver, type SecretResolverOptions } from "./resolver.js";
-export {
-  isSecretProvider,
-  SECRET_PROVIDERS,
-  type SecretProvider,
-  type SecretProviderAdapter,
-  type SecretReference,
-  type SecretReferenceInput,
-} from "./types.js";

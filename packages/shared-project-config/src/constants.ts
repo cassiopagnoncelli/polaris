@@ -41,16 +41,18 @@ export const DEFAULT_SWEEP_INTERVAL_MS = 10_000;
  */
 export const SWEEP_JITTER_RATIO = 0.2;
 
-/**
- * How long a snapshot containing resolved secrets may be reused before its
- * secrets are re-resolved, in milliseconds — independent of its version.
+/*
+ * There is deliberately no secret-refresh deadline here.
  *
- * Version-based invalidation is structurally blind to rotation: rotating a
+ * One existed while secrets were `provider:ref` pointers: version-based
+ * invalidation was structurally blind to rotation, because rotating a
  * credential in Vault does not touch `project_config`, so the version never
- * moves and neither `NOTIFY` nor the sweep fires. Without this deadline a
- * cached snapshot would hold a revoked credential indefinitely.
+ * moved and neither `NOTIFY` nor the sweep fired. A cached snapshot could hold
+ * a revoked credential indefinitely, and a five-minute deadline capped that.
  *
- * Five minutes matches `DEFAULT_VAULT_CACHE_TTL_MS` in
- * `@polaris/shared-secrets`, so propagation is no slower than it is today.
+ * Secrets are now stored values, not pointers. A secret changes only by a
+ * write to `project_config`, which bumps the version and fires `NOTIFY` in the
+ * same transaction — the two mechanisms above already cover it exactly as they
+ * cover every other key. A deadline on top would be a periodic refetch that
+ * can never observe a change the version did not already announce.
  */
-export const SECRET_REFRESH_DEADLINE_MS = 300_000;

@@ -12,9 +12,13 @@
  * cutover. A schema default would look tidier and would silently override an
  * operator who tuned those variables for their deployment.
  *
- * What is NOT here: the access token. Credentials stay in `secret_ref` on the
- * destination row, resolved per attempt through `@polaris/shared-secrets`.
- * This module carries only values a project may set in plain sight.
+ * What is NOT here: the access token. The credential lives in `secret_value`
+ * on the DESTINATION row, not in project config, and the split is deliberate
+ * now that both are plaintext in the same database. A destination credential
+ * belongs to one instance — two Meta pixels for one project have two — and it
+ * is write-only through every Polaris surface, rotated with
+ * `polaris destinations rotate-secret`. The keys here are project-wide values
+ * an operator reads back routinely.
  *
  * @see docs/implementation/project-config-plan.md §3.1
  */

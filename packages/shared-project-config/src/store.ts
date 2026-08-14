@@ -22,19 +22,11 @@
 import type { Database } from "@polaris/shared-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
 import type { Logger } from "@polaris/shared-logger";
-import type { SecretResolver } from "@polaris/shared-secrets";
 import type { Kysely } from "kysely";
-import {
-  assembleSnapshot,
-  readVersions,
-  scopeKey,
-  snapshotHasSecret,
-  snapshotKey,
-} from "./assemble.js";
+import { assembleSnapshot, readVersions, scopeKey, snapshotKey } from "./assemble.js";
 import {
   DEFAULT_CACHE_CAPACITY,
   DEFAULT_SWEEP_INTERVAL_MS,
-  SECRET_REFRESH_DEADLINE_MS,
   SWEEP_JITTER_RATIO,
 } from "./constants.js";
 import { PinMissingError } from "./errors.js";
@@ -69,12 +61,10 @@ export interface ProjectConfigMetricsHooks {
 
 export interface ProjectConfigStoreOptions {
   readonly db: Kysely<Database>;
-  readonly secrets: SecretResolver;
   readonly listener: ListenerTransport;
   readonly logger: Logger;
   readonly capacity?: number;
   readonly sweepIntervalMs?: number;
-  readonly secretRefreshDeadlineMs?: number;
   readonly now?: () => Date;
   readonly metrics?: ProjectConfigMetricsHooks;
 }
@@ -109,10 +99,16 @@ export interface ProjectConfigStore {
 
 interface CacheEntry {
   snapshot: ProjectConfigSnapshot;
-  /** Marked by a notification or sweep; the next reader refetches. */
+  /**
+   * Marked by a notification or sweep; the next reader refetches.
+   *
+   * The only freshness signal an entry has. Secret-bearing entries once
+   * carried a second one — a wall-clock deadline that forced re-resolution
+   * regardless of version, because a Vault rotation moved no version. Stored
+   * secrets change only by a write, and a write bumps the version, so
+   * staleness alone now covers them.
+   */
   stale: boolean;
-  /** Whether the snapshot holds resolved secrets, and so has a deadline. */
-  hasSecret: boolean;
   /** Epoch ms this entry's version was last confirmed against the database. */
   confirmedAt: number;
 }
@@ -121,7 +117,6 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
   const now = options.now ?? ((): Date => new Date());
   const metrics = options.metrics ?? {};
   const sweepIntervalMs = options.sweepIntervalMs ?? DEFAULT_SWEEP_INTERVAL_MS;
-  const secretDeadlineMs = options.secretRefreshDeadlineMs ?? SECRET_REFRESH_DEADLINE_MS;
 
   const cache = new BoundedLru<string, CacheEntry>(
     options.capacity ?? DEFAULT_CACHE_CAPACITY,
@@ -155,11 +150,6 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     if (entry !== undefined) entry.stale = true;
   }
 
-  /** A secret-bearing snapshot expires on its own clock, regardless of version. */
-  function pastSecretDeadline(entry: CacheEntry, nowMs: number): boolean {
-    return entry.hasSecret && nowMs - entry.snapshot.resolvedAt > secretDeadlineMs;
-  }
-
   async function assembleInto(cacheKey: string, key: ProjectConfigKey) {
     const pending = inFlight.get(cacheKey);
     if (pending !== undefined) return pending;
@@ -167,7 +157,6 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     const startedAt = now().getTime();
     const promise = assembleSnapshot({
       db: options.db,
-      secrets: options.secrets,
       key,
       now,
     })
@@ -183,7 +172,6 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
           // exist yet. Born stale in that case, so the next reader refetches
           // instead of waiting out the sweep.
           stale: announced !== undefined && announced > snapshot.version,
-          hasSecret: snapshotHasSecret(snapshot),
           confirmedAt: finishedAt,
         });
         keyIndex.set(cacheKey, key);
@@ -210,16 +198,15 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
   async function get(key: ProjectConfigKey): Promise<ProjectConfigSnapshot> {
     const cacheKey = snapshotKey(key);
     const entry = cache.get(cacheKey);
-    const nowMs = now().getTime();
 
-    if (entry !== undefined && !entry.stale && !pastSecretDeadline(entry, nowMs)) {
+    if (entry !== undefined && !entry.stale) {
       metrics.onCacheLookup?.(key.namespace, "hit");
       return entry.snapshot;
     }
 
     metrics.onCacheLookup?.(key.namespace, entry === undefined ? "miss" : "stale");
     // A failed assembly must NOT poison the cache: the entry is only replaced
-    // on success, so a transient Vault error means the next read retries.
+    // on success, so a database blip means the next read retries.
     return assembleInto(cacheKey, key);
   }
 
@@ -240,7 +227,7 @@ export function createProjectConfigStore(options: ProjectConfigStoreOptions): Pr
     // marks the entry stale, every subsequent peek keeps hitting, get() is
     // never called again, and a config change never reaches a running
     // service. Single-flighted, so a burst of peeks schedules one assembly.
-    if (entry.stale || pastSecretDeadline(entry, now().getTime())) {
+    if (entry.stale) {
       void assembleInto(cacheKey, key).catch((err: unknown) => {
         // Next peek retries (the entry is still stale). Warn is bounded by
         // the single-flight: one line per failed assembly, not per peek.

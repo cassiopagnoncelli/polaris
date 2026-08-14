@@ -27,6 +27,7 @@ import {
   buildDestinationsEnableReplayRunner,
   buildDestinationsEnableRunner,
   buildDestinationsListRunner,
+  buildDestinationsRotateSecretRunner,
   buildDestinationsShowRunner,
   buildDestinationsUpdateOpsRunner,
   type CommandContext,
@@ -38,6 +39,7 @@ import {
   type DestinationsEnableReplayStore,
   type DestinationsEnableStore,
   type DestinationsListStore,
+  type DestinationsRotateSecretStore,
   type DestinationsShowStore,
   type DestinationsUpdateOpsStore,
   ExitCode,
@@ -48,7 +50,7 @@ import {
   rejectMappingArguments,
   run,
   type UpdateDestinationOpsInput,
-  validateSecretRef,
+  validateSecretValue,
 } from "../src/index.js";
 
 const META: PackageMeta = {
@@ -126,7 +128,6 @@ class InMemoryDestinationStore {
           environment: input.environment,
           vendor: input.vendor,
           instance_label: input.instance_label,
-          secret_ref: input.secret_ref,
           status: "active",
           mode: input.mode,
           max_concurrency: input.max_concurrency ?? 4,
@@ -325,6 +326,43 @@ class InMemoryDestinationStore {
     };
   }
 
+  /**
+   * The rotate-secret adapter keeps a `secrets` map beside `rows`, because
+   * `DestinationRow` deliberately has no credential field — the production
+   * readers do not select the column. Tests assert on this map rather than on
+   * the row, which is exactly the shape of the real system.
+   */
+  public readonly secrets = new Map<string, string>();
+
+  asRotateSecretStore(): DestinationsRotateSecretStore {
+    return {
+      findById: async (id) => this.rows.get(id) ?? null,
+      rotateWithAudit: async (id, secretValue, now, audit) => {
+        const row = this.rows.get(id);
+        if (row === undefined) return false;
+        this.secrets.set(id, secretValue);
+        this.rows.set(id, { ...row, updated_at: now.toISOString() });
+        this.auditCalls.push({
+          action: "destinations.rotate-secret",
+          auditId: audit.auditId,
+          targetType: "destination",
+          targetId: id,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          projectId: audit.projectId,
+          environment: audit.environment,
+          before: audit.before,
+          after: audit.after,
+          reason: audit.reason,
+        });
+        return true;
+      },
+      close: async () => {
+        this.closeCalls += 1;
+      },
+    };
+  }
+
   asUpdateOpsStore(): DestinationsUpdateOpsStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
@@ -413,7 +451,6 @@ function seedActiveRow(
     environment: "production",
     vendor: "meta-capi",
     instance_label: "storefront-prod",
-    secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
     status: "active",
     mode: "live",
     max_concurrency: 4,
@@ -439,7 +476,7 @@ const CREATE_BASE_ARGS = {
   env: "production",
   vendor: "meta-capi",
   instanceLabel: "storefront-prod",
-  secretRef: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
+  secretValue: '{"pixel_id":"123","access_token":"EAAB-live-token"}',
 } as const;
 
 describe("validation: rejectMappingArguments", () => {
@@ -469,43 +506,55 @@ describe("validation: rejectMappingArguments", () => {
         env: "production",
         vendor: "meta-capi",
         instanceLabel: "storefront-prod",
-        secretRef: "env:X",
+        secretValue: "EAAB-live-token",
         maxConcurrency: "8",
       }),
     ).not.toThrow();
   });
 });
 
-describe("validation: validateSecretRef", () => {
-  it("accepts well-formed provider:ref values", () => {
-    expect(validateSecretRef("env:META_CAPI_TOKEN_STOREFRONT_PROD")).toEqual({
-      provider: "env",
-      ref: "META_CAPI_TOKEN_STOREFRONT_PROD",
-    });
-    expect(validateSecretRef("secret_manager:polaris/production/storefront/meta-capi")).toEqual({
-      provider: "secret_manager",
-      ref: "polaris/production/storefront/meta-capi",
-    });
-  });
-
-  it("rejects values without a provider separator", () => {
-    expect(() => validateSecretRef("plaintextshouldfail")).toThrow(
-      /must be in the form <provider>:<reference>/,
+describe("validation: validateSecretValue", () => {
+  /**
+   * This replaced `validateSecretRef`, which asserted a `<provider>:<ref>`
+   * shape across five cases. That shape was Polaris's own — a pointer format
+   * the platform defined and could therefore validate. A credential's shape
+   * belongs to the vendor, so there is nothing here to check beyond presence;
+   * meta-capi's `parseResolvedSecret` is what rejects a malformed one, at
+   * delivery time, where the shape is actually known.
+   */
+  it("accepts any non-empty credential, whatever its shape", () => {
+    expect(validateSecretValue('{"pixel_id":"123","access_token":"EAAB"}')).toBe(
+      '{"pixel_id":"123","access_token":"EAAB"}',
     );
-  });
-
-  it("rejects values with an empty reference tail", () => {
-    expect(() => validateSecretRef("env:")).toThrow(/must be in the form <provider>:<reference>/);
-  });
-
-  it("rejects values with whitespace in the reference", () => {
-    expect(() => validateSecretRef("env:foo bar")).toThrow(
-      /Must be non-empty and contain no whitespace/,
+    expect(validateSecretValue("https://hooks.example/receiver")).toBe(
+      "https://hooks.example/receiver",
     );
+    // Including one that looks exactly like the old pointer format. Nothing
+    // resolves it any more, so it is just an odd credential — and the loud
+    // failure belongs at the vendor, not here.
+    expect(validateSecretValue("env:META_CAPI_TOKEN")).toBe("env:META_CAPI_TOKEN");
   });
 
-  it("rejects providers with disallowed characters", () => {
-    expect(() => validateSecretRef("ENV:VALUE")).toThrow(/provider/);
+  it("trims surrounding whitespace", () => {
+    // A credential pasted from a vendor console routinely carries a trailing
+    // newline, and the vendor would reject it with an opaque 401.
+    expect(validateSecretValue("  EAAB-token  ")).toBe("EAAB-token");
+  });
+
+  it("rejects an empty or whitespace-only value", () => {
+    expect(() => validateSecretValue("")).toThrow(/non-empty credential/);
+    expect(() => validateSecretValue("   ")).toThrow(/non-empty credential/);
+  });
+
+  it("does not echo the value in its error message", () => {
+    // The one thing this validator must never do. It only ever refuses an
+    // empty value today, but the rule holds for whatever it grows to refuse.
+    try {
+      validateSecretValue("");
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as Error).message).not.toContain('""');
+    }
   });
 });
 
@@ -529,13 +578,13 @@ describe("destinations create runner", () => {
     expect(inserted.environment).toBe("production");
     expect(inserted.vendor).toBe("meta-capi");
     expect(inserted.instance_label).toBe("storefront-prod");
-    expect(inserted.secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    expect(inserted.secret_value).toBe(CREATE_BASE_ARGS.secretValue);
     expect(inserted.mode).toBe("live");
 
     const stdout = capture.stdout.join("");
     expect(stdout).toContain("polaris destination created");
     expect(stdout).toContain("polaris_dst_fixed-id-1");
-    expect(stdout).toContain("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    expect(stdout).toContain("instance_label  storefront-prod");
 
     // P6-006 follow-up: audit row persisted in the same transaction.
     expect(store.auditCalls).toHaveLength(1);
@@ -556,7 +605,6 @@ describe("destinations create runner", () => {
       environment: "production",
       vendor: "meta-capi",
       instance_label: "storefront-prod",
-      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
       status: "active",
       mode: "live",
       max_concurrency: 4,
@@ -630,7 +678,7 @@ describe("destinations create runner", () => {
     );
   });
 
-  it("emits the same shape under --output json with the resolved secret_provider", async () => {
+  it("emits the same shape under --output json, with no credential in it", async () => {
     const store = new InMemoryDestinationStore();
     const capture = captureOutput();
     const runner = buildDestinationsCreateRunner({
@@ -645,8 +693,6 @@ describe("destinations create runner", () => {
       environment: "production",
       vendor: "meta-capi",
       instance_label: "storefront-prod",
-      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
-      secret_provider: "env",
       mode: "live",
     });
   });
@@ -730,16 +776,44 @@ describe("destinations create runner", () => {
     ).rejects.toMatchObject({ name: "UsageError" });
   });
 
-  it("rejects malformed --secret-ref values (plaintext detection by shape)", async () => {
+  it("rejects an empty --secret-value, before touching the store", async () => {
+    // The inverse of what this test used to assert. It refused a plaintext
+    // value by shape, because the column held a `provider:ref` pointer and a
+    // bare string meant an operator had pasted a credential into the wrong
+    // slot. Plaintext IS the value now; the only shape the platform can still
+    // judge is emptiness, and a destination with no credential would fail
+    // every delivery with an opaque vendor error.
     const store = new InMemoryDestinationStore();
     const capture = captureOutput();
     const runner = buildDestinationsCreateRunner({
       openStore: () => store.asCreateStore(),
     });
     await expect(
-      runner({ ...CREATE_BASE_ARGS, secretRef: "plainsecretvalue" }, makeContext(capture.streams)),
+      runner({ ...CREATE_BASE_ARGS, secretValue: "   " }, makeContext(capture.streams)),
     ).rejects.toMatchObject({ name: "UsageError" });
     expect(store.inserts).toHaveLength(0);
+  });
+
+  it("never prints the credential it was given", async () => {
+    // `create` is the one command an operator hands a live credential to, so
+    // it is the one place a careless `emit` would echo one straight back into
+    // terminal scrollback and CI logs.
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_no-echo",
+      openStore: () => store.asCreateStore(),
+    });
+    await runner(CREATE_BASE_ARGS, makeContext(capture.streams));
+    expect(capture.stdout.join("")).not.toContain("EAAB-live-token");
+
+    const jsonCapture = captureOutput();
+    const jsonRunner = buildDestinationsCreateRunner({
+      issueId: () => "polaris_dst_no-echo-2",
+      openStore: () => store.asCreateStore(),
+    });
+    await jsonRunner(CREATE_BASE_ARGS, jsonContext(jsonCapture.streams));
+    expect(jsonCapture.stdout.join("")).not.toContain("EAAB-live-token");
   });
 
   it("rejects unsupported --mode values", async () => {
@@ -799,7 +873,7 @@ describe("destinations list runner", () => {
 });
 
 describe("destinations show runner", () => {
-  it("returns the row and exposes only non-secret fields", async () => {
+  it("returns the row and exposes no credential field at all", async () => {
     const store = new InMemoryDestinationStore();
     seedActiveRow(store, { destination_id: "polaris_dst_show-me" });
     const capture = captureOutput();
@@ -808,8 +882,11 @@ describe("destinations show runner", () => {
     const stdout = capture.stdout.join("");
     expect(stdout).toContain("polaris_dst_show-me");
     expect(stdout).toContain("vendor                meta-capi");
-    // The secret reference is shown (it IS the reference, not the plaintext)
-    expect(stdout).toContain("env:META_CAPI_TOKEN_STOREFRONT_PROD");
+    // This asserted the opposite until the column changed meaning: `show`
+    // printed `secret_ref` because it named a vault entry, and seeing it was
+    // how an operator confirmed the wiring. The same line would now print a
+    // live credential to a terminal. `DestinationRow` no longer carries one.
+    expect(stdout).not.toContain("secret");
   });
 
   it("raises a usage error when the id is unknown", async () => {
@@ -962,6 +1039,133 @@ describe("destinations disable runner", () => {
   });
 });
 
+describe("destinations rotate-secret runner", () => {
+  const ROTATE_ARGS = {
+    destinationId: "polaris_dst_active-1",
+    secretValue: '{"pixel_id":"123","access_token":"EAAB-rotated"}',
+    reason: "leaked in a support ticket",
+  };
+
+  it("replaces the credential and writes one audit row", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const now = new Date("2026-08-13T15:00:00.000Z");
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+      now: () => now,
+      generateAuditId: () => "audit-rotate-1",
+    });
+
+    await runner(ROTATE_ARGS, makeContext(capture.streams));
+
+    expect(store.secrets.get("polaris_dst_active-1")).toBe(ROTATE_ARGS.secretValue);
+    expect(store.rows.get("polaris_dst_active-1")?.updated_at).toBe(now.toISOString());
+    expect(store.auditCalls).toHaveLength(1);
+    const audit = store.auditCalls[0];
+    expect(audit?.action).toBe("destinations.rotate-secret");
+    expect(audit?.reason).toBe(ROTATE_ARGS.reason);
+  });
+
+  it("puts no credential in the audit row, on either side", async () => {
+    // The audit row is the durable artifact of a rotation and must not become
+    // a copy of the value being rotated away from OR to. `before` and `after`
+    // are identical here by design — the only field that changed is the one
+    // this log may not hold.
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await runner(ROTATE_ARGS, makeContext(capture.streams));
+
+    const audit = store.auditCalls[0];
+    expect(JSON.stringify(audit?.before)).not.toContain("EAAB-rotated");
+    expect(JSON.stringify(audit?.after)).not.toContain("EAAB-rotated");
+    expect(audit?.before).toEqual(audit?.after);
+  });
+
+  it("never echoes the new credential to stdout", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await runner(ROTATE_ARGS, makeContext(capture.streams));
+    expect(capture.stdout.join("")).not.toContain("EAAB-rotated");
+
+    const jsonCapture = captureOutput();
+    const jsonRunner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+    await jsonRunner(ROTATE_ARGS, jsonContext(jsonCapture.streams));
+    expect(jsonCapture.stdout.join("")).not.toContain("EAAB-rotated");
+  });
+
+  it("requires --reason and never touches the row when omitted", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await expect(
+      runner({ ...ROTATE_ARGS, reason: undefined }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.secrets.size).toBe(0);
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("rejects an empty --secret-value before touching the row", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await expect(
+      runner({ ...ROTATE_ARGS, secretValue: "   " }, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.secrets.size).toBe(0);
+  });
+
+  it("raises a usage error when the destination id is unknown", async () => {
+    const store = new InMemoryDestinationStore();
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await expect(
+      runner(
+        { ...ROTATE_ARGS, destinationId: "polaris_dst_missing" },
+        makeContext(capture.streams),
+      ),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.auditCalls).toHaveLength(0);
+  });
+
+  it("REJECTS a mapping-shaped flag BEFORE any DB write", async () => {
+    const store = new InMemoryDestinationStore();
+    seedActiveRow(store);
+    const capture = captureOutput();
+    const runner = buildDestinationsRotateSecretRunner({
+      openStore: () => store.asRotateSecretStore(),
+    });
+
+    await expect(
+      runner({ ...ROTATE_ARGS, fieldMap: "event->vendor" } as never, makeContext(capture.streams)),
+    ).rejects.toMatchObject({ name: "UsageError" });
+    expect(store.secrets.size).toBe(0);
+  });
+});
+
 describe("destinations update-ops runner", () => {
   it("updates only operational tuning fields", async () => {
     const store = new InMemoryDestinationStore();
@@ -999,7 +1203,6 @@ describe("destinations update-ops runner", () => {
     // Non-tuning fields untouched.
     expect(after?.status).toBe("active");
     expect(after?.mode).toBe("live");
-    expect(after?.secret_ref).toBe("env:META_CAPI_TOKEN_STOREFRONT_PROD");
     expect(capture.stdout.join("")).toContain("updated polaris_dst_to-tune");
 
     // P6-006 follow-up: audit row persisted with before/after and reason.
@@ -1530,7 +1733,7 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       "environment",
       "vendor",
       "instance_label",
-      "secret_ref",
+      "secret_value",
       "mode",
       "max_concurrency",
       "max_rps",
@@ -1584,7 +1787,7 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       environment: "production",
       vendor: "meta-capi",
       instance_label: "x",
-      secret_ref: "env:X",
+      secret_value: "env:X",
       status: "active",
       mode: "live",
       max_concurrency: 1,

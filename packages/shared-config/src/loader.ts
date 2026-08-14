@@ -140,11 +140,7 @@ export function loadConfigWithDefaults<Schema extends ZodType>(
   return loadConfig({ ...options, files: defaultEnvFiles(options.processEnv ?? process.env) });
 }
 
-/**
- * The standard `.env` file cascade for a process environment. Shared by
- * {@link loadConfigWithDefaults} and {@link loadEnvWithDefaults} so the two
- * can never disagree about which files exist.
- */
+/** The standard `.env` file cascade for a process environment. */
 function defaultEnvFiles(env: NodeJS.ProcessEnv): string[] {
   const polarisEnv: string | undefined = env["POLARIS_ENV"];
   const files: string[] = [];
@@ -155,20 +151,16 @@ function defaultEnvFiles(env: NodeJS.ProcessEnv): string[] {
   return files;
 }
 
-/**
- * A frozen env snapshot built with the SAME file cascade
- * {@link loadConfigWithDefaults} feeds the config schema.
+/*
+ * `loadEnvWithDefaults` used to live here and is gone.
  *
- * This exists because there are two consumers of "the environment" in a
- * service — the config loader, and the `env:` secret provider — and they must
- * see one universe. A bare `loadEnv()` reads no files at all, so a service
- * wired that way resolves `POLARIS_*` config from `.env.local` while
- * `env:MY_TOKEN` from the same file fails as not-found: two behaviours for
- * one file, and the difference is invisible until someone stores a secret.
+ * It existed because a service had two consumers of "the environment" — the
+ * config loader and the `env:` secret provider — which had to see one
+ * universe. A bare `loadEnv()` reads no files, so a service wired that way
+ * resolved `POLARIS_*` config from `.env.local` while `env:MY_TOKEN` from the
+ * same file failed as not-found.
  *
- * Production hosts inject real environment variables and carry no `.env`
- * files, so there this is byte-identical to `loadEnv()`.
+ * The `env:` provider went with the rest of the secret resolver when
+ * per-project secrets moved into the database, leaving the config loader as
+ * the only consumer of the cascade — and it uses `defaultEnvFiles` directly.
  */
-export function loadEnvWithDefaults(options: Omit<LoadEnvOptions, "files"> = {}): EnvSource {
-  return loadEnv({ ...options, files: defaultEnvFiles(options.processEnv ?? process.env) });
-}

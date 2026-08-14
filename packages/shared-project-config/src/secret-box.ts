@@ -1,13 +1,18 @@
 /**
- * Redaction-safe wrapper for resolved secret values.
+ * Redaction-safe wrapper for secret values.
  *
- * Project-config snapshots carry resolved credentials rather than references,
- * which means plaintext lives in the cache for the snapshot's lifetime. This
- * box removes the whole class of accidental disclosure that would otherwise
- * follow: every path that turns an object into text — `console.log`, a pino
- * serializer, `JSON.stringify` into a DLQ payload or delivery record, string
- * interpolation into an error message, `util.inspect` in a stack trace —
- * yields `[redacted]`.
+ * Project-config snapshots carry credentials themselves rather than references
+ * to them, which means plaintext lives in the cache for the snapshot's
+ * lifetime. This box removes the whole class of accidental disclosure that
+ * would otherwise follow: every path that turns an object into text —
+ * `console.log`, a pino serializer, `JSON.stringify` into a DLQ payload or
+ * delivery record, string interpolation into an error message, `util.inspect`
+ * in a stack trace — yields `[redacted]`.
+ *
+ * This is what survived the move from `provider:ref` pointers to stored
+ * values. The box never had anything to do with WHERE a secret came from; it
+ * is about what happens to plaintext once something holds it, and holding
+ * plaintext is now the normal case rather than the brief one.
  *
  * Disclosure therefore requires an explicit {@link Secret.expose} call, which
  * is greppable and lint-restrictable to the modules that actually talk to a

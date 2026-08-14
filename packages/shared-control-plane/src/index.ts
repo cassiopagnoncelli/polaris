@@ -66,6 +66,7 @@ export {
   type ResolveActorOptions,
   resolveActor,
 } from "./resolver.js";
+export { isMaskedSecret, maskIfSecret, SECRET_MASK } from "./secret-masking.js";
 export {
   formatOperatorToken,
   OPERATOR_TOKEN_ID_PREFIX,

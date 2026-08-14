@@ -33,9 +33,7 @@ import {
   postgresEnvSchema,
   type RabbitmqConfig,
   rabbitmqEnvSchema,
-  type SecretProviderConfig,
   type ServiceConfig,
-  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -88,7 +86,6 @@ export interface MetaCapiRuntimeConfig {
   readonly http: HttpConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
-  readonly secretProvider: SecretProviderConfig;
   readonly meta: MetaCapiConfig;
 }
 
@@ -98,7 +95,6 @@ export function metaCapiConfigSchema() {
     http: httpEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
-    secretProvider: secretProviderEnvSchema,
     meta: metaCapiEnvSchema,
   });
 }

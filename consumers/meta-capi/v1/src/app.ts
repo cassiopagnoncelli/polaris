@@ -13,7 +13,6 @@
  *          `DestinationInstanceCache` (per-event lookup)
  *        - `createKyselyDeliveryRecordRepository` (delivery_records)
  *        - `createKyselyDlqRecordRepository` (P9-007 triage queue)
- *        - `SecretResolver` with the env-backed adapter
  *        - a fresh `DestinationMetrics` registry threaded into `/metrics`
  *   5. Hand the runtime's `start`/`stop` and lifecycle to
  *      `bootstrapService`.
@@ -23,7 +22,6 @@
  * RabbitMQ broker or PostgreSQL.
  */
 
-import { loadEnvWithDefaults } from "@polaris/shared-config";
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -46,7 +44,6 @@ import {
   createProjectConfigStore,
   type ProjectConfigStore,
 } from "@polaris/shared-project-config";
-import { createSecretResolver, type SecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -85,7 +82,6 @@ export interface BuildAppOptions {
   readonly instances?: DestinationInstanceReader;
   readonly records?: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
-  readonly secrets?: SecretResolver;
   /** Injected in tests; built from the db handle otherwise. */
   readonly projectConfigStore?: ProjectConfigStore;
   readonly fetch?: typeof globalThis.fetch;
@@ -124,16 +120,6 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
 
   // ---- PostgreSQL ----------------------------------------------------
   const { db, ownsDb } = buildDb(config, options.db);
-
-  // ---- secrets -------------------------------------------------------
-  const secrets =
-    options.secrets ??
-    createSecretResolver({
-      config: config.secretProvider,
-      env: loadEnvWithDefaults(),
-      logger,
-      deploymentEnvironment: config.service.environment,
-    });
 
   // ---- metrics + transport hooks ------------------------------------
   // Built before the transport because the hooks need the registry: until
@@ -203,7 +189,6 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
     options.projectConfigStore ??
     createProjectConfigStore({
       db,
-      secrets,
       listener: createPgListenerTransport({
         connectionString: postgresConnectionString(config.postgres),
         logger,
@@ -228,7 +213,6 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
     instances,
     records,
     dlqRecords,
-    secrets,
     logger: consumerLogger,
     allowReplay: config.meta.allowReplay,
     projectConfig: createDestinationProjectConfigLookup({

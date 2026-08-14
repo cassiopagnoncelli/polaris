@@ -230,9 +230,6 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../packages/shared-metrics
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../../packages/shared-secrets
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../packages/shared-service-bootstrap
@@ -296,9 +293,6 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../packages/shared-metrics
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../../packages/shared-secrets
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../packages/shared-service-bootstrap
@@ -335,9 +329,6 @@ importers:
       '@polaris/shared-project-config':
         specifier: workspace:*
         version: link:../../../packages/shared-project-config
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../../packages/shared-secrets
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../packages/shared-service-bootstrap
@@ -371,9 +362,6 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../packages/shared-metrics
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../../packages/shared-secrets
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../packages/shared-service-bootstrap
@@ -407,9 +395,6 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../packages/shared-metrics
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../../packages/shared-secrets
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../packages/shared-service-bootstrap
@@ -934,6 +919,9 @@ importers:
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../packages/shared-config
+      '@polaris/shared-control-plane':
+        specifier: workspace:*
+        version: link:../packages/shared-control-plane
       '@polaris/shared-control-plane-db':
         specifier: workspace:*
         version: link:../packages/shared-control-plane-db
@@ -949,9 +937,6 @@ importers:
       '@polaris/shared-project-config':
         specifier: workspace:*
         version: link:../packages/shared-project-config
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../packages/shared-secrets
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../packages/shared-transport

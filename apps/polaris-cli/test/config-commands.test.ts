@@ -32,7 +32,6 @@ vi.mock("@polaris/project-config-schemas", () => ({
 import type { CommandContext } from "../src/command.js";
 import type { ConfigStore } from "../src/commands/config/index.js";
 import { buildConfigSetRunner } from "../src/commands/config/index.js";
-import { UsageError } from "../src/errors.js";
 
 function makeContext(): CommandContext {
   const noopLogger = {
@@ -85,39 +84,35 @@ const BASE_ARGS = {
 };
 
 describe("config set — schema-declared secret keys", () => {
-  it("refuses a secret-typed key without --secret-ref, before touching the store", async () => {
-    // The failure this prevents: an operator omits the flag and a live
-    // credential lands in PostgreSQL as ordinary jsonb, past every gate that
-    // only fires when is_secret_ref is set.
+  it("FORCES is_secret on a secret-typed key even when --secret is omitted", async () => {
+    // The behaviour changed shape here, and the reason is worth keeping. This
+    // used to REFUSE: the flag decided which column semantics applied, and a
+    // write without it would have put a credential in a slot documented to
+    // hold a `provider:ref` pointer. Every value now lives in the same column,
+    // so a forgotten flag is not an unsafe write — it is a value that would be
+    // handled carelessly, printed in `config list` and copied into the audit
+    // row. Deciding from the schema fixes that without making the operator
+    // re-run the command.
     const { store, calls } = recordingStore();
     const runner = buildConfigSetRunner({ openStore: () => store });
 
-    await expect(
-      runner({ ...BASE_ARGS, key: "access_token", value: "sk-live-oops" }, makeContext()),
-    ).rejects.toThrow(UsageError);
-    await expect(
-      runner({ ...BASE_ARGS, key: "access_token", value: "sk-live-oops" }, makeContext()),
-    ).rejects.toThrow(/secret-typed key/);
-    expect(calls).toHaveLength(0);
+    await runner({ ...BASE_ARGS, key: "access_token", value: "EAAB-live-token" }, makeContext());
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      input: { isSecret: true, value: "EAAB-live-token" },
+    });
   });
 
-  it("accepts the same key with --secret-ref and a reference", async () => {
+  it("accepts the same key with --secret, storing the credential itself", async () => {
     const { store, calls } = recordingStore();
     const runner = buildConfigSetRunner({ openStore: () => store });
 
     await runner(
-      {
-        ...BASE_ARGS,
-        key: "access_token",
-        value: "vault:polaris/production/storefront/meta-capi",
-        secretRef: true,
-      },
+      { ...BASE_ARGS, key: "access_token", value: "EAAB-live-token", secret: true },
       makeContext(),
     );
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      input: { isSecretRef: true, value: "vault:polaris/production/storefront/meta-capi" },
-    });
+    expect(calls[0]).toMatchObject({ input: { isSecret: true, value: "EAAB-live-token" } });
   });
 
   it("leaves non-secret keys of the same namespace alone", async () => {
@@ -126,6 +121,20 @@ describe("config set — schema-declared secret keys", () => {
 
     await runner({ ...BASE_ARGS, key: "graph_host", value: "graph.facebook.com" }, makeContext());
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ input: { isSecretRef: false } });
+    expect(calls[0]).toMatchObject({ input: { isSecret: false } });
+  });
+
+  it("--secret can ADD sensitivity to a key no schema declares", async () => {
+    // Free-form keys are the reason the flag still exists: the generated
+    // schemas know nothing about them, so the server has nothing to decide
+    // from and the operator's word is all there is.
+    const { store, calls } = recordingStore();
+    const runner = buildConfigSetRunner({ openStore: () => store });
+
+    await runner(
+      { ...BASE_ARGS, key: "partner_api_key", value: "pk-live-xyz", secret: true },
+      makeContext(),
+    );
+    expect(calls[0]).toMatchObject({ input: { isSecret: true } });
   });
 });

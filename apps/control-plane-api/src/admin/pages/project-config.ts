@@ -23,9 +23,10 @@
  * operators learn to type past it, which costs the ritual its meaning on the
  * changes that need it.
  *
- * Values are never resolved here. A secret-typed row shows its
- * `<provider>:<ref>` pointer, matching how `pages/destinations.ts` already
- * renders `secret_ref`.
+ * A secret-typed row shows `[redacted]`, and this page never holds anything
+ * else: `listProjectConfig` masks secret values on the way out, so the
+ * plaintext does not reach the renderer to be leaked by a future edit here.
+ * `polaris config get --reveal` is the disclosure path.
  */
 
 import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
@@ -110,7 +111,7 @@ export interface DeclaredKeyFacts {
  *
  * The server consults this rather than trusting the form, for two decisions
  * that must not be client-controlled: whether a key is secret-typed (a write
- * omitting the `secret_ref` flag must not store a credential as a plain
+ * omitting the `secret` flag must not store a credential as a plainly-visible
  * value — plan §3.5 assigns this check to the admin API), and whether the
  * typed-confirmation ritual applies.
  */
@@ -128,11 +129,12 @@ export function declaredKeyFacts(namespace: string, key: string): DeclaredKeyFac
  * Parse a form value the way the CLI does: JSON when it parses, else a string.
  *
  * So `5000` stores a number and `graph.facebook.com` stores a string, which
- * is what an operator typing into a form expects. A secret reference always
- * stays a string — a ref that happens to look numeric is still a ref.
+ * is what an operator typing into a form expects. A secret always stays a
+ * string: `project_config_secret_is_string` requires it, and a credential of
+ * all digits must not be retyped as a number and lose its leading zeroes.
  */
-export function parseConfigFormValue(raw: string, isSecretRef: boolean): unknown {
-  if (isSecretRef) return raw;
+export function parseConfigFormValue(raw: string, isSecret: boolean): unknown {
+  if (isSecret) return raw;
   try {
     return JSON.parse(raw);
   } catch {
@@ -322,9 +324,12 @@ function renderRow(input: ProjectConfigPanelInput, entry: EffectiveEntry): Html 
       }
       return html`<span class="muted">—</span>`;
     }
-    if (stored.is_secret_ref) {
-      // The pointer, never a resolved value. Nothing on the write side ever
-      // stored one, so there is nothing here to leak.
+    if (stored.is_secret) {
+      // `stored.value` is already `SECRET_MASK` — `listProjectConfig` masks on
+      // the way out, so this page never holds the plaintext to begin with.
+      // Rendering it rather than hard-coding the mask keeps one spelling, and
+      // means a future unmasked read shows up here as a visible regression
+      // rather than silently rendering a credential.
       return html`<span class="badge">secret</span> ${mono(String(stored.value))}`;
     }
     return mono(JSON.stringify(stored.value));
@@ -362,7 +367,7 @@ function renderRow(input: ProjectConfigPanelInput, entry: EffectiveEntry): Html 
 function renderRowActions(input: ProjectConfigPanelInput, entry: EffectiveEntry): Html {
   const label = `${entry.namespace}.${entry.key}`;
   const base = `${ADMIN_PREFIX}/projects/${encodeURIComponent(input.projectId)}/config/${encodeURIComponent(input.environment)}`;
-  const secret = entry.declared?.secret === true || entry.stored?.is_secret_ref === true;
+  const secret = entry.declared?.secret === true || entry.stored?.is_secret === true;
   const required = entry.declared?.required === true;
 
   const setNeedsRitual = needsConfirmation({
@@ -375,7 +380,7 @@ function renderRowActions(input: ProjectConfigPanelInput, entry: EffectiveEntry)
   const hidden: Record<string, string> = {
     namespace: entry.namespace,
     key: entry.key,
-    secret_ref: secret ? "true" : "false",
+    secret: secret ? "true" : "false",
     // Compare-and-set: empty for an unset key, which the handler reads as
     // "expect no row".
     expected_updated_at: entry.stored?.updated_at ?? "",
@@ -547,8 +552,8 @@ function renderAddForm(input: ProjectConfigPanelInput): Html {
           <input type="text" name="value" autocomplete="off" required />
         </label>
         <label class="checkbox">
-          <input type="checkbox" name="secret_ref" value="true" />
-          <span>This is a secret reference (<code>provider:ref</code>), not a value</span>
+          <input type="checkbox" name="secret" value="true" />
+          <span>Sensitive — mask this value in lists, exports and the audit log</span>
         </label>
         <label>
           <span>Reason (recorded in the audit log)</span>

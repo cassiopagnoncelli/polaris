@@ -103,6 +103,7 @@ export {
   type ProjectConfigRow,
   type ProjectConfigValueRef,
   readProjectConfigVersion,
+  revealProjectConfigSecret,
 } from "./queries/project-config.js";
 export {
   fetchAllProjects,
@@ -183,6 +184,7 @@ export {
   type DestinationAuditSnapshot,
   disableDestinationWithAudit,
   enableDestinationWithAudit,
+  rotateDestinationSecretWithAudit,
   setDestinationReplayOptInWithAudit,
   toDestinationSnapshot,
   updateDestinationOpsWithAudit,
@@ -205,7 +207,7 @@ export {
 export {
   type InvalidateProjectConfigInput,
   invalidateProjectConfigWithAudit,
-  PlaintextSecretError,
+  MaskedSecretWriteError,
   type ProjectConfigAuditSnapshot,
   type SetProjectConfigInput,
   setProjectConfigValueWithAudit,

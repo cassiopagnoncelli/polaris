@@ -20,7 +20,7 @@
 
 import fastifyCookie from "@fastify/cookie";
 import { MappingSemanticsError } from "@polaris/shared-control-plane";
-import { PlaintextSecretError } from "@polaris/shared-control-plane-db";
+import { MaskedSecretWriteError } from "@polaris/shared-control-plane-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
 import { ProblemError } from "@polaris/shared-service-bootstrap";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
@@ -810,15 +810,14 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           // A key the schema marks secret is secret regardless of what the
           // form says, and a stored secret row stays one. Without this, a
           // write omitting the flag would store a live credential as a plain
-          // value — plan §3.5 assigns this check to the admin API.
-          const isSecretRef =
-            facts.secret ||
-            existing?.is_secret_ref === true ||
-            formField(request, "secret_ref") === "true";
+          // value — visible in every list view and copied into the audit row.
+          // Plan §3.5 assigns this check to the admin API.
+          const isSecret =
+            facts.secret || existing?.is_secret === true || formField(request, "secret") === "true";
           const ritualRequired = needsConfirmation({
             action: action === "unset" ? "unset" : "set",
             environment,
-            secret: isSecretRef,
+            secret: isSecret,
             required: facts.required,
           });
 
@@ -898,8 +897,8 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
                   environment,
                   namespace,
                   configKey: key,
-                  value: parseConfigFormValue(raw, isSecretRef),
-                  isSecretRef,
+                  value: parseConfigFormValue(raw, isSecret),
+                  isSecret,
                 },
                 check.reason,
                 actor,
@@ -908,7 +907,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           } catch (err) {
             // The write path's own gates. An operator mistake, not a fault:
             // re-render with the message rather than a 500.
-            if (err instanceof MappingSemanticsError || err instanceof PlaintextSecretError) {
+            if (err instanceof MappingSemanticsError || err instanceof MaskedSecretWriteError) {
               const message = err.message;
               request.log.warn(
                 { event: "admin.mutation_refused", action: `config.${action}`, err },

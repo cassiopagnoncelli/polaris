@@ -1,9 +1,11 @@
 /**
  * `polaris destinations show <destination_id>` — read-only.
  *
- * Renders the full destination row including operational tuning fields and
- * the provider-namespaced `secret_ref`. The CLI never resolves the secret
- * value; it only displays the reference string.
+ * Renders the destination row's identity and operational tuning fields. The
+ * credential is not among them and cannot be: `secret_value` holds the vendor
+ * credential in plaintext, and `findDestinationById` does not select it.
+ * `polaris destinations rotate-secret` is how it changes; there is no CLI verb
+ * that prints it.
  *
  * Returns exit code 2 (usage) when the id is unknown.
  *
@@ -98,7 +100,6 @@ function renderHuman(row: DestinationRow): string {
     `environment           ${row.environment}`,
     `vendor                ${row.vendor}`,
     `instance_label        ${row.instance_label}`,
-    `secret_ref            ${row.secret_ref}`,
     `status                ${row.status}`,
     `mode                  ${row.mode}`,
     `max_concurrency       ${row.max_concurrency}`,

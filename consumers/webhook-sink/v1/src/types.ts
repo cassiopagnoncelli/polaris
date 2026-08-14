@@ -40,21 +40,21 @@ export interface WebhookPayload {
 }
 
 /**
- * Webhook receiver configuration resolved at delivery time.
+ * Webhook receiver configuration, parsed from the destination's credential.
  *
- * Carried inside the secret value (so production rotation works through
- * the existing secret resolver) AND/OR as plain instance fields when the
- * receiver does not need a signing secret.
+ * The target URL rides inside `destinations.secret_value` rather than in a
+ * plain column because for this vendor the URL IS the credential — anyone who
+ * knows it can post events to the receiver — and because it lets a URL and a
+ * signing key rotate together in one `polaris destinations rotate-secret`.
  *
- * `secret_ref` resolution rules:
+ * Accepted shapes:
  *
- *   - When the resolved secret is a URL (starts with `https://`), the
- *     consumer treats it as the target URL with no HMAC signing.
- *   - When the resolved secret is a JSON document of shape
- *     `{ "url": string, "signing_key": string }`, the consumer POSTs to
- *     `url` and signs the body with HMAC-SHA256(signing_key, body).
+ *   - a URL (starts with `https://`): the target, with no HMAC signing;
+ *   - a JSON document `{ "url": string, "signing_key": string }`: POST to
+ *     `url` and sign the body with HMAC-SHA256(signing_key, body).
  *
- * No other secret shapes are supported in v1.
+ * No other shapes are supported in v1. Anything else is `failed_permanent`
+ * with `error_class: 'auth'`.
  */
 export interface ResolvedWebhookConfig {
   /** Where to POST. HTTPS in production; HTTP allowed only when the */

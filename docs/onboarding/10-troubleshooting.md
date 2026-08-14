@@ -106,10 +106,10 @@ the vendor is rejecting the request shape, or the credential is wrong.
    The row carries `vendor_response_summary` — the receiver's reason
    truncated to 1 KB. That string is your evidence.
 3. If `vendor_response_summary` says "invalid signature" / "auth failed"
-   / "credential expired", the operator rotates the secret in the
-   secret provider (the `secret_ref` doesn't change, but the value
-   behind it does). Then resume delivery — the runtime picks up the new
-   value on the next refresh.
+   / "credential expired", issue a new credential at the vendor and run
+   `polaris destinations rotate-secret <id> --secret-value <new>
+   --reason <why>`. Then resume delivery — the runtime picks up the new
+   value within the 60s instance-cache window, no restart.
 4. If `vendor_response_summary` describes a schema mismatch, the
    destination's mapper code (`consumers/<vendor>/v<n>/mappers/`) is
    probably stale relative to the vendor's API. File a follow-up to

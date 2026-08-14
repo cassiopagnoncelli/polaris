@@ -20,7 +20,6 @@ import {
   InMemoryDlqRecordRepository,
 } from "@polaris/shared-destinations";
 import { createLogger } from "@polaris/shared-logger";
-import { SecretResolver } from "@polaris/shared-secrets";
 import type { PolarisProducer } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
@@ -77,20 +76,6 @@ const NOOP_PRODUCER = {
   publishToQueue: async () => undefined,
 } as unknown as PolarisProducer;
 
-function makeSecretResolver(map: Record<string, string>): SecretResolver {
-  return new SecretResolver({
-    adapters: {
-      env: {
-        async getSecret(ref: string) {
-          const value = map[ref];
-          if (value === undefined) throw new Error(`secret not found: env:${ref}`);
-          return value;
-        },
-      },
-    },
-  });
-}
-
 function fixtureEnvelope(overrides: Partial<NormalizableEnvelope> = {}): NormalizableEnvelope {
   return {
     event_id: "evt_int_ga4_001",
@@ -141,11 +126,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
   it("delivers a checkout.started event and writes status=accepted on HTTP 204", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
 
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({
       fetch,
@@ -158,7 +142,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -186,11 +169,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
   it("stamps purchase.transaction_id as the dedupe_key for payment.approved", async () => {
     const { fetch } = makeFetch(() => new Response(null, { status: 204 }));
 
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -199,7 +181,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -222,11 +203,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("drops events when required analytics consent is denied", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -235,7 +215,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -254,11 +233,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("writes mapped_failed for unsupported canonical events", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -267,7 +245,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -284,11 +261,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("suppresses replay traffic by default (no delivery, no record)", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -297,7 +273,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
       // allowReplay defaults to false.
     });
@@ -315,11 +290,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("delivers a signup.completed event as sign_up with method='polaris'", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -328,7 +302,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -350,11 +323,10 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("delivers a subscription.renewed event as subscription_renewed with currency + value + transaction_id", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -363,7 +335,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -394,12 +365,11 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
 
   it("maps a 401 to failed_permanent + auth and writes a dlq_records row", async () => {
     const { fetch } = makeFetch(() => new Response("nope", { status: 401 }));
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
     const dlqRecords = new InMemoryDlqRecordRepository();
-    const secrets = makeSecretResolver({ GA4_SECRET: SECRET });
 
     const descriptor = createGa4Descriptor({ fetch, requestTimeoutMs: 5000 });
     const runtime = createDestinationConsumer({
@@ -409,7 +379,6 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
       instances,
       records,
       dlqRecords,
-      secrets,
       logger,
     });
 

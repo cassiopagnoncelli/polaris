@@ -9,9 +9,9 @@
  *
  * `toDestinationSnapshot` is the before/after shape the CLI records. It is
  * shared rather than re-derived so a reader diffing two audit rows sees the
- * same fields regardless of which surface wrote them — and so the snapshot
- * keeps carrying `secret_ref` (a `<provider>:<ref>` pointer) and never a
- * resolved secret.
+ * same fields regardless of which surface wrote them — and it carries no
+ * credential at all. `DestinationRow` no longer has one to carry: the readers
+ * in ../queries/destinations.ts do not select `secret_value`.
  */
 
 import type { Database } from "@polaris/shared-db";
@@ -29,6 +29,7 @@ import {
   insertDestination,
   type UpdateDestinationOpsInput,
   updateDestinationOps,
+  updateDestinationSecret,
 } from "../queries/destinations.js";
 import { type AuditContext, type MutationOutcome, withAudit } from "./audited.js";
 
@@ -119,9 +120,10 @@ export async function enableDestinationWithAudit(
  * Create a destination.
  *
  * Creation is the one destination mutation with no `before` — there was no
- * row. The snapshot is the row as it will exist, and `secret_ref` rides along
- * as the `<provider>:<ref>` pointer it is; the resolved secret never touches
- * this package.
+ * row. The snapshot is the row as it will exist, minus the credential:
+ * `secret_value` used to ride along here as the `<provider>:<ref>` pointer it
+ * then was, which would now write a live vendor token into `audit_records` on
+ * every `destinations create`.
  */
 export async function createDestinationWithAudit(
   db: Kysely<Database>,
@@ -144,7 +146,6 @@ export async function createDestinationWithAudit(
         environment: input.environment,
         vendor: input.vendor,
         instance_label: input.instance_label,
-        secret_ref: input.secret_ref,
         mode: input.mode,
       },
     },
@@ -152,6 +153,42 @@ export async function createDestinationWithAudit(
       await insertDestination(trx, input);
       return true;
     },
+  );
+}
+
+/**
+ * Replace a destination's vendor credential.
+ *
+ * The audit row records that a rotation happened, by whom and why — never the
+ * old or new value. `before` and `after` are therefore identical, which looks
+ * odd next to the other mutations here and is correct: the only field that
+ * changed is the one field this log may not hold. The `reason` an operator
+ * supplies is what carries the meaning ("leaked in a screenshot", "quarterly
+ * rotation"), and `updated_at` moves on the row itself.
+ *
+ * Always `applied: true` when the row exists — see `updateDestinationSecret`
+ * for why there is no did-it-actually-change comparison.
+ */
+export async function rotateDestinationSecretWithAudit(
+  db: Kysely<Database>,
+  input: { row: DestinationRow; secretValue: string },
+  audit: AuditContext,
+): Promise<MutationOutcome> {
+  const snapshot = toDestinationSnapshot(input.row);
+  return withAudit(
+    db,
+    audit,
+    {
+      action: "destinations.rotate-secret",
+      targetType: "destination",
+      targetId: input.row.destination_id,
+      projectId: input.row.project_id,
+      environment: input.row.environment as AuditEnvironment,
+      before: snapshot,
+      after: snapshot,
+    },
+    (trx) =>
+      updateDestinationSecret(trx, input.row.destination_id, input.secretValue, audit.occurredAt),
   );
 }
 

@@ -1,15 +1,19 @@
 /**
  * Cold-path snapshot assembly.
  *
- * Two queries per assembly — the namespace's value rows, and the scope's
- * version — plus one secret resolution per secret-flagged row. Everything
- * here runs only on a cache miss or a stale refetch; the hot read path never
- * reaches this module.
+ * Exactly two queries per assembly — the namespace's value rows, and the
+ * scope's version. Everything here runs only on a cache miss or a stale
+ * refetch; the hot read path never reaches this module.
+ *
+ * There is no third step: secrets are stored values, so assembly reads them
+ * from the same rows as everything else and boxes them. While they were
+ * `provider:ref` pointers this function also made one network call per
+ * secret-flagged row, which is what made a cold assembly worth keeping off
+ * the request path in the first place.
  */
 
 import type { Database } from "@polaris/shared-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
-import type { SecretResolver } from "@polaris/shared-secrets";
 import type { Kysely } from "kysely";
 import { ProjectConfigAssemblyError } from "./errors.js";
 import { isSecret, Secret } from "./secret-box.js";
@@ -89,17 +93,16 @@ export function snapshotKey(key: ProjectConfigKey): string {
  */
 export async function assembleSnapshot(input: {
   readonly db: Kysely<Database>;
-  readonly secrets: SecretResolver;
   readonly key: ProjectConfigKey;
   readonly now: () => Date;
 }): Promise<ProjectConfigSnapshot> {
-  const { db, secrets, key } = input;
+  const { db, key } = input;
   try {
     const version = await readVersion(db, key.projectId, key.environment);
 
     const rows = await db
       .selectFrom("project_config")
-      .select(["config_key", "value", "is_secret_ref"])
+      .select(["config_key", "value", "is_secret"])
       .where("project_id", "=", key.projectId)
       .where("environment", "=", key.environment)
       .where("namespace", "=", key.namespace)
@@ -107,11 +110,12 @@ export async function assembleSnapshot(input: {
 
     const values: Record<string, unknown> = {};
     for (const row of rows) {
-      if (row.is_secret_ref) {
-        // The stored value is a `provider:ref` string, enforced by the
-        // `project_config_secret_ref_shape` CHECK.
-        const resolved = await secrets.resolve(row.value as string);
-        values[row.config_key] = new Secret(resolved);
+      if (row.is_secret) {
+        // Boxed at the boundary, not at the point of use: from here on the
+        // value cannot reach a log line, a delivery record or a DLQ payload
+        // without someone writing `.expose()`. The `project_config_secret_is_string`
+        // CHECK is what makes the cast hold for any row PostgreSQL accepted.
+        values[row.config_key] = new Secret(row.value as string);
       } else {
         values[row.config_key] = row.value;
       }
@@ -138,16 +142,14 @@ export function createSnapshot(input: {
   readonly resolvedAt: number;
 }): ProjectConfigSnapshot {
   const values = Object.freeze({ ...input.values });
-  const hasSecret = Object.values(values).some(isSecret);
 
-  const snapshot: ProjectConfigSnapshot & { readonly hasSecret: boolean } = {
+  const snapshot: ProjectConfigSnapshot = {
     projectId: input.key.projectId,
     environment: input.key.environment,
     namespace: input.key.namespace,
     version: input.version,
     values,
     resolvedAt: input.resolvedAt,
-    hasSecret,
     toJSON(): unknown {
       // Secret.toJSON already redacts, but mapping explicitly means the
       // redaction does not depend on JSON.stringify's willingness to call it.
@@ -166,9 +168,4 @@ export function createSnapshot(input: {
     },
   };
   return Object.freeze(snapshot);
-}
-
-/** Whether a snapshot holds any resolved secret, and so has a refresh deadline. */
-export function snapshotHasSecret(snapshot: ProjectConfigSnapshot): boolean {
-  return Object.values(snapshot.values).some(isSecret);
 }

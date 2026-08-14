@@ -15,6 +15,7 @@
  */
 
 import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/idp";
+import { SECRET_MASK } from "@polaris/shared-control-plane";
 import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
 import { describe, expect, it, vi } from "vitest";
 import type { AdminMutations, MutationOutcome } from "../src/admin/actions/mutations.js";
@@ -39,7 +40,6 @@ function destination(overrides: Partial<DestinationRow> = {}): DestinationRow {
     environment: "development",
     vendor: "ga4",
     instance_label: LABEL,
-    secret_ref: "env:GA4_TOKEN",
     status: "active",
     mode: "live",
     max_concurrency: 4,
@@ -881,14 +881,21 @@ const PROJECT: ProjectRow = {
   created_at: new Date("2026-05-12T10:00:00.000Z"),
 };
 
-/** A stored production secret: the shape whose edits demand the ritual. */
+/**
+ * A stored production secret: the shape whose edits demand the ritual.
+ *
+ * `value` is `SECRET_MASK` because that is what `listProjectConfig` returns
+ * for a secret row — the panel never receives the plaintext. A fixture
+ * carrying a real-looking credential here would be testing a shape the
+ * handler cannot actually be given.
+ */
 const SECRET_ROW: ProjectConfigRow = {
   project_id: "storefront",
   environment: "production",
   namespace: "meta-capi",
   config_key: "access_token",
-  value: "vault:polaris/production/storefront/meta-capi",
-  is_secret_ref: true,
+  value: SECRET_MASK,
+  is_secret: true,
   updated_at: "2026-08-13T09:30:00.000Z",
   updated_by: "ops@example.com",
 };
@@ -914,10 +921,10 @@ describe("admin mutations — project-config writes", () => {
       payload: form({
         namespace: "meta-capi",
         key: "access_token",
-        value: "vault:polaris/production/storefront/meta-capi-2",
-        secret_ref: "true",
+        value: "EAAB-rotated-token",
+        secret: "true",
         expected_updated_at: SECRET_ROW.updated_at,
-        reason: "rotating to the new mount",
+        reason: "rotating the leaked token",
         // no confirm field at all
       }),
     });
@@ -925,7 +932,7 @@ describe("admin mutations — project-config writes", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("applies the same set when the label is typed, and FORCES is_secret_ref", async () => {
+  it("applies the same set when the label is typed, and FORCES is_secret", async () => {
     const spy = vi.fn(async () => APPLIED);
     const app = await buildApp({
       row: destination(),
@@ -940,20 +947,20 @@ describe("admin mutations — project-config writes", () => {
       payload: form({
         namespace: "meta-capi",
         key: "access_token",
-        value: "vault:polaris/production/storefront/meta-capi-2",
+        value: "EAAB-rotated-token",
         // Deliberately OMITTED: the stored row is a secret, and a write that
         // drops the flag must not demote a credential slot to plaintext.
-        // secret_ref: absent
+        // secret: absent
         expected_updated_at: SECRET_ROW.updated_at,
-        reason: "rotating to the new mount",
+        reason: "rotating the leaked token",
         confirm: "meta-capi.access_token",
       }),
     });
     expect(res.statusCode).toBe(303);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ isSecretRef: true, configKey: "access_token" }),
-      "rotating to the new mount",
+      expect.objectContaining({ isSecret: true, configKey: "access_token" }),
+      "rotating the leaked token",
       expect.anything(),
     );
     await app.app.close();
@@ -998,7 +1005,7 @@ describe("admin mutations — project-config writes", () => {
           namespace: "ingest",
           config_key: "rate_limit_rps",
           value: 5000,
-          is_secret_ref: false,
+          is_secret: false,
         },
       ],
     });
@@ -1039,7 +1046,7 @@ describe("admin mutations — project-config writes", () => {
     });
     expect(res.statusCode).toBe(303);
     expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ isSecretRef: false, value: 5000 }),
+      expect.objectContaining({ isSecret: false, value: 5000 }),
       "raising the launch budget",
       expect.anything(),
     );

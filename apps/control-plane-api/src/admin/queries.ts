@@ -73,7 +73,6 @@ export interface DestinationRow {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
   readonly status: string;
   readonly mode: string;
   readonly max_concurrency: number;
@@ -477,13 +476,16 @@ export function createKyselyAdminQueries(db: Kysely<Database>): AdminQueries {
   };
 }
 
+// `secret_value` is absent on purpose, the same rule `api_keys.hash` follows:
+// the column holds a vendor credential in plaintext, and every consumer of
+// this list renders it into a page. Nothing in the panel reads it — a
+// destination credential is write-only through every Polaris surface.
 const DESTINATION_COLUMNS = [
   "destination_id",
   "project_id",
   "environment",
   "vendor",
   "instance_label",
-  "secret_ref",
   "status",
   "mode",
   "max_concurrency",

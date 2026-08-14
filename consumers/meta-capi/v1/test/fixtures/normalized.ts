@@ -19,14 +19,22 @@ import type {
 
 import type { MetaCapiPayload } from "../../src/types.js";
 
-export function fixtureDestinationInstance(): DestinationInstance {
+/**
+ * A destination instance for the runtime under test.
+ *
+ * `secretValue` is a parameter because the credential now lives ON this row —
+ * it used to be a `provider:ref` pointer here and a resolver double in the
+ * test, and the value a delivery actually saw came from the double. Tests that
+ * exercise a malformed or unusual credential pass it in.
+ */
+export function fixtureDestinationInstance(secretValue = ""): DestinationInstance {
   return {
     destination_id: "polaris_dst_test_meta",
     project_id: "storefront",
     environment: "production",
     vendor: "meta-capi",
     instance_label: "meta-ads-main",
-    secret_ref: "env:META_CAPI_SECRET",
+    secret_value: secretValue,
     status: "active",
     mode: "live",
     max_concurrency: 4,

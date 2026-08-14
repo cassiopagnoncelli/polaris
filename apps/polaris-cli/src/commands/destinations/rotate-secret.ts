@@ -1,19 +1,32 @@
 /**
- * `polaris destinations disable <destination_id> --reason <reason>` — mutating.
+ * `polaris destinations rotate-secret <destination_id> --secret-value <credential>
+ *   --reason <reason>` — mutating.
  *
- * Transitions a destination's `status` to `'disabled'` and stamps the
- * operator-supplied `--reason` into `disabled_reason`. Idempotent: running
- * on an already-disabled destination prints "already disabled" and exits 0.
- * The original `disabled_reason` is preserved when the row is already
- * disabled — re-running does not overwrite the existing reason.
+ * Replaces a destination's stored vendor credential.
  *
- * The `--reason` flag is required so the audit record carries a structured
- * rationale, not just a free-text justification field.
+ * This command exists because the credential IS the stored value. While
+ * `destinations` held a `<provider>:<ref>` pointer, rotating meant replacing
+ * the secret behind the pointer in Vault and Polaris had nothing to do — the
+ * row never changed, and there was deliberately no CLI verb for it. With the
+ * value in the row, the alternatives to this command would be recreating the
+ * destination (a new `destination_id`, breaking replay pins and delivery
+ * history) or direct SQL (no audit row).
  *
- * Audit trail: when the transition lands, this command INSERTs a row into
- * `audit_records` inside the SAME transaction as the status UPDATE. The
- * `reason` operator-supplied value is stored on the audit row. Neither
- * `before` nor `after` carry a resolved secret value.
+ * Not idempotent in the sense `enable` / `disable` are: this command cannot
+ * report "already set to that" without reading the old credential back into
+ * the process to compare, which is exactly the read this codebase confines to
+ * the delivery path. Re-running is a harmless no-op write that bumps
+ * `updated_at` and records a second audit row.
+ *
+ * Audit trail: an `audit_records` row lands in the SAME transaction as the
+ * UPDATE, with matching `before` and `after` snapshots — the one field that
+ * changed is the one field the audit log may not hold. `--reason` is required
+ * and is what carries the meaning: "leaked in a support ticket", "quarterly
+ * rotation", "vendor revoked the old token".
+ *
+ * The credential reaches this process through argv, so it lands in shell
+ * history. For a rotation prompted by a leak, prefer the admin UI's form; if
+ * you use this command, clear the history entry afterwards.
  *
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
@@ -25,20 +38,21 @@ import {
   type AuditEnvironment,
   connectDb,
   type DestinationRow,
-  disableDestinationWithAudit,
   findDestinationById,
+  rotateDestinationSecretWithAudit,
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import type { DestinationAuditSnapshot } from "./enable.js";
-import { rejectMappingArguments } from "./validation.js";
+import { rejectMappingArguments, validateSecretValue } from "./validation.js";
 
-interface DestinationsDisableArgs {
+interface DestinationsRotateSecretArgs {
   readonly destinationId: string;
+  readonly secretValue?: string;
   readonly reason?: string;
 }
 
-export interface DestinationsDisableAuditPayload {
+export interface DestinationsRotateSecretAuditPayload {
   readonly auditId: string;
   readonly actorSource: AuditActorSource;
   readonly actorLabel: string;
@@ -50,58 +64,70 @@ export interface DestinationsDisableAuditPayload {
   readonly reason: string;
 }
 
-export interface DestinationsDisableStore {
+export interface DestinationsRotateSecretStore {
   findById(destinationId: string): Promise<DestinationRow | null>;
-  disableWithAudit(
+  rotateWithAudit(
     destinationId: string,
-    reason: string,
+    secretValue: string,
     now: Date,
-    audit: DestinationsDisableAuditPayload,
+    audit: DestinationsRotateSecretAuditPayload,
   ): Promise<boolean>;
   close(): Promise<void>;
 }
 
-export interface DestinationsDisableHooks {
-  readonly openStore?: () => DestinationsDisableStore;
+export interface DestinationsRotateSecretHooks {
+  readonly openStore?: () => DestinationsRotateSecretStore;
   readonly now?: () => Date;
   readonly generateAuditId?: () => string;
   readonly actorLabel?: () => string;
 }
 
-export const destinationsDisableCommand: CommandDefinition = {
-  id: "destinations.disable",
+export const destinationsRotateSecretCommand: CommandDefinition = {
+  id: "destinations.rotate-secret",
   mutates: true,
   register: (parent, deps) => {
     const cmd = parent
-      .command("disable <destination_id>")
+      .command("rotate-secret <destination_id>")
       .description(
-        "Disable a destination instance (status='disabled'). Idempotent: re-running on a disabled destination prints `already disabled` and exits 0.",
+        "Replace a destination's vendor credential. The new value is stored as given and never printed back.",
+      )
+      .requiredOption(
+        "--secret-value <credential>",
+        "The new vendor credential. Shape is the consumer's — meta-capi wants " +
+          '{"pixel_id":"…","access_token":"…"} JSON.',
       )
       .requiredOption(
         "--reason <reason>",
         "Operator rationale for the audit record. Free text, required.",
       );
-    cmd.action(async (destinationId: string, opts: { reason?: string }, command: Command) => {
-      const wrapped = deps.runCommand<DestinationsDisableArgs>(
-        { id: "destinations.disable", mutates: true },
-        runDestinationsDisable,
-      );
-      const args: DestinationsDisableArgs = {
-        destinationId,
-        ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
-      };
-      await wrapped(args, command);
-    });
+    cmd.action(
+      async (
+        destinationId: string,
+        opts: { secretValue?: string; reason?: string },
+        command: Command,
+      ) => {
+        const wrapped = deps.runCommand<DestinationsRotateSecretArgs>(
+          { id: "destinations.rotate-secret", mutates: true },
+          runDestinationsRotateSecret,
+        );
+        const args: DestinationsRotateSecretArgs = {
+          destinationId,
+          ...(opts.secretValue !== undefined ? { secretValue: opts.secretValue } : {}),
+          ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+        };
+        await wrapped(args, command);
+      },
+    );
   },
 };
 
-export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks = {}) {
+export function buildDestinationsRotateSecretRunner(hooks: DestinationsRotateSecretHooks = {}) {
   const nowFn = hooks.now ?? (() => new Date());
   const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
   const actorLabelOverride = hooks.actorLabel;
 
   return async function runner(
-    args: DestinationsDisableArgs,
+    args: DestinationsRotateSecretArgs,
     ctx: CommandContext,
   ): Promise<undefined> {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
@@ -110,6 +136,10 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
     if (id.length === 0) {
       throw new UsageError("destination_id is required");
     }
+    if (args.secretValue === undefined) {
+      throw new UsageError("--secret-value is required");
+    }
+    const secretValue = validateSecretValue(args.secretValue);
     const reason = args.reason?.trim();
     if (reason === undefined || reason.length === 0) {
       throw new UsageError("--reason is required for audit traceability");
@@ -124,64 +154,42 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
       if (existing === null) {
         throw new UsageError(`destination "${id}" not found`);
       }
-      if (existing.status === "disabled") {
-        emit(ctx, {
-          destinationId: id,
-          applied: false,
-          status: "disabled",
-          reason: existing.disabled_reason,
-        });
-        return undefined;
-      }
 
       const now = nowFn();
       const auditId = generateAuditId();
-      const auditPayload: DestinationsDisableAuditPayload = {
+      const snapshot = toSnapshot(existing);
+      const auditPayload: DestinationsRotateSecretAuditPayload = {
         auditId,
         actorSource: ctx.actor.source,
         actorLabel: actorLabelOverride?.() ?? ctx.actor.label,
         occurredAt: now,
-        before: toSnapshot(existing),
-        after: toSnapshot({
-          ...existing,
-          status: "disabled",
-          disabled_reason: reason,
-        }),
+        before: snapshot,
+        after: snapshot,
         projectId: existing.project_id,
         environment: existing.environment as AuditEnvironment,
         reason,
       };
 
-      const applied = await store.disableWithAudit(id, reason, now, auditPayload);
-      if (!applied) {
-        const after = await store.findById(id);
-        emit(ctx, {
-          destinationId: id,
-          applied: false,
-          status: after?.status ?? existing.status,
-          reason: after?.disabled_reason ?? null,
-        });
-        return undefined;
-      }
+      const applied = await store.rotateWithAudit(id, secretValue, now, auditPayload);
 
       ctx.logger.info(
         {
           audit_id: auditId,
-          audit_action: "destinations.disable",
+          audit_action: "destinations.rotate-secret",
           destination_id: id,
           project_id: existing.project_id,
           environment: existing.environment,
           vendor: existing.vendor,
           instance_label: existing.instance_label,
-          previous_status: existing.status,
-          new_status: "disabled",
+          // No credential field, old or new. The point of the command is the
+          // one thing this line may not carry.
           reason,
           occurred_at: now.toISOString(),
         },
-        "destination disabled (audit row persisted)",
+        "destination credential rotated (audit row persisted)",
       );
 
-      emit(ctx, { destinationId: id, applied: true, status: "disabled", reason });
+      emit(ctx, { destinationId: id, applied });
     } finally {
       await store.close();
     }
@@ -189,18 +197,18 @@ export function buildDestinationsDisableRunner(hooks: DestinationsDisableHooks =
   };
 }
 
-const runDestinationsDisable = buildDestinationsDisableRunner();
+const runDestinationsRotateSecret = buildDestinationsRotateSecretRunner();
 
-function defaultStore(env: NodeJS.ProcessEnv): DestinationsDisableStore {
+function defaultStore(env: NodeJS.ProcessEnv): DestinationsRotateSecretStore {
   const handle = connectDb({ env });
   return {
     findById: (id) => findDestinationById(handle.db, id),
-    disableWithAudit: async (id, reason, now, audit) => {
+    rotateWithAudit: async (id, secretValue, now, audit) => {
       const row = await findDestinationById(handle.db, id);
       if (row === null) return false;
-      const outcome = await disableDestinationWithAudit(
+      const outcome = await rotateDestinationSecretWithAudit(
         handle.db,
-        { row, reason },
+        { row, secretValue },
         {
           auditId: audit.auditId,
           actorSource: audit.actorSource,
@@ -237,34 +245,18 @@ function toSnapshot(row: DestinationRow): DestinationAuditSnapshot {
 interface EmitInput {
   readonly destinationId: string;
   readonly applied: boolean;
-  readonly status: string;
-  readonly reason: string | null;
 }
 
 function emit(ctx: CommandContext, input: EmitInput): void {
   ctx.output.writeOut(
     renderAccordingTo(ctx.config.output, {
-      human: renderHuman(input),
+      human: input.applied
+        ? `rotated credential for ${input.destinationId}`
+        : `${input.destinationId}: no row updated`,
       json: {
         destination_id: input.destinationId,
         applied: input.applied,
-        status: input.status,
-        reason: input.reason,
       },
     }),
   );
-}
-
-function renderHuman(input: EmitInput): string {
-  if (input.applied) {
-    return `disabled ${input.destinationId}${
-      input.reason !== null ? ` (reason: ${input.reason})` : ""
-    }`;
-  }
-  if (input.status === "disabled") {
-    return `${input.destinationId}: already disabled${
-      input.reason !== null ? ` (reason: ${input.reason})` : ""
-    }`;
-  }
-  return `${input.destinationId}: ${input.status} (no transition)`;
 }

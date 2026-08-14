@@ -46,7 +46,7 @@ decided and why; there is no open-questions section.
 | Mechanism | Location | Scope |
 |---|---|---|
 | YAML catalog | `catalog/projects/`, `catalog/sources/` | project, project+source |
-| `destinations` rows | Postgres + `secret_ref` | project + env + vendor |
+| `destinations` rows | Postgres + `secret_value` | project + env + vendor |
 | `processor_activations` rows | Postgres, absence = allowed, fails open | project + env + processor |
 | `topic_isolations` rows | Postgres, producer hot path | project |
 | Env override strings | `POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS`, `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES` | project |
@@ -148,7 +148,7 @@ CREATE TABLE project_config (
   namespace     text        NOT NULL,
   config_key    text        NOT NULL,
   value         jsonb       NOT NULL,
-  is_secret_ref boolean     NOT NULL DEFAULT false,
+  is_secret     boolean     NOT NULL DEFAULT false,
   updated_at    timestamptz NOT NULL DEFAULT now(),
   updated_by    text        NOT NULL,
   PRIMARY KEY (project_id, environment, namespace, config_key),
@@ -158,16 +158,13 @@ CREATE TABLE project_config (
     CHECK (namespace ~ '^[a-z][a-z0-9_-]{1,62}[a-z0-9]$'),
   CONSTRAINT project_config_key_format
     CHECK (config_key ~ '^[a-z][a-z0-9_]{0,62}[a-z0-9]$'),
-  -- A secret-flagged value must be a well-formed `provider:ref`, using the
-  -- same pattern `destinations.secret_ref` already enforces. This is the
-  -- last line of defence for "PostgreSQL never stores plaintext secrets":
-  -- it holds even against a direct SQL write that bypasses the CLI.
-  CONSTRAINT project_config_secret_ref_shape
-    CHECK (
-      NOT is_secret_ref
-      OR (jsonb_typeof(value) = 'string'
-          AND value #>> '{}' ~ '^[a-z][a-z0-9_-]*:[^[:space:]]+$')
-    )
+  -- A secret-flagged value must be a JSON string. The `provider:ref`
+  -- PATTERN this CHECK once required went with the move to stored secrets:
+  -- a plaintext credential matches no pattern worth asserting. The string
+  -- requirement stays so masking, reveal and redaction each have exactly one
+  -- shape to handle.
+  CONSTRAINT project_config_secret_is_string
+    CHECK (NOT is_secret OR jsonb_typeof(value) = 'string')
 );
 
 CREATE TABLE project_config_versions (
@@ -250,12 +247,12 @@ ambiguity:
 > `retry_policy`, `dead_letter_threshold`, `replay_opt_in`. A value lives in
 > `destinations.config` if the **consumer's own code** interprets it and it
 > varies per instance. It lives in `project_config` if the consumer's code
-> interprets it and it is shared across the project. Credentials stay in
-> `secret_ref`.
+> interprets it and it is shared across the project. The vendor credential
+> stays in `secret_value`.
 
-Consumers with two secrets per instance keep today's answer: `secret_ref`
-points at one provider document whose JSON carries multiple fields. What
-changes is that non-secret values no longer hide in there with them.
+Consumers with two secrets per instance keep today's answer: `secret_value`
+holds one JSON document carrying multiple fields. What changes is that
+non-secret values no longer hide in there with them.
 
 ### 3.4 Namespace and version coexistence
 
@@ -309,15 +306,20 @@ one free-form variable quarantining every project. Strip mode makes undeclared
 keys inert by construction, which is precisely the property §3.1's free-form
 argument relies on.
 
-**A secret-typed key only ever accepts a reference.** The database cannot know
-which keys are secret — that lives in the component's schema — so enforcement
-is two layers. The CLI and admin API reject a write to a secret-typed key
-unless the value parses as a `provider:ref` via `parseSecretReference`, and set
-`is_secret_ref = true`; the CHECK constraint in §3.2 then rejects a malformed
-ref even on a direct SQL write. Without both, an operator typing the credential
-itself into `polaris config set` would put plaintext in Postgres, in shell
-history, and in the audit record's arguments — breaking a rule the platform
-currently holds absolutely.
+**A secret-typed key is marked secret by the server, not the caller.** The
+database cannot know which keys are secret — that lives in the component's
+schema — so both write surfaces consult the generated artifact and force
+`is_secret = true` regardless of what the request said. The flag a caller
+passes can only ADD sensitivity, for free-form keys no schema knows about.
+
+This decides rather than refuses, which is the change from the reference era.
+Then, omitting the flag meant a credential was about to be written into a
+column documented to hold a pointer, and refusing was the only safe answer.
+Every value now lives in the same column, so a forgotten flag is not an unsafe
+write — it is a value that would be handled carelessly: printed in
+`config list`, copied into the audit row. Deciding from the schema fixes that
+without making the operator re-run the command with the credential in their
+shell history a second time.
 
 **JSON and the secret box.** The stored and wire form is JSON. The in-process
 form is a frozen object in which secret-typed values are `Secret<T>` instances
@@ -346,9 +348,10 @@ exact object §3.5's snapshot would assemble:
   the panel header. These are the same facts `polaris config validate` prints
   and `/health` lists, read through the same query — three surfaces, one
   truth.
-- secret-typed rows show the provider badge and the ref, never a resolved
-  value — the precedent the destinations page already sets by rendering
-  `secret_ref` labelled as such.
+- secret-typed rows show a badge and `[redacted]`. The panel never holds the
+  plaintext to begin with: `listProjectConfig` masks on the way out, so a
+  careless edit to the renderer cannot leak one. `polaris config get --reveal`
+  is the disclosure path.
 - namespaces whose consumer is instance-scoped (§3.3) end with a link to that
   project + environment's destination rows; per-instance values are edited on
   the destination detail page, which owns the row's lifecycle, not here.
@@ -482,29 +485,28 @@ counters would avoid it. They are not worth the complexity: writes are
 operator actions on the order of one per day, and the cost of over-invalidation
 is one extra refetch of a small row set.
 
-### 4.3 Secret-bearing entries need a second, independent deadline
+### 4.3 Secret-bearing entries need nothing extra
 
-Version-based invalidation is **structurally blind to secret rotation.**
-Rotating a credential in Vault does not change `project_config`, so
-`project_config_versions.version` does not move, so neither `NOTIFY` nor the
-sweep fires. A snapshot holding resolved plaintext (§6) would therefore keep a
-revoked credential indefinitely.
+A second, independent freshness deadline lived here, and it is worth recording
+why it existed and why it does not any more.
 
-That is a regression against today's behaviour, not merely a gap:
-`VaultSecretProvider` already caches with `DEFAULT_VAULT_CACHE_TTL_MS = 5min`
-(`packages/shared-secrets/src/providers/vault.ts:83`), so a rotation currently
-propagates within five minutes. Caching the resolved value one layer up would
-take that from five minutes to never.
+Version-based invalidation was **structurally blind to secret rotation.**
+Rotating a credential in Vault did not change `project_config`, so
+`project_config_versions.version` never moved, so neither `NOTIFY` nor the
+sweep fired. A snapshot holding resolved plaintext would keep a revoked
+credential indefinitely — worse than the behaviour it replaced, since the Vault
+adapter's own five-minute cache had at least bounded it. The answer was a
+separate wall-clock re-resolution deadline, deliberately NOT the sweep interval,
+because the two watch different things.
 
-So a snapshot whose namespace declares any `secret: true` key carries a
-**re-resolution deadline independent of its version**: 5 minutes, matching the
-provider's own TTL, after which secret values are re-resolved even when the
-version is unchanged. Non-secret values are untouched by this — they stay
-version-driven.
-
-`polaris config invalidate --project <id> --env <env>` exists for the operator
-who has just rotated and does not want to wait out the deadline. It bumps the
-version, reusing the write path below rather than adding a second mechanism.
+Secrets are now stored values rather than pointers (§6). A secret changes only
+by a write to `project_config`, and a write bumps the version and fires
+`NOTIFY` in the same transaction — the two mechanisms already described cover
+secrets exactly as they cover every other key. A deadline on top would be a
+periodic refetch that cannot observe a change the version did not announce, so
+`SECRET_REFRESH_DEADLINE_MS` was removed rather than left as a no-op.
+`packages/shared-project-config/test/public-surface.test.ts` asserts its
+absence, so re-adding one is a deliberate act with a test to change.
 
 ### 4.4 Write path
 
@@ -624,15 +626,52 @@ learns at creation time rather than from a metric.
 
 ## 6. Secrets
 
-**Decision: the snapshot carries resolved secret values, not refs.** Storage
-stays as refs (`is_secret_ref = true`, value is `env:...` / `vault:...`);
-`SecretResolver` resolves during assembly and plaintext enters the cache. This
-is already the de facto pattern — GA4 resolves its `secret_ref` to a JSON blob
-mixing credentials and plain config.
+**Decision: per-project secrets are STORED values, not references.** A
+destination's vendor credential lives in `destinations.secret_value` and a
+project's sensitive configuration values live in `project_config` with
+`is_secret = true` — both plaintext, both in the control-plane database. There
+is no provider, no `provider:ref` format, and no resolution step.
 
-Three consequences, each engineered rather than accepted:
+This reverses the platform's oldest security rule ("PostgreSQL stores
+references, never plaintext") and the reversal is the point of the change, not
+a side effect. What it buys: one storage mechanism for everything a project
+declares, editable from the admin UI, with no external dependency in the read
+path and no propagation story beyond the one §4 already describes. What it
+costs, stated plainly because it is permanent: **every reader of the
+control-plane database, every `pg_dump`, every replica and every backup carries
+live credentials.** Access to that database is access to every project's vendor
+accounts.
 
-**Serialization leaks — mitigated.** Secret-typed values are boxed:
+An earlier revision of this plan kept refs and resolved them during assembly.
+Three consequences that revision had to engineer away are simply gone: Vault on
+the critical path of every cold assembly, a transient/permanent classification
+for resolution failures, and the rotation-latency deadline in §4.3. The
+resolver, its adapters and the Vault client were deleted rather than left
+unreachable — they had exactly two callers and both are this change.
+
+### What survived, and why
+
+Storage changed. Handling did not, and it is enforced in two independent
+places rather than by convention.
+
+**Masking, at the data layer.** Every generic read returns the mask:
+`listProjectConfig` and `findProjectConfigValue` funnel through one `toRow`
+that replaces a secret value with `[redacted]`, and `DESTINATION_READ_COLUMNS`
+simply does not select `secret_value`, so the credential never leaves
+PostgreSQL on a list, `show`, export or audit path. Disclosure requires asking
+by name: `revealProjectConfigSecret`, one greppable function behind
+`polaris config get --reveal`. Destination credentials have no reader at all —
+they are write-only through every Polaris surface, set at create, replaced with
+`polaris destinations rotate-secret`, the same posture `api_keys.hash` has.
+
+This is deliberately structural rather than a rule each call site follows.
+Nine call sites printed, exported, logged or audit-snapshotted the old column
+*because its name promised a pointer*; renaming it to `secret_value` made the
+compiler visit every one, and moving the guarantee into the SQL means the next
+one cannot be added by accident.
+
+**Boxing, at the point of use.** A value a consumer legitimately holds arrives
+wrapped:
 
 ```ts
 class Secret<T = string> {
@@ -644,59 +683,47 @@ class Secret<T = string> {
 }
 ```
 
-Logs, error serialization, DLQ payloads, delivery records, and audit rows
-redact automatically. A leak requires an explicit `.expose()`, which a lint
-rule restricts to deliverer modules.
+Logs, error serialization, DLQ payloads and delivery records redact
+automatically; a leak requires an explicit `.expose()`. The box never had
+anything to do with where a secret came from — it is about what happens to
+plaintext once something holds it, and holding plaintext is now the normal case
+rather than the brief one.
 
-**Rotation latency — bounded by the §4.3 deadline, not by the sweep.** The
-sweep watches `project_config_versions`, which a Vault-side rotation does not
-touch; only the independent 5-minute re-resolution deadline catches it. That
-matches today's propagation exactly, since `VaultSecretProvider` already caches
-for 5 minutes. `docs/operations/secret-rotation.md` and the GA4 rotation
-runbook (`agents/pm/kanban/backlog/MRFBR8X3-*.md`) state the bound and point at
-`polaris config invalidate` for operators who need it immediate.
+**The mask cannot be written back.** Every read returns `[redacted]`, so a
+surface that round-trips a read into a write — a form pre-filled from a list, a
+script piping `config list` into `config set` — would store that literal string
+as the credential, failing much later as an opaque vendor 401.
+`setProjectConfigValueWithAudit` refuses it (`MaskedSecretWriteError`) before
+touching the database.
 
-**Transient provider failures must become retryable.** Snapshot assembly
-resolves secrets, so a Vault blip now fails assembly for a whole project rather
-than one delivery. Assembly distinguishes the two cases: a transport or 5xx
-error is **retryable** and the delivery retries with backoff; a missing,
-malformed, or unauthorized ref is **permanent** and DLQs.
+**Audit rows carry no secret.** An `audit_records` row outlives the row it
+describes, gets exported and is read by more people, so this matters more than
+it did when the snapshots held pointers. `before` arrives already masked from
+the query layer; `after` is built from caller input and masks explicitly;
+`rotate-secret` writes identical `before` and `after` because the only field
+that changed is the one field the log may not hold, with `--reason` carrying
+the meaning.
 
-This corrects a pre-existing defect rather than introducing a distinction.
-Today `packages/shared-destinations/src/runtime.ts:841-870` catches every
-`secrets.resolve()` throw and records `failed_permanent` with `error_class:
-"auth"`, publishing straight to DLQ — so a Vault 503 or a network blip
-permanently dead-letters events that would have succeeded on retry. The fix
-belongs in this workstream because the same code path is being rewritten;
-worth landing early in C6 regardless of the rest.
+### Known properties, not defects
 
-**Heap dumps — irreducible.** Plaintext sits in the heap for the cache
-lifetime rather than one attempt. JS strings are immutable and GC timing is not
-controllable, so there is no zeroing story. It goes in
-`docs/architecture/11-production-readiness.md` as a known property of the
-design.
+**Heap dumps — irreducible.** Plaintext sits in the heap for the cache lifetime.
+JS strings are immutable and GC timing is not controllable, so there is no
+zeroing story. The destination runtime no longer even clears its local alias
+after a delivery: the credential lives on the cached instance row for the
+cache's TTL either way, so clearing an alias would be theatre.
 
-**Vault becomes critical path.** ~~`createVaultProvider` has zero callers
-today; every consumer hard-codes `EnvSecretProvider({ source: process.env })`,
-which reads the environment this plan eliminates.~~ **LANDED** as card
-`FR74FN42`. `createSecretResolver` in `@polaris/shared-secrets` now builds the
-adapter from `secretProviderEnvSchema`, over a frozen `loadEnv()` snapshot, and
-all five destination consumers use it — which also closed the five
-`process.env` escape hatches §7 lists.
+**No encryption at rest beyond the database's own.** Column-level encryption
+would need a key, which would need a keystore, which is the dependency this
+change removed. If that becomes necessary, it is a real piece of work and
+belongs in `docs/architecture/11-production-readiness.md` as such — not a
+retrofit.
 
-**Amended in implementation: how `env:` is restricted.** This section said the
-`env:` provider "survives only in the bootstrap tier for local development",
-which reads as a hard runtime refusal. Implementing it that way would have been
-a rollback trap of exactly the kind §11 keeps inert env vars around to avoid:
-`POLARIS_SECRET_PROVIDER` defaults to `env`, so a fatal check would turn
-"deploy the new image" into an outage for any deployment still resolving
-production secrets from the environment.
-
-What shipped instead: production + `env:` logs a loud WARN naming the
-remediation, and refuses only under `POLARIS_SECRET_PROVIDER_STRICT=true`. The
-guarantee is reached by sequence rather than by fiat — provision Vault, set
-`POLARIS_SECRET_PROVIDER=vault`, then set strict, after which regression is
-impossible. `.env.example` documents the block and the ordering.
+**Rows written before the cutover hold pointers.** The migration renames the
+column but cannot resolve what was in it. Those rows fail every consumer's
+secret parse, so the first delivery lands as `failed_permanent` with
+`error_class='auth'` naming the destination — loud on the first event rather
+than silently misdelivering. Re-enter them with
+`polaris destinations rotate-secret`.
 
 ## 7. Environment variables
 
@@ -747,7 +774,7 @@ Verified per-service inventory:
 | Everything else | none | |
 
 So roughly **20** variables move, of 103 — the rest are bootstrap
-(postgres, rabbitmq, redis, clickhouse, http, service identity, log, vault) or
+(postgres, rabbitmq, redis, clickhouse, http, service identity, log) or
 per-deployment tuning that has no project dimension. The smaller number does
 not weaken the case: the two comma-separated override strings it deletes are
 the mechanism this whole plan exists to replace.
@@ -837,10 +864,9 @@ table, so it can only check things that live in the repo. The two are split:
    `destinations.config` satisfies it, so validating per project would miss a
    newly created second pixel entirely. It lists missing
    `namespace[.instance].key` triples and warns (exit 0) on keys unknown to
-   every schema (§3.1). `--resolve` additionally
-   dereferences secret refs against the live provider; it is opt-in because the
-   plain check only needs the ref to be present and well-formed, and requiring
-   Vault credentials for every validation run would be its own problem.
+   every schema (§3.1). There is no `--resolve`: with secrets stored rather
+   than referenced, "is the value present" is the whole check, and there is no
+   provider to dereference against.
 
 Quarantine (§5) is the runtime backstop underneath both, not a substitute for
 either: it keeps a fifty-project fleet alive when one project is incomplete,
@@ -882,7 +908,7 @@ covers both mechanisms failing.
 | C3 | **LANDED** `88b8db9` — `pnpm config-schemas` / `--check`, additive-only compat check (§3.4). Registry empty until the first service exports a schema. Card `WFHTKR4A` | C1 | with C2 |
 | C4 | `polaris config get/set/unset/list/invalidate` + audited write path — card `VCJ896JN` (landed). `validate`, the `projects sync` post-sync report, and the pre-deploy validate job remain, unblocked once C3 lands | C2, C3 | — |
 | C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
-| C6 | **LANDED** `07eb4cb` — `createSecretResolver`, transient/permanent split, five consumers off `process.env`. `env:` restriction shipped as warn + `POLARIS_SECRET_PROVIDER_STRICT` (see §6). Card `FR74FN42` | C2 | yes |
+| C6 | **LANDED then REVERSED.** `07eb4cb` shipped `createSecretResolver`, the transient/permanent split and five consumers off `process.env` (card `FR74FN42`). Superseded when per-project secrets became stored values: the resolver, its adapters and the Vault client had no callers left and were deleted (§6). The `process.env` half of the work stands. | C2 | yes |
 | C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
 | C8 | Fan-out project filter + pre-merge blast-radius query | C2 | yes |
 | C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke fixture migration. **Partly landed:** `tests/integration/project-config.test.ts` covers write → NOTIFY → store against real PostgreSQL | C4 | yes |
@@ -949,12 +975,12 @@ pool — `pg ^8.20.0` is already a direct dependency of
 extra connections against `max_connections`: small, but it must be checked
 against deployed Postgres sizing before C2 ships, not after.
 
-**Secret-bearing snapshots re-resolve on a 5-minute clock regardless of
-traffic.** For a namespace with secrets, that is one Vault round-trip per
-`(project, environment)` per 5 minutes per replica. At 20 projects × 3
-environments × 5 consumer replicas that is ~300 resolutions per 5 minutes,
-which the provider's own cache absorbs. It is worth re-checking if the project
-count grows an order of magnitude.
+**Secret-bearing snapshots cost nothing extra.** An earlier revision of this
+plan re-resolved them on a 5-minute clock regardless of traffic — one Vault
+round-trip per `(project, environment)` per 5 minutes per replica, ~300
+resolutions per 5 minutes at 20 projects × 3 environments × 5 replicas. Stored
+secrets removed both the round-trip and the clock: a secret-bearing snapshot is
+now exactly as expensive as any other, which is one row read on a cold miss.
 
 ## 15. Prerequisite
 
@@ -976,9 +1002,12 @@ Cheap now, expensive once there is data.
 | Change history | `audit_records`, no new table | Every write goes through CLI/admin; a second table would drift |
 | Invalidation transport | Postgres LISTEN/NOTIFY | 9 of 16 services have no Redis; all 16 have Postgres; NOTIFY-on-commit is atomic with the write |
 | Freshness backstop | 10s jittered sweep, one batched query | Notification loss must self-heal |
-| Secret freshness | Separate 5-min re-resolution deadline | Version-based invalidation is blind to rotation behind a ref; 5 min matches the Vault provider's own cache |
-| Secret resolution failure | Transient retryable, permanent DLQs; unknown defaults transient | Corrects a pre-existing defect where a Vault 503 permanently dead-letters. Unknown-defaults-transient because a wrong `permanent` is data loss needing manual replay, while a wrong `transient` costs bounded retries and reaches the same DLQ anyway |
-| Restricting `env:` in production | Warn by default; refuse under `POLARIS_SECRET_PROVIDER_STRICT` | A fatal default would be a rollback trap: `env` is the default provider, so it would turn "deploy the new image" into an outage. The guarantee is reached by sequence — provision Vault, switch, then set strict |
+| Secret storage | Plaintext in the control-plane database | One mechanism for everything a project declares, editable from the UI, no external dependency in the read path. Costs: the database and its backups become credential material (§6) |
+| ~~Secret freshness~~ | ~~Separate 5-min re-resolution deadline~~ | Removed with stored secrets: a secret changes only by a write, which already bumps the version and fires NOTIFY (§4.3) |
+| ~~Secret resolution failure~~ | ~~Transient retryable, permanent DLQs~~ | Removed with stored secrets: reading a column has no resolution step to fail (§6) |
+| ~~Restricting `env:` in production~~ | ~~Warn, refuse under strict~~ | Removed with the provider abstraction itself |
+| Secret disclosure | Masked at the data layer; reveal is a named function | Nine call sites leaked the old column because its NAME promised a pointer. Moving the guarantee into the SQL projection means the next one cannot be added by accident (§6) |
+| Destination credential reads | Write-only; no read path at all | Nothing an operator does needs the current value — "is it right?" is answered by delivery history, "change it" by rotation. Same posture as `api_keys.hash` |
 | Revalidation shape | Batched version sweep, not per-key inline | ~6 queries/sec fleet-wide; read path never blocks on I/O |
 | Invalidation behaviour | Lazy mark-stale + single-flight refetch | Eager refetch stampedes Postgres when 64 replicas hear one save |
 | Out-of-order notifications | Monotonic version guard | Duplicated/reordered NOTIFY must not downgrade a fresher entry |

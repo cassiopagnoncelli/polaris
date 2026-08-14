@@ -6,22 +6,17 @@
  * a KafkaJS consumer:
  *
  *   subscribe -> replay-suppress -> resolve instance -> check status -> mode=test
- *   -> dedupe -> normalize -> map -> resolve secret -> rate-limit -> deliver -> RECORD
+ *   -> dedupe -> normalize -> map -> rate-limit -> deliver -> RECORD
  *
  * Each test wires an `InMemoryDestinationInstanceReader`, an
- * `InMemoryDeliveryRecordRepository`, a stub mapper / deliverer / secret
- * resolver, and asserts on the captured delivery record + metric snapshot.
+ * `InMemoryDeliveryRecordRepository`, a stub mapper and deliverer, and
+ * asserts on the captured delivery record + metric snapshot.
  *
  * @see docs/implementation/tasks/P9-001b-destination-runtime-behavioral-tests.md
  */
 
 import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
-import {
-  SecretNotFoundError,
-  SecretProviderError,
-  type SecretResolver,
-} from "@polaris/shared-secrets";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -61,7 +56,7 @@ const SEED_INSTANCE: DestinationInstance = {
   environment: "development",
   vendor: "test-vendor",
   instance_label: "test-instance",
-  secret_ref: "env:TEST_SECRET",
+  secret_value: "<test-secret>",
   status: "active",
   mode: "live",
   max_concurrency: 4,
@@ -105,14 +100,10 @@ interface MapperCall<P> {
 interface DelivererCall<P> {
   payload: P;
   attempt: number;
-  /** Did the runtime hand us the resolved plaintext secret? */
+  /** How long a credential the runtime handed us — never the value itself. */
   secretLength: number;
   /** The per-project slice the runtime resolved for this envelope. */
   projectConfig: Readonly<Record<string, unknown>>;
-}
-
-interface SecretResolverCall {
-  ref: string;
 }
 
 interface ProducerSend {
@@ -131,8 +122,6 @@ interface TestEnv {
   records: InMemoryDeliveryRecordRepository;
   instances: InMemoryDestinationInstanceReader;
   dedupe: InMemoryDestinationDedupe;
-  secrets: SecretResolver;
-  secretCalls: SecretResolverCall[];
   mapperCalls: MapperCall<TestPayload>[];
   delivererCalls: DelivererCall<TestPayload>[];
   projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
@@ -145,14 +134,12 @@ function makeEnv({
   mapper,
   deliverer,
   requiredConsent = {},
-  resolveSecret,
   projectConfig,
 }: {
   instance?: DestinationInstance;
   mapper?: Mapper<TestPayload>;
   deliverer?: Deliverer<TestPayload>;
   requiredConsent?: { marketing?: boolean; analytics?: boolean };
-  resolveSecret?: (ref: string) => Promise<string>;
   projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
 } = {}): TestEnv {
   const records = new InMemoryDeliveryRecordRepository();
@@ -162,15 +149,6 @@ function makeEnv({
   const mapperCalls: MapperCall<TestPayload>[] = [];
   const delivererCalls: DelivererCall<TestPayload>[] = [];
   const producerSends: ProducerSend[] = [];
-  const secretCalls: SecretResolverCall[] = [];
-  const secrets: SecretResolver = {
-    resolve: async (ref) => {
-      secretCalls.push({ ref });
-      if (resolveSecret !== undefined) return resolveSecret(ref);
-      return "<test-secret>";
-    },
-  } as SecretResolver;
-
   const defaultMapper: Mapper<TestPayload> = (ctx) => {
     mapperCalls.push({ payload: { vendor_payload: ctx.normalized.event } });
     return { kind: "mapped", payload: { vendor_payload: ctx.normalized.event } };
@@ -203,8 +181,6 @@ function makeEnv({
     records,
     instances,
     dedupe,
-    secrets,
-    secretCalls,
     mapperCalls,
     delivererCalls,
     ...(projectConfig !== undefined ? { projectConfig } : {}),
@@ -254,16 +230,18 @@ function buildConsumerStub() {
   } as unknown as Parameters<typeof createDestinationConsumer>[0]["consumer"];
 }
 
-function buildConsumer(env: TestEnv, overrides: { consumerBuildVersion?: string } = {}) {
+function buildConsumer(
+  env: TestEnv,
+  overrides: { consumerBuildVersion?: string; logger?: Logger } = {},
+) {
   return createDestinationConsumer({
     descriptor: env.descriptor,
     consumer: buildConsumerStub(),
     producer: makeProducerStub({ producerSends: env.producerSends }),
     instances: env.instances,
     records: env.records,
-    secrets: env.secrets,
     ...(env.projectConfig !== undefined ? { projectConfig: env.projectConfig } : {}),
-    logger: noopLogger,
+    logger: overrides.logger ?? noopLogger,
     dedupe: env.dedupe,
     ...(overrides.consumerBuildVersion !== undefined
       ? { consumerBuildVersion: overrides.consumerBuildVersion }
@@ -495,7 +473,6 @@ describe("destination runtime — fan-out to active instances", () => {
       producer: makeProducerStub({ producerSends: env.producerSends }),
       instances: env.instances,
       records: env.records,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
       activeInstanceTtlMs: 10_000,
@@ -696,7 +673,6 @@ describe("destination runtime — dlq_records persistence", () => {
       instances: env.instances,
       records: env.records,
       dlqRecords,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
     });
@@ -734,7 +710,6 @@ describe("destination runtime — dlq_records persistence", () => {
       instances: env.instances,
       records: env.records,
       dlqRecords,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
     });
@@ -850,7 +825,6 @@ describe("destination runtime — replay suppression + dedupe", () => {
       producer: makeProducerStub({ producerSends: env.producerSends }),
       instances: env.instances,
       records: env.records,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
       allowReplay: true,
@@ -881,7 +855,6 @@ describe("destination runtime — replay suppression + dedupe", () => {
       producer: makeProducerStub({ producerSends: env.producerSends }),
       instances: env.instances,
       records: env.records,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
       allowReplay: true,
@@ -914,7 +887,6 @@ describe("destination runtime — replay suppression + dedupe", () => {
       producer: makeProducerStub({ producerSends: env.producerSends }),
       instances: env.instances,
       records: env.records,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
       allowReplay: true,
@@ -968,8 +940,24 @@ describe("destination runtime — replay suppression + dedupe", () => {
 });
 
 describe("destination runtime — secret handling + PII safety", () => {
-  it("resolves the secret on every attempt (not at startup)", async () => {
-    const env = makeEnv();
+  /**
+   * These used to be five tests, three of which exercised secret-RESOLUTION
+   * failures: an unreachable provider, an unclassified error, an unprovisioned
+   * reference. None of those states can occur now that the credential arrives
+   * on the destination row — there is no resolution step to fail, and a row
+   * that does not exist is handled long before this point.
+   *
+   * What replaced them matters more. The credential now sits in memory for the
+   * cached lifetime of every destination instance rather than for the duration
+   * of one attempt, so the question is no longer "does resolution behave?" but
+   * "can this value escape?" — and it has to be asked of the log line as well
+   * as the delivery record, because the runtime stamped the column onto EVERY
+   * delivery log while it held a pointer.
+   */
+  const SECRET = "TOPSECRET-DO-NOT-LOG-abcdefghijklmn";
+
+  it("hands the deliverer the instance's stored credential, on every attempt", async () => {
+    const env = makeEnv({ instance: { ...SEED_INSTANCE, secret_value: SECRET } });
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),
@@ -979,15 +967,12 @@ describe("destination runtime — secret handling + PII safety", () => {
       envelope: makeEnvelope({ event_id: "second-event-id" }),
       destination_id: SEED_INSTANCE.destination_id,
     });
-    expect(env.secretCalls).toHaveLength(2);
-    expect(env.secretCalls.every((call) => call.ref === SEED_INSTANCE.secret_ref)).toBe(true);
+    expect(env.delivererCalls).toHaveLength(2);
+    expect(env.delivererCalls.every((call) => call.secretLength === SECRET.length)).toBe(true);
   });
 
-  it("the resolved secret never appears in the delivery_records row", async () => {
-    const SECRET = "TOPSECRET-DO-NOT-LOG-abcdefghijklmn";
-    const env = makeEnv({
-      resolveSecret: async () => SECRET,
-    });
+  it("the credential never appears in the delivery_records row", async () => {
+    const env = makeEnv({ instance: { ...SEED_INSTANCE, secret_value: SECRET } });
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),
@@ -995,66 +980,45 @@ describe("destination runtime — secret handling + PII safety", () => {
     });
     const rec = lastRecord(env);
     expect(JSON.stringify(rec)).not.toContain(SECRET);
-    // The deliverer DID receive the secret (sanity check).
+    // The deliverer DID receive it (sanity check — an empty string would pass
+    // the assertion above for the wrong reason).
     expect(env.delivererCalls[0]?.secretLength).toBe(SECRET.length);
   });
 
-  it("unreachable secret provider → failed_retryable, rethrows for retry", async () => {
-    // This asserted `failed_permanent` until the failure classes were split.
-    // That was the defect: a Vault 503 or a token-renewal race permanently
-    // dead-lettered deliveries that a retry seconds later would have
-    // completed, each one then needing a human to replay it.
-    const env = makeEnv({
-      resolveSecret: async () => {
-        throw new SecretProviderError("vault", "polaris/production/x", "503 from vault");
-      },
-    });
-    const consumer = buildConsumer(env);
-    await expect(
-      consumer.handleEvent({
-        envelope: makeEnvelope(),
-        destination_id: SEED_INSTANCE.destination_id,
-      }),
-    ).rejects.toThrow();
-    expect(env.delivererCalls).toHaveLength(0);
-    const rec = lastRecord(env);
-    expect(rec?.status).toBe("failed_retryable");
-    expect(rec?.error_class).toBe("transient");
-  });
+  it("the credential never appears in a log line", async () => {
+    // The regression this pins is concrete. `recordOutcome` logged
+    // `secret_ref: instance.secret_ref` on every single delivery, which was
+    // correct while the column named a vault entry. Renaming the column to
+    // `secret_value` without deleting that field would have published a live
+    // vendor credential once per delivered event, into whatever aggregator the
+    // fleet ships logs to — the highest-volume disclosure available.
+    const lines: unknown[] = [];
+    const capturing = {
+      info: (fields: unknown, msg: unknown) => lines.push({ fields, msg }),
+      warn: (fields: unknown, msg: unknown) => lines.push({ fields, msg }),
+      error: (fields: unknown, msg: unknown) => lines.push({ fields, msg }),
+      debug: () => {},
+      fatal: () => {},
+      trace: () => {},
+      child: () => capturing,
+    } as unknown as Logger;
 
-  it("unknown secret failure defaults to retryable", async () => {
-    const env = makeEnv({
-      resolveSecret: async () => {
-        throw new Error("something unclassified");
-      },
-    });
-    const consumer = buildConsumer(env);
-    await expect(
-      consumer.handleEvent({
-        envelope: makeEnvelope(),
-        destination_id: SEED_INSTANCE.destination_id,
-      }),
-    ).rejects.toThrow();
-    expect(lastRecord(env)?.status).toBe("failed_retryable");
-  });
+    const env = makeEnv({ instance: { ...SEED_INSTANCE, secret_value: SECRET } });
+    const consumer = buildConsumer(env, { logger: capturing });
 
-  it("unprovisioned secret reference → failed_permanent with error_class='auth'", async () => {
-    // Retrying cannot conjure a reference nobody created, so this one still
-    // goes straight to the DLQ for an operator to fix.
-    const env = makeEnv({
-      resolveSecret: async () => {
-        throw new SecretNotFoundError("vault", "polaris/production/missing");
-      },
-    });
-    const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),
       destination_id: SEED_INSTANCE.destination_id,
     });
-    expect(env.delivererCalls).toHaveLength(0);
-    const rec = lastRecord(env);
-    expect(rec?.status).toBe("failed_permanent");
-    expect(rec?.error_class).toBe("auth");
+    // A failing delivery logs at error with a vendor summary — the other place
+    // an instance field could be interpolated.
+    await consumer.handleEvent({
+      envelope: makeEnvelope({ event_id: "unmapped-event-id", event: "cart.abandoned" }),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+
+    expect(lines.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lines)).not.toContain(SECRET);
   });
 });
 
@@ -1104,7 +1068,6 @@ describe("destination runtime — subscription naming", () => {
       producer: makeProducerStub({ producerSends: env.producerSends }),
       instances: env.instances,
       records: env.records,
-      secrets: env.secrets,
       logger: noopLogger,
       dedupe: env.dedupe,
     });

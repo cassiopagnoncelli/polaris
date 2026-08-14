@@ -26,7 +26,7 @@ function row(overrides: Partial<ProjectConfigRow> = {}): ProjectConfigRow {
     namespace: "ingest",
     config_key: "dedupe_window_sec",
     value: 3600,
-    is_secret_ref: false,
+    is_secret: false,
     updated_at: "2026-08-13T12:00:00.000Z",
     updated_by: "cassio@example.com",
     ...overrides,

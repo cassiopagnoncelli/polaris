@@ -535,11 +535,12 @@ async function stepIssueApiKey(cfg) {
 }
 
 async function stepEnsureDestination(cfg) {
-  // We persist the webhook URL through the standard inline-secret form
-  // documented in 06-destinations.md. The shared-secrets resolver
-  // accepts `inline:<value>` for local/dev flows; the same resolver
-  // unwraps Vault refs in production.
-  const secretRef = `inline:${cfg.webhookEndpoint}`;
+  // webhook-sink's credential IS its target URL, so it goes in as-is. This
+  // used to be wrapped as `inline:<url>` because the column held a
+  // `<provider>:<ref>` pointer that a resolver unwrapped; nothing resolves
+  // now, and the same URL through the old form would reach the deliverer
+  // with an `inline:` prefix and fail to parse as a URL.
+  const secretValue = cfg.webhookEndpoint;
   const reason = `acceptance-test-${Date.now()}`;
   let destinationId;
   try {
@@ -554,8 +555,8 @@ async function stepEnsureDestination(cfg) {
       cfg.vendor,
       "--instance-label",
       cfg.instanceLabel,
-      "--secret-ref",
-      secretRef,
+      "--secret-value",
+      secretValue,
       "--mode",
       "test",
       "--reason",

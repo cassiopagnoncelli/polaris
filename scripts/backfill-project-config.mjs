@@ -253,7 +253,7 @@ async function main() {
           namespace: row.namespace,
           configKey: row.configKey,
           value: row.value,
-          isSecretRef: false,
+          isSecret: false,
         },
       );
       written += 1;

@@ -209,7 +209,7 @@ set of destination error classes lives in
 
 | `error_class`   | Retryability                              | Operator action |
 |-----------------|-------------------------------------------|-----------------|
-| `auth`          | **Permanent until credential is rotated** | Rotate the credential via the secret-provider runbook; verify with `polaris destinations show <id>` that `secret_ref` points at the rotated material; retry **once** (`polaris dlq retry`); escalate if the retry still fails. |
+| `auth`          | **Permanent until credential is rotated** | Rotate with `polaris destinations rotate-secret <id> --secret-value <new> --reason <why>` (see the [secret rotation runbook](secret-rotation.md)); the new value is live within the 60s instance-cache window; retry **once** (`polaris dlq retry`); escalate if the retry still fails. The credential cannot be read back for comparison — verify by whether the retry is accepted. |
 | `rate_limit`    | Retryable                                 | Safe to retry. If a vendor enforces a long cooldown, batch-retry after the cooldown window. |
 | `timeout`       | Retryable                                 | Safe to retry. If the destination's `timeout_ms` is too aggressive, update via `polaris destinations update-ops` before retry. |
 | `transient`     | Retryable                                 | Safe to retry. Vendor-side flakes, network blips, 5xx. |
@@ -398,10 +398,9 @@ This is enforced at three layers:
 
 1. **Schema.** The `dlq_records` migration
    ([`db/migrations/20260514000001_create_dlq_records.sql`](../../db/migrations/20260514000001_create_dlq_records.sql))
-   defines no column resembling a resolved secret value. The
-   destination instance's `secret_ref` is the only credential-adjacent
-   field surfaced, and that is the `provider:ref` literal, not the
-   resolved plaintext.
+   defines no column resembling a credential, and nothing joins one in.
+   `destinations.secret_value` holds a vendor credential in plaintext,
+   and no DLQ read path selects it.
 2. **Application.** The repository's `truncateSummary` helper bounds
    `vendor_response_summary` to 1 KB on insert. Tests in
    `packages/shared-destinations/test/no-secret-shape.test.ts` assert

@@ -54,7 +54,8 @@ the recovery procedure for each row of this table lives in
 | Processor ephemeral state | Redis | processor-specific TTL | ephemeral | Processor owner |
 | Web SDK queued events | Browser storage | bounded by count / bytes, max age configurable | ephemeral | SDK owner |
 | Node SDK memory queue | Process memory | process lifetime (unless durable adapter configured) | ephemeral | SDK owner |
-| Secret material | External provider (Vault / equivalent) | provider-managed | sensitive | Security operator |
+| Per-project secret material | PostgreSQL (`destinations.secret_value`, `project_config`) | lifetime of the row | sensitive | Security operator |
+| App / deployment credentials | Process environment | deployment lifetime | sensitive | Platform operator |
 
 ## Owner glossary
 

@@ -70,12 +70,15 @@ export function requireReason(value: string | undefined): string {
  * Parse `--value` as JSON when it parses, otherwise keep it a string.
  *
  * `5000` becomes a number, `true` a boolean, `["a","b"]` an array, and
- * `graph.facebook.com` stays a string rather than failing to parse. A
- * `--secret-ref` value always stays a string: `vault:polaris/x` is not JSON,
- * but neither should a ref that happens to look numeric become a number.
+ * `graph.facebook.com` stays a string rather than failing to parse.
+ *
+ * A secret always stays a string, and this is the code that satisfies the
+ * `project_config_secret_is_string` CHECK. It also stops a credential that
+ * happens to be all digits from being silently retyped as a number and losing
+ * its leading zeroes.
  */
-export function parseConfigValue(raw: string, isSecretRef: boolean): unknown {
-  if (isSecretRef) return raw;
+export function parseConfigValue(raw: string, isSecret: boolean): unknown {
+  if (isSecret) return raw;
   try {
     return JSON.parse(raw);
   } catch {

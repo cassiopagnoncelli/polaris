@@ -38,7 +38,7 @@ It is not a replacement for task cards. It is a quick way to see whether the del
 | Local development | `08-observability-and-operations.md` | P1-001, P10-001, P5-002 |
 | Engineering standards | `09-engineering-standards.md` | P0-001, P0-002, P11-002, P11-007 |
 | Production deployment | `09-engineering-standards.md`, `11-production-readiness.md` | P11-* |
-| Production secrets (Vault) | `02-control-plane.md`, `11-production-readiness.md` | P0-008, P11-004 |
+| Per-project secrets (plaintext in PostgreSQL) | `02-control-plane.md`, `11-production-readiness.md` | P0-008, P11-004 (Vault, since removed) |
 | Data lifecycle | `03-rabbitmq-streams.md`, `07-clickhouse.md`, `11-production-readiness.md` | P11-005 |
 | Product release readiness | roadmap | P12-* |
 | CLI access model and control-plane API | `02-control-plane.md` | P6-000, P6-001, P6-007 |

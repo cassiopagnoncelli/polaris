@@ -1,25 +1,28 @@
 /**
- * `polaris config set --project --env --namespace --key --value [--secret-ref]
+ * `polaris config set --project --env --namespace --key --value [--secret]
  *   --reason` — mutating.
  *
- * The two refusals worth knowing about, both raised by the mutation layer
- * before any write so a rejected call leaves no trace:
+ * The refusal worth knowing about is raised by the mutation layer before any
+ * write, so a rejected call leaves no trace: a key that looks like mapping
+ * semantics (`field_map`, `event-map`, …). `project_config.value` is jsonb, so
+ * the platform's "PostgreSQL has nowhere to put a field map" guarantee is no
+ * longer structural — that check is what replaces it.
  *
- *   - a key that looks like mapping semantics (`field_map`, `event-map`, …).
- *     `project_config.value` is jsonb, so the platform's "PostgreSQL has
- *     nowhere to put a field map" guarantee is no longer structural — this is
- *     what replaces it.
- *   - a plaintext value on a `--secret-ref` key. Secrets are stored as
- *     `<provider>:<ref>` pointers and resolved at read time; a credential
- *     typed here would otherwise land in PostgreSQL, in shell history, and in
- *     the audit row's arguments.
+ * `--secret` marks a value sensitive. It does not change where the value is
+ * stored — every value lives in `project_config` either way — it changes how
+ * the value is handled once stored: masked in `config get` / `config list`,
+ * `[redacted]` in the audit row, boxed in `Secret<T>` when a consumer reads it.
+ *
+ * Note the value still passes through this process's argv, so it lands in
+ * shell history. `polaris config set` is the scripting surface; the admin UI's
+ * Variables panel is the one to reach for when typing a credential by hand.
  */
 
 import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
 import { MappingSemanticsError } from "@polaris/shared-control-plane";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import { PlaintextSecretError } from "../../db/index.js";
+import { MaskedSecretWriteError } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import { type ConfigHooks, type ConfigStore, defaultConfigStore } from "./store.js";
@@ -39,7 +42,7 @@ interface ConfigSetArgs {
   readonly namespace?: string;
   readonly key?: string;
   readonly value?: string;
-  readonly secretRef?: boolean;
+  readonly secret?: boolean;
   readonly reason?: string;
 }
 
@@ -65,8 +68,8 @@ export const configSetCommand: CommandDefinition = {
         "Value. Parsed as JSON when it parses (5000 -> number), else stored as a string.",
       )
       .option(
-        "--secret-ref",
-        "Mark the value a secret reference (<provider>:<ref>). Plaintext is refused.",
+        "--secret",
+        "Mark the value sensitive: masked in reads and exports, [redacted] in the audit row.",
       )
       .requiredOption("--reason <reason>", "Operator rationale for the audit record.")
       .action(deps.runCommand({ id: "config.set", mutates: true }, runConfigSet));
@@ -86,29 +89,29 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
     const reason = requireReason(args.reason);
     if (args.value === undefined) throw new UsageError("--value is required");
 
-    const isSecretRef = args.secretRef === true;
-    // A key the component schema marks secret cannot be written as a plain
-    // value: an operator omitting --secret-ref would otherwise store a live
-    // credential in PostgreSQL as ordinary jsonb, past every gate that only
-    // fires when is_secret_ref is set. Plan §3.5 assigns this check to both
-    // write surfaces; the admin panel enforces the same rule from the same
-    // generated schema.
+    // The generated schema decides, and the flag can only ADD sensitivity —
+    // never remove it. A key its component declares secret is stored secret
+    // whether or not the operator remembered `--secret`; the flag exists for
+    // free-form keys, which no schema knows about and which are exactly the
+    // ones an operator invents under time pressure.
+    //
+    // Deciding here rather than refusing here is the change from the
+    // reference era, when omitting the flag meant a credential was about to be
+    // stored in a column that promised to hold pointers. There is no such
+    // column now, so a forgotten flag is a handling mistake to correct, not an
+    // unsafe write to reject. The admin panel forces the same bit from the
+    // same schema.
     const secretDeclared =
       PROJECT_CONFIG_SCHEMAS[namespace]?.secretKeys.project.includes(configKey) === true;
-    if (secretDeclared && !isSecretRef) {
-      throw new UsageError(
-        `"${configKey}" is a secret-typed key in the "${namespace}" schema; pass --secret-ref ` +
-          "with a <provider>:<ref> value. Polaris never stores plaintext secrets.",
-      );
-    }
-    const value = parseConfigValue(args.value, isSecretRef);
+    const isSecret = secretDeclared || args.secret === true;
+    const value = parseConfigValue(args.value, isSecret);
 
     const store = openStore();
     try {
       const now = nowFn();
       const auditId = generateAuditId();
       const outcome = await store.set(
-        { projectId, environment, namespace, configKey, value, isSecretRef },
+        { projectId, environment, namespace, configKey, value, isSecret },
         {
           auditId,
           actorSource: ctx.actor.source,
@@ -126,9 +129,9 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
           environment,
           namespace,
           config_key: configKey,
-          is_secret_ref: isSecretRef,
+          is_secret: isSecret,
           // Never the value: a non-secret value is safe, but branching on
-          // is_secret_ref here would be one refactor away from leaking.
+          // is_secret here would be one refactor away from leaking.
           reason,
           occurred_at: now.toISOString(),
         },
@@ -143,7 +146,7 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
             audit_id: outcome.auditId,
             namespace,
             config_key: configKey,
-            is_secret_ref: isSecretRef,
+            is_secret: isSecret,
           },
         }),
       );
@@ -151,7 +154,7 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
       // Both are operator mistakes, not faults: surface them as usage errors
       // so the CLI exits with the usage code and prints the guidance rather
       // than a stack trace.
-      if (err instanceof MappingSemanticsError || err instanceof PlaintextSecretError) {
+      if (err instanceof MappingSemanticsError || err instanceof MaskedSecretWriteError) {
         throw new UsageError(err.message);
       }
       throw err;

@@ -16,6 +16,11 @@
 --   - `is_secret_ref = true` rows hold a `provider:ref` string (same pattern
 --     as `destinations.secret_ref`), NEVER a plaintext secret. The CHECK is
 --     the last line of defence and holds even against direct SQL.
+--
+--     NOTE (added later, not a rewrite): reversed by
+--     20260813000004_plaintext_project_secrets.sql. The column is now
+--     `is_secret`, it means "this value is sensitive" rather than "this value
+--     is a pointer", and the value IS the secret.
 --   - `project_config_versions` carries one monotonic counter per
 --     (project, environment); every write bumps it in the same transaction.
 --     Cache revalidation reads this one row instead of re-reading values.

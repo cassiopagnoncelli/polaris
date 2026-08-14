@@ -20,6 +20,7 @@ import {
   type MutationOutcome,
   type ProjectConfigRow,
   readProjectConfigVersion,
+  revealProjectConfigSecret,
   setProjectConfigValueWithAudit,
   unsetProjectConfigValueWithAudit,
 } from "../../db/index.js";
@@ -39,7 +40,17 @@ export interface ConfigScope {
 }
 
 export interface ConfigStore {
+  /** Values for a scope. Secret values come back masked — see {@link ConfigStore.reveal}. */
   list(scope: ConfigScope, namespace?: string): Promise<readonly ProjectConfigRow[]>;
+  /**
+   * One value, unmasked. Backs `config get --reveal` and nothing else.
+   *
+   * Separate from `list` so that disclosure is a distinct call an operator
+   * asked for, rather than a field on a shape every read path already holds.
+   */
+  reveal(
+    input: ConfigScope & { readonly namespace: string; readonly configKey: string },
+  ): Promise<unknown | undefined>;
   /** Every project id, for validating a whole environment at once. */
   listProjectIds(): Promise<readonly string[]>;
   version(scope: ConfigScope): Promise<bigint>;
@@ -48,7 +59,7 @@ export interface ConfigStore {
       readonly namespace: string;
       readonly configKey: string;
       readonly value: unknown;
-      readonly isSecretRef: boolean;
+      readonly isSecret: boolean;
     },
     audit: ConfigAuditPayload,
   ): Promise<MutationOutcome>;
@@ -83,6 +94,13 @@ export function defaultConfigStore(env: NodeJS.ProcessEnv): ConfigStore {
         projectId: scope.projectId,
         environment: scope.environment,
         ...(namespace !== undefined ? { namespace } : {}),
+      }),
+    reveal: (input) =>
+      revealProjectConfigSecret(handle.db, {
+        projectId: input.projectId,
+        environment: input.environment,
+        namespace: input.namespace,
+        configKey: input.configKey,
       }),
     listProjectIds: async () => (await fetchAllProjects(handle.db)).map((row) => row.project_id),
     version: (scope) => readProjectConfigVersion(handle.db, scope.projectId, scope.environment),

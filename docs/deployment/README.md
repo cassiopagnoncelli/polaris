@@ -29,9 +29,11 @@ semantic config  versioned code/files. Event catalog, mapping
                  SDK contracts. Never an environment variable. See
                  docs/architecture/02-control-plane.md.
 
-secrets          provider-based references in PostgreSQL
-                 (secret_provider + secret_ref). Plaintext lives in
-                 the provider only. See secrets section below.
+secrets          per-project credentials stored in PostgreSQL as
+                 plaintext (destinations.secret_value,
+                 project_config with is_secret). App/deployment
+                 credentials stay environment variables. See secrets
+                 section below.
 ```
 
 The split matters. A "config change" that alters a schema, mapping, or
@@ -90,10 +92,10 @@ A few platform invariants:
 - Services read configuration only from environment variables. No `.env`
   file is read from disk on a production host; the orchestrator
   injects every `POLARIS_*` variable directly.
-- Secrets are referenced, not written. The secret provider (today
-  `env`; Vault from [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md))
-  injects values into the process environment at boot. PostgreSQL
-  stores the reference; never the plaintext.
+- App and deployment credentials are injected by the orchestrator as
+  environment variables at boot. Per-project credentials are not: they
+  live in the control-plane database, which therefore holds live
+  secrets. See the secrets section below.
 - Build metadata flows through to `/health` via the three Docker build
   args documented in [`infra/docker/README.md`](../../infra/docker/README.md).
 
@@ -104,10 +106,20 @@ described here through their existing manifest tooling.
 
 ## Secrets
 
-Polaris stores `(secret_provider, secret_ref)` pairs in PostgreSQL,
-never plaintext. The secret provider abstraction lives in
-[`packages/shared-secrets/`](../../packages/shared-secrets/). It ships
-the `env` adapter; the Vault adapter is [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md).
+Two kinds, stored differently.
+
+**Per-project credentials** — a destination's vendor token, a project's
+sensitive configuration values — live in the control-plane database as
+plaintext (`destinations.secret_value`, `project_config.value` with
+`is_secret`). There is no external provider and no resolution step.
+The deployment consequence is direct: **the control-plane database and
+its backups are credential material**, and their access controls should
+match. See [Control Plane — Secrets](../architecture/02-control-plane.md).
+
+**App and deployment credentials** — Postgres, RabbitMQ, ClickHouse,
+Redis — are environment variables injected by the orchestrator, read at
+bootstrap before a service can reach any store. The rules below are
+about these.
 
 Three rules apply at deployment time:
 
@@ -154,10 +166,11 @@ The recovery-objective table is also reproduced in
   the contracts here through their existing manifest tooling. A
   follow-up task will land `infra/k8s/` once a real production
   deployment shape is in flight.
-- **No Vault wiring.** The `env` secret provider is the only adapter in
-  v1. [P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md)
-  ships the Vault adapter; `.env.example` does not pre-template Vault
-  variables to avoid documenting unwired code.
+- **No external secret manager.** Per-project credentials are plaintext
+  in the control-plane database. A Vault adapter existed (P11-004) and
+  was removed when those credentials moved into the database, which
+  left it with no callers. Encrypting them at rest, or moving them back
+  behind a provider, is honest future work.
 - **GeoIP database.** `POLARIS_GEOIP_DB_PATH` is reserved in
   `.env.example` but the v1 enricher does not read it (the MaxMind
   adapter is a future task; see

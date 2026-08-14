@@ -141,13 +141,20 @@ export interface ProjectConfigTable {
    * schema declares — string, number, boolean, enum member, or array —
    * without a migration per shape.
    *
-   * When `is_secret_ref` is true this is a `provider:ref` STRING and never a
-   * plaintext credential; the `project_config_secret_ref_shape` CHECK
-   * enforces that even against a direct SQL write.
+   * When `is_secret` is true this is the credential ITSELF, in plaintext,
+   * constrained to a JSON string by the `project_config_secret_is_string`
+   * CHECK. It is boxed in `Secret<T>` the moment it leaves this table.
    */
   value: ColumnType<unknown, unknown, unknown>;
-  /** Whether `value` is a secret reference to resolve rather than a literal. */
-  is_secret_ref: ColumnType<boolean, boolean | undefined, boolean>;
+  /**
+   * Whether `value` is sensitive.
+   *
+   * This flag once meant "a pointer to resolve". It now means "handle this
+   * carefully": boxed on read, redacted in logs and audit snapshots, masked
+   * in the admin UI behind an explicit reveal. Storage changed with
+   * `20260813000004_plaintext_project_secrets`; handling did not.
+   */
+  is_secret: ColumnType<boolean, boolean | undefined, boolean>;
   /** Last mutation time, in UTC. */
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
   /** Audit actor label: an operator identity, or `migration` / `system`. */
@@ -264,13 +271,18 @@ export interface DestinationsTable {
    */
   instance_label: string;
   /**
-   * Provider-namespaced secret reference (e.g.
-   * `env:META_CAPI_TOKEN_STOREFRONT_PROD`,
-   * `secret_manager:polaris/production/storefront/meta-capi`). The runtime
-   * resolves this through `@polaris/shared-secrets`; the resolved value is
-   * never persisted here.
+   * The vendor credential itself, in plaintext.
+   *
+   * Its shape is the consumer's business — meta-capi stores
+   * `{pixel_id, access_token}` JSON, ga4 an api_secret — and each asserts it
+   * in its own `parseResolvedSecret`. The database only requires non-empty.
+   *
+   * NEVER log, print, export or audit-snapshot this column. It reaches
+   * exactly two places: the deliverer, through `DelivererContext.secret`,
+   * and an explicit operator reveal in the admin UI. Every other read path
+   * masks it.
    */
-  secret_ref: string;
+  secret_value: string;
   /** Lifecycle status (`active` | `paused` | `disabled`). */
   status: ColumnType<DestinationStatus, DestinationStatus | undefined, DestinationStatus>;
   /** Delivery mode (`live` | `sandbox` | `test`). */
@@ -332,7 +344,7 @@ export interface DestinationsTable {
    * The boundary against the typed columns above: those are knobs the shared
    * destination runtime reads (status, mode, max_rps, retry_policy); `config`
    * is read only by the consumer's own code. Values shared across the whole
-   * project live in `project_config`; credentials live in `secret_ref`.
+   * project live in `project_config`; the credential lives in `secret_value`.
    *
    * Parameters only. No mappings, routing, transforms, or field maps — see
    * the hard rule in the migration header.

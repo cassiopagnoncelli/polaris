@@ -14,7 +14,6 @@
  *        - `createKyselyDestinationInstanceReader` wrapped in
  *          `DestinationInstanceCache` (per-event lookup)
  *        - `createKyselyDeliveryRecordRepository` (delivery_records)
- *        - `SecretResolver` with the env-backed adapter
  *        - a fresh `DestinationMetrics` registry threaded into `/metrics`
  *   5. Hand the runtime's `start`/`stop` and the consumer/producer/db
  *      lifecycles to `bootstrapService`:
@@ -24,11 +23,10 @@
  *          producer, then end the Kysely pool in that order
  *
  * Tests inject pre-built consumer + producer + instance reader + records
- * repo + secrets through the `BuildAppOptions` slots so they can drive
+ * repo through the `BuildAppOptions` slots so they can drive
  * the runtime without a real RabbitMQ broker or PostgreSQL.
  */
 
-import { loadEnvWithDefaults } from "@polaris/shared-config";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -45,7 +43,6 @@ import {
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
-import { createSecretResolver, type SecretResolver } from "@polaris/shared-secrets";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -72,8 +69,8 @@ import { CONSUMER_VENDOR, CONSUMER_VERSION } from "./descriptor-identity.js";
 /**
  * Options accepted by `buildWebhookSinkApp`.
  *
- * Tests override `consumer`, `producer`, `db`, `instances`, `records`, and
- * `secrets` to drive the runtime in isolation.
+ * Tests override `consumer`, `producer`, `db`, `instances` and `records` to
+ * drive the runtime in isolation.
  */
 export interface BuildAppOptions {
   readonly config: WebhookSinkRuntimeConfig;
@@ -114,11 +111,6 @@ export interface BuildAppOptions {
    * adapter.
    */
   readonly dlqRecords?: DlqRecordRepository;
-  /**
-   * Pre-built secret resolver. Default: env-only resolver (production wires
-   * a Vault / file adapter through `@polaris/shared-secrets`).
-   */
-  readonly secrets?: SecretResolver;
   /** `fetch`-compatible deliverer implementation. Default: `globalThis.fetch`. */
   readonly fetch?: typeof globalThis.fetch;
   /** Override of `() => new Date()` for deterministic tests. */
@@ -167,16 +159,6 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
 
   // ---- PostgreSQL ----------------------------------------------------
   const { db, ownsDb } = buildDb(config, options.db);
-
-  // ---- secrets -------------------------------------------------------
-  const secrets =
-    options.secrets ??
-    createSecretResolver({
-      config: config.secretProvider,
-      env: loadEnvWithDefaults(),
-      logger,
-      deploymentEnvironment: config.service.environment,
-    });
 
   // ---- metrics + transport hooks ------------------------------------
   // Built before the transport because the hooks need the registry: until
@@ -248,7 +230,6 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     instances,
     records,
     dlqRecords,
-    secrets,
     logger: consumerLogger,
     allowReplay: config.sink.allowReplay,
     metrics,

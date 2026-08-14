@@ -61,41 +61,27 @@ export function rejectMappingArguments(args: Readonly<Record<string, unknown>>):
 }
 
 /**
- * Validate a `--secret-ref` value. The value MUST be of the form
- * `<provider>:<reference>`, e.g.
+ * Validate a `--secret-value`: the vendor credential itself.
  *
- *   env:META_CAPI_TOKEN_STOREFRONT_PROD
- *   secret_manager:polaris/production/storefront/meta-capi
- *   vault:secret/data/polaris/meta-capi
+ * Non-empty is the only rule, matching the `destinations_secret_value_present`
+ * CHECK, and that is on purpose. Its predecessor validated a
+ * `<provider>:<reference>` shape because the column held a pointer with a
+ * platform-defined format. A credential has no platform-defined format — it is
+ * whatever the vendor issues, and each consumer asserts its own shape in
+ * `parseResolvedSecret` at delivery time.
  *
- * Plaintext secrets must never be passed here. The CLI does not detect
- * "secret-shaped" values — operator hygiene plus the
- * `destinations_secret_ref_format` CHECK constraint catch obvious mistakes.
+ * Note the error message quotes the flag name, never the value. On this path
+ * the value is a live credential, so echoing it back would put it in terminal
+ * scrollback and in whatever captured the CLI's stderr.
  */
-export function validateSecretRef(value: string): { provider: string; ref: string } {
+export function validateSecretValue(value: string): string {
   const trimmed = value.trim();
-  const idx = trimmed.indexOf(":");
-  if (idx <= 0 || idx === trimmed.length - 1) {
+  if (trimmed.length === 0) {
     throw new UsageError(
-      `--secret-ref must be in the form <provider>:<reference> (got "${value}"). ` +
-        "Examples: env:META_CAPI_TOKEN_STOREFRONT_PROD, " +
-        "secret_manager:polaris/production/storefront/meta-capi. " +
-        "Plaintext secrets are never accepted.",
+      "--secret-value must be a non-empty credential. " +
+        "This is the credential itself (for meta-capi, the " +
+        '{"pixel_id":…,"access_token":…} JSON), not a reference to one.',
     );
   }
-  const provider = trimmed.slice(0, idx);
-  const ref = trimmed.slice(idx + 1);
-  if (!/^[a-z][a-z0-9_-]*$/.test(provider)) {
-    throw new UsageError(
-      `--secret-ref provider "${provider}" is invalid. ` +
-        "Allowed shape: lowercase alphanumeric with underscores or hyphens.",
-    );
-  }
-  if (ref.length === 0 || /\s/.test(ref)) {
-    throw new UsageError(
-      `--secret-ref reference "${ref}" is invalid. ` +
-        "Must be non-empty and contain no whitespace.",
-    );
-  }
-  return { provider, ref };
+  return trimmed;
 }

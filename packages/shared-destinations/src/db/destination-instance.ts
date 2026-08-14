@@ -29,9 +29,12 @@
  * The reader exposes a `DestinationInstanceReader` contract so tests can
  * inject in-memory adapters and production wires the Kysely adapter.
  *
- * Resolved secret values do NOT live in this module. The reader returns the
- * `secret_ref` literal (`provider:ref` form); the runtime resolves it
- * through `@polaris/shared-secrets` per delivery attempt, in memory only.
+ * This module DOES hold plaintext credentials, and that is a change worth
+ * naming. `secret_value` is the vendor credential itself, so every cached
+ * instance carries one for its TTL — where previously the cache held a
+ * `provider:ref` pointer and the runtime resolved it per attempt. Nothing here
+ * may log, serialize or summarize an instance wholesale; the runtime picks the
+ * fields it needs by name for exactly this reason.
  */
 
 import type {
@@ -47,10 +50,8 @@ import type { Kysely } from "kysely";
  * attempt. The runtime never reads anything outside this shape; the shape
  * is intentionally narrow so the cache footprint stays small.
  *
- * `secret_ref` is the `provider:ref` literal stored in PostgreSQL. The
- * runtime hands it to `@polaris/shared-secrets`'s `SecretResolver`; the
- * resolved plaintext lives in memory only for the duration of one
- * delivery attempt.
+ * `secret_value` is the vendor credential in plaintext, as stored. The runtime
+ * hands it to the deliverer as `DelivererContext.secret` and nowhere else.
  *
  * `replay_opt_in` (P7-004) is the per-instance gate the runtime consults
  * before delivering replay traffic. It DEFAULTS to `false` for every row;
@@ -66,7 +67,7 @@ export interface DestinationInstance {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
+  readonly secret_value: string;
   readonly status: DestinationStatus;
   readonly mode: DestinationMode;
   readonly max_concurrency: number;
@@ -173,7 +174,7 @@ export function createKyselyDestinationInstanceReader(
         "environment",
         "vendor",
         "instance_label",
-        "secret_ref",
+        "secret_value",
         "status",
         "mode",
         "max_concurrency",
@@ -199,7 +200,7 @@ export function createKyselyDestinationInstanceReader(
         "environment",
         "vendor",
         "instance_label",
-        "secret_ref",
+        "secret_value",
         "status",
         "mode",
         "max_concurrency",

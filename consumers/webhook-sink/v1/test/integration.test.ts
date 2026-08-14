@@ -22,7 +22,6 @@ import {
   InMemoryDestinationInstanceReader,
 } from "@polaris/shared-destinations";
 import { createLogger } from "@polaris/shared-logger";
-import { SecretResolver } from "@polaris/shared-secrets";
 import type { PolarisProducer } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
@@ -78,22 +77,6 @@ const NOOP_PRODUCER = {
   publishToQueue: async () => undefined,
 } as unknown as PolarisProducer;
 
-function makeSecretResolver(map: Record<string, string>): SecretResolver {
-  return new SecretResolver({
-    adapters: {
-      env: {
-        async getSecret(ref: string) {
-          const value = map[ref];
-          if (value === undefined) {
-            throw new Error(`secret not found: env:${ref}`);
-          }
-          return value;
-        },
-      },
-    },
-  });
-}
-
 function fixtureEnvelope(): NormalizableEnvelope {
   return {
     event_id: "evt_int_test_001",
@@ -134,12 +117,11 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
   it("delivers a happy-path envelope and writes a single 'accepted' delivery record", async () => {
     const { fetch, calls } = makeFetch(() => new Response("ok", { status: 200 }));
 
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance("https://hooks.example/receiver");
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
 
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ WEBHOOK_SINK_TARGET: "https://hooks.example/receiver" });
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -153,7 +135,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
       now: () => new Date("2026-05-14T12:00:00.000Z"),
     });
@@ -185,11 +166,10 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
   it("maps an HTTP 500 response to a failed_retryable delivery record", async () => {
     const { fetch } = makeFetch(() => new Response("oops", { status: 500 }));
 
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance("https://hooks.example/");
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ WEBHOOK_SINK_TARGET: "https://hooks.example/" });
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -203,7 +183,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
       now: () => new Date("2026-05-14T12:00:00.000Z"),
     });
@@ -227,11 +206,10 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
   it("treats a malformed secret value as a permanent auth failure", async () => {
     const { fetch, calls } = makeFetch(() => new Response("never reached", { status: 200 }));
 
-    const instance = fixtureDestinationInstance();
+    const instance = fixtureDestinationInstance("this-is-not-a-url");
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({ WEBHOOK_SINK_TARGET: "this-is-not-a-url" });
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -244,7 +222,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -261,16 +238,15 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
   it("signs the request body when the secret is { url, signing_key }", async () => {
     const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
 
-    const instance = fixtureDestinationInstance();
-    const instances = new InMemoryDestinationInstanceReader();
-    instances.set(instance);
-    const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({
-      WEBHOOK_SINK_TARGET: JSON.stringify({
+    const instance = fixtureDestinationInstance(
+      JSON.stringify({
         url: "https://hooks.example/receiver",
         signing_key: "test_signing_key",
       }),
-    });
+    );
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -283,7 +259,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -300,7 +275,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
     const { fetch, calls } = makeFetch(() => new Response("", { status: 200 }));
     const instances = new InMemoryDestinationInstanceReader();
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({});
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -312,7 +286,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 
@@ -330,7 +303,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
     const instances = new InMemoryDestinationInstanceReader();
     instances.set(instance);
     const records = new InMemoryDeliveryRecordRepository();
-    const secrets = makeSecretResolver({});
 
     const descriptor = createWebhookSinkDescriptor({
       fetch,
@@ -342,7 +314,6 @@ describe("webhook-sink v1 integration (handleEvent driven)", () => {
       producer: NOOP_PRODUCER,
       instances,
       records,
-      secrets,
       logger,
     });
 

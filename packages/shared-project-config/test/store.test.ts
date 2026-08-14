@@ -7,16 +7,15 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { SECRET_REFRESH_DEADLINE_MS } from "../src/constants.js";
 import { PinMissingError } from "../src/errors.js";
-import { isSecret } from "../src/secret-box.js";
+import { isSecret, type Secret } from "../src/secret-box.js";
 import {
   createProjectConfigStore,
   type ProjectConfigMetricsHooks,
   type ProjectConfigStore,
 } from "../src/store.js";
 import type { ProjectConfigKey } from "../src/types.js";
-import { FakeClock, FakeDb, FakeListener, FakeSecrets, fakeLogger } from "./support.js";
+import { FakeClock, FakeDb, FakeListener, fakeLogger } from "./support.js";
 
 const KEY: ProjectConfigKey = {
   projectId: "storefront",
@@ -30,7 +29,6 @@ const OTHER_PROJECT: ProjectConfigKey = { ...KEY, projectId: "checkout" };
 interface Harness {
   store: ProjectConfigStore;
   db: FakeDb;
-  secrets: FakeSecrets;
   listener: FakeListener;
   clock: FakeClock;
   lookups: { namespace: string; result: string }[];
@@ -42,7 +40,6 @@ interface Harness {
 
 function harness(overrides: { capacity?: number; sweepIntervalMs?: number } = {}): Harness {
   const db = new FakeDb();
-  const secrets = new FakeSecrets();
   const listener = new FakeListener();
   const clock = new FakeClock();
   const { logger } = fakeLogger();
@@ -65,7 +62,6 @@ function harness(overrides: { capacity?: number; sweepIntervalMs?: number } = {}
 
   const store = createProjectConfigStore({
     db: db.asKysely(),
-    secrets: secrets.asResolver(),
     listener,
     logger: logger as never,
     now: clock.now,
@@ -79,7 +75,6 @@ function harness(overrides: { capacity?: number; sweepIntervalMs?: number } = {}
   return {
     store,
     db,
-    secrets,
     listener,
     clock,
     lookups,
@@ -99,7 +94,7 @@ function seed(db: FakeDb, key: ProjectConfigKey, version: bigint): void {
     namespace: key.namespace,
     config_key: "pixel_id",
     value: "1234567890",
-    is_secret_ref: false,
+    is_secret: false,
   });
   db.setVersion(key.projectId, key.environment, version);
 }
@@ -232,38 +227,53 @@ describe("project-config store", () => {
     expect(h.invalidations).toContain("reconnect");
   });
 
-  it("B8: a secret-bearing snapshot re-resolves on its deadline despite an unchanged version", async () => {
+  it("B8: a secret row arrives boxed, with the stored value intact inside it", async () => {
     const h = harness();
     h.db.rows.push({
       project_id: KEY.projectId,
       environment: KEY.environment,
       namespace: KEY.namespace,
       config_key: "access_token",
-      value: "vault:polaris/prod/storefront/meta-capi",
-      is_secret_ref: true,
+      value: "EAAB-live-token-value",
+      is_secret: true,
+    });
+    h.db.setVersion(KEY.projectId, KEY.environment, 3n);
+
+    const snapshot = await h.store.get(KEY);
+    const token = snapshot.values["access_token"];
+
+    // A consumer must be able to reach the real value — a delivery needs it.
+    expect(isSecret(token)).toBe(true);
+    expect((token as Secret<string>).expose()).toBe("EAAB-live-token-value");
+
+    // And nothing that stringifies the snapshot may reach it. This is the
+    // whole job of the box now that the store caches plaintext rather than a
+    // pointer: one `JSON.stringify` in a log line or a DLQ payload would
+    // otherwise publish the credential.
+    expect(JSON.stringify(snapshot)).not.toContain("EAAB-live-token-value");
+    expect(String(token)).toBe("[redacted]");
+  });
+
+  it("B8b: a secret-bearing snapshot is NOT refetched on a timer", async () => {
+    // Pins a deliberate removal. A wall-clock deadline used to force
+    // re-resolution of secret-bearing snapshots regardless of version, because
+    // rotating a credential in Vault moved no version and the fleet would
+    // otherwise serve a revoked one indefinitely. A stored secret changes only
+    // by a write, and a write bumps the version — so the deadline would now be
+    // a periodic refetch that can never observe anything new.
+    const h = harness();
+    h.db.rows.push({
+      project_id: KEY.projectId,
+      environment: KEY.environment,
+      namespace: KEY.namespace,
+      config_key: "access_token",
+      value: "EAAB-live-token-value",
+      is_secret: true,
     });
     h.db.setVersion(KEY.projectId, KEY.environment, 3n);
 
     await h.store.get(KEY);
-    expect(h.secrets.calls).toBe(1);
-
-    h.clock.advance(SECRET_REFRESH_DEADLINE_MS - 1000);
-    await h.store.get(KEY);
-    expect(h.secrets.calls).toBe(1);
-
-    // Version never moved — only the deadline forces re-resolution, which is
-    // the whole reason it exists.
-    h.clock.advance(2000);
-    await h.store.get(KEY);
-    expect(h.secrets.calls).toBe(2);
-  });
-
-  it("B8b: a snapshot with no secrets has no deadline", async () => {
-    const h = harness();
-    seed(h.db, KEY, 1n);
-
-    await h.store.get(KEY);
-    h.clock.advance(SECRET_REFRESH_DEADLINE_MS * 10);
+    h.clock.advance(3_000_000);
     await h.store.get(KEY);
 
     expect(h.db.valueQueries).toBe(1);
@@ -327,21 +337,26 @@ describe("project-config store", () => {
     expect(snapshot.values["pixel_id"]).toBe("1234567890");
   });
 
-  it("B11b: a secret-resolution failure propagates without caching", async () => {
+  it("B11b: a failed assembly of a secret-bearing scope leaves no partial entry", async () => {
+    // B11 covers the same rule for ordinary values; this one exists because a
+    // half-cached secret scope is the worse failure — a consumer would read a
+    // snapshot whose credential key is simply absent and quietly fall back to
+    // its deployment default, delivering with the wrong account rather than
+    // failing.
     const h = harness();
     h.db.rows.push({
       project_id: KEY.projectId,
       environment: KEY.environment,
       namespace: KEY.namespace,
       config_key: "access_token",
-      value: "vault:x",
-      is_secret_ref: true,
+      value: "EAAB-live-token-value",
+      is_secret: true,
     });
-    h.secrets.failWith = new Error("503 from vault");
+    h.db.failNext = new Error("connection reset");
 
     await expect(h.store.get(KEY)).rejects.toThrow(/failed to assemble project config/);
+    expect(h.store.peek(KEY)).toBeUndefined();
 
-    h.secrets.failWith = undefined;
     const snapshot = await h.store.get(KEY);
     expect(isSecret(snapshot.values["access_token"])).toBe(true);
   });

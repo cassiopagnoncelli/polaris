@@ -7,10 +7,18 @@
  * changes configuration without the audit row, the version bump, and the
  * notification that go with it.
  *
+ * The readers apply the same principle to disclosure. Secret values are stored
+ * plaintext, so every generic read here MASKS them and only
+ * {@link revealProjectConfigSecret} returns one — there must be no import path
+ * by which a caller accidentally puts a credential in a list view, an export or
+ * an audit snapshot.
+ *
  * @see ../mutations/project-config.ts
  * @see db/migrations/20260813000001_create_project_config.sql
+ * @see db/migrations/20260813000004_plaintext_project_secrets.sql
  */
 
+import { maskIfSecret } from "@polaris/shared-control-plane";
 import type { Database } from "@polaris/shared-db";
 import type { Kysely, Transaction } from "kysely";
 import { sql } from "kysely";
@@ -24,13 +32,17 @@ export interface ProjectConfigRow {
   readonly namespace: string;
   readonly config_key: string;
   /**
-   * The stored value. For `is_secret_ref` rows this is the
-   * `<provider>:<ref>` pointer, never a resolved secret — the resolution
-   * happens in `@polaris/shared-project-config` at read time and its result
-   * never comes back here.
+   * The stored value — or `SECRET_MASK` when `is_secret` is true.
+   *
+   * Masked here rather than at each call site, because the call sites are
+   * list views, `show` output, exports and audit snapshots: nine of them, all
+   * one forgotten mask away from writing a credential somewhere durable. A
+   * caller that genuinely needs the plaintext calls
+   * {@link revealProjectConfigSecret}, which is greppable.
    */
   readonly value: unknown;
-  readonly is_secret_ref: boolean;
+  /** Whether the value is sensitive, and therefore masked above. */
+  readonly is_secret: boolean;
   readonly updated_at: string;
   readonly updated_by: string;
 }
@@ -54,7 +66,7 @@ export async function listProjectConfig(
       "namespace",
       "config_key",
       "value",
-      "is_secret_ref",
+      "is_secret",
       "updated_at",
       "updated_by",
     ])
@@ -88,7 +100,7 @@ export async function findProjectConfigValue(
       "namespace",
       "config_key",
       "value",
-      "is_secret_ref",
+      "is_secret",
       "updated_at",
       "updated_by",
     ])
@@ -99,6 +111,35 @@ export async function findProjectConfigValue(
     .executeTakeFirst();
 
   return row === undefined ? undefined : toRow(row);
+}
+
+/**
+ * Read one value WITHOUT masking — the deliberate disclosure path.
+ *
+ * The only way plaintext leaves this module. Two callers are legitimate: the
+ * admin UI's explicit reveal action, and `polaris config get --reveal`. Both
+ * are operator-initiated and both show the value to a human who already holds
+ * control-plane credentials.
+ *
+ * Named so that a reviewer asking "where can a stored secret escape?" gets the
+ * complete answer from one grep. Returns `undefined` when the key does not
+ * exist, and for a non-secret key returns the value unchanged — a caller that
+ * revealed something harmless has still done nothing wrong.
+ */
+export async function revealProjectConfigSecret(
+  db: Kysely<Database>,
+  ref: ProjectConfigValueRef,
+): Promise<unknown | undefined> {
+  const row = await db
+    .selectFrom("project_config")
+    .select("value")
+    .where("project_id", "=", ref.projectId)
+    .where("environment", "=", ref.environment)
+    .where("namespace", "=", ref.namespace)
+    .where("config_key", "=", ref.configKey)
+    .executeTakeFirst();
+
+  return row === undefined ? undefined : row.value;
 }
 
 /** Current version for a scope; `0n` when the scope has never been written. */
@@ -122,7 +163,7 @@ export async function readProjectConfigVersion(
 
 export interface UpsertProjectConfigInput extends ProjectConfigValueRef {
   readonly value: unknown;
-  readonly isSecretRef: boolean;
+  readonly isSecret: boolean;
   readonly updatedBy: string;
   readonly updatedAt: Date;
 }
@@ -139,14 +180,14 @@ export async function upsertProjectConfigValue(
       namespace: input.namespace,
       config_key: input.configKey,
       value: sql`${JSON.stringify(input.value)}::jsonb`,
-      is_secret_ref: input.isSecretRef,
+      is_secret: input.isSecret,
       updated_at: input.updatedAt,
       updated_by: input.updatedBy,
     })
     .onConflict((oc) =>
       oc.columns(["project_id", "environment", "namespace", "config_key"]).doUpdateSet({
         value: sql`${JSON.stringify(input.value)}::jsonb`,
-        is_secret_ref: input.isSecretRef,
+        is_secret: input.isSecret,
         updated_at: input.updatedAt,
         updated_by: input.updatedBy,
       }),
@@ -235,7 +276,7 @@ function toRow(row: {
   namespace: string;
   config_key: string;
   value: unknown;
-  is_secret_ref: boolean;
+  is_secret: boolean;
   updated_at: Date | string;
   updated_by: string;
 }): ProjectConfigRow {
@@ -244,8 +285,10 @@ function toRow(row: {
     environment: row.environment,
     namespace: row.namespace,
     config_key: row.config_key,
-    value: row.value,
-    is_secret_ref: row.is_secret_ref,
+    // The single choke point. Every generic read in this module funnels
+    // through here, so masking cannot be forgotten by adding a query.
+    value: maskIfSecret(row.value, row.is_secret),
+    is_secret: row.is_secret,
     updated_at:
       row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
     updated_by: row.updated_by,

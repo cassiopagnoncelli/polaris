@@ -313,7 +313,6 @@ describe("dispatcher integration: destinations.disable + audit row carries the a
       environment: "production" as const,
       vendor: "meta-capi",
       instance_label: "storefront-prod",
-      secret_ref: "env:META_CAPI_TOKEN_STOREFRONT_PROD",
       status: "active" as const,
       mode: "live" as const,
       max_concurrency: 4,

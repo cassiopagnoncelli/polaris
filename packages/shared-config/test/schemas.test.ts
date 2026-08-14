@@ -10,7 +10,6 @@ import {
   postgresEnvSchema,
   rabbitmqEnvSchema,
   redisEnvSchema,
-  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "../src/index.js";
 
@@ -383,89 +382,5 @@ describe("httpEnvSchema", () => {
     });
     expect(config.port).toBe(8081);
     expect(config.bodyLimitBytes).toBe(2048);
-  });
-});
-
-describe("secretProviderEnvSchema", () => {
-  it("defaults to the env provider when nothing is set", () => {
-    const config = secretProviderEnvSchema.parse({});
-    expect(config.provider).toBe("env");
-    expect("vault" in config).toBe(false);
-  });
-
-  it("requires POLARIS_VAULT_ADDRESS when provider=vault", () => {
-    expect(() =>
-      secretProviderEnvSchema.parse({
-        POLARIS_SECRET_PROVIDER: "vault",
-        POLARIS_VAULT_ROLE: "polaris-production",
-      }),
-    ).toThrow(/POLARIS_VAULT_ADDRESS/);
-  });
-
-  it("requires POLARIS_VAULT_ROLE when provider=vault", () => {
-    expect(() =>
-      secretProviderEnvSchema.parse({
-        POLARIS_SECRET_PROVIDER: "vault",
-        POLARIS_VAULT_ADDRESS: "https://vault.svc:8200",
-      }),
-    ).toThrow(/POLARIS_VAULT_ROLE/);
-  });
-
-  it("rejects POLARIS_VAULT_ADDRESS with a trailing slash", () => {
-    expect(() =>
-      secretProviderEnvSchema.parse({
-        POLARIS_SECRET_PROVIDER: "vault",
-        POLARIS_VAULT_ADDRESS: "https://vault.svc:8200/",
-        POLARIS_VAULT_ROLE: "polaris-production",
-      }),
-    ).toThrow(/must not end with/);
-  });
-
-  it("returns a fully typed vault config with defaults applied", () => {
-    const config = secretProviderEnvSchema.parse({
-      POLARIS_SECRET_PROVIDER: "vault",
-      POLARIS_VAULT_ADDRESS: "https://vault.svc:8200",
-      POLARIS_VAULT_ROLE: "polaris-production",
-    });
-    expect(config.provider).toBe("vault");
-    if (config.provider !== "vault") throw new Error("type guard");
-    expect(config.vault).toEqual({
-      address: "https://vault.svc:8200",
-      role: "polaris-production",
-      kvMount: "secret",
-      kubernetesAuthMount: "kubernetes",
-      tokenPath: "/var/run/secrets/kubernetes.io/serviceaccount/token",
-      cacheTtlMs: 300_000,
-    });
-  });
-
-  it("overrides the default cache TTL and mounts", () => {
-    const config = secretProviderEnvSchema.parse({
-      POLARIS_SECRET_PROVIDER: "vault",
-      POLARIS_VAULT_ADDRESS: "https://vault.svc:8200",
-      POLARIS_VAULT_ROLE: "polaris-production",
-      POLARIS_VAULT_KV_MOUNT: "polaris-secrets",
-      POLARIS_VAULT_K8S_AUTH_MOUNT: "kubernetes-prod",
-      POLARIS_VAULT_CACHE_TTL_MS: "60000",
-    });
-    if (config.provider !== "vault") throw new Error("type guard");
-    expect(config.vault.kvMount).toBe("polaris-secrets");
-    expect(config.vault.kubernetesAuthMount).toBe("kubernetes-prod");
-    expect(config.vault.cacheTtlMs).toBe(60_000);
-  });
-
-  it("rejects unknown provider strings", () => {
-    expect(() =>
-      secretProviderEnvSchema.parse({
-        POLARIS_SECRET_PROVIDER: "hashicorp-vault-typo",
-      }),
-    ).toThrow();
-  });
-
-  it("accepts reserved provider slots without requiring vault knobs", () => {
-    const config = secretProviderEnvSchema.parse({
-      POLARIS_SECRET_PROVIDER: "aws-secrets-manager",
-    });
-    expect(config.provider).toBe("aws-secrets-manager");
   });
 });

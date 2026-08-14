@@ -78,7 +78,7 @@ packages/
   shared-transport/                    transport port + RabbitMQ driver + stream-family resolver
   shared-logger/                   Pino setup
   shared-config/                   Zod-validated runtime config
-  shared-secrets/                  secret provider interface + env / Vault adapters
+  shared-secrets/                  argon2id hashing primitive (API keys, operator tokens)
   shared-clickhouse/               wraps @clickhouse/client; only sanctioned ClickHouse access path
   shared-destinations/             destination consumer runtime (normalize/map/deliver helpers)
   shared-destination-normalize/    vendor-agnostic normalization primitives

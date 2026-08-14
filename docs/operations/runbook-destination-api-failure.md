@@ -55,8 +55,9 @@ the ratio.
    per-key rate cap and the runtime's retry budget can't absorb the
    spike. `polaris_destination_rate_limit_wait_ms_last` climbs.
 3. **Stale credential.** `error_class='auth'` (401 / 403) on the
-   destination's delivery attempts. The destination's `secret_ref`
-   resolves to a key that has been rotated, revoked, or expired.
+   destination's delivery attempts. The credential in
+   `destinations.secret_value` has been rotated, revoked or expired at
+   the vendor.
 4. **Vendor contract change.** The vendor accepted the payload
    yesterday and rejects it today; a vendor changed their schema or
    tightened validation. `error_class='permanent'` (vendor 4xx with
@@ -114,10 +115,16 @@ runtime's retry budget will handle the recovery automatically.
 polaris destinations show <destination_id>
 ```
 
-The output renders the `secret_ref` literal. Cross-check against the
-secret provider's audit log to see when the credential was last
-rotated. If the rotation happened recently and the destination's
-secret_ref was not updated, that's the smoking gun.
+The output does NOT render the credential — it cannot, by design. Use
+the audit trail instead:
+
+```bash
+polaris audit list --action destinations.rotate-secret --target <destination_id>
+```
+
+Compare the last rotation timestamp against when the vendor says the
+credential changed. A vendor-side rotation with no corresponding Polaris
+rotation is the smoking gun.
 
 ### 5. Read the destination consumer's logs
 
@@ -147,10 +154,10 @@ connection failures).
 - **For rate limiting (cause #2):** lower the destination's
   concurrency / batch-rate knob via
   `polaris destinations update-ops`. Audited.
-- **For a stale credential (cause #3):** rotate the secret per the
-  secret-provider runbook, then re-resolve the destination's
-  `secret_ref`. The runtime picks up the new value on the next batch
-  fetch (no restart required).
+- **For a stale credential (cause #3):** `polaris destinations
+  rotate-secret <id> --secret-value <new> --reason <why>`. The runtime
+  picks up the new value within the 60s instance-cache window — no
+  restart. See the [secret rotation runbook](secret-rotation.md).
 - **Disable the destination during triage:**
   ```bash
   polaris destinations disable <destination_id> \

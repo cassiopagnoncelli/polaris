@@ -300,9 +300,7 @@ shell environment.
 
 Every variable that may carry a secret is named below. None of these
 should ever appear in `.env.example` with a real value. The production
-deployment's secret provider (today `env`; Vault from
-[P11-004](../../agents/pm/kanban/done/P11-004-production-secret-provider-adapter-vault.md))
-injects them at boot.
+deployment's orchestrator injects them at boot.
 
 | Variable | Used by |
 | --- | --- |
@@ -315,10 +313,13 @@ injects them at boot.
 | `POLARIS_OPERATOR_TOKEN` | `polaris` CLI for production mutations |
 
 The platform also stores **destination credentials** (Meta CAPI tokens,
-TikTok keys, generic webhook secrets, etc.) as `(secret_provider,
-secret_ref)` pairs in PostgreSQL. Those are not Polaris-platform
-variables and not listed in `.env.example`. The secret provider
-resolves them at delivery time inside the consumer process.
+TikTok keys, generic webhook secrets) and **per-project secret values**
+in the control-plane database as plaintext. Those are not
+Polaris-platform variables and are not listed in `.env.example` — they
+are operator data, set with `polaris destinations create
+--secret-value` / `polaris config set --secret` and rotated with
+`polaris destinations rotate-secret`. See the
+[secret rotation runbook](../operations/secret-rotation.md).
 
 ## Composition map (cheat sheet)
 

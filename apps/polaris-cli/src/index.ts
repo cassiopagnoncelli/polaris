@@ -187,6 +187,11 @@ export {
   type DestinationsListStore,
 } from "./commands/destinations/list.js";
 export {
+  buildDestinationsRotateSecretRunner,
+  type DestinationsRotateSecretHooks,
+  type DestinationsRotateSecretStore,
+} from "./commands/destinations/rotate-secret.js";
+export {
   buildDestinationsShowRunner,
   type DestinationsShowHooks,
   type DestinationsShowStore,
@@ -199,7 +204,7 @@ export {
 export {
   FORBIDDEN_MAPPING_FLAG_TOKENS,
   rejectMappingArguments,
-  validateSecretRef,
+  validateSecretValue,
 } from "./commands/destinations/validation.js";
 export {
   buildExportApiKeysRunner,

@@ -30,7 +30,6 @@
  *      - on `drop` outcome -> record + return,
  *      - look up the per-event mapper -> `mapped_failed` if missing,
  *      - call the mapper -> `mapped_failed` on throw or `skip` outcome,
- *      - resolve the secret reference (one resolution per attempt),
  *      - call the deliverer with `(payload, instance, secret, ...)`,
  *      - on `accepted` outcome -> record + mark dedupe + return,
  *      - on `failed_retryable` outcome -> record + re-throw so KafkaJS
@@ -45,10 +44,15 @@
  * slots; the runtime never imports anything vendor-shaped.
  *
  * Concurrency + RPS limits per `(destination_id, environment)` are honored
- * through `DestinationRateLimiter`. Secret resolution uses
- * `@polaris/shared-secrets`; resolved values live in memory for the
- * duration of one delivery attempt and are never persisted, logged, or
- * stamped onto delivery records.
+ * through `DestinationRateLimiter`.
+ *
+ * The vendor credential arrives on the destination row as `secret_value` and
+ * goes straight to the deliverer. There is no resolution step: the runtime
+ * used to call `@polaris/shared-secrets` per attempt to turn a `provider:ref`
+ * pointer into plaintext, which meant a delivery could fail because a secrets
+ * provider was unreachable — a whole failure mode, with its own transient /
+ * permanent classification, that reading a column does not have. The credential
+ * is never persisted, logged, or stamped onto delivery records.
  */
 
 import {
@@ -57,7 +61,6 @@ import {
   normalizeForDestination,
 } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
-import { classifySecretFailure, type SecretResolver } from "@polaris/shared-secrets";
 
 /**
  * The runtime's view of project configuration.
@@ -155,8 +158,6 @@ export interface DestinationConsumerOptions<Payload> {
    * the Postgres-backed triage path.
    */
   readonly dlqRecords?: DlqRecordRepository;
-  /** Secret resolver. The runtime calls `.resolve(instance.secret_ref)`. */
-  readonly secrets: SecretResolver;
   /**
    * Per-`(project, environment)` configuration for this consumer's namespace.
    *
@@ -335,7 +336,6 @@ export function createDestinationConsumer<Payload>(
       instances: options.instances,
       records: options.records,
       ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
-      secrets: options.secrets,
       projectConfig: options.projectConfig,
       producer: options.producer,
       logger: options.logger,
@@ -460,7 +460,6 @@ export function createDestinationConsumer<Payload>(
           instances: options.instances,
           records: options.records,
           ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
-          secrets: options.secrets,
           projectConfig: options.projectConfig,
           producer: options.producer,
           logger: options.logger,
@@ -549,7 +548,6 @@ interface ProcessOneInput<Payload> {
   readonly instances: DestinationInstanceReader;
   readonly records: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
-  readonly secrets: SecretResolver;
   readonly projectConfig: ProjectConfigLookup | undefined;
   readonly producer: PolarisProducer;
   readonly logger: Logger;
@@ -575,7 +573,6 @@ async function processOne<Payload>(
     instances,
     records,
     dlqRecords,
-    secrets,
     projectConfig,
     producer,
     logger,
@@ -869,86 +866,16 @@ async function processOne<Payload>(
 
   const vendor_dedupe_key = mapResult.dedupe_key ?? null;
 
-  // 6. Resolve secret. The plaintext lives in memory for the duration of
-  // this call ONLY. The reference (`provider:ref` form) is what gets
-  // logged.
-  let secret: string;
-  try {
-    secret = await secrets.resolve(instance.secret_ref);
-  } catch (err) {
-    // Not every secret failure is the operator's fault. A reference nobody
-    // provisioned is permanent and belongs in the DLQ; a provider that was
-    // briefly unreachable is not, and treating it as permanent destroyed
-    // deliveries a retry seconds later would have completed — each one then
-    // needing a human to notice and replay it.
-    const failureClass = classifySecretFailure(err);
-    const summary = truncateSummary(
-      `secret resolution failed for ${instance.secret_ref}: ${errSummaryString(err)}`,
-    );
-
-    if (failureClass === "transient") {
-      return recordOutcome({
-        ...outcomeBuildVersion,
-        records,
-        metrics,
-        logger,
-        identity,
-        instance,
-        envelope,
-        attempt,
-        startedAt,
-        now,
-        status: "failed_retryable",
-        error_class: "transient",
-        vendor_response_code: null,
-        vendor_response_summary: summary,
-        dedupe_key: vendor_dedupe_key,
-        delivery_key,
-        logLine: "secret resolution failed — failed_retryable",
-        labels: instanceLabels,
-        logErr: err,
-        // Re-throw through the same path a retryable delivery takes, so
-        // KafkaJS retry semantics apply unchanged.
-        rethrow: buildRetryableError({ error_class: "transient" }),
-        // And the same exhaustion rule: once the attempt counter reaches the
-        // destination's threshold, this still reaches the DLQ — just after the
-        // provider was given a chance to come back.
-        ...(attempt >= instance.dead_letter_threshold && payload !== undefined
-          ? { payloadForDlq: payload }
-          : {}),
-        producer,
-        ...(dlqRecords !== undefined ? { dlqRecords } : {}),
-      });
-    }
-
-    return recordOutcome({
-      ...outcomeBuildVersion,
-      records,
-      metrics,
-      logger,
-      identity,
-      instance,
-      envelope,
-      attempt,
-      startedAt,
-      now,
-      status: "failed_permanent",
-      error_class: "auth",
-      vendor_response_code: null,
-      vendor_response_summary: summary,
-      dedupe_key: vendor_dedupe_key,
-      delivery_key,
-      logLine: "secret resolution failed — failed_permanent",
-      labels: instanceLabels,
-      logErr: err,
-      // Permanent failures publish to DLQ.
-      ...(payload !== undefined ? { payloadForDlq: payload } : {}),
-      producer,
-      ...(dlqRecords !== undefined ? { dlqRecords } : {}),
-    });
-  }
-
-  // 7. Rate limit + deliver.
+  // 6. Rate limit + deliver.
+  //
+  // No secret-resolution step precedes this any more. It used to sit here and
+  // could fail on its own — a provider unreachable, a reference nobody
+  // provisioned — which is why it carried a transient/permanent split, a
+  // DLQ branch and an `error_class: 'auth'` outcome of its own. The credential
+  // now arrives on the instance row, so the only way to reach the deliverer
+  // without one is a destination row that does not exist, which step 1 already
+  // handles. A credential that is present but wrong is the vendor's 401, and
+  // that has always been the deliverer's to report.
   const lease = await rateLimiter.acquire(instance);
   metrics.observeRateLimitWaitMs(instanceLabels, lease.waited_ms);
 
@@ -960,7 +887,7 @@ async function processOne<Payload>(
       context: {
         payload: mapResult.payload,
         instance,
-        secret,
+        secret: instance.secret_value,
         ...(vendor_dedupe_key !== null ? { dedupe_key: vendor_dedupe_key } : {}),
         attempt,
         delivery_key,
@@ -1006,10 +933,10 @@ async function processOne<Payload>(
     deliveryFinishedAt.getTime() - deliveryStartedAt.getTime(),
   );
   lease.release();
-  // Free the plaintext secret as soon as we're done — V8 won't zero the
-  // backing buffer immediately, but releasing the local reference is the
-  // best we can do in v1.
-  secret = "";
+  // No secret to release here. Dropping the local alias meant something while
+  // the plaintext was resolved per attempt and this function held the only
+  // reference; the credential now lives on the cached destination instance for
+  // the cache's TTL either way, so clearing an alias would be theatre.
 
   if (deliveryResult.kind === "accepted") {
     await dedupe.mark(instance.destination_id, delivery_key, deliveryFinishedAt.getTime());
@@ -1194,7 +1121,12 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
     delivery_id: record.delivery_id,
     delivery_key: input.delivery_key,
     instance_label: input.instance.instance_label,
-    secret_ref: input.instance.secret_ref,
+    // `secret_ref` used to be logged here on EVERY delivery, and was safe
+    // while it named a pointer rather than holding a credential. The column
+    // holds the credential now, so this line became the single highest-volume
+    // disclosure in the platform — one log entry per delivered event, in
+    // whatever aggregator the fleet ships to. `destination_id` and
+    // `instance_label` already identify the row for triage.
     consumer_version: input.identity.consumerVersion,
     normalize_version: input.identity.normalizeVersion,
     mapper_version: input.identity.mapperVersion,
@@ -1419,7 +1351,11 @@ const PLACEHOLDER_INSTANCE: DestinationInstance = {
   environment: "production",
   vendor: "unknown",
   instance_label: "unknown",
-  secret_ref: "env:UNKNOWN",
+  // Empty, not a plausible-looking value. This object exists only to stamp DLQ
+  // headers for failures that happen before a real instance is resolved, so
+  // there is no credential to carry — and an empty one cannot be mistaken for
+  // a real credential if this object ever reaches somewhere it should not.
+  secret_value: "",
   status: "active",
   mode: "live",
   max_concurrency: 1,

@@ -19,10 +19,13 @@
  * Skips unless `POLARIS_INTEGRATION=1`, matching the rest of this directory.
  */
 
+import { SECRET_MASK } from "@polaris/shared-control-plane";
 import {
   invalidateProjectConfigWithAudit,
   listProjectConfig,
+  MaskedSecretWriteError,
   readProjectConfigVersion,
+  revealProjectConfigSecret,
   setProjectConfigValueWithAudit,
   unsetProjectConfigValueWithAudit,
 } from "@polaris/shared-control-plane-db";
@@ -34,7 +37,6 @@ import {
   type ProjectConfigStore,
   type Secret,
 } from "@polaris/shared-project-config";
-import { EnvSecretProvider, SecretResolver } from "@polaris/shared-secrets";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanupProjectConfig } from "../helpers/project-config.js";
@@ -123,9 +125,6 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
 
     store = createProjectConfigStore({
       db,
-      secrets: new SecretResolver({
-        adapters: { env: new EnvSecretProvider({ source: { IT_TOKEN: SECRET_VALUE } }) },
-      }),
       listener: createPgListenerTransport({
         connectionString: CONNECTION_STRING,
         logger: noopLogger as never,
@@ -156,7 +155,7 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
       namespace: NAMESPACE,
       configKey: "pixel_id",
       value: "1234567890",
-      isSecretRef: false,
+      isSecret: false,
     });
 
     // Only NOTIFY can deliver this: the sweep is an hour away.
@@ -164,28 +163,67 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
     expect((await store.get(key)).version).toBeGreaterThan(0n);
   });
 
-  it("stores a secret as a reference and hands the consumer a redacting box", async () => {
+  it("hands a consumer the plaintext in a box, and every other reader the mask", async () => {
     await setProjectConfigValueWithAudit(db, audit(2), {
       projectId,
       environment: ENVIRONMENT,
       namespace: NAMESPACE,
       configKey: "access_token",
-      value: "env:IT_TOKEN",
-      isSecretRef: true,
+      value: SECRET_VALUE,
+      isSecret: true,
     });
     await until(async () => (await store.get(key)).values["access_token"] !== undefined);
 
+    // The consumer path gets the real value — a delivery has to work.
     const snapshot = await store.get(key);
     const token = snapshot.values["access_token"];
     expect(isSecret(token)).toBe(true);
     expect((token as Secret<string>).expose()).toBe(SECRET_VALUE);
 
-    // The row holds the pointer, never the plaintext.
+    // The operator path does not. This is the assertion that matters now that
+    // the row holds plaintext: `listProjectConfig` feeds the admin panel, the
+    // CLI and the audit `before` snapshot, and it must never hand any of them
+    // the credential.
     const rows = await listProjectConfig(db, { projectId, environment: ENVIRONMENT });
-    expect(rows.find((r) => r.config_key === "access_token")?.value).toBe("env:IT_TOKEN");
+    expect(rows.find((r) => r.config_key === "access_token")?.value).toBe(SECRET_MASK);
+    expect(JSON.stringify(rows)).not.toContain(SECRET_VALUE);
 
-    // And serialising the snapshot cannot leak it.
+    // The reveal path is the one deliberate exception.
+    const revealed = await revealProjectConfigSecret(db, {
+      projectId,
+      environment: ENVIRONMENT,
+      namespace: NAMESPACE,
+      configKey: "access_token",
+    });
+    expect(revealed).toBe(SECRET_VALUE);
+
+    // And serialising a snapshot cannot leak it.
     expect(JSON.stringify(snapshot)).not.toContain(SECRET_VALUE);
+  });
+
+  it("refuses a write that would store the mask as a real value", async () => {
+    // The round-trip hazard: a surface that reads a masked value and submits
+    // it back would otherwise persist "[redacted]" as the credential, and the
+    // failure would surface much later as a vendor auth error.
+    await expect(
+      setProjectConfigValueWithAudit(db, audit(9), {
+        projectId,
+        environment: ENVIRONMENT,
+        namespace: NAMESPACE,
+        configKey: "access_token",
+        value: SECRET_MASK,
+        isSecret: true,
+      }),
+    ).rejects.toBeInstanceOf(MaskedSecretWriteError);
+
+    // And the refusal left the stored value untouched.
+    const revealed = await revealProjectConfigSecret(db, {
+      projectId,
+      environment: ENVIRONMENT,
+      namespace: NAMESPACE,
+      configKey: "access_token",
+    });
+    expect(revealed).toBe(SECRET_VALUE);
   });
 
   it("bumps the version by exactly one per applied write", async () => {
@@ -196,7 +234,7 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
       namespace: NAMESPACE,
       configKey: "graph_host",
       value: "graph.facebook.com",
-      isSecretRef: false,
+      isSecret: false,
     });
     expect(await readProjectConfigVersion(db, projectId, ENVIRONMENT)).toBe(before + 1n);
   });
@@ -263,7 +301,7 @@ describe.skipIf(!ENABLED)("project config: write path → NOTIFY → read store"
       namespace: NAMESPACE,
       configKey: "pixel_id",
       value: "peeked-fresh-value",
-      isSecretRef: false,
+      isSecret: false,
     });
 
     // Only peek() from here on. NOTIFY marks the entry stale; peek must both

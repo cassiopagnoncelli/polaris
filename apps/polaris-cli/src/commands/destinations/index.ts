@@ -1,7 +1,7 @@
 /**
  * `polaris destinations` command group.
  *
- * Surfaces eight commands:
+ * Surfaces nine commands:
  *
  *   - `polaris destinations list`                              mutates: false
  *   - `polaris destinations show <destination_id>`             mutates: false
@@ -9,8 +9,13 @@
  *   - `polaris destinations enable <destination_id>`           mutates: true
  *   - `polaris destinations disable <destination_id> ...`      mutates: true
  *   - `polaris destinations update-ops <destination_id>`       mutates: true
+ *   - `polaris destinations rotate-secret <destination_id> ...`  mutates: true
  *   - `polaris destinations enable-replay <destination_id> ...`  mutates: true  (P7-004)
  *   - `polaris destinations disable-replay <destination_id> ...` mutates: true  (P7-004)
+ *
+ * No command in this group PRINTS a destination's credential. `create` and
+ * `rotate-secret` accept one; `show`, `list` and the JSON export cannot emit
+ * one, because `DestinationRow` does not carry it.
  *
  * Central architectural rule baked into this group:
  *
@@ -51,6 +56,7 @@ import { destinationsDisableReplayCommand } from "./disable-replay.js";
 import { destinationsEnableCommand } from "./enable.js";
 import { destinationsEnableReplayCommand } from "./enable-replay.js";
 import { destinationsListCommand } from "./list.js";
+import { destinationsRotateSecretCommand } from "./rotate-secret.js";
 import { destinationsShowCommand } from "./show.js";
 import { destinationsUpdateOpsCommand } from "./update-ops.js";
 
@@ -61,6 +67,7 @@ const CHILDREN: readonly CommandDefinition[] = [
   destinationsEnableCommand,
   destinationsDisableCommand,
   destinationsUpdateOpsCommand,
+  destinationsRotateSecretCommand,
   destinationsEnableReplayCommand,
   destinationsDisableReplayCommand,
 ];
@@ -90,6 +97,7 @@ export {
   destinationsEnableCommand,
   destinationsEnableReplayCommand,
   destinationsListCommand,
+  destinationsRotateSecretCommand,
   destinationsShowCommand,
   destinationsUpdateOpsCommand,
 };

@@ -69,7 +69,6 @@ polaris destination created
   environment     production
   vendor          meta-capi
   instance_label  storefront-acquisition
-  secret_ref      env:META_CAPI_TOKEN_YOUR_PROJECT_PROD
   mode            live
   max_concurrency 4
   max_rps         50
@@ -144,9 +143,11 @@ polaris destinations show polaris_dst_018f1c0b...
 polaris export destinations --project your_project --env production
 ```
 
-`destinations show` and `destinations list` include the `secret_ref`
-*literal* (`env:META_CAPI_TOKEN_...`) but never the resolved value. The
-reference names where the secret lives; it is not the secret.
+Neither `destinations show` nor `destinations list` includes the
+credential. It is stored in `destinations.secret_value` as plaintext and
+is write-only through every Polaris surface: set it at create, replace it
+with `polaris destinations rotate-secret`, and confirm it works by
+whether deliveries are accepted rather than by reading it back.
 
 `export destinations` is the bulk JSON dump for diff and review.
 

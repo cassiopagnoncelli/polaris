@@ -11,9 +11,7 @@ import {
   type RedisConfig,
   rabbitmqEnvSchema,
   redisEnvSchema,
-  type SecretProviderConfig,
   type ServiceConfig,
-  secretProviderEnvSchema,
   serviceEnvSchema,
 } from "@polaris/shared-config";
 import { z } from "zod";
@@ -200,7 +198,6 @@ export interface IngesterConfig {
   readonly service: ServiceConfig;
   readonly http: HttpConfig;
   readonly postgres: PostgresConfig;
-  readonly secretProvider: SecretProviderConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly redis: RedisConfig;
   readonly authCache: AuthCacheConfig;
@@ -229,7 +226,6 @@ export function ingesterConfigSchema() {
     service: serviceEnvSchema,
     http: httpEnvSchema,
     postgres: postgresEnvSchema,
-    secretProvider: secretProviderEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     redis: redisEnvSchema,
     authCache: authCacheEnvSchema,

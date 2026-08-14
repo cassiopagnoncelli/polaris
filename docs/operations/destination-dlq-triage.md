@@ -48,10 +48,9 @@ of reaching this table. Each row carries:
 - mutable resolution slots (`resolved_at`, `resolved_by`,
   `resolution_note`) set when an operator marks the row done.
 
-Both tables have schema CHECKs forbidding secret-shaped columns; the
-destination instance's `secret_ref` is the only "credential-adjacent"
-field surfaced, and that is the `provider:ref` literal, not the
-resolved plaintext.
+Both tables have schema CHECKs forbidding secret-shaped columns, and no
+triage read path selects `destinations.secret_value` — which, since it
+holds a vendor credential in plaintext, is the column that would matter.
 
 ## CLI surface
 
@@ -108,9 +107,10 @@ Renders the full row including transport coordinates (`source_topic`,
 payload-preview (first 400 chars of the canonical envelope JSON). Use
 this view to determine the root cause:
 
-- **`error_class='auth'`** — credentials expired or revoked. Fix the
-  destination's `secret_ref` (via the secret-provider runbook); then
-  decide retry vs. mark-resolved.
+- **`error_class='auth'`** — credentials expired or revoked. Rotate with
+  `polaris destinations rotate-secret` (see the
+  [secret rotation runbook](secret-rotation.md)); then decide retry vs.
+  mark-resolved.
 - **`error_class='mapping'`** — mapper version mismatch or a producer
   emitted an envelope the mapper rejects. Capture the envelope, fix the
   mapper version on the destination, then `retry`.

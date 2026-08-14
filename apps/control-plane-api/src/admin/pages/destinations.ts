@@ -1,10 +1,16 @@
 /**
  * Destinations list and detail.
  *
- * `secret_ref` is rendered because it is a `<provider>:<ref>` **pointer**, not
- * a credential — `@polaris/shared-secrets` resolves it at delivery time, and
- * the database never holds the secret itself. Showing the pointer is how an
- * operator confirms a destination is wired to the right vault entry.
+ * No credential appears on this page. It used to render `secret_ref`, and that
+ * was right at the time: the column held a `<provider>:<ref>` pointer that
+ * `@polaris/shared-secrets` resolved at delivery time, so showing it was how
+ * an operator confirmed a destination was wired to the right vault entry. The
+ * column holds the credential itself now, and `DestinationRow` no longer
+ * carries it — `DESTINATION_COLUMNS` in ../queries.ts does not select it.
+ *
+ * "Is this destination wired correctly?" is answered by its delivery history
+ * instead: an `auth` error class on recent rows means the credential is wrong.
+ * Changing it is `polaris destinations rotate-secret`.
  */
 
 import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
@@ -206,8 +212,6 @@ export function renderDestinationDetailPage(input: {
             >${mono(dest.project_id)}</a
           >
         </dd>
-        <dt>Secret ref</dt>
-        <dd>${mono(dest.secret_ref)} <span class="muted">(pointer, not a secret)</span></dd>
         ${
           /*
            * Enabling nulls this column, so a reason surviving on an active row

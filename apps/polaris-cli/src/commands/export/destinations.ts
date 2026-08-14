@@ -4,17 +4,17 @@
  * Exports destination INSTANCE rows scoped to one `(project_id, environment)`
  * pair as JSON.
  *
- * **Hard rule: the export emits the `secret_ref` literal (`provider:ref`
- * form) but NEVER the resolved value.** The reference itself is safe to
- * print — it names where the secret lives, not what it is. The CLI never
- * resolves the secret at export time (or at any time outside the
- * destination consumer runtime).
+ * **Hard rule: the export carries no credential.** It once emitted
+ * `secret_ref`, and that was safe while the column named where a secret lived
+ * rather than holding it. The column holds the credential now, and an export
+ * is the worst possible carrier for one: a file, written to whatever path the
+ * operator redirected to, easily mailed or committed.
  *
- * The destination row's column set does not include anything beyond the
- * `secret_ref` shape — no `secret_value`, no `password`, no `token`. Even
- * if a future migration added such a column, the export's allowlisted
- * shape below would skip it, and a dedicated redaction test would
- * surface the gap.
+ * Two things enforce it. `DestinationRow` has no credential field, because
+ * `listDestinationsByProjectEnv` does not select the column — so there is
+ * nothing here to emit even by accident. And the allowlist below names every
+ * field it writes, so a future migration adding a sensitive column does not
+ * join the document by default.
  *
  * `mutates: false`.
  */
@@ -49,7 +49,7 @@ export const exportDestinationsCommand: CommandDefinition = {
     parent
       .command("destinations")
       .description(
-        "Export destination instances for one (project, environment) as JSON. Emits `secret_ref` literals only — never resolved secret values.",
+        "Export destination instances for one (project, environment) as JSON. Operational columns only — never vendor credentials.",
       )
       .requiredOption("--project <project_id>", "Project to export destinations for.")
       .requiredOption("--env <environment>", "Environment: development | staging | production.")
@@ -109,8 +109,8 @@ function validate(args: ExportDestinationsArgs): ValidatedArgs {
 function emit(ctx: CommandContext, args: ValidatedArgs, rows: readonly DestinationRow[]): void {
   // Strict allowlist of operational columns. Mapping semantics never
   // appear because the `DestinationsTable` schema has no such columns
-  // (enforced by P6-004's schema-invariant test). The `secret_ref` is the
-  // provider-namespaced reference, never the resolved value.
+  // (enforced by P6-004's schema-invariant test), and no credential appears
+  // because `DestinationRow` does not carry one.
   const document = {
     project_id: args.project,
     environment: args.env,
@@ -121,7 +121,6 @@ function emit(ctx: CommandContext, args: ValidatedArgs, rows: readonly Destinati
       environment: row.environment,
       vendor: row.vendor,
       instance_label: row.instance_label,
-      secret_ref: row.secret_ref,
       status: row.status,
       mode: row.mode,
       max_concurrency: row.max_concurrency,
@@ -129,8 +128,7 @@ function emit(ctx: CommandContext, args: ValidatedArgs, rows: readonly Destinati
       retry_policy: row.retry_policy,
       dead_letter_threshold: row.dead_letter_threshold,
       disabled_reason: row.disabled_reason,
-      // P7-004: replay-opt-in snapshot. Reference + flag only — no
-      // resolved secret values appear in the export.
+      // P7-004: replay-opt-in snapshot.
       replay_opt_in: row.replay_opt_in,
       replay_opt_in_reason: row.replay_opt_in_reason,
       replay_opt_in_at: row.replay_opt_in_at,

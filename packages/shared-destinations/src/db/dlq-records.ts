@@ -16,10 +16,11 @@
  *
  * Hard rules baked into this module (mirror `delivery_records`):
  *
- *   - No column resembling a resolved secret value. The destination row
- *     stores a `secret_ref`; the runtime never stamps the plaintext
- *     anywhere durable. Tests in `test/no-secret-shape.test.ts` assert
- *     this at the surface level.
+ *   - No column resembling a credential. This mattered more once
+ *     `destinations.secret_value` began holding the vendor credential
+ *     itself rather than a `<provider>:<ref>` pointer: a DLQ row outlives
+ *     the delivery that produced it and is read during triage by whoever
+ *     is on call. The runtime never stamps one here.
  *
  *   - `vendor_response_summary` is capped at 1 KB at the application
  *     layer (same as `delivery_records`). The repository truncates on

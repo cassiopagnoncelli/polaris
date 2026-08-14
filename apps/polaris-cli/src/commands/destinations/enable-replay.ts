@@ -72,7 +72,6 @@ export interface DestinationReplayAuditSnapshot {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
   readonly status: string;
   readonly mode: string;
   readonly max_concurrency: number;
@@ -299,7 +298,6 @@ function toSnapshot(row: DestinationRow): DestinationReplayAuditSnapshot {
     environment: row.environment,
     vendor: row.vendor,
     instance_label: row.instance_label,
-    secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
     max_concurrency: row.max_concurrency,

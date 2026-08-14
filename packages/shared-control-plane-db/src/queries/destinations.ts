@@ -23,7 +23,18 @@
  *   - `update-ops` only writes operational tuning columns. The function
  *     signature has no mapping fields.
  *
+ *   - The read shape carries NO credential. `secret_value` holds a vendor
+ *     credential in plaintext, and these readers feed `destinations show`,
+ *     `destinations list`, the JSON export, the admin UI and every audit
+ *     snapshot the mutation layer builds. {@link DESTINATION_READ_COLUMNS}
+ *     omits it, so the credential does not leave PostgreSQL on any of those
+ *     paths — not "is dropped later", does not leave. It is write-only through
+ *     this module: `insertDestination` and `updateDestinationSecret` set it,
+ *     and nothing here reads it back. The delivery runtime's own reader in
+ *     `@polaris/shared-destinations` is the single consumer.
+ *
  * @see db/migrations/20260512000005_create_destinations.sql
+ * @see db/migrations/20260813000004_plaintext_project_secrets.sql
  * @see packages/shared-db/src/database.ts DestinationsTable
  */
 import type {
@@ -50,7 +61,6 @@ export interface DestinationRow {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
   readonly status: DestinationStatus;
   readonly mode: DestinationMode;
   readonly max_concurrency: number;
@@ -79,7 +89,7 @@ export interface InsertDestinationInput {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
+  readonly secret_value: string;
   readonly mode: DestinationMode;
   readonly max_concurrency?: number;
   readonly max_rps?: number;
@@ -100,6 +110,36 @@ export interface UpdateDestinationOpsInput {
 }
 
 /**
+ * Every column the operator-facing readers select — which is every column
+ * except `secret_value`.
+ *
+ * Spelled out rather than `selectAll()`, and that is the whole point. Under
+ * `selectAll()` the credential is fetched and then dropped by a projection,
+ * so the guarantee rests on `toRow` continuing to omit it. Listing the columns
+ * moves the guarantee into the SQL: a projection can be edited by accident, a
+ * missing column cannot be read back by anyone.
+ */
+const DESTINATION_READ_COLUMNS = [
+  "destination_id",
+  "project_id",
+  "environment",
+  "vendor",
+  "instance_label",
+  "status",
+  "mode",
+  "max_concurrency",
+  "max_rps",
+  "retry_policy",
+  "dead_letter_threshold",
+  "disabled_reason",
+  "replay_opt_in",
+  "replay_opt_in_reason",
+  "replay_opt_in_at",
+  "created_at",
+  "updated_at",
+] as const;
+
+/**
  * Insert one destination row. The migration's CHECK constraints and column
  * defaults handle status/mode/operational defaults; we explicitly carry
  * non-default values when the caller passes them.
@@ -114,7 +154,7 @@ export async function insertDestination(
     environment: string;
     vendor: string;
     instance_label: string;
-    secret_ref: string;
+    secret_value: string;
     mode: DestinationMode;
     max_concurrency?: number;
     max_rps?: number;
@@ -126,7 +166,7 @@ export async function insertDestination(
     environment: input.environment,
     vendor: input.vendor,
     instance_label: input.instance_label,
-    secret_ref: input.secret_ref,
+    secret_value: input.secret_value,
     mode: input.mode,
   };
   if (input.max_concurrency !== undefined) values.max_concurrency = input.max_concurrency;
@@ -149,11 +189,59 @@ export async function findDestinationById(
 ): Promise<DestinationRow | null> {
   const row = await db
     .selectFrom("destinations")
-    .selectAll()
+    .select(DESTINATION_READ_COLUMNS)
     .where("destination_id", "=", destinationId)
     .executeTakeFirst();
   if (row === undefined) return null;
   return toRow(row);
+}
+
+/*
+ * There is deliberately no `revealDestinationSecret` here.
+ *
+ * A destination credential is WRITE-ONLY through every Polaris surface: set by
+ * `destinations create`, replaced by `destinations rotate-secret`, and read
+ * back by exactly one consumer — the delivery runtime, through its own narrow
+ * reader in `@polaris/shared-destinations`. No CLI verb, page or export can
+ * print it.
+ *
+ * The same rule `api_keys.hash` follows, and for the same reason: nothing an
+ * operator does needs the current value. "Is this destination wired
+ * correctly?" is answered by its delivery history — an `auth` error class on
+ * recent rows — and "I need a different credential" is answered by rotating.
+ * Adding a read path would create a disclosure route to serve neither.
+ *
+ * `project_config` differs and has `revealProjectConfigSecret`, because those
+ * rows are general configuration an operator inspects routinely and only some
+ * of them are sensitive.
+ */
+
+/**
+ * Replace one destination's credential.
+ *
+ * Rotation has to live somewhere now that the credential IS the stored value.
+ * While the column held a `provider:ref` pointer, rotating meant changing the
+ * secret behind the pointer in Vault and Polaris had nothing to do; the row
+ * never changed. Without this, the only ways to change a live credential would
+ * be recreating the destination or direct SQL.
+ *
+ * Returns whether a row matched. No `WHERE secret_value <> $new` guard: a
+ * comparison would need the old value in this process for nothing, and
+ * re-setting a credential to itself is a harmless no-op that an operator
+ * re-pasting after a failed attempt will do routinely.
+ */
+export async function updateDestinationSecret(
+  db: Kysely<Database>,
+  destinationId: string,
+  secretValue: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("destinations")
+    .set({ secret_value: secretValue, updated_at: now })
+    .where("destination_id", "=", destinationId)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows ?? 0) > 0;
 }
 
 /**
@@ -167,7 +255,7 @@ export async function listDestinationsByProjectEnv(
 ): Promise<DestinationRow[]> {
   const rows = await db
     .selectFrom("destinations")
-    .selectAll()
+    .select(DESTINATION_READ_COLUMNS)
     .where("project_id", "=", projectId)
     .where("environment", "=", environment)
     .orderBy("vendor")
@@ -183,7 +271,7 @@ export async function listDestinationsByProjectEnv(
 export async function listAllDestinations(db: Kysely<Database>): Promise<DestinationRow[]> {
   const rows = await db
     .selectFrom("destinations")
-    .selectAll()
+    .select(DESTINATION_READ_COLUMNS)
     .orderBy("project_id")
     .orderBy("environment")
     .orderBy("vendor")
@@ -334,7 +422,6 @@ function toRow(row: {
   readonly environment: string;
   readonly vendor: string;
   readonly instance_label: string;
-  readonly secret_ref: string;
   readonly status: DestinationStatus;
   readonly mode: DestinationMode;
   readonly max_concurrency: number;
@@ -354,7 +441,6 @@ function toRow(row: {
     environment: row.environment,
     vendor: row.vendor,
     instance_label: row.instance_label,
-    secret_ref: row.secret_ref,
     status: row.status,
     mode: row.mode,
     max_concurrency: row.max_concurrency,

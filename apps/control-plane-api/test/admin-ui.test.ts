@@ -179,7 +179,6 @@ function makeQueries(overrides: Partial<AdminQueries> = {}): AdminQueries {
         environment: "production",
         vendor: "ga4",
         instance_label: "storefront-prod",
-        secret_ref: "env:GA4_TOKEN",
         status: "active",
         mode: "live",
         max_concurrency: 4,
@@ -1057,6 +1056,37 @@ describe("admin UI — pages", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).not.toContain("<img src=x");
     expect(res.body).toContain("&lt;img src=x");
+    await app.app.close();
+  });
+
+  it("renders a destination detail page with no credential and a balanced <dl>", async () => {
+    // Two things at once, because the rendered page is where this codebase's
+    // defects have hidden before: tests assert on data and miss presentation.
+    //
+    // The credential half — the page used to render `secret_ref` labelled
+    // "(pointer, not a secret)", which was accurate then and would now print a
+    // live vendor credential into a browser tab and its history.
+    //
+    // The markup half — removing that row deleted a <dt>/<dd> pair from a
+    // definition list. An unbalanced <dl> renders as visibly misaligned rows,
+    // which no assertion about page CONTENT would catch.
+    const app = await buildApp();
+    const res = await app.app.inject({
+      method: "GET",
+      url: "/admin/destinations/polaris_dst_1",
+      headers: { cookie: sessionCookie("owner-token") },
+    });
+    expect(res.statusCode).toBe(200);
+
+    for (const probe of ["secret_ref", "secret_value", "Secret ref", "pointer, not a secret"]) {
+      expect(res.body).not.toContain(probe);
+    }
+
+    const detail = /<dl class="detail">([\s\S]*?)<\/dl>/.exec(res.body);
+    expect(detail).not.toBeNull();
+    const block = detail?.[1] ?? "";
+    expect((block.match(/<dt>/g) ?? []).length).toBe((block.match(/<dd>/g) ?? []).length);
+    expect((block.match(/<dt>/g) ?? []).length).toBeGreaterThan(0);
     await app.app.close();
   });
 
