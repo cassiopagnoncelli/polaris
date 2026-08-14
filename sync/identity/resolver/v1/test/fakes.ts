@@ -36,8 +36,22 @@ export class InMemoryProfileRepository implements ProfileRepository {
   private readonly identifiers = new Map<string, string>();
   private readonly merges: MergeRow[] = [];
   private sequence = 0;
+  private idCounter = 0;
 
-  public constructor(private readonly idFactory: () => string = defaultIdFactory) {}
+  public constructor(private readonly idFactory?: () => string) {}
+
+  /**
+   * Zero-padded, per-instance ids. Padding matters: the merge tiebreak is
+   * "lower id" by STRING comparison (uuidv7 in production), and unpadded
+   * counters invert it at the 9→10 boundary — `"prof_10" < "prof_9"` —
+   * which would flip the winner depending on how many profiles earlier
+   * tests happened to create.
+   */
+  private nextId(): string {
+    if (this.idFactory !== undefined) return this.idFactory();
+    this.idCounter += 1;
+    return `prof_${String(this.idCounter).padStart(6, "0")}`;
+  }
 
   public getProfile(profileId: string): ProfileRow | undefined {
     return this.profiles.get(profileId);
@@ -84,10 +98,9 @@ export class InMemoryProfileRepository implements ProfileRepository {
     let profileId: string;
     let kind: ResolutionResult["kind"];
     let merge: ResolutionResult["merge"] = null;
-    let mergeSuspended: ResolutionResult["mergeSuspended"] = null;
 
     if (distinct.length === 0) {
-      profileId = this.idFactory();
+      profileId = this.nextId();
       this.profiles.set(profileId, {
         profileId,
         canonicalCustomerId: null,
@@ -122,28 +135,47 @@ export class InMemoryProfileRepository implements ProfileRepository {
       ).length;
 
       if (recent >= input.policy.maxMergesPerWindow) {
-        profileId = winner.profileId;
-        kind = "bound";
-        mergeSuspended = { profileId: winner.profileId, mergeCount: recent };
-      } else {
-        let moved = 0;
-        for (const [k, v] of this.identifiers.entries()) {
-          if (v === loser.profileId) {
-            this.identifiers.set(k, winner.profileId);
-            moved += 1;
-          }
+        // Mirrors the real repository's early return: a suspended merge
+        // binds NOTHING — moving the event's identifiers to the winner
+        // would be the merge — so identifiers stay where they were and
+        // the canonical customer id cannot change. Traits still patch.
+        const winnerRow = this.profiles.get(winner.profileId) as ProfileRow;
+        let suspendedTraitsPatched = false;
+        if (input.traits !== null) {
+          winnerRow.traits = { ...winnerRow.traits, ...input.traits };
+          winnerRow.traitsVersion += 1;
+          suspendedTraitsPatched = true;
         }
-        loser.mergedInto = winner.profileId;
-        this.merges.push({ winnerProfileId: winner.profileId, mergedAt: input.now });
-        merge = {
-          mergeId: `merge_${++this.sequence}`,
-          winnerProfileId: winner.profileId,
-          loserProfileId: loser.profileId,
-          identifiersMoved: moved,
+        return {
+          kind: "bound",
+          profileId: winner.profileId,
+          canonicalCustomerId: winnerRow.canonicalCustomerId,
+          traitsVersion: winnerRow.traitsVersion,
+          bound: [],
+          merge: null,
+          rejected: [],
+          mergeSuspended: { profileId: winner.profileId, mergeCount: recent },
+          traitsPatched: suspendedTraitsPatched,
         };
-        profileId = winner.profileId;
-        kind = "merged";
       }
+
+      let moved = 0;
+      for (const [k, v] of this.identifiers.entries()) {
+        if (v === loser.profileId) {
+          this.identifiers.set(k, winner.profileId);
+          moved += 1;
+        }
+      }
+      loser.mergedInto = winner.profileId;
+      this.merges.push({ winnerProfileId: winner.profileId, mergedAt: input.now });
+      merge = {
+        mergeId: `merge_${++this.sequence}`,
+        winnerProfileId: winner.profileId,
+        loserProfileId: loser.profileId,
+        identifiersMoved: moved,
+      };
+      profileId = winner.profileId;
+      kind = "merged";
     }
 
     // Bind, enforcing the per-kind cap.
@@ -180,7 +212,10 @@ export class InMemoryProfileRepository implements ProfileRepository {
     }
 
     const row = this.profiles.get(profileId) as ProfileRow;
-    const customer = input.identifiers.find((i) => i.kind === "customer_id")?.value;
+    // Canonical mirrors the repository's rule: picked from what actually
+    // BOUND, never from the raw input, so a cap-refused customer_id does
+    // not become a canonical id whose identifier resolves elsewhere.
+    const customer = bound.find((b) => b.kind === "customer_id")?.value;
     if (customer !== undefined) row.canonicalCustomerId = customer;
     let traitsPatched = false;
     if (input.traits !== null) {
@@ -197,16 +232,10 @@ export class InMemoryProfileRepository implements ProfileRepository {
       bound,
       merge,
       rejected,
-      mergeSuspended,
+      mergeSuspended: null,
       traitsPatched,
     };
   }
-}
-
-let counter = 0;
-function defaultIdFactory(): string {
-  counter += 1;
-  return `prof_${counter}`;
 }
 
 /** Records every publish so tests can assert on families and payloads. */

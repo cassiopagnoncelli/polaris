@@ -1,0 +1,6 @@
+# Loader fixture: a project with NO identity block — manifest defaults.
+project_id: bare
+display_name: Bare
+owner: nobody
+description: Loader fixture.
+status: active

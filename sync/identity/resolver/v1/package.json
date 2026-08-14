@@ -24,7 +24,7 @@
     "format": "biome format --write src test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "POLARIS_SERVICE_NAME=sync-identity POLARIS_HTTP_PORT=4014 tsx watch src/main.ts",
+    "dev": "POLARIS_SERVICE_NAME=sync-identity POLARIS_HTTP_PORT=4014 POLARIS_SYNC_IDENTITY_CATALOG_ROOT=../../../.. tsx watch src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {
@@ -32,12 +32,14 @@
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-policy": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-schemas": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0",
+    "yaml": "2.9.0",
     "zod": "^4.4.3"
   }
 }

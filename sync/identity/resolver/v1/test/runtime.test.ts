@@ -25,7 +25,7 @@ const BASE_POLICY: IdentityPolicy = {
   maxTraitsBytes: 32768,
 };
 
-function makeDeps(policy: Partial<IdentityPolicy> = {}) {
+function makeDeps(policy: Partial<IdentityPolicy> = {}, nowFn?: () => Date) {
   const repository = new InMemoryProfileRepository();
   const producer = new RecordingProducer();
   const now = new Date("2026-08-14T00:00:00.000Z");
@@ -38,7 +38,7 @@ function makeDeps(policy: Partial<IdentityPolicy> = {}) {
       logger: silentLogger,
       policyFor: () => ({ ...BASE_POLICY, ...policy }),
       runId: () => "run_1",
-      now: () => now,
+      now: nowFn ?? (() => now),
     },
   };
 }
@@ -124,22 +124,34 @@ describe("identity stage: resolution", () => {
     expect(producer.names(IDENTITY)).toContain("identity.merged");
   });
 
-  it("picks the same merge winner on a replay (older first_seen_at, stable tiebreak)", async () => {
+  it("picks the same merge winner on a replay (older first_seen_at wins)", async () => {
     const run = async () => {
-      const { deps } = makeDeps();
-      await handleEvent(deps, event({ identity: identity({ anonymous_id: "anon_x" }) }));
+      // A real clock advances between events; the winner rule is keyed on
+      // it, so the test must not flatten every first_seen_at into a tie.
+      let tick = 0;
+      const clock = () => new Date(Date.UTC(2026, 7, 14, 0, 0, tick++));
+      const { deps } = makeDeps({}, clock);
+      const anonProfile = await handleEvent(
+        deps,
+        event({ identity: identity({ anonymous_id: "anon_x" }) }),
+      );
       await handleEvent(deps, event({ identity: identity({ customer_id: "cus_x" }) }));
       const merged = await handleEvent(
         deps,
         event({ identity: identity({ anonymous_id: "anon_x", customer_id: "cus_x" }) }),
       );
-      return merged.merge;
+      return { anonProfileId: anonProfile.profileId, merge: merged.merge };
     };
     const first = await run();
     const second = await run();
-    // Ids differ across runs (uuidv7), but the RULE is stable: the older
-    // profile wins both times, so a rebuild does not shuffle survivors.
-    expect(first?.identifiersMoved).toBe(second?.identifiersMoved);
+    // Ids differ across runs (uuidv7 in production), so equality of ids
+    // is not the property — the RULE is: the OLDER profile (the
+    // anonymous history) wins in EVERY run, so a rebuild converges on
+    // the same shape instead of shuffling survivors.
+    expect(first.merge?.winnerProfileId).toBe(first.anonProfileId);
+    expect(second.merge?.winnerProfileId).toBe(second.anonProfileId);
+    expect(first.merge?.identifiersMoved).toBe(1);
+    expect(second.merge?.identifiersMoved).toBe(1);
   });
 
   it("forwards an event with no strong identifier instead of dropping it", async () => {
@@ -237,7 +249,7 @@ describe("identity stage: merge safeguards", () => {
   });
 
   it("trips the merge-rate breaker and stops merging, emitting merge_suspended", async () => {
-    const { producer, deps } = makeDeps({ maxMergesPerWindow: 1 });
+    const { repository, producer, deps } = makeDeps({ maxMergesPerWindow: 1 });
     // First merge is allowed.
     await handleEvent(deps, event({ identity: identity({ anonymous_id: "a1" }) }));
     await handleEvent(deps, event({ identity: identity({ customer_id: "c1" }) }));
@@ -247,7 +259,7 @@ describe("identity stage: merge safeguards", () => {
     );
 
     // Second merge onto the same winner trips the breaker.
-    await handleEvent(deps, event({ identity: identity({ anonymous_id: "a2" }) }));
+    const other = await handleEvent(deps, event({ identity: identity({ anonymous_id: "a2" }) }));
     const suspended = await handleEvent(
       deps,
       event({ identity: identity({ anonymous_id: "a2", customer_id: "c1" }) }),
@@ -256,6 +268,40 @@ describe("identity stage: merge safeguards", () => {
     expect(suspended.mergeSuspended).not.toBeNull();
     expect(suspended.merge).toBeNull();
     expect(producer.names(IDENTITY)).toContain("identity.merge_suspended");
+    // Suspension binds NOTHING: repointing a2 at the winner would be the
+    // merge the breaker just refused, so a2 keeps resolving to its own
+    // profile until an operator (or a later window) lets the merge run.
+    expect(suspended.bound).toHaveLength(0);
+    expect(repository.resolveIdentifier("storefront", "development", "anonymous_id", "a2")).toBe(
+      other.profileId,
+    );
+  });
+
+  it("keeps the canonical customer id when the cap refuses a new one", async () => {
+    const { repository, deps } = makeDeps({ maxIdentifiersPerKind: 1 });
+    const first = await handleEvent(
+      deps,
+      event({ identity: identity({ anonymous_id: "anon_1", customer_id: "cus_1" }) }),
+    );
+    expect(first.canonicalCustomerId).toBe("cus_1");
+
+    // The same person (via anon_1) arrives claiming a SECOND customer id.
+    // The per-kind cap refuses the binding — and the profile must not
+    // claim a canonical customer id whose identifier row does not point
+    // back at it: destinations key on this column, and the next event
+    // carrying cus_2 will resolve to a DIFFERENT profile.
+    const second = await handleEvent(
+      deps,
+      event({ identity: identity({ anonymous_id: "anon_1", customer_id: "cus_2" }) }),
+    );
+
+    expect(
+      second.rejected.some((r) => r.kind === "customer_id" && r.reason === "identifier_cap"),
+    ).toBe(true);
+    expect(second.canonicalCustomerId).toBe("cus_1");
+    expect(
+      repository.resolveIdentifier("storefront", "development", "customer_id", "cus_2"),
+    ).toBeUndefined();
   });
 });
 

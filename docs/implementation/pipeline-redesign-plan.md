@@ -475,9 +475,11 @@ Properties worth stating:
 - **Merge safety.** Two guards against merge storms — the classic
   identity-graph incident, where one promiscuous identifier (a kiosk
   device, `customer_id: "guest"`, a bot's anonymous_id) chain-merges
-  thousands of profiles into one: an **identifier value denylist** in
-  catalog policy (the forbidden-fields pattern; denylisted values resolve
-  as if absent) and a **merge-rate breaker** — a profile that exceeds the
+  thousands of profiles into one: an **identifier value denylist**
+  declared alongside the bound overrides in the project's `identity:`
+  block of `catalog/projects/<id>.yaml` (denylisted values resolve as if
+  absent; one block, one loader, one strict schema in
+  `@polaris/shared-policy`) and a **merge-rate breaker** — a profile that exceeds the
   merge-rate bound stops accepting merges and emits an
   `identity.merge_suspended` fact for operator review. Both change
   emitted events → semantic parameters, and both ship inside R1:
@@ -906,4 +908,5 @@ independent hardening.
 | Traits mutate only via identify-family events (+ computed/reverse-ETL writers) | Traits on any `track` context | One serialization point per customer partition; last-write-wins stays explainable |
 | Audiences/traits computed from projections only | Compute from `analytics_raw` | Keeps trait compute on the service role and inside the sanctioned query surface |
 | Reverse ETL re-enters through the ingester | Direct publish to `raw.events` | Full validation/policy/dedupe for free; `source.type: internal` marks provenance; no second write path to audit |
+| Identity overrides (denylist + narrowed bounds) live in one `identity:` block of `catalog/projects/<id>.yaml`, schema in `@polaris/shared-policy`, loaded by the stage at boot with eager validation | Denylist as TS modules in `catalog/policy/` (forbidden-fields pattern); or materialize via `projects sync` | The forbidden-fields TS override channel has no working import path (nothing loads it); materializing would put semantic parameters in PostgreSQL, which §3 forbids. One block, one strict shared schema, one boot loader; an invalid override fails the deploy instead of DLQ-ing the project's feed. **Refined during R1B review fixes** |
 | Stay on RabbitMQ for the R programme | Switch to Kafka "to unlock gold standard" | None of the gold-standard gaps are broker-shaped (all seven are store logic, harness code, or read-side tooling); delayed retries are strictly better on RabbitMQ (broker-owned TTL tiers vs consumer-slept backoff); the streams migration just landed; `shared-transport` is a port, so the option survives. Recorded flip conditions: static-assignment toil at sustained multi-team scale, a hard multi-DC replication requirement, or org-level adoption of a Flink-class processing layer |

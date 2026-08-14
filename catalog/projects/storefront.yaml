@@ -10,3 +10,14 @@ owner: storefront-platform
 description: >-
   Customer-facing storefront across web, mobile, and backend services.
 status: active
+
+# Optional identity-stage overrides. Semantic input, loaded by
+# `sync/identity/resolver` at boot and validated against the manifest's
+# bounds — deliberately NOT materialized into PostgreSQL. Shape:
+# `@polaris/shared-policy` `projectIdentityOverrideSchema`.
+#
+# identity:
+#   max_merges_per_window: 20
+#   denylist:
+#     customer_id:
+#       - "guest"

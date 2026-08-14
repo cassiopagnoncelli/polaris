@@ -36,22 +36,36 @@ export const STAGE_SERVICE_NAME = "sync-identity" as const;
  * Stage-specific tuning knobs — operational only. Env vars:
  *
  *   POLARIS_SYNC_IDENTITY_CONSUMER_GROUP   ("polaris-sync-identity-v1")
+ *   POLARIS_SYNC_IDENTITY_CATALOG_ROOT     (".")
+ *
+ * `CATALOG_ROOT` is a PATH, which is why it may live in env while the
+ * values under it may not: it points at the directory holding
+ * `catalog/projects/`, whose `identity:` blocks are the semantic input.
+ * The container image copies the catalog under the workdir, so "." is
+ * right in production; `pnpm dev` overrides it to the repository root.
  */
 export const syncIdentityEnvSchema = z
   .object({
     POLARIS_SYNC_IDENTITY_CONSUMER_GROUP: nonEmptyStringSchema.default("polaris-sync-identity-v1"),
+    POLARIS_SYNC_IDENTITY_CATALOG_ROOT: nonEmptyStringSchema.default("."),
   })
   .transform(
     (parsed): SyncIdentityConfig => ({
       consumerGroup: parsed["POLARIS_SYNC_IDENTITY_CONSUMER_GROUP"],
+      catalogRoot: parsed["POLARIS_SYNC_IDENTITY_CATALOG_ROOT"],
     }),
   );
 
 export interface SyncIdentityConfig {
   readonly consumerGroup: string;
+  /** Directory containing `catalog/projects/`; see the schema docstring. */
+  readonly catalogRoot: string;
 }
 
-export const syncIdentityEnvKeys = ["POLARIS_SYNC_IDENTITY_CONSUMER_GROUP"] as const;
+export const syncIdentityEnvKeys = [
+  "POLARIS_SYNC_IDENTITY_CONSUMER_GROUP",
+  "POLARIS_SYNC_IDENTITY_CATALOG_ROOT",
+] as const;
 
 /** Full runtime config: service / http / rabbitmq / postgres / stage. */
 export interface SyncIdentityRuntimeConfig {

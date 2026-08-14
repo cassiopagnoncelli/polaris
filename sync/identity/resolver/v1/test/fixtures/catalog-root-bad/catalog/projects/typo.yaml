@@ -1,0 +1,12 @@
+# Loader fixture: a TYPO'D identity block. `deny_list` is not a key; the
+# strict schema must refuse it — the alternative is a safeguard that is
+# silently not installed.
+project_id: typo
+display_name: Typo
+owner: nobody
+description: Loader fixture.
+status: active
+identity:
+  deny_list:
+    customer_id:
+      - "guest"

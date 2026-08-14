@@ -56,4 +56,17 @@ describe("identity policy", () => {
     // Cached instance is reused (identity check, not just equality).
     expect(resolver("storefront", "development")).toBe(resolver("storefront", "production"));
   });
+
+  it("refuses an invalid override at construction, so the boot fails — not the feed", () => {
+    // Lazy resolution would throw on the FIRST MESSAGE from the project,
+    // inside the consumer handler, cycling its whole feed through the
+    // retry tiers into the DLQ over a configuration mistake. Deploy-time
+    // inputs fail the deploy.
+    expect(() => createPolicyResolver(new Map([["storefront", { max_traits_bytes: 1 }]]))).toThrow(
+      IdentityPolicyError,
+    );
+    expect(() => createPolicyResolver(new Map([["storefront", { max_traits_bytes: 1 }]]))).toThrow(
+      /project "storefront"/,
+    );
+  });
 });

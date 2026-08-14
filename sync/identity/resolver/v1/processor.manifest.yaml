@@ -117,9 +117,12 @@ semantic_parameters:
     default: 3600
     min: 60
     max: 86400
-  # Trait snapshot size guard, in bytes. Over-cap snapshots are stored but
-  # the ENRICHMENT stage stamps `traits: null` downstream; this stage
-  # bounds what it will merge-patch in one write.
+  # Trait snapshot size guard, in bytes. An over-cap `identify` payload is
+  # REFUSED here: the identifiers still bind (losing an identity link over
+  # a payload-size problem would be the worse outcome), but the traits are
+  # dropped with a metric and no `profile.updated` is emitted. The
+  # enrichment stage applies its own, separate bound to the OUTBOUND
+  # snapshot it stamps on the spine.
   max_traits_bytes:
     default: 32768
     min: 1024

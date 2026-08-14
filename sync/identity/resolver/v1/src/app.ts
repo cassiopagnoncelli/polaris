@@ -53,7 +53,6 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
-  type SyncIsolationLookup,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -78,7 +77,6 @@ export interface BuildAppOptions {
   readonly producer?: PolarisProducer;
   readonly db?: Kysely<Database>;
   readonly repository?: ProfileRepository;
-  readonly isolation?: SyncIsolationLookup;
   readonly isolatedProjects?: ReadonlyArray<string>;
   readonly now?: () => Date;
   readonly startRuntime?: boolean;
@@ -101,9 +99,13 @@ export interface BuildAppOptions {
    */
   readonly gate?: ProcessorActivationGate;
   /**
-   * Per-project identity overrides, keyed by `project_id`. Loaded from
-   * `catalog/projects/` at boot in production; tests pass a literal map.
-   * Absent means every project uses manifest defaults.
+   * Per-project identity overrides, keyed by `project_id`. `main.ts`
+   * loads these from the `identity:` blocks of `catalog/projects/` via
+   * `loadProjectIdentityOverrides`; tests pass a literal map. Absent
+   * means every project uses manifest defaults. Entries are validated
+   * EAGERLY here (`createPolicyResolver`), so an out-of-bounds override
+   * fails this build call — and therefore the boot — instead of
+   * throwing per message inside the consumer handler.
    */
   readonly projectPolicies?: ReadonlyMap<string, ProjectIdentityOverride>;
 }

@@ -59,6 +59,11 @@ WORKDIR /app
 
 COPY --from=builder --chown=polaris:polaris /deploy /app
 
+# Per-project identity overrides (`identity:` blocks — denylist, narrowed
+# semantic parameters) are read from here at boot; see src/overrides.ts.
+# `POLARIS_SYNC_IDENTITY_CATALOG_ROOT` defaults to ".", i.e. /app.
+COPY --from=builder --chown=polaris:polaris /workspace/catalog/projects /app/catalog/projects
+
 USER polaris
 
 ENV NODE_ENV=production \

@@ -294,11 +294,9 @@ async function publishDerived(
 import {
   type PolarisConsumer,
   STREAM_FAMILY_RAW_EVENTS,
-  type SyncIsolationLookup,
   type TransportMessageHandler,
   consumerFamiliesFor,
   decodeEvent,
-  sharedOnlyIsolationLookup,
 } from "@polaris/shared-transport";
 
 export interface IdentityStageRuntime {
@@ -310,7 +308,13 @@ export interface IdentityStageRuntime {
 
 export interface IdentityStageRuntimeDeps extends IdentityStageDeps {
   readonly consumer: PolarisConsumer;
-  readonly isolation?: SyncIsolationLookup;
+  /**
+   * Projects with isolated `raw.events.<project_id>` streams to consume
+   * alongside the shared family. This is the ONLY isolation input: the
+   * consumer resolves family names itself, so there is deliberately no
+   * lookup-function option here — an accepted-but-unread dependency is a
+   * trap for the caller who passes it.
+   */
   readonly isolatedProjects?: ReadonlyArray<string>;
   /**
    * Per-message activation gate. `false` skips the event entirely —
@@ -364,7 +368,3 @@ export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRunt
     },
   };
 }
-
-// Referenced so the isolation lookup default stays discoverable to
-// readers even though the consumer resolves families itself.
-export const DEFAULT_ISOLATION: SyncIsolationLookup = sharedOnlyIsolationLookup;

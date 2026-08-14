@@ -21,9 +21,19 @@
  * this package enforces the documented downgrade rule: project overrides
  * may not weaken a platform reject to a redact without an explicit
  * `documentedExceptions` entry.
+ *
+ * The package also owns the per-project identity-override contract
+ * (`identity.ts`): the `identity:` block of `catalog/projects/<id>.yaml`,
+ * shared by the CLI's catalog validation and the identity stage's boot
+ * loader so the two cannot drift.
  */
 
 export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
+export {
+  type IdentityOverrideKind,
+  type ProjectIdentityOverride,
+  projectIdentityOverrideSchema,
+} from "./identity.js";
 export {
   formatPolicyInspection,
   inspectPolicy,

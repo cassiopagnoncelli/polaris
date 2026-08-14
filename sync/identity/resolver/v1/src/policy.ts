@@ -2,12 +2,13 @@
  * Resolve the identity policy for a project.
  *
  * Semantic parameters come from the manifest's declared defaults; a
- * project may NARROW them in `catalog/projects/<id>.yaml` but never widen
- * them past the manifest's bounds. The identifier denylist comes from
- * `catalog/policy/`, the same file-backed home the forbidden-field policy
- * uses.
+ * project may NARROW them — and declare its identifier denylist — in the
+ * `identity:` block of `catalog/projects/<id>.yaml`, but never widen
+ * them past the manifest's bounds. The block's shape is pinned by
+ * `@polaris/shared-policy` so the CLI's catalog validation and this
+ * stage's boot loader (`overrides.ts`) cannot drift.
  *
- * Both are deploy-time, file-backed inputs — not `project_config`.
+ * These are deploy-time, file-backed inputs — not `project_config`.
  * Changing the cap or the denylist changes which events the stage emits,
  * and semantic truth lives in files and code
  * (`docs/architecture/05-processors-and-replay.md`). It also means the
@@ -15,7 +16,11 @@
  * which is what makes a rebuild reproducible.
  */
 
+import type { ProjectIdentityOverride } from "@polaris/shared-policy";
+
 import type { IdentityPolicy, StrongIdentityKind } from "./transform.js";
+
+export type { ProjectIdentityOverride };
 
 /** Manifest-declared defaults. Mirrors `semantic_parameters` exactly. */
 export const MANIFEST_DEFAULTS = {
@@ -32,16 +37,6 @@ export const MANIFEST_BOUNDS = {
   mergeWindowSeconds: { min: 60, max: 86_400 },
   maxTraitsBytes: { min: 1_024, max: 1_048_576 },
 } as const;
-
-/** Shape a project may declare under `identity:` in its catalog file. */
-export interface ProjectIdentityOverride {
-  readonly max_identifiers_per_kind?: number;
-  readonly max_merges_per_window?: number;
-  readonly merge_window_seconds?: number;
-  readonly max_traits_bytes?: number;
-  /** Identifier values that resolve as if absent, keyed by kind. */
-  readonly denylist?: Partial<Record<StrongIdentityKind, readonly string[]>>;
-}
 
 export class IdentityPolicyError extends Error {
   public constructor(message: string) {
@@ -112,23 +107,34 @@ export function resolveIdentityPolicy(
 }
 
 /**
- * Per-project policy resolver with a small cache.
+ * Per-project policy resolver.
  *
- * Policies are deploy-time inputs, so they cannot change under a running
- * process — the cache is unbounded-by-project on purpose and never needs
- * invalidation. A restart is the only way policy changes, which is also
- * what makes "which policy produced this output" answerable from a
- * deployment.
+ * Every declared override is resolved EAGERLY, at construction: policies
+ * are deploy-time inputs, so an out-of-bounds value must fail the boot.
+ * Resolving lazily would defer the `IdentityPolicyError` to the first
+ * message from that project — inside the consumer handler — and cycle
+ * the project's entire feed through the retry tiers into the DLQ, one
+ * event at a time, for a configuration mistake.
+ *
+ * The cache never needs invalidation: a restart is the only way policy
+ * changes, which is also what makes "which policy produced this output"
+ * answerable from a deployment.
  */
 export function createPolicyResolver(
   overridesByProject: ReadonlyMap<string, ProjectIdentityOverride>,
 ): (projectId: string, environment: string) => IdentityPolicy {
   const cache = new Map<string, IdentityPolicy>();
-  return (projectId: string): IdentityPolicy => {
-    const cached = cache.get(projectId);
-    if (cached !== undefined) return cached;
-    const resolved = resolveIdentityPolicy(overridesByProject.get(projectId));
-    cache.set(projectId, resolved);
-    return resolved;
-  };
+  for (const [projectId, override] of overridesByProject) {
+    try {
+      cache.set(projectId, resolveIdentityPolicy(override));
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new IdentityPolicyError(
+        `project "${projectId}" declares an invalid identity override: ${detail}`,
+      );
+    }
+  }
+
+  const defaults = resolveIdentityPolicy(undefined);
+  return (projectId: string): IdentityPolicy => cache.get(projectId) ?? defaults;
 }

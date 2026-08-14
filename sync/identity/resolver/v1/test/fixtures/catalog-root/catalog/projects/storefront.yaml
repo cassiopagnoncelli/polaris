@@ -1,0 +1,13 @@
+# Loader fixture: a project WITH an identity block.
+project_id: storefront
+display_name: Storefront
+owner: storefront-platform
+description: Loader fixture.
+status: active
+identity:
+  max_merges_per_window: 20
+  denylist:
+    customer_id:
+      - "guest"
+    anonymous_id:
+      - "kiosk-shared"

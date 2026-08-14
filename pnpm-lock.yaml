@@ -179,6 +179,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../../packages/shared-logger
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../../packages/shared-policy
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../packages/shared-processor
@@ -509,6 +512,9 @@ importers:
       '@polaris/shared-schemas':
         specifier: workspace:*
         version: link:../shared-schemas
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/shared-processor:
     dependencies:
@@ -838,6 +844,9 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../../packages/shared-metrics
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-policy
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../../../../packages/shared-processor
@@ -856,6 +865,9 @@ importers:
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3

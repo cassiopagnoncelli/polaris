@@ -15,7 +15,7 @@
 
 import type { Database } from "@polaris/shared-db";
 import type { Kysely, Transaction } from "kysely";
-import { v7 as uuidv7 } from "uuid";
+import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 
 import type { CollectedIdentifier, IdentityPolicy, StrongIdentityKind } from "./transform.js";
 
@@ -153,7 +153,6 @@ async function createProfileAndBind(
   input: ResolveInput,
 ): Promise<ResolutionResult> {
   const profileId = uuidv7();
-  const canonicalCustomerId = pickCanonicalCustomerId(input.identifiers) ?? null;
 
   await trx
     .insertInto("profiles")
@@ -161,7 +160,7 @@ async function createProfileAndBind(
       profile_id: profileId,
       project_id: input.projectId,
       environment: input.environment,
-      canonical_customer_id: canonicalCustomerId,
+      canonical_customer_id: null,
       traits: input.traits ?? {},
       merged_into: null,
       first_seen_at: input.now,
@@ -170,11 +169,21 @@ async function createProfileAndBind(
     .execute();
 
   const bound = await bindIdentifiers(trx, input, profileId, new Map());
+  // Canonical comes from what actually BOUND, never from the raw input:
+  // a profile must not claim a customer id whose identifier row does not
+  // point back at it. On a fresh profile nothing can be cap-refused (at
+  // most one identifier per kind arrives, against a count of zero), but
+  // the rule is uniform across all three paths so it cannot drift.
+  const canonicalCustomerId = pickCanonicalCustomerId(bound.bound) ?? null;
   const traitsVersion = input.traits === null ? 0 : 1;
-  if (input.traits !== null) {
+  if (canonicalCustomerId !== null || input.traits !== null) {
     await trx
       .updateTable("profiles")
-      .set({ traits_version: String(traitsVersion), updated_at: input.now })
+      .set({
+        canonical_customer_id: canonicalCustomerId,
+        traits_version: String(traitsVersion),
+        updated_at: input.now,
+      })
       .where("profile_id", "=", profileId)
       .execute();
   }
@@ -201,7 +210,7 @@ async function bindToProfile(
 ): Promise<ResolutionResult> {
   const alreadyBound = new Map(existing.map((row) => [`${row.kind}:${row.value}`, row.profile_id]));
   const bound = await bindIdentifiers(trx, input, profileId, alreadyBound);
-  const patched = await patchProfile(trx, input, profileId);
+  const patched = await patchProfile(trx, input, profileId, bound.bound);
 
   return {
     kind: "bound",
@@ -267,7 +276,10 @@ async function mergeProfiles(
   if (recentCount >= input.policy.maxMergesPerWindow) {
     // Refuse the merge, but still resolve the event to the winner so it
     // keeps flowing. The operator gets an event; the graph stops growing.
-    const patched = await patchProfile(trx, input, winner.profile_id);
+    // Nothing binds on this path — moving the event's identifiers to the
+    // winner would BE the merge — so the empty bound set also means the
+    // canonical customer id cannot change here.
+    const patched = await patchProfile(trx, input, winner.profile_id, []);
     return {
       kind: "bound",
       profileId: winner.profile_id,
@@ -319,7 +331,7 @@ async function mergeProfiles(
     existing.map((row) => [`${row.kind}:${row.value}`, winner.profile_id]),
   );
   const bound = await bindIdentifiers(trx, input, winner.profile_id, alreadyBound);
-  const patched = await patchProfile(trx, input, winner.profile_id);
+  const patched = await patchProfile(trx, input, winner.profile_id, bound.bound);
 
   return {
     kind: "merged",
@@ -407,62 +419,115 @@ async function bindIdentifiers(
       )
       .execute();
 
-    // The evidence ledger keeps its original job: why we believe two
-    // identifiers are one person. It is written alongside, not instead.
-    if (input.identifiers.length > 1) {
-      const pair = [...input.identifiers].map((i) => `${i.kind}:${i.value}`).sort();
-      await trx
-        .insertInto("identity_links")
-        .values({
-          link_id: uuidv7(),
-          project_id: input.projectId,
-          environment: input.environment,
-          left_identifier: pair[0] as string,
-          right_identifier: pair[1] as string,
-          confidence: "authoritative",
-          evidence_type: "explicit_overlap",
-          evidence: {
-            source_event_id: input.sourceEventId,
-            source_event_name: input.sourceEventName,
-          },
-          reason: "identifiers co-occurred on one event",
-          processor_name: "sync-identity-resolver",
-          processor_version: "v1",
-          run_id: input.runId,
-          created_at: input.now,
-          superseded_at: null,
-        })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-    }
-
     bound.push({ ...identifier, newlyBound: true });
+  }
+
+  // The evidence ledger keeps its original job: why we believe two
+  // identifiers are one person. Written once per event — outside the
+  // per-identifier loop — and only when the event changed the graph:
+  // re-seeing a fully-bound pair is the steady state, not new evidence.
+  if (input.identifiers.length > 1 && bound.some((b) => b.newlyBound)) {
+    const pair = [...input.identifiers].map((i) => `${i.kind}:${i.value}`).sort();
+    await trx
+      .insertInto("identity_links")
+      .values({
+        link_id: deriveIdentityLinkId(input, pair[0] as string, pair[1] as string),
+        project_id: input.projectId,
+        environment: input.environment,
+        left_identifier: pair[0] as string,
+        right_identifier: pair[1] as string,
+        confidence: "authoritative",
+        evidence_type: "explicit_overlap",
+        evidence: {
+          source_event_id: input.sourceEventId,
+          source_event_name: input.sourceEventName,
+        },
+        reason: "identifiers co-occurred on one event",
+        processor_name: "sync-identity-resolver",
+        processor_version: "v1",
+        run_id: input.runId,
+        created_at: input.now,
+        superseded_at: null,
+      })
+      .onConflict((oc) => oc.column("link_id").doNothing())
+      .execute();
   }
 
   return { bound, rejected };
 }
 
 /**
+ * Namespace for identity-link ledger ids. Module-private and frozen: the
+ * id is part of the storage format, and changing the namespace would
+ * re-mint every ledger row's identity.
+ */
+const IDENTITY_LINK_NAMESPACE = "3c9d4a71-52e8-4b0f-9f6d-8e2b7c50a114";
+
+/**
+ * Deterministic ledger id: one row per (scope, pair, evidence type).
+ *
+ * `identity_links` carries no unique constraint on the pair — its primary
+ * key is `link_id` — so a random id would make the `ON CONFLICT` above
+ * unreachable and the ledger would grow one row per DELIVERY: twice per
+ * login event (two newly-bound identifiers used to each write the pair)
+ * and again on every redelivery or replay. Deriving the id from the fact
+ * itself makes the write idempotent against the existing primary key,
+ * the same way `deriveEventId` makes derived-event emission idempotent.
+ *
+ * `source_event_id` is deliberately NOT in the key: the ledger answers
+ * "why do we believe these two identifiers are one person", and the
+ * first observation answers it. Async processors that later evidence the
+ * same pair differently get their own rows via their own evidence type.
+ */
+function deriveIdentityLinkId(input: ResolveInput, left: string, right: string): string {
+  return uuidv5(
+    `${input.projectId}|${input.environment}|${left}|${right}|explicit_overlap`,
+    IDENTITY_LINK_NAMESPACE,
+  );
+}
+
+/**
  * Apply the canonical customer id and any trait patch, returning the
  * profile's post-write state.
+ *
+ * `bound` is the set of identifiers that actually point at this profile
+ * after binding. The canonical customer id is picked from IT, never from
+ * the raw input: a cap-refused `customer_id` must not become canonical,
+ * because its identifier row resolves elsewhere (or will create a fresh
+ * profile on the next lookup) and destinations key on this column.
  */
 async function patchProfile(
   trx: Transaction<Database>,
   input: ResolveInput,
   profileId: string,
+  bound: readonly BoundIdentifier[],
 ): Promise<{
   canonicalCustomerId: string | null;
   traitsVersion: number;
   traitsPatched: boolean;
 }> {
+  // FOR UPDATE, because this is a read-modify-write and partition order
+  // does not serialize it: `raw.events` is keyed on the identity fallback
+  // chain (customer_id, then anonymous_id), so until a person's history
+  // unifies, their events straddle two partitions and two workers can
+  // reach the same profile at once. The row lock makes "last write wins"
+  // mean commit order; without it a whole trait patch can vanish and two
+  // events can claim the same traits_version. The merge path locks this
+  // row earlier via its profiles SELECT; re-taking a held lock is free.
+  //
+  // A concurrent merge holding this row while repointing identifier rows
+  // this transaction locked can deadlock against it. That is accepted:
+  // PostgreSQL aborts one transaction, the message redelivers, and the
+  // re-run is idempotent — it surfaces as a retry, not as corruption.
   const current = await trx
     .selectFrom("profiles")
     .select(["canonical_customer_id", "traits", "traits_version"])
     .where("profile_id", "=", profileId)
+    .forUpdate()
     .executeTakeFirst();
 
   const currentVersion = Number(current?.traits_version ?? 0);
-  const customerId = pickCanonicalCustomerId(input.identifiers);
+  const customerId = pickCanonicalCustomerId(bound);
   const nextCustomerId = customerId ?? current?.canonical_customer_id ?? null;
   const patched = input.traits !== null;
 
@@ -474,9 +539,8 @@ async function patchProfile(
     };
   }
 
-  // Merge-patch per key, last-write-wins. Safe because every event for a
-  // given customer serializes on one partition, so "last" is arrival
-  // order and nothing subtler.
+  // Merge-patch per key. Last-write-wins, where "last" is the order in
+  // which the serialized transactions committed on the locked row.
   const nextTraits = patched
     ? { ...((current?.traits as Record<string, unknown>) ?? {}), ...input.traits }
     : ((current?.traits as Record<string, unknown>) ?? {});
@@ -500,6 +564,8 @@ async function patchProfile(
   };
 }
 
-function pickCanonicalCustomerId(identifiers: readonly CollectedIdentifier[]): string | undefined {
+function pickCanonicalCustomerId(
+  identifiers: readonly { kind: StrongIdentityKind; value: string }[],
+): string | undefined {
   return identifiers.find((i) => i.kind === "customer_id")?.value;
 }

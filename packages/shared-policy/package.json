@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Forbidden-field policy evaluator and named/pattern detection rules used by the Polaris ingester.",
+  "description": "Forbidden-field policy evaluator, pattern detection rules, and the per-project identity-override contract shared by the ingester, the CLI catalog validation, and the identity stage.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-schemas": "workspace:*"
+    "@polaris/shared-schemas": "workspace:*",
+    "zod": "^4.4.3"
   }
 }
