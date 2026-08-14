@@ -21,3 +21,9 @@ status: active
 #   denylist:
 #     customer_id:
 #       - "guest"
+#
+# Optional enrichment-stage overrides, same contract — narrowing only,
+# validated against `sync/enrichment/runtime`'s manifest bounds at boot.
+#
+# enrichment:
+#   max_traits_bytes: 8192

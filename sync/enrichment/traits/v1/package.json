@@ -1,0 +1,32 @@
+{
+  "name": "@polaris/sync-enrichment-traits-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Traits enricher for the Polaris enrichment stage. Reads the committed profile row by the id the identity stage stamped and attaches the latest traits snapshot. Read-only by construction: it holds no write path to the profile store. A library the enrichment runtime composes in-process and pins by version.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "kysely": "^0.29.0"
+  }
+}

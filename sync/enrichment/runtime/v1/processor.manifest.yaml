@@ -1,0 +1,173 @@
+# Polaris processor manifest — sync/enrichment/runtime v1
+#
+# The SEMANTIC definition of the enrichment stage, version 1. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are
+# immutable: anything that changes emitted event meaning or output schema
+# requires a new version directory.
+#
+# PostgreSQL stores runtime activation state (enabled/disabled, project
+# and environment scope, consumer group) — never semantic rules.
+
+name: sync-enrichment-runtime
+version: v1
+owner: platform-identity
+release_status: released
+description: |
+  Stage 3 of the main pipeline, and the READ-ONLY half of the spine.
+
+  Consumes `identified.events` — every event already resolved to a person
+  by stage 2 — runs the pinned enrichers in-process, and emits
+  `resolved.events` keyed by the same profile id:
+
+  1. `sync-enrichment-traits` reads the committed `profiles` row named by
+     `profile.profile_id` and stamps `profile.traits` +
+     `profile.traits_version`: the latest snapshot AS OF DELIVERY, which
+     is what keeps a historical delivery explainable after the profile
+     has moved on.
+
+  2. `sync-enrichment-geoip` resolves `context.ip` against a MaxMind
+     mmdb database and stamps `enrichment.geo` — country, region, city,
+     and the provenance of the lookup.
+
+  The ownership line this stage exists to hold: THE IDENTITY STAGE IS
+  THE PROFILE STORE'S ONLY WRITER, THIS STAGE ONLY READS. It is
+  structural, not conventional — the traits enricher's package exports a
+  reader and no write path, and this runtime holds no handle it could
+  write through.
+
+  The read needs no read-your-writes machinery. Stage 2 commits its
+  transaction before publishing, so a profile named on `identified.events`
+  is already visible to any connection.
+
+  Both enrichers FAIL OPEN. A missing profile row, an over-size trait
+  snapshot, an absent geo database and an event with no IP all produce a
+  well-formed `resolved.events` record with null-ish blocks and honest
+  provenance, never a stalled partition. Geo is decoration and traits are
+  a snapshot; every destination in the product sits behind this stage,
+  and stopping the spine over a missing city name would be the wrong
+  trade by a wide margin.
+
+  The stage emits no derived facts. An enrichment is an attribute of the
+  event, not an event about the event.
+
+mode: streaming
+
+inputs:
+  - family: identified.events
+    schema_versions: "*"   # the stage does not gate on event schema version
+outputs:
+  - family: resolved.events
+    schema_versions: "*"   # forwards the source event's own schema version
+
+state_stores:
+  # Read-only. Declared because an auditor asking "what touches profiles"
+  # must find this stage, and finding it here alongside the identity
+  # stage's four entries is exactly how the asymmetry becomes visible.
+  - postgres:profiles
+
+defaults:
+  consumer_group: polaris-sync-enrichment-v1
+
+# ---------------------------------------------------------------------
+# Composed units.
+#
+# The enrichment stage runs its enrichers IN-PROCESS: one broker hop for
+# the stage regardless of how many enrichers exist. Each is an
+# independently versioned unit under `sync/enrichment/<name>/<version>`,
+# so bumping one does not re-version the other — only the pin below
+# moves.
+#
+# This mirrors how a destination consumer pins normalize / mapper /
+# deliverer versions, with one improvement: `test/manifest.test.ts`
+# asserts these entries against both the runtime's `ENRICHER_PINS`
+# constant and each enricher package's own `ENRICHER_IDENTITY`, so the
+# manifest cannot drift from the code it describes.
+# ---------------------------------------------------------------------
+composes:
+  - name: sync-enrichment-traits
+    version: v1
+  - name: sync-enrichment-geoip
+    version: v1
+
+# ---------------------------------------------------------------------
+# Semantic parameters.
+#
+# Changes emitted events, so it lives here and not in `project_config` —
+# a project may narrow it via the `enrichment:` block of
+# `catalog/projects/<id>.yaml` but never widen it, and introducing the
+# capability at all is a new processor version.
+# ---------------------------------------------------------------------
+semantic_parameters:
+  # Ceiling on the traits snapshot this stage will stamp onto an event,
+  # in bytes of serialised JSON. Over the ceiling, `profile.traits` is
+  # `null` with a metric and the event still ships: truncating would hand
+  # destinations a snapshot that looks complete and is not, and dropping
+  # would lose a real fact over a payload-size problem.
+  #
+  # Deliberately a DIFFERENT bound from the identity stage's identically
+  # named parameter, which limits what one `identify` call may WRITE.
+  # This one limits what the spine will CARRY — a profile can pass the
+  # write guard many times over and still grow past what is sane to copy
+  # onto every downstream event.
+  max_traits_bytes:
+    default: 32768
+    min: 1024
+    max: 1048576
+
+replay:
+  supported: true
+  restrictions:
+    - >-
+      Enrichment is a function of state at RUN time, not at source-event
+      time. A replay stamps the traits the profile carries now and the geo
+      the database resolves now — not what either said originally. That is
+      the intended behaviour (it is how a corrected profile propagates),
+      but it means a replayed slice is not byte-identical to the original
+      and must not be used to prove the stage was correct historically.
+
+replay_notes: |
+  Replays re-read `identified.events` and re-enrich. Every step is a pure
+  read, so a replayed slice converges rather than duplicating: the
+  `event_id` is preserved verbatim, so ClickHouse's ReplacingMergeTree
+  collapses the replayed row onto the original.
+
+  What a replay CHANGES is the enrichment itself, by design. Traits are
+  "latest as of delivery", so replaying after a profile rebuild is how a
+  corrected profile reaches destinations. Geo resolves against whatever
+  mmdb snapshot the process loaded, so a replay months later may resolve
+  a city the original run did not.
+
+  This is the repair path for a bad geo database or a stale trait
+  snapshot: fix the input, replay the range. There is no inverse
+  operation to apply, because the stage holds no state of its own.
+
+fixtures:
+  - name: profiled-event-with-traits-and-geo
+    input: test/golden/profiled-event-with-traits-and-geo.input.json
+    output: test/golden/profiled-event-with-traits-and-geo.output.json
+    description: |
+      The ordinary case: an event carrying a profile id whose row has
+      traits, and an IP the geo database resolves. Both blocks fill, and
+      `event_id` / `ingested_at` pass through untouched.
+  - name: unprofiled-event-passes-through
+    input: test/golden/unprofiled-event-passes-through.input.json
+    output: test/golden/unprofiled-event-passes-through.output.json
+    description: |
+      An event stage 2 could not resolve to a person. `profile` stays
+      null — no traits slots are invented on it — and the geo block still
+      fills, because an unidentifiable event still came from somewhere.
+  - name: over-cap-traits-stamps-null
+    input: test/golden/over-cap-traits-stamps-null.input.json
+    output: test/golden/over-cap-traits-stamps-null.output.json
+    description: |
+      A profile whose snapshot exceeds the size guard. `traits` is null,
+      `traits_version` is still reported so the offending version is
+      identifiable from the event, and the event ships.
+  - name: no-ip-yields-no-ip-provenance
+    input: test/golden/no-ip-yields-no-ip-provenance.input.json
+    output: test/golden/no-ip-yields-no-ip-provenance.output.json
+    description: |
+      A server-side event with no IP. The geo block is present with every
+      field null and `source: "no_ip"` — distinguishable from a lookup
+      that ran and found nothing.

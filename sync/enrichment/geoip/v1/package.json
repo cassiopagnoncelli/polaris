@@ -1,0 +1,31 @@
+{
+  "name": "@polaris/sync-enrichment-geoip-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Geo enricher for the Polaris enrichment stage. Resolves `context.ip` to country/region/city through a pluggable IP lookup backend (MaxMind mmdb in production), and never emits or logs the raw address. A library: the enrichment runtime composes it in-process and pins its version.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/shared-logger": "workspace:*",
+    "mmdb-lib": "^3.0.3"
+  }
+}

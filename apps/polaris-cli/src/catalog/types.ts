@@ -17,7 +17,10 @@ import {
   type PolarisEnvironment,
   polarisEnvironmentSchema,
 } from "@polaris/shared-environments";
-import { projectIdentityOverrideSchema } from "@polaris/shared-policy";
+import {
+  projectEnrichmentOverrideSchema,
+  projectIdentityOverrideSchema,
+} from "@polaris/shared-policy";
 import { z } from "zod";
 
 /**
@@ -79,6 +82,8 @@ export const projectFileSchema = z
      * by `projects sync`: semantic parameters never enter PostgreSQL.
      */
     identity: projectIdentityOverrideSchema.optional(),
+    /** Optional enrichment-stage overrides. Same contract as `identity`. */
+    enrichment: projectEnrichmentOverrideSchema.optional(),
   })
   .strict();
 export type ProjectFile = z.infer<typeof projectFileSchema>;

@@ -1,0 +1,50 @@
+[
+  {
+    "family": "resolved.events",
+    "partition_key": "storefront:development:019ffe00-0000-7000-8000-0000000000a2",
+    "event": {
+      "event_id": "019ffe00-0000-7000-8000-0000000000a2",
+      "event": "page.viewed",
+      "schema_version": 1,
+      "project_id": "storefront",
+      "environment": "development",
+      "occurred_at": "2026-08-14T00:00:00.000Z",
+      "ingested_at": "2026-08-14T00:00:01.000Z",
+      "source": {
+        "type": "browser",
+        "id": "storefront-web"
+      },
+      "identity": {
+        "anonymous_id": null,
+        "session_id": "sess_1",
+        "customer_id": null,
+        "device_id": null
+      },
+      "context": {
+        "ip": "8.8.8.8",
+        "user_agent": null,
+        "locale": null,
+        "page": null,
+        "campaign": null
+      },
+      "properties": {},
+      "processor": {
+        "name": "sync-enrichment-runtime",
+        "version": "v1",
+        "ran_at": "2026-08-14T00:00:00.000Z",
+        "run_id": "run_fixture"
+      },
+      "processor_name": "sync-enrichment-runtime",
+      "processor_version": "v1",
+      "profile": null,
+      "enrichment": {
+        "geo": {
+          "country": "US",
+          "region": "CA",
+          "city": "Mountain View",
+          "source": "maxmind:GeoLite2-City:2026-08-01"
+        }
+      }
+    }
+  }
+]

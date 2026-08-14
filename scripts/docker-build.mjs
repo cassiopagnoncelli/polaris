@@ -66,6 +66,11 @@ const services = [
     image: "polaris/sync-identity-resolver-v1",
   },
   {
+    name: "sync-enrichment",
+    dockerfile: "sync/enrichment/runtime/v1/Dockerfile",
+    image: "polaris/sync-enrichment-runtime-v1",
+  },
+  {
     name: "identity-resolver",
     dockerfile: "sync/legacy/identity-resolver/v1/Dockerfile",
     image: "polaris/processor-identity-resolver-v1",

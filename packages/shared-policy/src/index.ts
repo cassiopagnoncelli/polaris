@@ -31,9 +31,11 @@
 export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
 export {
   type IdentityOverrideKind,
+  type ProjectEnrichmentOverride,
+  projectEnrichmentOverrideSchema,
   type ProjectIdentityOverride,
   projectIdentityOverrideSchema,
-} from "./identity.js";
+} from "./project-overrides.js";
 export {
   formatPolicyInspection,
   inspectPolicy,

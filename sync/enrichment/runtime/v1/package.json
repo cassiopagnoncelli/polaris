@@ -1,0 +1,45 @@
+{
+  "name": "@polaris/sync-enrichment-runtime-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris enrichment stage (sync pipeline, stage 3). Consumes identified.events, composes the pinned enrichers in-process — traits snapshot from the profile store, geo from context.ip — and emits resolved.events. Reads the profile store; never writes it.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "processor.manifest.yaml",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=sync-enrichment POLARIS_HTTP_PORT=4015 POLARIS_SYNC_ENRICHMENT_CATALOG_ROOT=../../../.. tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-policy": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "@polaris/sync-enrichment-geoip-v1": "workspace:*",
+    "@polaris/sync-enrichment-traits-v1": "workspace:*",
+    "kysely": "^0.29.0",
+    "yaml": "2.9.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,189 +1,77 @@
 /**
- * Zod schemas, types, and filesystem loader for processor manifests.
+ * Filesystem loader for processor manifests.
  *
- * Manifests live next to processor code under
- * `processors/<name>/v<n>/processor.manifest.yaml` and are the SEMANTIC
- * definition of each processor version. The CLI reads them for `processors
- * list` and `processors show`; it must NEVER write to them. P6-005 is also
- * not allowed to touch `processors/*\/v*\/src/` — that's owned by the
- * processor task cards (P4-001, P8-*).
+ * Manifests live next to processor code at
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml` and are
+ * the SEMANTIC definition of each processor version. The CLI reads them
+ * for `processors list` / `processors show`; it must NEVER write to them.
  *
- * Schema mirrors the manifest produced by P4-001
- * (`sync/legacy/analytics-projector/v1/processor.manifest.yaml`):
+ * ## The schema is imported, not restated
  *
- *   name: analytics-projector
- *   version: v1
- *   owner: platform-data
- *   description: "..."
- *   mode: streaming
- *   inputs:
- *     - family: raw.events
- *       schema_versions: "*"
- *   outputs:
- *     - family: analytics.events
- *       schema_versions: "*"
- *   state_stores: []
- *   defaults:
- *     consumer_group: polaris-analytics-projector-v1
- *   replay:
- *     supported: true
- *     restrictions: []
+ * This module used to fork the manifest schema, on the reasoning that the
+ * CLI is read-only and should validate whatever is on disk. The fork did
+ * what forks do: `semantic_parameters` was added to the canonical schema
+ * and the CLI silently began reporting every manifest carrying it as
+ * "malformed", skipping it from `processors list` — a warning on stderr
+ * standing in for the one processor an operator most wanted to see.
+ *
+ * A read-only reader has no license to disagree with the writer about
+ * what a valid manifest is. The schema now comes from
+ * `@polaris/shared-processor`, which is where the manifest contract
+ * lives; what stays here is the part that is genuinely CLI-shaped — the
+ * tree walk, and the decision to warn-and-continue rather than throw so
+ * one bad file cannot break `processors list`.
  *
  * See:
  *   - docs/architecture/05-processors-and-replay.md
- *   - sync/legacy/analytics-projector/v1/processor.manifest.yaml
+ *   - packages/shared-processor/src/manifest.ts
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import {
+  PROCESSOR_MODES,
+  PROCESSOR_RELEASE_STATUSES,
+  type ProcessorDefaults,
+  type ProcessorFixture,
+  type ProcessorManifest,
+  type ProcessorMode,
+  type ProcessorReleaseStatus,
+  type ProcessorReplay,
+  type ProcessorTopicSpec,
+  processorDefaultsSchema,
+  processorFixtureSchema,
+  processorManifestSchema,
+  processorModeSchema,
+  processorNameSchema,
+  processorReleaseStatusSchema,
+  processorReplaySchema,
+  processorTopicSpecSchema,
+  processorVersionSchema,
+} from "@polaris/shared-processor";
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
 
-/**
- * Closed set of processor modes. `streaming` maps one input event to one
- * emitted event; `batch` aggregates multiple inputs into one output. The
- * mode is part of the semantic definition and changing it requires a new
- * processor version.
- */
-export const PROCESSOR_MODES = ["streaming", "batch"] as const;
-export const processorModeSchema = z.enum(PROCESSOR_MODES);
-export type ProcessorMode = z.infer<typeof processorModeSchema>;
-
-/**
- * Version-string pattern. `v1`, `v2`, `v1.2.3` all valid. Mirrors the
- * `processor_activations_processor_version_format` CHECK constraint.
- */
-export const processorVersionSchema = z
-  .string()
-  .min(2)
-  .max(32)
-  .regex(/^v[0-9]+(\.[0-9]+){0,2}$/, {
-    message: "must be a semver-like tag prefixed with 'v', e.g. v1 or v1.2.3",
-  });
-
-/**
- * Processor catalog name. Mirrors the
- * `processor_activations_processor_name_format` CHECK constraint and the
- * directory naming convention under `processors/`.
- */
-export const processorNameSchema = z
-  .string()
-  .min(3)
-  .max(64)
-  .regex(/^[a-z][a-z0-9_-]{1,62}[a-z0-9]$/, {
-    message: "must be lowercase, alphanumerics + `_-`, 3-64 chars",
-  });
-
-/**
- * Topic family + accepted schema versions an input/output declares. The
- * runtime resolver (P8-001) turns the family into concrete topic names per
- * project isolation state.
- */
-export const processorTopicSpecSchema = z
-  .object({
-    family: z.string().min(1).max(128),
-    // Either the literal "*" (passthrough) or a list of explicit integer
-    // versions. The manifest YAML for analytics-projector uses "*".
-    schema_versions: z.union([z.literal("*"), z.array(z.number().int().positive())]),
-  })
-  .strict();
-export type ProcessorTopicSpec = z.infer<typeof processorTopicSpecSchema>;
-
-/**
- * Replay metadata block. Mirrors the manifest in
- * `sync/legacy/analytics-projector/v1/processor.manifest.yaml`.
- */
-export const processorReplaySchema = z
-  .object({
-    supported: z.boolean(),
-    restrictions: z.array(z.string()).default([]),
-  })
-  .strict();
-export type ProcessorReplay = z.infer<typeof processorReplaySchema>;
-
-/**
- * Release status of a processor version. Mirrors the closed set defined by
- * P8-006 in `packages/shared-processor/src/manifest.ts`; duplicated here
- * because the CLI catalog deliberately forks the schema (the CLI is read-only
- * over `processors/` and validates whatever exists on disk).
- *
- *   - `released`     production semantics; immutable per the architecture's
- *                    "Processor Versioning" rule.
- *   - `deprecated`   superseded by a newer version; replay-only.
- *   - `experimental` opt-in, not promoted; production activations should not
- *                    target it.
- */
-export const PROCESSOR_RELEASE_STATUSES = ["released", "deprecated", "experimental"] as const;
-export const processorReleaseStatusSchema = z.enum(PROCESSOR_RELEASE_STATUSES);
-export type ProcessorReleaseStatus = z.infer<typeof processorReleaseStatusSchema>;
-
-/**
- * Golden-fixture pair declared by a processor manifest. Mirrors P8-006's
- * `packages/shared-processor` convention: each scenario carries one
- * `<name>.input.json` and one `<name>.output.json` under the processor's
- * test directory. Paths are relative to the manifest file. Optional on the
- * schema so manifests predating P8-006 keep parsing.
- */
-export const processorFixtureSchema = z
-  .object({
-    name: z
-      .string()
-      .min(1)
-      .max(128)
-      .regex(/^[a-z0-9][a-z0-9._-]*$/u, {
-        message: "fixture name must be lowercase, alphanumerics + `._-`",
-      }),
-    input: z.string().min(1).max(512),
-    output: z.string().min(1).max(512),
-    description: z.string().trim().min(1).max(2048).optional(),
-  })
-  .strict();
-export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
-
-/**
- * Operational defaults the runtime helpers fall back to when no activation
- * row overrides them. These are non-semantic per the architecture doc
- * ("Processor Configuration").
- *
- * The shape is intentionally `.passthrough()` so future processors can
- * declare additional non-semantic defaults (max_concurrency, batch_size,
- * ...) without bumping this schema. The Zod parse still records the known
- * fields with their types.
- */
-export const processorDefaultsSchema = z
-  .object({
-    consumer_group: z.string().min(1).max(128).optional(),
-  })
-  .passthrough();
-export type ProcessorDefaults = z.infer<typeof processorDefaultsSchema>;
-
-/**
- * Shape of `processors/<name>/v<n>/processor.manifest.yaml`.
- *
- * NOTE: this schema rejects unknown top-level keys via `.strict()`. New
- * fields land here as the architecture grows; the v1 baseline came from
- * P4-001 and P8-006 added the three optional `release_status` /
- * `replay_notes` / `fixtures` fields. The CLI catalog forks the schema
- * (read-only over `processors/`); the canonical schema lives in
- * `packages/shared-processor/src/manifest.ts`.
- */
-export const processorManifestSchema = z
-  .object({
-    name: processorNameSchema,
-    version: processorVersionSchema,
-    owner: z.string().trim().min(1).max(128),
-    description: z.string().trim().min(1).max(8192),
-    release_status: processorReleaseStatusSchema.optional(),
-    mode: processorModeSchema,
-    inputs: z.array(processorTopicSpecSchema).min(1),
-    outputs: z.array(processorTopicSpecSchema).min(1),
-    state_stores: z.array(z.string()).default([]),
-    defaults: processorDefaultsSchema.optional(),
-    replay: processorReplaySchema.optional(),
-    replay_notes: z.string().trim().min(1).max(8192).optional(),
-    fixtures: z.array(processorFixtureSchema).optional(),
-  })
-  .strict();
-export type ProcessorManifest = z.infer<typeof processorManifestSchema>;
+// Re-exported so existing CLI imports keep resolving through this module.
+// The definitions are the canonical ones; nothing here redefines them.
+export {
+  PROCESSOR_MODES,
+  PROCESSOR_RELEASE_STATUSES,
+  type ProcessorDefaults,
+  type ProcessorFixture,
+  type ProcessorManifest,
+  type ProcessorMode,
+  type ProcessorReleaseStatus,
+  type ProcessorReplay,
+  type ProcessorTopicSpec,
+  processorDefaultsSchema,
+  processorFixtureSchema,
+  processorManifestSchema,
+  processorModeSchema,
+  processorNameSchema,
+  processorReleaseStatusSchema,
+  processorReplaySchema,
+  processorTopicSpecSchema,
+  processorVersionSchema,
+};
 
 /**
  * In-memory record of one discovered manifest. Carries the on-disk path so

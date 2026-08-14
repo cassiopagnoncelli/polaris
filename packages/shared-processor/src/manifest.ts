@@ -188,6 +188,31 @@ const processorSemanticParameterSchema = z
   .strict();
 export type ProcessorSemanticParameter = z.infer<typeof processorSemanticParameterSchema>;
 
+/**
+ * An in-process unit that a COMPOSING processor pins by version.
+ *
+ * The enrichment stage runs several enrichers inside one process — one
+ * broker hop for the stage regardless of how many units compose it —
+ * exactly as a destination consumer runs its normalize / mapper /
+ * deliverer stages. Destinations declare that with flat
+ * `normalize_version` / `mapper_version` scalars because they have three
+ * fixed stages; a stage whose unit list is open-ended needs a list, and
+ * that is the only difference.
+ *
+ * The pin is what makes the composition auditable: "which traits enricher
+ * produced this output" is answerable from the manifest at a git sha,
+ * without reading the runtime's import graph. Each composed unit lives in
+ * its own version directory, so bumping one does not re-version the other
+ * — only this pin moves.
+ */
+const processorComposedUnitSchema = z
+  .object({
+    name: processorNameSchema,
+    version: processorVersionSchema,
+  })
+  .strict();
+export type ProcessorComposedUnit = z.infer<typeof processorComposedUnitSchema>;
+
 export const processorManifestSchema = z
   .object({
     name: processorNameSchema,
@@ -204,6 +229,8 @@ export const processorManifestSchema = z
     replay_notes: z.string().trim().min(1).max(8192).optional(),
     fixtures: z.array(processorFixtureSchema).optional(),
     semantic_parameters: z.record(z.string(), processorSemanticParameterSchema).optional(),
+    /** In-process units this processor composes; see the schema above. */
+    composes: z.array(processorComposedUnitSchema).optional(),
   })
   .strict();
 export type ProcessorManifest = z.infer<typeof processorManifestSchema>;

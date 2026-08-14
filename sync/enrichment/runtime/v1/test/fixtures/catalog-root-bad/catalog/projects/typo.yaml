@@ -1,0 +1,9 @@
+# Loader fixture: a TYPO'D enrichment block. `max_trait_bytes` is not a
+# key; the strict schema must refuse it rather than apply no limit.
+project_id: typo
+display_name: Typo
+owner: nobody
+description: Loader fixture.
+status: active
+enrichment:
+  max_trait_bytes: 8192

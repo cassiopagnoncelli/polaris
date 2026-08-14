@@ -73,6 +73,26 @@ MAILTO=""
 # this one later is the whole of the remaining change.
 27 3 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; POLARIS_PRUNE_ENV=production; set +a; /opt/polaris/infra/backups/prune-attribution-chains.sh >> /var/log/polaris/prune-chains.log 2>&1
 
+# --- Reference data --------------------------------------------------------
+
+# MaxMind GeoLite2 database for the enrichment stage. Wednesdays at 04:05.
+#
+# MaxMind publishes GeoLite2 twice weekly; once a week is ample for
+# city-level geo and keeps a 60 MB download off the nightly backup
+# window. The script verifies the archive and swaps it in atomically, so
+# a failed fetch leaves yesterday's database in place rather than
+# breaking geo — see infra/geoip/refresh-geoip.sh.
+#
+# This does NOT affect running processes: the enrichment stage loads the
+# database once at boot and stamps that snapshot's identity onto every
+# event it enriches, which is what makes "which database produced this
+# row" answerable. A rolling restart picks up a new one, and there is no
+# urgency — city boundaries are not a fast-moving input.
+#
+# Needs POLARIS_GEOIP_LICENSE_KEY, so keep that env file root-owned and
+# 0600 like the production retention one above.
+5 4 * * 3   polaris  set -a; . /etc/polaris/geoip.env; set +a; /opt/polaris/infra/geoip/refresh-geoip.sh >> /var/log/polaris/refresh-geoip.log 2>&1
+
 # --- Not scheduled here ----------------------------------------------------
 #
 # `pg-restore.sh` is a drill and an incident tool. It refuses to restore over

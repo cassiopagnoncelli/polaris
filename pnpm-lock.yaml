@@ -830,6 +830,69 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  sync/enrichment/geoip/v1:
+    dependencies:
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      mmdb-lib:
+        specifier: ^3.0.3
+        version: 3.0.3
+
+  sync/enrichment/runtime/v1:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-policy
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      '@polaris/sync-enrichment-geoip-v1':
+        specifier: workspace:*
+        version: link:../../geoip/v1
+      '@polaris/sync-enrichment-traits-v1':
+        specifier: workspace:*
+        version: link:../../traits/v1
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  sync/enrichment/traits/v1:
+    dependencies:
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+
   sync/identity/resolver/v1:
     dependencies:
       '@polaris/shared-config':
@@ -1874,6 +1937,10 @@ packages:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
 
+  mmdb-lib@3.0.3:
+    resolution: {integrity: sha512-xQPoBXcNjjHiOvOraFBKtA++uNWF6aCVHL9dRKFXEov8eI3QJwtgiw3qApsonFT5SpoqsEVISUTg3HIDs2DiXw==}
+    engines: {node: '>=10', npm: '>=6'}
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -2914,6 +2981,8 @@ snapshots:
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.0
+
+  mmdb-lib@3.0.3: {}
 
   ms@2.1.3: {}
 
