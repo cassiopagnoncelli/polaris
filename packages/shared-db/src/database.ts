@@ -775,6 +775,104 @@ export interface TransportCheckpointsTable {
 //   }
 //
 // As migrations land, add a new property here in the same change.
+/**
+ * `profiles` — the person, and the row every spine stage keys on.
+ *
+ * Derived runtime state: reproducible by replaying `raw.events` through a
+ * pinned resolver version. Written ONLY by the identity stage on the sync
+ * path (plus the computed-traits and reverse-ETL writers on the async
+ * path); the enrichment stage reads and never writes.
+ *
+ * See `db/migrations/20260814000001_create_profile_plane.sql`.
+ */
+export interface ProfilesTable {
+  /** UUIDv7, application-generated. */
+  profile_id: string;
+  /** Project scope. References `projects(project_id)`. */
+  project_id: string;
+  /** Environment scope. Closed set: development | staging | production. */
+  environment: string;
+  /**
+   * Latest authoritative `customer_id` for this person, denormalised from
+   * `profile_identifiers` so destinations get a stable external id without
+   * a join on the delivery path.
+   */
+  canonical_customer_id: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * Project-owned trait bag, merge-patched per key. The platform never
+   * interprets its contents — see the `.passthrough()` note on
+   * `user.identified` v1.
+   */
+  traits: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  /**
+   * Monotonic revision, bumped on every trait write and stamped onto the
+   * envelope so a historical delivery stays explainable.
+   */
+  traits_version: Generated<string>;
+  /**
+   * Set when this profile lost a merge. AUDIT ONLY — readers never
+   * traverse it, because merges repoint identifiers eagerly.
+   */
+  merged_into: ColumnType<string | null, string | null | undefined, string | null>;
+  first_seen_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/**
+ * `profile_identifiers` — the resolved graph.
+ *
+ * One row per known identifier. The primary key
+ * `(project_id, environment, kind, value)` is both the resolver's hot-path
+ * read and the constraint that makes concurrent find-or-create safe.
+ *
+ * `identity_links` remains the EVIDENCE ledger explaining why a binding
+ * exists; this table is the answer to "who is this?".
+ */
+export interface ProfileIdentifiersTable {
+  project_id: string;
+  environment: string;
+  /** Open vocabulary: `customer_id` | `anonymous_id` in v1. */
+  kind: string;
+  /** The identifier value itself, un-prefixed. */
+  value: string;
+  /** Profile this identifier resolves to. */
+  profile_id: string;
+  first_seen_at: Generated<Date>;
+  last_seen_at: Generated<Date>;
+}
+
+/**
+ * `profile_merges` — merge audit.
+ *
+ * Written when two profiles prove to be one person. Both ids are retained
+ * permanently: ClickHouse rows stamped with the loser's id are only
+ * explainable through this table, and the merge worker (R4) streams these
+ * to maintain the canonical-profile dictionary.
+ */
+export interface ProfileMergesTable {
+  /** UUIDv7 of the merge record. */
+  merge_id: string;
+  project_id: string;
+  environment: string;
+  /** Surviving profile — all identifiers now point here. */
+  winner_profile_id: string;
+  /** Tombstoned profile — retained for lineage, never resolved to again. */
+  loser_profile_id: string;
+  /** Event whose identifiers proved the two profiles were one person. */
+  source_event_id: string;
+  /** Open shape per evidence kind, same convention as `identity_links`. */
+  evidence: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  merged_at: Generated<Date>;
+}
+
 export interface Database {
   api_keys: ApiKeyTable;
   attribution_touchpoint_chains: AttributionTouchpointChainsTable;
@@ -782,6 +880,9 @@ export interface Database {
   identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;
   processor_runs: ProcessorRunsTable;
+  profile_identifiers: ProfileIdentifiersTable;
+  profile_merges: ProfileMergesTable;
+  profiles: ProfilesTable;
   project_config: ProjectConfigTable;
   project_config_versions: ProjectConfigVersionsTable;
   projects: ProjectsTable;
