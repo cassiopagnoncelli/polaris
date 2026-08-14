@@ -1,0 +1,20 @@
+# Catalog entry: identity.merge_suspended v1 (ACTIVE)
+#
+# A profile absorbed more merges inside the window than its manifest allows
+# — the signature of a merge storm, where one promiscuous identifier
+# chain-merges thousands of profiles into a mega-profile.
+#
+# The breaker stops that profile accepting further merges and raises this
+# for an operator. Committed merges are not unwound: repair is a profile
+# rebuild under a corrected denylist, because merges are derived state.
+name: identity.merge_suspended
+schema_version: 1
+domain: identity
+owner: platform-identity
+description: >-
+  Records that a profile tripped the merge-rate breaker and is no longer
+  accepting merges pending operator review.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/identity/merge_suspended.v1"
+schema_export: identityMergeSuspendedV1PropertiesSchema

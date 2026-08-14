@@ -1,0 +1,19 @@
+# Catalog entry: signup.completed v1 (ACTIVE)
+#
+# Registration finished. Vendor consumers map it to their registration
+# primitive and, when `predicted_ltv_minor` is present, attach it as the
+# event value.
+#
+# The predicted LTV here is the PRODUCER's number. A platform-computed LTV
+# is a computed trait (R5) and rides the profile, not the event.
+name: signup.completed
+schema_version: 1
+domain: signup
+owner: growth
+description: >-
+  Emitted when a user completes registration, optionally carrying the
+  producer's predicted lifetime value in minor currency units.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/signup/completed.v1"
+schema_export: signupCompletedV1PropertiesSchema

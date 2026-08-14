@@ -1,0 +1,22 @@
+# Catalog entry: profile.updated v1 (ACTIVE)
+#
+# Emitted whenever profile traits change, by any of the three sanctioned
+# writers (identity stage, computed traits, reverse ETL) — `writer` says
+# which.
+#
+# This stream IS trait history. `profiles.traits` holds only the current
+# value, because it is runtime state on the hot path; the record of what a
+# profile believed and when lives in ClickHouse, fed from here. Carries
+# changed keys only — a full snapshot per update would multiply storage by
+# the trait count, and current state is one argMax away.
+name: profile.updated
+schema_version: 1
+domain: profile
+owner: platform-identity
+description: >-
+  Records a change to a profile's traits, naming the writer, the new
+  version, and the keys set or removed.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/profile/updated.v1"
+schema_export: profileUpdatedV1PropertiesSchema

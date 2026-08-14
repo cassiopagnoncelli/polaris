@@ -1,0 +1,21 @@
+# Catalog entry: payment.approved v1 (ACTIVE)
+#
+# The revenue event. Every vendor consumer maps it to that vendor's purchase
+# primitive, which is why it was the most costly of the four unregistered
+# events: without this entry the ingester rejected it as `unknown_event` and
+# the purchase mappers were unreachable code.
+#
+# Money is carried in minor units; destination normalizers convert per
+# vendor. Never carries the payment instrument itself — the forbidden-field
+# policy rejects card fields at ingest.
+name: payment.approved
+schema_version: 1
+domain: payment
+owner: commerce
+description: >-
+  Emitted when a payment authorisation succeeds, carrying the settled amount
+  in minor currency units and the merchant order reference.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/payment/approved.v1"
+schema_export: paymentApprovedV1PropertiesSchema

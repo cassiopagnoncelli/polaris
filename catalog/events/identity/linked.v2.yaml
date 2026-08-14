@@ -1,0 +1,20 @@
+# Catalog entry: identity.linked v2 (ACTIVE)
+#
+# v1 described a PAIR of identifiers because the pairwise ledger had no
+# person to point at. v2 describes a BINDING — identifier to profile — so
+# every event names the person, and `profile_created` lets a consumer count
+# new people without joining anything.
+#
+# v1 stays active until the legacy resolver retires (R2C), then is
+# deprecated with a sunset.
+name: identity.linked
+schema_version: 2
+domain: identity
+owner: platform-identity
+description: >-
+  Records that an identifier now resolves to a profile, either by creating
+  that profile or by attaching to an existing one.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/identity/linked.v2"
+schema_export: identityLinkedV2PropertiesSchema

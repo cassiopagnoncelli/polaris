@@ -3,9 +3,18 @@ import { attributionLastTouchAssignedV1PropertiesSchema } from "../events/attrib
 import { attributionTouchpointCapturedV1PropertiesSchema } from "../events/attribution/touchpoint_captured.v1.js";
 import { checkoutStartedV1PropertiesSchema } from "../events/checkout/started.v1.js";
 import { enrichedGeoipV1PropertiesSchema } from "../events/enriched/geoip.v1.js";
+import { identityLinkRejectedV1PropertiesSchema } from "../events/identity/link_rejected.v1.js";
 import { identityLinkedV1PropertiesSchema } from "../events/identity/linked.v1.js";
+import { identityLinkedV2PropertiesSchema } from "../events/identity/linked.v2.js";
+import { identityMergeSuspendedV1PropertiesSchema } from "../events/identity/merge_suspended.v1.js";
 import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.js";
+import { identityMergedV2PropertiesSchema } from "../events/identity/merged.v2.js";
 import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
+import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
+import { profileUpdatedV1PropertiesSchema } from "../events/profile/updated.v1.js";
+import { signupCompletedV1PropertiesSchema } from "../events/signup/completed.v1.js";
+import { subscriptionRenewedV1PropertiesSchema } from "../events/subscription/renewed.v1.js";
+import { userIdentifiedV1PropertiesSchema } from "../events/user/identified.v1.js";
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
 import { sessionEndedV1PropertiesSchema } from "../events/session/ended.v1.js";
@@ -85,5 +94,50 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "attribution.last_touch_assigned",
     schema_version: 1,
     propertiesSchema: attributionLastTouchAssignedV1PropertiesSchema,
+  },
+  {
+    event: "identity.linked",
+    schema_version: 2,
+    propertiesSchema: identityLinkedV2PropertiesSchema,
+  },
+  {
+    event: "identity.merged",
+    schema_version: 2,
+    propertiesSchema: identityMergedV2PropertiesSchema,
+  },
+  {
+    event: "identity.link_rejected",
+    schema_version: 1,
+    propertiesSchema: identityLinkRejectedV1PropertiesSchema,
+  },
+  {
+    event: "identity.merge_suspended",
+    schema_version: 1,
+    propertiesSchema: identityMergeSuspendedV1PropertiesSchema,
+  },
+  {
+    event: "profile.updated",
+    schema_version: 1,
+    propertiesSchema: profileUpdatedV1PropertiesSchema,
+  },
+  {
+    event: "payment.approved",
+    schema_version: 1,
+    propertiesSchema: paymentApprovedV1PropertiesSchema,
+  },
+  {
+    event: "user.identified",
+    schema_version: 1,
+    propertiesSchema: userIdentifiedV1PropertiesSchema,
+  },
+  {
+    event: "signup.completed",
+    schema_version: 1,
+    propertiesSchema: signupCompletedV1PropertiesSchema,
+  },
+  {
+    event: "subscription.renewed",
+    schema_version: 1,
+    propertiesSchema: subscriptionRenewedV1PropertiesSchema,
   },
 ];

@@ -1,0 +1,17 @@
+# Catalog entry: subscription.renewed v1 (ACTIVE)
+#
+# A recurring billing cycle settled. Kept distinct from payment.approved
+# because renewals carry subscription lineage that purchase mappers have no
+# slot for — collapsing the two would make recurring revenue
+# indistinguishable from one-off revenue downstream.
+name: subscription.renewed
+schema_version: 1
+domain: subscription
+owner: commerce
+description: >-
+  Emitted when a subscription billing cycle settles, carrying the amount in
+  minor currency units and the subscription's stable identifier.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/subscription/renewed.v1"
+schema_export: subscriptionRenewedV1PropertiesSchema

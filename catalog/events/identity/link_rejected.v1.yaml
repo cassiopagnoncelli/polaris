@@ -1,0 +1,19 @@
+# Catalog entry: identity.link_rejected v1 (ACTIVE)
+#
+# A binding refused by a merge safeguard: either the profile hit its
+# per-kind identifier cap, or the identifier value is denylisted (kiosk
+# devices, "guest", bot ids) and resolves as if absent.
+#
+# Emitted because a silent refusal is indistinguishable from a producer bug.
+# The event still flows and the profile is left intact.
+name: identity.link_rejected
+schema_version: 1
+domain: identity
+owner: platform-identity
+description: >-
+  Records that an identifier binding was refused by a merge safeguard,
+  naming the identifier, the reason, and the profile it would have joined.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/identity/link_rejected.v1"
+schema_export: identityLinkRejectedV1PropertiesSchema

@@ -80,12 +80,19 @@ describe("EventCatalog (built from YAML + bindings)", () => {
       "attribution.touchpoint_captured",
       "checkout.started",
       "enriched.geoip",
+      "identity.link_rejected",
       "identity.linked",
+      "identity.merge_suspended",
       "identity.merged",
       "identity.rotated",
       "page.viewed",
+      "payment.approved",
+      "profile.updated",
       "session.ended",
       "session.started",
+      "signup.completed",
+      "subscription.renewed",
+      "user.identified",
     ]);
   });
 

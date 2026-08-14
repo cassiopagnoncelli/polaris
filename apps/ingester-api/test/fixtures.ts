@@ -7,6 +7,7 @@
 
 import {
   buildCatalog,
+  type CatalogEntryFile,
   defaultSchemaBindings,
   type EventCatalog,
   envelopeSchema,
@@ -204,115 +205,58 @@ export class RecordingProducer {
  * they only depend on the catalog *types* and the schema *bindings*.
  */
 export function buildTestCatalog(): EventCatalog {
-  return buildCatalog(
-    [
-      {
-        name: "page.viewed",
-        schema_version: 1,
-        domain: "page",
-        owner: "web-platform",
-        description: "deprecated v1",
-        lifecycle: "deprecated",
-        sunset_at: "2026-08-10T00:00:00Z",
-      },
-      {
-        name: "page.viewed",
-        schema_version: 2,
-        domain: "page",
-        owner: "web-platform",
-        description: "active v2",
-        lifecycle: "active",
-      },
-      {
-        name: "checkout.started",
-        schema_version: 1,
-        domain: "checkout",
-        owner: "commerce",
-        description: "active v1",
-        lifecycle: "active",
-      },
-      // Identity events (P8-002) are emitted by the identity-resolver processor,
-      // not by SDKs, but their bindings are registered in defaultSchemaBindings,
-      // so every binding needs a matching catalog entry for buildCatalog to
-      // pass strict 1:1 validation.
-      {
-        name: "identity.linked",
-        schema_version: 1,
-        domain: "identity",
-        owner: "platform",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      {
-        name: "identity.merged",
-        schema_version: 1,
-        domain: "identity",
-        owner: "platform",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      {
-        name: "identity.rotated",
-        schema_version: 1,
-        domain: "identity",
-        owner: "platform",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      // Session events (P8-003) are emitted by the sessionizer processor.
-      {
-        name: "session.started",
-        schema_version: 1,
-        domain: "session",
-        owner: "platform",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      {
-        name: "session.ended",
-        schema_version: 1,
-        domain: "session",
-        owner: "platform",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      // Enriched events (P8-004) are emitted by the geoip-enricher processor.
-      {
-        name: "enriched.geoip",
-        schema_version: 1,
-        domain: "enriched",
-        owner: "platform-data",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      // Attribution events (P8-005) are emitted by the attribution-engine processor.
-      {
-        name: "attribution.touchpoint_captured",
-        schema_version: 1,
-        domain: "attribution",
-        owner: "platform-data",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      {
-        name: "attribution.first_touch_assigned",
-        schema_version: 1,
-        domain: "attribution",
-        owner: "platform-data",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-      {
-        name: "attribution.last_touch_assigned",
-        schema_version: 1,
-        domain: "attribution",
-        owner: "platform-data",
-        description: "processor-emitted v1",
-        lifecycle: "active",
-      },
-    ],
-    defaultSchemaBindings,
-  );
+  // Entries the tests assert on directly: the deprecated/sunset pair that
+  // drives `schema_version_sunset`, and the two active producer events.
+  const explicit: CatalogEntryFile[] = [
+    {
+      name: "page.viewed",
+      schema_version: 1,
+      domain: "page",
+      owner: "web-platform",
+      description: "deprecated v1",
+      lifecycle: "deprecated",
+      sunset_at: "2026-08-10T00:00:00Z",
+    },
+    {
+      name: "page.viewed",
+      schema_version: 2,
+      domain: "page",
+      owner: "web-platform",
+      description: "active v2",
+      lifecycle: "active",
+    },
+    {
+      name: "checkout.started",
+      schema_version: 1,
+      domain: "checkout",
+      owner: "commerce",
+      description: "active v1",
+      lifecycle: "active",
+    },
+  ];
+
+  // Every other binding gets a synthesised ACTIVE entry.
+  //
+  // `buildCatalog` enforces a strict 1:1 between bindings and YAML, which
+  // means a hand-written list here has to be extended every time a new
+  // event is registered — and until it is, every ingester test fails with
+  // a catalog error unrelated to what it was testing. Deriving the
+  // remainder keeps the original intent (tests depend on the catalog TYPES
+  // and the schema BINDINGS, never on the on-disk `catalog/events/**`
+  // tree) while making that whole class of breakage impossible.
+  const covered = new Set(explicit.map((e) => `${e.name}@${e.schema_version}`));
+  const derived: CatalogEntryFile[] = defaultSchemaBindings
+    .filter((b) => !covered.has(`${b.event}@${b.schema_version}`))
+    .map((b) => ({
+      name: b.event,
+      schema_version: b.schema_version,
+      domain: b.event.split(".")[0] ?? "platform",
+      owner: "platform",
+      description: `synthesised test entry for ${b.event} v${b.schema_version}`,
+      lifecycle: "active" as const,
+    }));
+
+  return buildCatalog([...explicit, ...derived], defaultSchemaBindings);
 }
 
 /**

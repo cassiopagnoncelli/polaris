@@ -1,0 +1,21 @@
+# Catalog entry: identity.merged v2 (ACTIVE)
+#
+# Two profiles proved to be one person. Winner is the older profile; the
+# loser's identifiers are repointed in the same transaction and its row is
+# tombstoned for lineage.
+#
+# This is the event the retroactive-merge worker (R4) consumes to maintain
+# the ClickHouse canonical-profile dictionary. Both ids ride the event
+# permanently because history is re-interpreted at read time, never
+# rewritten — which is precisely what v1 declared out of scope.
+name: identity.merged
+schema_version: 2
+domain: identity
+owner: platform-identity
+description: >-
+  Records that two profiles were merged into one, naming both the surviving
+  and the tombstoned profile so downstream reads can resolve either.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/identity/merged.v2"
+schema_export: identityMergedV2PropertiesSchema

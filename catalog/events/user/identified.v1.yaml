@@ -1,0 +1,22 @@
+# Catalog entry: user.identified v1 (ACTIVE)
+#
+# Emitted by SDK `identify(customerId, traits)`. Its properties ARE the
+# traits: the identity stage merge-patches them into `profiles.traits` and
+# bumps `traits_version`.
+#
+# Unlike every other catalog entry this one is `.passthrough()`. Traits are
+# project semantics — a platform-enumerated list would reject any project
+# that declared a trait of its own. The platform pins only the slots it
+# consumes (email, phone) and lets the rest through; the trait snapshot's
+# size guard, not a field whitelist, is what bounds the blast radius.
+name: user.identified
+schema_version: 1
+domain: user
+owner: platform-identity
+description: >-
+  Carries profile traits supplied by a producer via identify(). Merge-patched
+  into the profile store by the identity stage; last-write-wins per key.
+lifecycle: active
+since: "2026-08-14"
+schema_module: "@polaris/shared-schemas/events/user/identified.v1"
+schema_export: userIdentifiedV1PropertiesSchema
