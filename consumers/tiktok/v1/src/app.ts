@@ -22,7 +22,7 @@
  * RabbitMQ broker or PostgreSQL.
  */
 
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
   createDestinationTransportHooks,
@@ -38,6 +38,12 @@ import {
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
+import {
+  createDestinationProjectConfigLookup,
+  createPgListenerTransport,
+  createProjectConfigStore,
+  type ProjectConfigStore,
+} from "@polaris/shared-project-config";
 import {
   type BootstrappedService,
   bootstrapService,
@@ -60,6 +66,7 @@ import type { Kysely } from "kysely";
 import type { TikTokRuntimeConfig } from "./config.js";
 import { createTikTokDescriptor } from "./descriptor.js";
 import { CONSUMER_VENDOR, CONSUMER_VERSION } from "./descriptor-identity.js";
+import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
 
 export interface BuildAppOptions {
   readonly config: TikTokRuntimeConfig;
@@ -76,6 +83,8 @@ export interface BuildAppOptions {
   readonly instances?: DestinationInstanceReader;
   readonly records?: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
+  /** Injected in tests; built from the db handle otherwise. */
+  readonly projectConfigStore?: ProjectConfigStore;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => Date;
   readonly startRuntime?: boolean;
@@ -174,6 +183,28 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
   });
 
+  // Per-project overrides. Built only when this app owns its db handle; a
+  // caller injecting its own pieces gets deployment defaults for every
+  // project, which is the pre-cutover behaviour.
+  const projectConfigStore =
+    options.projectConfigStore ??
+    createProjectConfigStore({
+      db,
+      listener: createPgListenerTransport({
+        connectionString: postgresConnectionString(config.postgres),
+        logger,
+      }),
+      logger,
+    });
+  void projectConfigStore.start().catch((err: unknown) => {
+    // Startup must not block on the control plane: until the store is up,
+    // every project resolves to the deployment defaults it always used.
+    logger.warn(
+      { component: "tiktok.project-config", err },
+      "project-config store failed to start; using deployment defaults",
+    );
+  });
+
   const runtime = createDestinationConsumer({
     descriptor,
     consumerBuildVersion:
@@ -185,6 +216,10 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
     dlqRecords,
     logger: consumerLogger,
     allowReplay: config.tiktok.allowReplay,
+    projectConfig: createDestinationProjectConfigLookup({
+      store: projectConfigStore,
+      namespace: PROJECT_CONFIG_NAMESPACE,
+    }),
     metrics,
     ...(options.now !== undefined ? { now: options.now } : {}),
   });
@@ -219,6 +254,20 @@ export async function buildTikTokApp(options: BuildAppOptions): Promise<BuiltTik
       }
     });
   }
+  // Closed before the pool, and separately from it: the store's LISTEN
+  // connection is its own `pg` client, not one the Kysely pool hands out, so
+  // `closeDb` does not reach it. Leaving it open holds a backend open on the
+  // database after a graceful shutdown.
+  shutdownTasks.push(async () => {
+    try {
+      await projectConfigStore.close();
+    } catch (err) {
+      consumerLogger.warn(
+        { err: errSummary(err) },
+        "project-config store close error during shutdown",
+      );
+    }
+  });
   if (ownsDb) {
     shutdownTasks.push(async () => {
       try {

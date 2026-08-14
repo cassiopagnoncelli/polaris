@@ -348,3 +348,76 @@ describe("classifyRetryableStatus + isRetryableStatus", () => {
     expect(isRetryableStatus(401)).toBe(false);
   });
 });
+
+describe("buildTikTokDeliverer — per-project configuration", () => {
+  it("a project's api_host overrides the deployment default", async () => {
+    // The cutover's whole point: an operator changes one project's host from
+    // the admin panel and this delivery follows it, without a redeploy and
+    // without affecting any other project.
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const deliver = buildTikTokDeliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "tiktok.deployment-default.test",
+    });
+
+    await deliver(
+      fixtureDelivererContext({ projectConfig: { api_host: "tiktok.per-project.test" } }),
+    );
+    expect(calls[0]?.url).toContain("tiktok.per-project.test");
+  });
+
+  it("falls back to the deployment default when the project sets nothing", async () => {
+    // A cold cache or a project with no overrides must behave exactly as it
+    // did before the cutover — losing the deployment default here would
+    // silently change vendor behaviour mid-batch.
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const deliver = buildTikTokDeliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "tiktok.deployment-default.test",
+    });
+
+    await deliver(fixtureDelivererContext({ projectConfig: {} }));
+    expect(calls[0]?.url).toContain("tiktok.deployment-default.test");
+  });
+
+  it("ignores a malformed value rather than failing the delivery", async () => {
+    // The value is operator-supplied. Dead-lettering a producer's events over
+    // a typo in an unrelated setting is the wrong trade; the deployment
+    // default is a safe, predictable fallback.
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const deliver = buildTikTokDeliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "tiktok.deployment-default.test",
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({
+        projectConfig: { api_host: 12345, request_timeout_ms: "soon" },
+      }),
+    );
+    expect(result.kind).toBe("accepted");
+    expect(calls[0]?.url).toContain("tiktok.deployment-default.test");
+  });
+
+  it("ignores keys it does not declare", async () => {
+    // Free-form keys are a designed capability; a strict parse would fail
+    // every delivery for that project the moment one appeared.
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const deliver = buildTikTokDeliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "tiktok.deployment-default.test",
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({
+        projectConfig: { api_host: "tiktok.per-project.test", something_unknown: "ignored" },
+      }),
+    );
+    expect(result.kind).toBe("accepted");
+    expect(calls[0]?.url).toContain("tiktok.per-project.test");
+  });
+});

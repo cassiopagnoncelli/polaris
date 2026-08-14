@@ -52,6 +52,7 @@
 import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
 
 import { TIKTOK_EVENTS_API_VERSION } from "./descriptor-identity.js";
+import { parseTikTokProjectConfig } from "./project-config.js";
 import type { ResolvedTikTokSecret, TikTokEventPayload, TikTokEventSource } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -73,12 +74,23 @@ export function buildTikTokDeliverer(
   options: BuildDelivererOptions,
 ): Deliverer<TikTokEventPayload> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const timeoutMs = options.requestTimeoutMs;
-  const host = options.apiHost ?? "business-api.tiktok.com";
+  // Deployment defaults. Each is overridable per project; a project that sets
+  // nothing gets exactly these, which is what POLARIS_TIKTOK_* meant.
+  const defaultTimeoutMs = options.requestTimeoutMs;
+  const defaultHost = options.apiHost ?? "business-api.tiktok.com";
 
   return async function deliver(
     context: DelivererContext<TikTokEventPayload>,
   ): Promise<DelivererResult> {
+    // 0. Per-project overrides. Parsed per delivery rather than per batch
+    //    because the runtime hands the slice in on the context; the parse is a
+    //    Zod safeParse over at most two keys, and correctness here is worth
+    //    more than the microseconds — a batch-level cache would have to be
+    //    invalidated on the same signal the store already handles.
+    const projectConfig = parseTikTokProjectConfig(context.projectConfig);
+    const timeoutMs = projectConfig.request_timeout_ms ?? defaultTimeoutMs;
+    const host = projectConfig.api_host ?? defaultHost;
+
     // 1. Parse secret.
     const secret = parseResolvedSecret(context.secret);
     if (secret === null) {

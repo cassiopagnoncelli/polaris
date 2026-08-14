@@ -420,3 +420,40 @@ describe("signBody", () => {
     expect(a).not.toBe(c);
   });
 });
+
+describe("buildWebhookDeliverer — per-project request_timeout_ms", () => {
+  /**
+   * A fetch that never settles on its own, so the ONLY thing that ends the
+   * call is the deliverer's own AbortController. That makes the assertion
+   * about the timeout actually taking effect rather than about how fast the
+   * test machine is.
+   */
+  function hangingFetch(): typeof globalThis.fetch {
+    return (async (_input: unknown, init?: { signal?: AbortSignal }) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      });
+    }) as typeof globalThis.fetch;
+  }
+
+  it("a project's request_timeout_ms overrides the deployment default", async () => {
+    const deliver = buildWebhookDeliverer({
+      fetch: hangingFetch(),
+      requestTimeoutMs: 60_000,
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({ projectConfig: { request_timeout_ms: 5 } }),
+    );
+
+    // Without the override this would sit on the 60s deployment default and
+    // the test would time out rather than fail — which is the failure mode
+    // worth having, since a silently-ignored timeout override is invisible.
+    expect(result.kind).toBe("failed_retryable");
+    expect(result.kind === "failed_retryable" ? result.error_class : null).toBe("timeout");
+  });
+});

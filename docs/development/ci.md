@@ -148,13 +148,47 @@ pnpm lint:nul-bytes
 rm packages/shared-db/src/_oops.ts
 ```
 
+## The declared-but-unread project-config key check
+
+`pnpm lint:project-config-keys`, implemented in
+[`scripts/lint-project-config-keys.mjs`](../../scripts/lint-project-config-keys.mjs).
+
+Declaring a key in a component's `project-config.ts` is what creates operator
+surface. The generator turns it into a JSON Schema artifact, the admin UI's
+Variables panel renders a typed input for it, `polaris config set` accepts it,
+`polaris config list` shows it, and `polaris config validate` reports on it —
+all of which happen because the key is DECLARED. None of it requires the
+component to READ the key.
+
+So a declared-and-unread key is a control that looks live and is not: an
+operator sets it, sees it stored, and nothing changes. meta-capi shipped
+exactly that. `allow_replay` was declared and read by nothing, because replay
+suppression runs in the destination runtime long before the deliverer the
+config slice is handed to — and no type error or test could catch it, since the
+key type-checked fine and the component's tests only covered what it read.
+
+The check requires every key in a namespace's generated schema to appear by
+name somewhere in the component's `src/` other than the declaration module
+itself. Its `ALLOW` map is empty and should stay that way: a key that cannot be
+shown to be read is a key an operator can set to no effect, and the honest fix
+is to delete the declaration.
+
+Removing a key is separately governed by the additive-only compatibility rule
+in `pnpm config-schemas:check`, which fails on any removal. A removal that is
+genuinely safe — because the key never had an effect to lose — takes a recorded
+entry in that script's `REMOVAL_EXCEPTIONS`, with the reason.
+
+To verify a violation is caught locally, add an unread key to any
+`project-config.ts`, run `pnpm config-schemas`, then
+`pnpm lint:project-config-keys`.
+
 ## Running the same checks locally
 
 ```bash
 pnpm install
 pnpm build           # produces dist/ for every package — typecheck and tests need this
 pnpm typecheck
-pnpm lint            # Biome + ClickHouse import-restriction + raw-NUL check
+pnpm lint            # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
 pnpm format:check
 pnpm test            # workspace Vitest + scripts/ Vitest
 ```

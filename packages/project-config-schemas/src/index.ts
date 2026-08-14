@@ -25,6 +25,48 @@ export interface ProjectConfigSchemaEntry {
  * empty before the first cutover lands.
  */
 export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = {
+  braze: {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        api_host: {
+          minLength: 1,
+          type: "string",
+        },
+        request_timeout_ms: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
+  ga4: {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        api_host: {
+          minLength: 1,
+          type: "string",
+        },
+        request_timeout_ms: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
   ingest: {
     project: {
       $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -51,20 +93,48 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
     project: {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       properties: {
-        allow_replay: {
-          anyOf: [
-            {
-              type: "boolean",
-            },
-            {
-              type: "string",
-            },
-          ],
-        },
         graph_host: {
           minLength: 1,
           type: "string",
         },
+        request_timeout_ms: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
+  tiktok: {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        api_host: {
+          minLength: 1,
+          type: "string",
+        },
+        request_timeout_ms: {
+          maximum: 9007199254740991,
+          minimum: 1,
+          type: "integer",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
+  "webhook-sink": {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
         request_timeout_ms: {
           maximum: 9007199254740991,
           minimum: 1,

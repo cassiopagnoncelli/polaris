@@ -123,6 +123,10 @@ export function fixtureDelivererContext(
     secret: "https://hooks.example/receiver",
     attempt: 1,
     delivery_key: "pdk_dst_test_webhook_1_evt_test_001",
+    // Default: no per-project overrides, which is what a project that has set
+    // nothing looks like — and what every project looked like before the
+    // cutover. Tests that exercise an override pass one explicitly.
+    projectConfig: {},
   };
   return { ...base, ...overrides };
 }

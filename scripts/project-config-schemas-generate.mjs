@@ -83,6 +83,26 @@ export const REGISTRY = [
     packageName: "@polaris/ingester-api",
     distEntry: "apps/ingester-api/dist/project-config.js",
   },
+  {
+    namespace: "ga4",
+    packageName: "@polaris/consumer-ga4-v1",
+    distEntry: "consumers/ga4/v1/dist/project-config.js",
+  },
+  {
+    namespace: "tiktok",
+    packageName: "@polaris/consumer-tiktok-v1",
+    distEntry: "consumers/tiktok/v1/dist/project-config.js",
+  },
+  {
+    namespace: "braze",
+    packageName: "@polaris/consumer-braze-v1",
+    distEntry: "consumers/braze/v1/dist/project-config.js",
+  },
+  {
+    namespace: "webhook-sink",
+    packageName: "@polaris/consumer-webhook-sink-v1",
+    distEntry: "consumers/webhook-sink/v1/dist/project-config.js",
+  },
 ];
 
 /** Header stamped into every generated file. */
@@ -320,6 +340,28 @@ export function buildArtifacts(entries) {
 }
 
 /**
+ * Removals that are deliberate, reviewed, and safe — the one exception to
+ * additive-only.
+ *
+ * Keep this list SHORT and each entry specific. The rule exists because an
+ * operator may already have set the key: removing it drops a value they chose,
+ * silently, from a panel that will no longer show it. An entry here is a claim
+ * that the removal cannot do that, and the reason has to say why.
+ *
+ * "Nobody uses it yet" is NOT a reason — that is unknowable from here. The only
+ * reason that holds is that the key never had an effect to lose.
+ */
+const REMOVAL_EXCEPTIONS = new Map([
+  [
+    "meta-capi::allow_replay",
+    "declared and read by nothing: replay suppression runs in the destination " +
+      "runtime before the deliverer the config slice reaches, so a stored value " +
+      "never had an effect to drop. Redundant with destinations.replay_opt_in. " +
+      "`scripts/lint-project-config-keys.mjs` now fails on a key in this state.",
+  ],
+]);
+
+/**
  * The additive-only compatibility rules of plan §3.4, applied to two JSON
  * Schema documents (the HEAD artifact vs the regenerated one). Returns
  * violations `{ key, rule, message }`; an empty array means compatible.
@@ -328,9 +370,10 @@ export function buildArtifacts(entries) {
  * be removed, may not change its `type`, and may not be (or become) required
  * without a `default`. New optional properties and new properties with
  * defaults pass. A change that needs to break the contract takes a new
- * namespace instead.
+ * namespace instead — unless it appears in {@link REMOVAL_EXCEPTIONS}, which
+ * `namespace` is needed to consult.
  */
-export function checkCompat(previous, next) {
+export function checkCompat(previous, next, namespace) {
   const violations = [];
   const prevProps = isRecord(previous) && isRecord(previous.properties) ? previous.properties : {};
   const nextProps = isRecord(next) && isRecord(next.properties) ? next.properties : {};
@@ -338,6 +381,7 @@ export function checkCompat(previous, next) {
     const prevProp = prevProps[key];
     const nextProp = nextProps[key];
     if (nextProp === undefined) {
+      if (namespace !== undefined && REMOVAL_EXCEPTIONS.has(`${namespace}::${key}`)) continue;
       violations.push({
         key,
         rule: "removed",
@@ -530,7 +574,10 @@ function checkMode(files) {
       } catch (err) {
         throw new Error(`HEAD:${repoPath} is not valid JSON: ${String(err)}`);
       }
-      for (const violation of checkCompat(previous, JSON.parse(files[relPath]))) {
+      // The namespace is the artifact's filename stem, which is how
+      // REMOVAL_EXCEPTIONS is keyed.
+      const namespace = relPath.replace(/^schemas\//, "").replace(/\.project\.schema\.json$/, "");
+      for (const violation of checkCompat(previous, JSON.parse(files[relPath]), namespace)) {
         violations.push(`  ${repoPath} :: ${violation.key} — ${violation.message}`);
       }
     }

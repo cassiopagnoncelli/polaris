@@ -74,6 +74,7 @@
 
 import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
 
+import { parseGa4ProjectConfig } from "./project-config.js";
 import type { Ga4EventPayload, Ga4RequestBody, ResolvedGa4Secret } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -93,12 +94,23 @@ export interface BuildDelivererOptions {
 /** Build a `Deliverer<Ga4EventPayload>` bound to a fetch + timeout + host. */
 export function buildGa4Deliverer(options: BuildDelivererOptions): Deliverer<Ga4EventPayload> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const timeoutMs = options.requestTimeoutMs;
-  const host = options.apiHost ?? "www.google-analytics.com";
+  // Deployment defaults. Each is overridable per project; a project that sets
+  // nothing gets exactly these, which is what POLARIS_GA4_* meant.
+  const defaultTimeoutMs = options.requestTimeoutMs;
+  const defaultHost = options.apiHost ?? "www.google-analytics.com";
 
   return async function deliver(
     context: DelivererContext<Ga4EventPayload>,
   ): Promise<DelivererResult> {
+    // 0. Per-project overrides. Parsed per delivery rather than per batch
+    //    because the runtime hands the slice in on the context; the parse is a
+    //    Zod safeParse over at most two keys, and correctness here is worth
+    //    more than the microseconds — a batch-level cache would have to be
+    //    invalidated on the same signal the store already handles.
+    const projectConfig = parseGa4ProjectConfig(context.projectConfig);
+    const timeoutMs = projectConfig.request_timeout_ms ?? defaultTimeoutMs;
+    const host = projectConfig.api_host ?? defaultHost;
+
     // 1. Parse secret.
     const secret = parseResolvedSecret(context.secret);
     if (secret === null) {

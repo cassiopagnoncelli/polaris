@@ -868,6 +868,16 @@ table, so it can only check things that live in the repo. The two are split:
    than referenced, "is the value present" is the whole check, and there is no
    provider to dereference against.
 
+3. **`pnpm lint:project-config-keys`**, which asks the question the two gates
+   above cannot: does the component actually READ each key it declares?
+   Declaring a key is what creates operator surface — a typed input in the
+   Variables panel, a settable `config set`, a row in `config list` — and none
+   of that requires the component to consume it. meta-capi shipped
+   `allow_replay` in exactly that state: declared, generated, rendered,
+   settable, and inert, because replay suppression runs in the runtime long
+   before the deliverer the slice is handed to. No type error and no test
+   catches that; this check does.
+
 Quarantine (§5) is the runtime backstop underneath both, not a substitute for
 either: it keeps a fifty-project fleet alive when one project is incomplete,
 while these two gates keep incomplete config from reaching a rollout at all.
@@ -913,7 +923,7 @@ covers both mechanisms failing.
 | C8 | Fan-out project filter + pre-merge blast-radius query | C2 | yes |
 | C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke fixture migration. **Partly landed:** `tests/integration/project-config.test.ts` covers write → NOTIFY → store against real PostgreSQL | C4 | yes |
 | C10 | `scripts/backfill-project-config.mjs` | C4 | yes |
-| C11 | Per-service cutover ×16, one PR each: config path in, env path out, allowlist entry deleted, fail-closed startup, backfill run | C6, C7, C9, C10 | 16-way |
+| C11 | Per-service cutover: config path in, env path out, allowlist entry deleted, backfill run. **All six participating components landed** — ingest, meta-capi, ga4, tiktok, braze, webhook-sink. The other ten services have no per-project configuration to move (§7); a cutover card for them would have had nothing in it | C7, C9, C10 | 6-way |
 | C12 | Env-var sweep PR: delete the inert deployment-manifest vars one release after C11 | C11 | — |
 | C13 | Docs: architecture 02/05/06/11, secret-rotation runbooks, `.env.example` rewrite, `docs/README.md:45` perimeter wording | C11 | — |
 

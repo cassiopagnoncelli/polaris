@@ -23,7 +23,7 @@
  * @see docs/implementation/project-config-plan.md §3.1
  */
 
-import { booleanFromStringSchema, positiveIntSchema } from "@polaris/shared-config";
+import { positiveIntSchema } from "@polaris/shared-config";
 import { z } from "zod";
 
 /** Namespace this consumer reads. One slice per component (plan §3.5). */
@@ -40,9 +40,26 @@ export const projectConfigSchema = z.object({
   graph_host: z.string().min(1).optional(),
   /** Per-attempt HTTP timeout, milliseconds. */
   request_timeout_ms: positiveIntSchema.optional(),
-  /** Whether replayed traffic may be delivered to the vendor. */
-  allow_replay: booleanFromStringSchema.optional(),
 });
+
+/*
+ * `allow_replay` was declared here and read by nothing.
+ *
+ * Replay suppression runs in the destination runtime's `processOne`, at step 2,
+ * long before the deliverer — and the `ProjectConfigLookup` seam only feeds
+ * `DelivererContext.projectConfig`. So an operator could run
+ * `polaris config set --key allow_replay --value true`, see it in
+ * `config list`, and have it change nothing.
+ *
+ * It is not worth plumbing, either: replay already has two gates, the
+ * host-level `POLARIS_META_CAPI_ALLOW_REPLAY` and the per-instance
+ * `destinations.replay_opt_in`. The second is strictly better than a
+ * per-project flag would be — finer-grained, audited, and with
+ * `polaris destinations enable-replay` / `disable-replay` behind it.
+ *
+ * `scripts/lint-project-config-keys.mjs` now fails on a declared key its
+ * component never reads, so this cannot recur silently.
+ */
 
 export type MetaCapiProjectConfig = z.infer<typeof projectConfigSchema>;
 

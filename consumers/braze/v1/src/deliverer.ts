@@ -52,6 +52,7 @@
 
 import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
 
+import { parseBrazeProjectConfig } from "./project-config.js";
 import type { BrazePayload, ResolvedBrazeSecret } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -76,10 +77,25 @@ export interface BuildDelivererOptions {
 /** Build a `Deliverer<BrazePayload>` bound to a fetch + timeout + host template. */
 export function buildBrazeDeliverer(options: BuildDelivererOptions): Deliverer<BrazePayload> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  const timeoutMs = options.requestTimeoutMs;
-  const hostTemplate = options.apiHost ?? "rest.{instance}.braze.com";
+  // Deployment defaults. Each is overridable per project; a project that sets
+  // nothing gets exactly these, which is what POLARIS_BRAZE_* meant.
+  const defaultTimeoutMs = options.requestTimeoutMs;
+  const defaultHostTemplate = options.apiHost ?? "rest.{instance}.braze.com";
 
   return async function deliver(context: DelivererContext<BrazePayload>): Promise<DelivererResult> {
+    // 0. Per-project overrides. Parsed per delivery rather than per batch
+    //    because the runtime hands the slice in on the context; the parse is a
+    //    Zod safeParse over at most two keys, and correctness here is worth
+    //    more than the microseconds — a batch-level cache would have to be
+    //    invalidated on the same signal the store already handles.
+    //
+    //    `api_host` stays a TEMPLATE through the override: `{instance}` is
+    //    substituted below from the credential, so a project-wide override
+    //    still routes each destination to its own Braze cluster.
+    const projectConfig = parseBrazeProjectConfig(context.projectConfig);
+    const timeoutMs = projectConfig.request_timeout_ms ?? defaultTimeoutMs;
+    const hostTemplate = projectConfig.api_host ?? defaultHostTemplate;
+
     // 1. Parse secret.
     const secret = parseResolvedSecret(context.secret);
     if (secret === null) {

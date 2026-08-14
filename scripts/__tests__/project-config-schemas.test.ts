@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 // Re-use the script's pure core rather than re-implementing generation here —
 // the goal is to detect drift in the *same* pipeline producers actually run.
@@ -134,6 +135,34 @@ describe("project-config-schemas-generate", () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatchObject({ key: "keep_me", rule: "removed" });
     expect(violations[0]?.message).toContain("keep_me");
+  });
+
+  it("compat: still fails on removal when the namespace has no exception", () => {
+    // Passing a namespace must not weaken the rule — only a namespace WITH a
+    // recorded exception for that exact key is allowed through.
+    const violations = checkCompat(
+      projectArtifact(compatBaseSchema),
+      projectArtifact(compatRemovalSchema),
+      "some-other-namespace",
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({ key: "keep_me", rule: "removed" });
+  });
+
+  it("compat: allows the one recorded removal, and only for its own namespace", () => {
+    // `meta-capi::allow_replay` is the single entry in REMOVAL_EXCEPTIONS: a
+    // key that was declared and read by nothing, so a stored value never had
+    // an effect to drop. Asserted against the real map rather than a fixture,
+    // because an entry silently disappearing would put the removal back in
+    // breach without any test noticing.
+    const base = projectArtifact(
+      z.object({ allow_replay: z.boolean().optional(), graph_host: z.string().optional() }),
+    );
+    const next = projectArtifact(z.object({ graph_host: z.string().optional() }));
+
+    expect(checkCompat(base, next, "meta-capi")).toEqual([]);
+    // The same removal in any other namespace is still a breaking change.
+    expect(checkCompat(base, next, "ga4")).toHaveLength(1);
   });
 
   it("compat: fails on a property type change", () => {

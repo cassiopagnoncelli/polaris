@@ -253,6 +253,20 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
       }
     });
   }
+  // Closed before the pool, and separately from it: the store's LISTEN
+  // connection is its own `pg` client, not one the Kysely pool hands out, so
+  // `closeDb` does not reach it. Leaving it open holds a backend open on the
+  // database after a graceful shutdown.
+  shutdownTasks.push(async () => {
+    try {
+      await projectConfigStore.close();
+    } catch (err) {
+      consumerLogger.warn(
+        { err: errSummary(err) },
+        "project-config store close error during shutdown",
+      );
+    }
+  });
   if (ownsDb) {
     shutdownTasks.push(async () => {
       try {

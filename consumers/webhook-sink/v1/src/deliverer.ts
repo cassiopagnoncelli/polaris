@@ -46,10 +46,9 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-
 import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
-
 import { stampDelivery } from "./mapper.js";
+import { parseWebhookSinkProjectConfig } from "./project-config.js";
 import type { ResolvedWebhookConfig, WebhookPayload } from "./types.js";
 
 /** Public HTTP header names the deliverer stamps onto every request. */
@@ -83,11 +82,21 @@ export interface BuildDelivererOptions {
 export function buildWebhookDeliverer(options: BuildDelivererOptions): Deliverer<WebhookPayload> {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const now = options.now ?? (() => new Date());
-  const timeoutMs = options.requestTimeoutMs;
+  // Deployment default. Overridable per project; a project that sets nothing
+  // gets exactly this, which is what POLARIS_WEBHOOK_SINK_* meant.
+  const defaultTimeoutMs = options.requestTimeoutMs;
 
   return async function deliver(
     context: DelivererContext<WebhookPayload>,
   ): Promise<DelivererResult> {
+    // 0. Per-project overrides. Parsed per delivery rather than per batch
+    //    because the runtime hands the slice in on the context; the parse is a
+    //    Zod safeParse over one key, and correctness here is worth more than
+    //    the microseconds — a batch-level cache would have to be invalidated
+    //    on the same signal the store already handles.
+    const projectConfig = parseWebhookSinkProjectConfig(context.projectConfig);
+    const timeoutMs = projectConfig.request_timeout_ms ?? defaultTimeoutMs;
+
     // 1. Resolve receiver config from the secret.
     const config = parseResolvedSecret(context.secret);
     if (config === null) {

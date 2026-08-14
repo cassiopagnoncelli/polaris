@@ -459,3 +459,112 @@ describe("classifyRetryableStatus + isRetryableStatus", () => {
     expect(isRetryableStatus(401)).toBe(false);
   });
 });
+
+describe("buildGa4Deliverer — per-project configuration", () => {
+  it("a project's api_host overrides the deployment default", async () => {
+    // The cutover's whole point: an operator changes one project's host from
+    // the admin panel and this delivery follows it, without a redeploy and
+    // without affecting any other project.
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "ga4.deployment-default.test",
+    });
+
+    await deliver(fixtureDelivererContext({ projectConfig: { api_host: "ga4.per-project.test" } }));
+    expect(calls[0]?.url).toContain("ga4.per-project.test");
+  });
+
+  it("falls back to the deployment default when the project sets nothing", async () => {
+    // A cold cache or a project with no overrides must behave exactly as it
+    // did before the cutover — losing the deployment default here would
+    // silently change vendor behaviour mid-batch.
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "ga4.deployment-default.test",
+    });
+
+    await deliver(fixtureDelivererContext({ projectConfig: {} }));
+    expect(calls[0]?.url).toContain("ga4.deployment-default.test");
+  });
+
+  it("ignores a malformed value rather than failing the delivery", async () => {
+    // The value is operator-supplied. Dead-lettering a producer's events over
+    // a typo in an unrelated setting is the wrong trade; the deployment
+    // default is a safe, predictable fallback.
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "ga4.deployment-default.test",
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({
+        projectConfig: { api_host: 12345, request_timeout_ms: "soon" },
+      }),
+    );
+    expect(result.kind).toBe("accepted");
+    expect(calls[0]?.url).toContain("ga4.deployment-default.test");
+  });
+
+  it("ignores keys it does not declare", async () => {
+    // Free-form keys are a designed capability; a strict parse would fail
+    // every delivery for that project the moment one appeared.
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({
+      fetch,
+      requestTimeoutMs: 5000,
+      apiHost: "ga4.deployment-default.test",
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({
+        projectConfig: { api_host: "ga4.per-project.test", something_unknown: "ignored" },
+      }),
+    );
+    expect(result.kind).toBe("accepted");
+    expect(calls[0]?.url).toContain("ga4.per-project.test");
+  });
+});
+
+describe("buildGa4Deliverer — per-project request_timeout_ms", () => {
+  /**
+   * A fetch that never settles on its own, so the ONLY thing that ends the
+   * call is the deliverer's own AbortController. That makes the assertion
+   * about the timeout actually taking effect rather than about how fast the
+   * test machine is.
+   */
+  function hangingFetch(): typeof globalThis.fetch {
+    return (async (_input: unknown, init?: { signal?: AbortSignal }) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const err = new Error("aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      });
+    }) as typeof globalThis.fetch;
+  }
+
+  it("a project's request_timeout_ms overrides the deployment default", async () => {
+    const deliver = buildGa4Deliverer({
+      fetch: hangingFetch(),
+      requestTimeoutMs: 60_000,
+      apiHost: "ga4.deployment-default.test",
+    });
+
+    const result = await deliver(
+      fixtureDelivererContext({ projectConfig: { request_timeout_ms: 5 } }),
+    );
+
+    // Without the override this would sit on the 60s deployment default and
+    // the test would time out rather than fail — which is the failure mode
+    // worth having, since a silently-ignored timeout override is invisible.
+    expect(result.kind).toBe("failed_retryable");
+    expect(result.kind === "failed_retryable" ? result.error_class : null).toBe("timeout");
+  });
+});

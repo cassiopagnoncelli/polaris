@@ -124,6 +124,10 @@ export function fixtureDelivererContext(
     }),
     attempt: 1,
     delivery_key: "polaris_del_test_tiktok_001",
+    // Default: no per-project overrides, which is what a project that has set
+    // nothing looks like — and what every project looked like before the
+    // cutover. Tests that exercise an override pass one explicitly.
+    projectConfig: {},
   };
   return { ...base, ...overrides };
 }
