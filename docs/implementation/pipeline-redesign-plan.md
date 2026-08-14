@@ -116,8 +116,8 @@ more expensive.
 
 ### 2.1 The two planes
 
-**The main pipeline** is the per-event, low-latency path from SDK to
-destination APIs and ClickHouse. It is a staged line, not a diamond:
+**The main pipeline** is the per-event, low-latency path from SDK to the
+destination APIs. It is a staged line, not a diamond:
 
 ```text
 SDKs / producers
@@ -129,12 +129,19 @@ ingester-api            Stage 1  Ingest: authenticate, stamp, validate,
 raw.events              immutable producer facts (unchanged, still the
     |                   replay source and the retention anchor)
     v
-profile-resolver        Stage 2  Resolve: match identifiers against the
-    |                            profile store; find-or-create; merge;
-    |                            update graph; stamp profile onto the event
-    |                   Stage 3  Enrich: attach traits snapshot from the
-    |                            same store row; attach context enrichment
-    |                            (geo); stamp `enrichment`
+identity resolver       Stage 2  Resolve: match identifiers against the
+    |                            profile store; find-or-create; merge.
+    |                            ALL profile-store writes live here
+    |                            (bindings, merges, trait patches);
+    |                            stamps profile_id onto the event
+    v
+identified.events       intermediate family: profile stamped, not yet
+    |                   enriched. Short retention; regenerable
+    v
+enrichment stage        Stage 3  Enrich: attach the latest traits
+    |                            snapshot (profile-store READ) and the
+    |                            context enrichers (geo); stamps
+    |                            `profile.traits` + `enrichment`
     v
 resolved.events         THE canonical spine. Same event_id as the source
     |                   event; envelope now carries platform-owned
@@ -150,8 +157,8 @@ vendor APIs             Stage 5  Deliver: batching, retries with real
 ```
 
 The main pipeline is only the line above. Everything else that reads
-`resolved.events` is a **support-plane tap on the spine — a reader, not a
-stage**:
+`resolved.events` is an **async-pipeline tap on the spine — a reader of it,
+not a stage of it**:
 
 ```text
 resolved.events --> clickhouse-sink        --> analytics_raw (+ profile_id)
@@ -160,14 +167,14 @@ resolved.events --> attribution-engine v3  --> attribution.events
 resolved.events --> journey-orchestrator   --> profile.events   (R11, later)
 ```
 
-**The support plane** is everything asynchronous that feeds or reads the main
-pipeline without adding latency to it:
+**The async pipelines** are the six background processes of the reference
+model. They feed or read the main pipeline without adding latency to it, and
+every stream-attached unit of them lives under `async/` (§2.3):
 
 | Process | Polaris implementation |
 |---|---|
 | Warehouse sync | Two halves: `clickhouse-sink` (exists; streaming — ClickHouse is ours and takes streams) **plus scheduled batch exports** to object storage: the raw archive (replay beyond the 90-day stream window) and Parquet loads for any external warehouse (§6.2) |
-| Derived facts | sessionizer, attribution-engine — now consuming `resolved.events`, keyed by `profile_id` |
-| Trait & audience computation | new scheduled jobs: code-defined trait/audience definitions computed from ClickHouse projections, written into the profile store, changes emitted on `profile.events` |
+| Trait & audience computation | `async/computation/`: sessionizer v2 and attribution-engine v3 — background aggregations over the spine, keyed by `profile_id` (§2.4) — plus code-defined computed traits and audiences from ClickHouse projections, written into the profile store, changes emitted on `profile.events` |
 | Retroactive merges | new worker consuming `identity.merged`: maintains the ClickHouse merge map; history is re-interpreted at read time, never rewritten |
 | Profiles sync | `profile.updated` events → clickhouse-sink → `profiles` table in ClickHouse (streaming), plus the scheduled profile export riding the warehouse-export job (§6.2) |
 | Reverse ETL | new `consumers/reverse-etl`: scheduled repo-defined ClickHouse queries whose rows re-enter the platform as canonical events through the ingester |
@@ -180,6 +187,12 @@ Family              Today                          Target
 raw.events          producer facts                 unchanged (6 partitions)
 analytics.events    raw passthrough (the spine)    RETIRED after cutover
 enriched.events     geoip sibling facts            RETIRED (geo folds into Stage 3)
+identified.events   —                              NEW: intermediate between the
+                                                   identity and enrichment
+                                                   stages (6 partitions, key =
+                                                   profile_id, short retention;
+                                                   regenerable, never a replay
+                                                   anchor)
 resolved.events     —                              NEW: the spine (6 partitions,
                                                    partition key = profile_id)
 identity.events     link facts                     kept; schema v2 adds profile ids
@@ -197,36 +210,91 @@ the producer sent, so the sessionizer, the attribution engine, and every
 destination consumer inherit per-person ordering. Width matches `raw.events`
 (6) because it carries the same volume.
 
-### 2.3 One spine processor, not three
+### 2.3 The repository tree is the pipeline map
 
-Stages 2 and 3 are one physical processor, `processors/profile-resolver/v1`,
-with independently versioned sub-stages (`resolve_version`,
-`traits_version`, `context_version` in its manifest — same pattern as the
-destination consumers' normalize/mapper/deliverer versions). Reasons:
+Processors form the backbone of specific stages of specific pipelines, so
+their placement should say which pipeline and which stage. The flat
+`processors/` + `consumers/` directories are retired in favour of a
+hierarchy keyed `{sync,async}/{stage}/{name}/{version}`:
 
-- The traits the enricher attaches come from the same row the resolver just
-  touched; one Postgres transaction returns both. Splitting the stages buys
-  a second broker hop, a second checkpointed consumer, and an eventual-read
-  race for zero semantic gain.
-- Geo enrichment is stateless and adds no ordering constraint; folding it in
-  costs nothing and removes an entire processor (`geoip-enricher`) and an
-  entire stream family (`enriched.events`) from the operational surface.
-- The sub-stage versions preserve the independent-versioning rule: a geo DB
-  swap bumps `context_version` without re-versioning identity semantics.
+```text
+sync/                              the main pipeline, in stage order
+  identity/
+    resolver/v1/                   stage 2 — the profile store's only writer:
+                                   find-or-create, merge, trait patches;
+                                   stamps profile_id
+  enrichment/
+    runtime/                       stage 3 runtime — composes the pinned
+                                   enricher versions into one process
+    traits/v1/                     enricher: latest traits snapshot (store read)
+    geoip/v1/                      enricher: geo from context.ip
+  destinations/                    stages 4–5 — one consumer per vendor;
+    webhook-sink/v1/               the internal normalize/ mappers/ deliver/
+    meta-capi/v1/  ga4/v1/         layout is the stage-4/stage-5 split,
+    tiktok/v1/     braze/v1/       exactly as consumers ship today
 
-`analytics-projector` retires: `profile-resolver` occupies the same slot in
-the topology (first hop off `raw.events`, emits the spine) and does real work
-in it. `identity-resolver` v1 is superseded by the resolve sub-stage; its
-pairwise-ledger semantics (including the known dead branch and the
+async/                             the six async pipelines
+  warehouse/
+    clickhouse-sink/v1/            streaming loads (moves out of consumers/ —
+                                   it was never a destination)
+    archiver/v1/                   raw.events -> object storage        (R10)
+    export/                        scheduled Parquet job               (R10)
+  computation/                     "trait & audience computation"
+    sessionizer/v2/                background aggregations over the
+    attribution-engine/v3/         spine (§2.4)
+    traits/                        computed-trait definitions + runner (R5)
+    audiences/                     audience definitions + runner       (R6)
+  merges/
+    merge-worker/v1/               retroactive merges                  (R4)
+  profiles-sync/
+    export/v1/                     profiles slice of the export        (R10)
+  reverse-etl/
+    runner/v1/                                                        (R7)
+  journeys/
+    orchestrator/v1/                                                   (R11)
+```
+
+Stage 1 (ingest) stays `apps/ingester-api` — it is an HTTP app, not a
+stream worker; the tree hosts stream-attached units. Component names,
+versions, and the processor chassis are unchanged: a directory move is
+non-semantic (the ADR-0005 precedent), so nothing re-versions by moving.
+
+Two structural decisions inside the tree:
+
+- **Identity and enrichment are separate stage processors** with an
+  intermediate `identified.events` family — reversing this plan's first
+  draft, which fused them. The split wins on mechanism: no invented
+  sub-stage versioning (each enricher and the resolver carry plain
+  processor versions), independent scaling of the ordering-constrained
+  write path vs the embarrassingly-parallel read path, failure isolation
+  (a geo bug cannot stall identity), and a tree that reads as the
+  topology. The price — one extra broker hop through a short-retention,
+  regenerable family — is accepted. Ownership line: **the identity stage
+  is the profile store's only writer; the enrichment stage only reads.**
+- **The enrichment stage composes enrichers in-process** rather than one
+  hop per enricher. `sync/enrichment/runtime` pins enricher versions the
+  way a destination consumer's descriptor pins its normalize/mapper/
+  deliverer versions — an existing idiom, not new machinery. One hop for
+  stage 3 total, regardless of how many enrichers exist.
+
+`analytics-projector` retires — the identity stage occupies its slot
+(first hop off `raw.events`) and does real work in it. `identity-resolver`
+v1 is superseded by `sync/identity/resolver` v1; its pairwise-ledger
+semantics (including the known dead branch and the
 partial-supersede-on-double-conflict defect in
 `processors/identity-resolver/v1/src/runtime.ts:555`) are not carried
 forward — the profile store's find-or-create is the v2 semantics.
+`geoip-enricher` retires as a processor; its transform survives as the
+`sync/enrichment/geoip` enricher.
 
 ### 2.4 What "sessionizer v2" and "attribution-engine v3" are
 
-Not new components, and not stages 4–5: they are the next directory
-versions (`processors/<name>/v<N>/`) of two derived-fact processors that
-already exist, and they live on the support plane. Each re-homes its input
+Not new components, and not stages 4–5: they are the next versions of two
+derived-fact processors that already exist — **stages of the async
+computation pipeline** (`async/computation/<name>/v<N>/`), not of the sync
+one, and not helpers of the identity stage (they play no role in
+resolution, and coupling session or attribution windows into the spine
+would re-version the spine every time those semantics change). Each re-homes its input
 to `resolved.events` and re-keys its state from "best raw identifier"
 (`customer_id > anonymous_id > session_id`) to the stamped `profile_id`.
 That change alters emitted events — session boundaries and ids, chain
@@ -246,9 +314,10 @@ hashing, the Postgres chain store. Cutover mechanics are already proven by
 attribution v1/v2 coexistence (activation gates, `processor_version` in
 the chain PK, disjoint state per version).
 
-In reference-model terms they are background computation, like trait and
-audience computation — they read the spine the way clickhouse-sink does.
-Stages 4–5 belong exclusively to the destination consumers.
+In reference-model terms they belong to the trait-and-audience-computation
+pipeline — background aggregation reading the spine the way
+clickhouse-sink does. Stages 4–5 belong exclusively to the destination
+consumers.
 
 ---
 
@@ -261,8 +330,9 @@ diff:
 |---|---|---|
 | `00-overview.md` | "Processors fan out from `raw.events` rather than chaining … There is no 'enriched copy' of a source event anywhere in the system" | "The main pipeline is staged: `raw.events` → `resolved.events`. A source event has exactly one resolved form — the same fact with platform resolution attached, same `event_id`. Genuinely *derived* facts (sessions, attributions, identity links, profile updates) remain sibling events with derived ids." |
 | `docs/README.md` rule 11 / `claude.md` hard rule | "clickhouse-sink … consumes `analytics.events`" | "clickhouse-sink consumes `resolved.events` (source facts) and the derived-fact families" |
-| `claude.md` core path | `raw.events -> versioned processors -> derived topics` | `raw.events -> profile-resolver -> resolved.events -> {destinations, clickhouse-sink, derived-fact processors}` |
+| `claude.md` core path | `raw.events -> versioned processors -> derived topics` | `raw.events -> sync/identity -> identified.events -> sync/enrichment -> resolved.events -> sync/destinations -> vendor APIs`, with `async/*` reading the spine |
 | new rule | — | "Destination **subscriptions, filters, and consent requirements are configuration values** (`project_config` / `destinations.config`). Destination **transformations are code**. The mapping prohibition is unchanged and absolute." |
+| new rule | flat `processors/` + `consumers/` in `claude.md`'s Expected Repository Shape | "Stream-attached units live at **`{sync,async}/{stage}/{name}/{version}`** — the tree is the pipeline map (§2.3). `apps/` keeps HTTP services; `packages/` keeps libraries." |
 | unchanged | "Ingestion stays thin" | unchanged — resolution happens at the first hop *after* ingest, not in the HTTP path. Segment's "inline" is also post-ingest; nothing about this plan touches the ingester's do-not list. |
 | unchanged | "Raw events are immutable, append-only, replayable" | unchanged — `raw.events` is untouched; `resolved.events` is a derived stream regenerable from `raw.events` + the profile store + versioned code. |
 | unchanged | normalize → map → deliver, mappings code-only | unchanged — Stage 4/5 keep the three-stage consumer contract; this plan adds a routing gate *before* normalize. |
@@ -351,8 +421,11 @@ today; cross-project identity stays out of scope.
 6. If the event is identify-family (`user.identified`), merge-patch its
    traits into `profiles.traits`, bump `traits_version`, emit
    `profile.updated` on `profile.events`.
-7. Return the snapshot `{profile_id, canonical_customer_id, traits,
-   traits_version}` for stamping.
+7. Stamp `profile.profile_id` and `profile.canonical_customer_id` onto the
+   emitted event. Traits are attached downstream by the enrichment stage —
+   a committed-state read by `profile_id`, race-free for this event (the
+   event reaches enrichment only after the resolver's transaction commits)
+   and deliberately "latest" for every later one.
 
 Properties worth stating:
 
@@ -407,12 +480,15 @@ enrichment: {
 }
 ```
 
-plus the existing processor stamp (`profile-resolver` stamps like any
-processor). The producer envelope schema does **not** accept either block —
+plus the existing processor stamp (each stage stamps like any processor).
+The `profile` block is completed across the two stages: the identity stage
+writes `profile_id` / `canonical_customer_id`; the enrichment stage fills
+`traits` / `traits_version` and the whole `enrichment` block. The producer
+envelope schema does **not** accept either block —
 both `.strict()` schemas already reject unknown top-level fields, so a
 producer attempting to forge a profile gets `invalid_envelope` with no new
 code. Events on `raw.events` never carry the blocks; events on
-`resolved.events` always carry `profile` (possibly `null`-bodied, §4.2.1)
+`resolved.events` always carry `profile` (possibly `null`-bodied, §4.2 step 1)
 and `enrichment`.
 
 `identity` (producer-observed identifiers) is untouched. Producer truth and
@@ -447,8 +523,8 @@ traits. Target:
 | # | Segment stage | Polaris today | Target | Net-new work |
 |---|---|---|---|---|
 | 1 | Ingest (Protocols) | **Strong.** API-key auth with trusted stamping, file-backed catalog + Zod validation, two-tier forbidden-field policy, dedupe lease, per-event batch results | Unchanged in shape | Register the 4 missing events; load per-project policy overrides (wired but never populated); nothing structural |
-| 2 | Identity resolution (Unify) | Pairwise link ledger; no person, no graph reads, no envelope effect; nobody consumes the output | Profile store + find-or-create + merge inline on the spine; `profile` stamped on every event | §4 entirely: migrations, `profile-resolver` resolve sub-stage, `identity.events` v2, CLI surface (`polaris profiles show/links`), metrics |
-| 3 | Enrichment | Geo-only, emitted as *sibling* events nothing joins; production backend is a no-op (no MaxMind, `source:"no_lookup"`); no traits anywhere | Traits snapshot + geo stamped on the spine event | Enrich sub-stage (reuses geoip transform code as a library); real MaxMind backend; traits snapshot plumbing |
+| 2 | Identity resolution (Unify) | Pairwise link ledger; no person, no graph reads, no envelope effect; nobody consumes the output | Profile store + find-or-create + merge inline on the spine; `profile_id` stamped on every event; sole writer of the profile store | §4 entirely: migrations, `sync/identity/resolver` v1, `identity.events` v2, CLI surface (`polaris profiles show/links`), metrics |
+| 3 | Enrichment | Geo-only, emitted as *sibling* events nothing joins; production backend is a no-op (no MaxMind, `source:"no_lookup"`); no traits anywhere | Traits snapshot + geo stamped on the spine event by the read-only enrichment stage | `sync/enrichment` stage (runtime + `traits` and `geoip` enrichers, composed in-process); real MaxMind backend; traits snapshot plumbing |
 | 4 | Per-destination processing | Fan-out is project-scoped (C8) and per-project config slices reach every consumer (C11) — but nothing *filters* on them yet: event selection is still "does a hand-written mapper exist"; consent dimensions hard-coded per vendor; planned skip indistinguishable from failure in `delivery_records` | Routing gate before normalize: per-instance event subscriptions, property filters, consent requirements — all config *values* riding the landed slice; mappers stay code and stay the terminal safety | Subscription/filter evaluator in `shared-destinations` harness; config schema (`destinations.config` + `project_config`); distinct `skipped_unmapped` / `skipped_filtered` delivery statuses |
 | 5 | Delivery | Normalize/map/deliver contract solid; but retry ladder provisioned and unused (failures rewind with no backoff), `dead_letter_threshold` unreachable (attempt counter never increments), `retry_policy` stored and never read, dedupe + rate limiting single-process in-memory | Real tiered retries via the existing `<component>.retry.*` queues with attempt propagation; `retry_policy` maps to tier schedules; Redis-backed delivery dedupe + rate limiting so replicas > 1 are safe | Wire `republishToRetry` into the destination error path; Redis adapters for dedupe/limiter; consolidate the 5× copy-pasted ~370-line `app.ts` into the harness while touching all five |
 
@@ -458,7 +534,7 @@ gates, golden-fixture testing — the processor chassis is already built.
 
 ---
 
-## 6. Support-plane gap analysis
+## 6. Async-pipeline gap analysis
 
 | Segment async process | Polaris today | Target | Work |
 |---|---|---|---|
@@ -540,13 +616,19 @@ replay should eventually come from an object-storage archive").
 Dual-run, one consumer at a time, dedupe-protected. No flag-day.
 
 ```text
-M1  Provision resolved.events (width 6) + profile.events (width 3)
-    families; declare profile-resolver + merge-worker component queues.
-    Topology change, runbook exists.
-M2  Land profile-store migrations + profile-resolver v1 consuming
-    raw.events, emitting resolved.events + identity.events v2 +
-    profile.events. analytics-projector keeps running; the two coexist
-    (different output families).
+M0  Repo re-layout (R0L): processors/ and consumers/ move under sync/
+    and async/ per §2.3 (workspace globs, docker-build, docs). Component
+    names and versions unchanged — moves are non-semantic; everything
+    after this is born in place.
+M1  Provision identified.events + resolved.events (width 6, matching
+    raw.events) + profile.events (width 3); declare identity-resolver,
+    enrichment, and merge-worker component queues. Topology change,
+    runbook exists.
+M2  Land profile-store migrations + the two stage processors:
+    sync/identity/resolver v1 (raw.events -> identified.events, plus
+    identity.events v2 + profile.events) and sync/enrichment v1
+    (identified.events -> resolved.events). analytics-projector keeps
+    running; they coexist (different output families).
 M3  clickhouse-sink v2: add resolved.events to the source-fact input set
     (new columns nullable/default). Overlap with analytics.events is safe:
     same event_id, same sort key — ReplacingMergeTree collapses. Verify
@@ -566,16 +648,16 @@ M5  sessionizer v2 + attribution-engine v3: input resolved.events, keyed
     activation gates handle coexistence, as attribution v1/v2 already
     proved.
 M6  Retire: analytics-projector (activation-disable, then delete),
-    geoip-enricher (delete; transform code survives as the enrich
-    sub-stage's library), identity-resolver v1 (deprecate, delete after
-    M4/M5 verify), enriched.events + analytics.events families
-    (decommission = topology migration; retention is declaration-time).
-M7  Support plane: merge worker + merge dictionary (R4), traits/audiences
-    (R5, R6), reverse ETL (R7), warehouse exports + archive (R10),
-    journeys (R11).
+    geoip-enricher (delete; transform survives as sync/enrichment/geoip),
+    identity-resolver v1 (deprecate, delete after M4/M5 verify),
+    enriched.events + analytics.events families (decommission = topology
+    migration; retention is declaration-time).
+M7  Async pipelines: merge worker + merge dictionary (R4),
+    traits/audiences (R5, R6), reverse ETL (R7), warehouse exports +
+    archive (R10), journeys (R11).
 ```
 
-Replay across the cutover: `raw.events` replays reach `profile-resolver`
+Replay across the cutover: `raw.events` replays reach the identity stage
 naturally (same first-hop position as the projector). A replay of Stage 2/3
 attaches current profiles — documented as-of semantics (§3). Person-keyed
 ClickHouse rebuilds go through the merge dictionary and are deterministic.
@@ -590,7 +672,8 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 | # | Workstream | Size | Depends on | Contents |
 |---|---|---|---|---|
 | R0 | Contract evolution | M | — | Accept this doc; envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing events and `user.identified`; SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
-| R1 | Profile store + resolver | L | R0 | §4 migrations; `profile-resolver` v1 (resolve + enrich sub-stages, manifests, golden fixtures); MaxMind backend; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
+| R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
+| R1 | Profile store + the two spine stages | L | R0, R0L | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); MaxMind backend; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
 | R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`) |
 | R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
 | R4 | Retroactive merge | M | R2 | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring |
@@ -603,6 +686,8 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 | R11 | Journey orchestration | L | R6 | §6.1: definition loader, `journey-orchestrator` v1, `journey_participants`, wait sweep, `journey.*` catalog events, funnels projection |
 
 Critical path: **R0 → R1 → R2 → R3**, with R8 and R4 fanning out after R2.
+R0L is mechanical, runs parallel with R0, and lands first so R1's
+components are born under the new tree.
 R5→R6→R7 are sequential among themselves but independent of R3. R10's
 archiver needs only R2's spine (its profiles slice waits on R5). R11 closes
 the programme after R6 — the full reference model, including journeys, is
@@ -689,7 +774,8 @@ independent hardening.
 
 | Decision | Alternatives considered | Why this way |
 |---|---|---|
-| One spine processor (resolve+enrich folded) | Separate identity and enrichment processors (Segment's conceptual split) | Same store row feeds both; one broker hop instead of two; sub-stage versioning preserves independent evolution; split later if scaling demands it |
+| Two stage processors (identity → enrichment) with `identified.events` between; enrichers composed in-stage | One fused spine processor (this plan's first draft); or one hop per enricher | Uniform processor versioning beats invented sub-stage machinery; the ordering-constrained write path scales apart from read-only enrichment; a geo bug cannot stall identity; the tree reads as the topology. Cost: one extra hop through a short-retention, regenerable family. **Reversed from the first draft on review** |
+| Repo layout `{sync,async}/{stage}/{name}/{version}` | Flat `processors/` + `consumers/` | Placement encodes pipeline and stage — the tree is the pipeline map; stage membership stops being tribal knowledge |
 | New family `resolved.events`; retire `analytics.events` + `enriched.events` | Reuse `analytics.events` name for the enriched spine; keep geo sibling stream | Reuse would silently change a family's semantics under consumers mid-cutover — a rename forces every consumer to opt in knowingly; `enriched.events` name is burned (geoip siblings) |
 | Partition spine by `profile_id` | Keep `best_available_identity` key | Per-person ordering downstream regardless of producer identifier churn; the resolver is the last place the weaker key is needed |
 | Profile store in Postgres, traits inline on `profiles` | Separate traits table; Redis-first store | One row read per event; traits history lives in ClickHouse (`profile.updated` events), not Postgres; Redis is a later cache, not the source of truth (rebuildability) |
