@@ -428,6 +428,42 @@ Rules:
 - Changing a projection's engine after it ships is a rebuild operation (P7-005), not a migration.
 - Ad-hoc operator queries against projection tables use plain `SELECT`; the MV has already deduped.
 
+## Retroactive Merges
+
+History is never rewritten. When the identity stage concludes two profiles were one person, every event already written under the losing profile stays exactly as it was — that row records what Polaris believed when it wrote it, and a delivery made under the loser's id really was made under that id. Rewriting it would make the warehouse disagree with the vendor's own record of the same delivery, and it would be a mutation over an arbitrarily large MergeTree slice besides.
+
+Reads resolve instead. `async/merges/merge-worker/v1` consumes `identity.merged` and maintains `polaris.profile_merge_map`, which backs the `polaris.profile_canonical` dictionary (`sql/clickhouse/34_profile_merge_map.sql`).
+
+**Every person-keyed query groups by the canonical id:**
+
+```sql
+SELECT
+    dictGetOrDefault(
+        'polaris.profile_canonical',
+        'winner_profile_id',
+        (project_id, environment, profile_id),
+        profile_id
+    ) AS canonical_profile_id,
+    count() AS events,
+    uniqExact(profile_id) AS merged_from
+FROM polaris.resolved_events
+WHERE project_id = {project:String}
+  AND environment = {environment:String}
+GROUP BY canonical_profile_id;
+```
+
+`OrDefault` is the load-bearing half: a profile that has never been merged is absent from the dictionary and resolves to itself, so the same expression is correct for every row and no query needs to know whether a merge happened. `merged_from` above is the number of historical ids that folded into one person — a column that only exists because the history was left intact.
+
+**Do not write the shorter version.** `dictGet` without a default throws on a missing key, which means it works in testing (where every profile in the fixture has been merged) and fails on the first unmerged profile in production.
+
+The dictionary key is a TUPLE of `(project_id, environment, profile_id)` and the layout is `COMPLEX_KEY_HASHED`. A profile id is only unique within a project and environment; a flat layout would let one project's merge resolve another project's profile.
+
+`LIFETIME(MIN 30 MAX 60)` sets how long after a merge a person-keyed query reflects it. Seconds, deliberately: a merge is operator-visible, and an analyst who re-runs a query after one is entitled to see it. The reload is cheap because the table holds one row per merge ever performed, and profiles merge far less often than they are created.
+
+### Chains resolve at write time
+
+If A merges into B and later B merges into C, the map stores A→C, not A→B. A dictionary lookup cannot iterate, so a reader following the emitted rows would resolve one hop and stop — under-merging silently, with no error and a number that is merely wrong. The worker rewrites every row pointing at a newly-tombstoned profile, which puts the cost on the rare write instead of on every query.
+
 ## Replay and Rebuild
 
 ClickHouse projection rebuilds are replay/rebuild workflows.

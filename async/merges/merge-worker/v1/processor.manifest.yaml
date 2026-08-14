@@ -1,0 +1,57 @@
+# Polaris processor manifest — merge-worker v1
+#
+# Semantic definition for the merge worker. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are immutable;
+# any change to what this worker CONCLUDES is a new version directory.
+
+name: merge-worker
+version: v1
+owner: platform-data
+release_status: released
+description: |
+  Keeps ClickHouse reads correct after a retroactive identity merge,
+  without rewriting a single historical row.
+
+  When the identity stage discovers two profiles were one person it emits
+  `identity.merged`. Every event already in ClickHouse under the losing
+  profile stays exactly as written — that row records what Polaris believed
+  when it wrote it, and a delivery made under the loser's id really was
+  made under that id. Rewriting it would make the warehouse disagree with
+  the vendor's own record of the same delivery, and would be a mutation
+  over an arbitrarily large MergeTree slice besides.
+
+  So reads resolve instead. This worker maintains
+  `polaris.profile_merge_map`, which backs the `polaris.profile_canonical`
+  dictionary, and a person-keyed query groups by
+  `dictGetOrDefault(...profile_id)` — correct for merged and unmerged
+  profiles alike, because a profile absent from the dictionary resolves to
+  itself.
+
+  Transitive chains collapse at WRITE time. A dictionary lookup cannot
+  iterate, so if A->B and later B->C were both stored as emitted, a query
+  would resolve one hop and stop — under-merging silently. When B->C
+  arrives, every row pointing at B is rewritten to point at C.
+
+mode: streaming
+
+inputs:
+  - family: profile.events
+    # Acts on `identity.merged` v2 only; `profile.created` and
+    # `profile.updated` share the family and are ignored without ceremony.
+    schema_versions: "*"
+
+outputs:
+  # Nothing is emitted back onto the platform. The output is a ClickHouse
+  # table, which is a sink, not an event family.
+  []
+
+# No state store. Idempotence comes from the storage engine:
+# `ReplacingMergeTree(_version)` keyed on
+# (project_id, environment, loser_profile_id), with `_version` derived from
+# the merge's own `occurred_at`. Processing the same event twice produces
+# byte-identical rows that collapse rather than accumulate, so a dedupe
+# store would be a second answer to a question already answered.
+state_stores: []
+
+required_consent: {}

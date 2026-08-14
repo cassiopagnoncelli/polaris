@@ -1,0 +1,43 @@
+{
+  "name": "@polaris/merge-worker-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris sessionizer processor v2. Consumes resolved.events and maintains an inactivity window per (project_id, environment, profile_id) in Redis, emitting session.started / session.ended on session.events. Keying on the PERSON rather than on whichever identifier an event happened to carry is the whole difference from v1: a login no longer ends one session and orphans another.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "processor.manifest.yaml",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "POLARIS_SERVICE_NAME=sessionizer POLARIS_HTTP_PORT=4017 tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*",
+    "ioredis": "^5.4.2",
+    "uuid": "^14.0.0",
+    "zod": "^4.4.3"
+  }
+}
