@@ -395,6 +395,9 @@ importers:
 
   async/merges/merge-worker/v1:
     dependencies:
+      '@polaris/shared-clickhouse':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-clickhouse
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../../../packages/shared-config

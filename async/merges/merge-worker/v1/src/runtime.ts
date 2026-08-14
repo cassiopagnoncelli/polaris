@@ -29,33 +29,24 @@
  * returns nothing and costs one indexed lookup.
  */
 
+import type { MergeMapStore } from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
 import type { ProcessorMetrics } from "@polaris/shared-processor";
 import { classifyError } from "@polaris/shared-processor";
 import { decodeEvent, type TransportMessagePayload } from "@polaris/shared-transport";
 
-import {
-  buildMergeRows,
-  type ExistingChain,
-  isActionableMerge,
-  type MergeEvent,
-  type MergeMapRow,
-} from "./merge-map.js";
+import { buildMergeRows, isActionableMerge, type MergeEvent } from "./merge-map.js";
 
-/** The ClickHouse surface this worker needs. Narrow, so tests pass a fake. */
-export interface MergeMapStore {
-  /**
-   * Rows whose `winner_profile_id` is `profileId` — the entries a merge of
-   * `profileId` invalidates.
-   */
-  chainedInto(input: {
-    readonly projectId: string;
-    readonly environment: string;
-    readonly profileId: string;
-  }): Promise<readonly ExistingChain[]>;
-  /** Insert. The engine collapses duplicates on `_version`. */
-  upsert(rows: readonly MergeMapRow[]): Promise<void>;
-}
+/**
+ * The ClickHouse surface this worker needs.
+ *
+ * Defined in `@polaris/shared-clickhouse` rather than here: raw SQL is
+ * confined to that package by `scripts/lint-clickhouse-imports`, so the
+ * worker gets a purpose-built store the same way the analytics sink and the
+ * projection readers do. Re-exported so tests can name it without reaching
+ * across packages.
+ */
+export type { MergeMapStore } from "@polaris/shared-clickhouse";
 
 export interface MergeWorkerRuntimeInput {
   readonly store: MergeMapStore;

@@ -21,9 +21,7 @@ export {
   createClickHouseClient,
   createClickHouseClientFromConfig,
 } from "./client.js";
-
 export { parseClickHouseConfig } from "./config.js";
-
 export {
   ClickHouseConfigError,
   ClickHouseConnectionError,
@@ -36,6 +34,13 @@ export {
 } from "./errors.js";
 export type { HealthChecker } from "./health.js";
 export type { IngestLogReader } from "./ingest-log.js";
+export {
+  createMergeMapStore,
+  MERGE_MAP_TABLE,
+  type MergeMapChainEntry,
+  type MergeMapRow,
+  type MergeMapStore,
+} from "./merge-map.js";
 export type {
   ClickHouseHealthProbes,
   MaterializedViewStateRow,
@@ -86,7 +91,6 @@ export {
   type CreateAnalyticsSinkWriterInput,
   createAnalyticsSinkWriter,
 } from "./sink.js";
-export { buildClickHouseVersion, type ClickHouseVersionStage } from "./version.js";
 export type {
   AnalyticsIngestLogRow,
   AnalyticsProcessedRow,
@@ -109,3 +113,4 @@ export type {
   SessionDailyMetricsFilter,
   TimeRange,
 } from "./types.js";
+export { buildClickHouseVersion, type ClickHouseVersionStage } from "./version.js";

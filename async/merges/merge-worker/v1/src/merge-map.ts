@@ -38,6 +38,8 @@
  * timestamp for exactly that reason.
  */
 
+import type { MergeMapChainEntry as ExistingChain, MergeMapRow } from "@polaris/shared-clickhouse";
+
 /** One `identity.merged` v2 event, reduced to what the map needs. */
 export interface MergeEvent {
   readonly project_id: string;
@@ -50,31 +52,10 @@ export interface MergeEvent {
   readonly occurred_at: string;
 }
 
-/** A row destined for `polaris.profile_merge_map`. */
-export interface MergeMapRow {
-  readonly project_id: string;
-  readonly environment: string;
-  readonly loser_profile_id: string;
-  readonly winner_profile_id: string;
-  readonly merge_id: string;
-  readonly reason: string;
-  readonly merged_at: string;
-  readonly _version: number;
-}
-
-/**
- * Existing map entries this worker must consider, keyed by loser id.
- *
- * Only the losers that currently point at the incoming merge's LOSER are
- * needed — those are the rows the new merge invalidates. The caller reads
- * exactly that slice rather than the whole map, which is what keeps this
- * bounded as the map grows.
- */
-export interface ExistingChain {
-  readonly loser_profile_id: string;
-  readonly merge_id: string;
-  readonly reason: string;
-}
+// The row and chain shapes come from `@polaris/shared-clickhouse`, which
+// owns the table. Declaring them again here would be a second copy of a
+// DDL's column list, and the two would drift the first time a column moved.
+export type { MergeMapChainEntry as ExistingChain, MergeMapRow } from "@polaris/shared-clickhouse";
 
 /**
  * Rows to upsert for one merge event.
