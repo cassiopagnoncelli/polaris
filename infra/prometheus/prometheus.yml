@@ -98,7 +98,7 @@ scrape_configs:
   - job_name: polaris-sync-identity
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4014"]
+      - targets: ["host.docker.internal:4018"]
         labels:
           polaris_service: sync-identity
           polaris_processor_name: sync-identity-resolver
@@ -113,6 +113,49 @@ scrape_configs:
           polaris_service: sync-enrichment
           polaris_processor_name: sync-enrichment-runtime
           polaris_processor_version: v1
+          polaris_component: processor
+
+  # ---------------------------------------------------------------
+  # Attribution engine, ALL THREE versions.
+  #
+  # v1 and v2 key touchpoint chains on whichever identifier an event
+  # carried; v3 keys them on the person. Neither v1 nor v2 was ever
+  # scraped, so the comparison the cutover rests on — do v3's chains hold
+  # first-touch across a login where v2's fragmented? — had no series
+  # behind it at all.
+  #
+  # Rows are disjoint by `processor_version` in the chain primary key, so
+  # the three can run at once and be told apart in Postgres. These jobs
+  # make them tellable apart in Prometheus too.
+  # ---------------------------------------------------------------
+  - job_name: polaris-attribution-engine
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4014"]
+        labels:
+          polaris_service: attribution-engine
+          polaris_processor_name: attribution-engine
+          polaris_processor_version: v1
+          polaris_component: processor
+
+  - job_name: polaris-attribution-engine-v2
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4019"]
+        labels:
+          polaris_service: attribution-engine
+          polaris_processor_name: attribution-engine
+          polaris_processor_version: v2
+          polaris_component: processor
+
+  - job_name: polaris-attribution-engine-v3
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4020"]
+        labels:
+          polaris_service: attribution-engine
+          polaris_processor_name: attribution-engine
+          polaris_processor_version: v3
           polaris_component: processor
 
   # ---------------------------------------------------------------

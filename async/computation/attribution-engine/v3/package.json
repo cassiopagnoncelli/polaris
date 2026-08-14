@@ -1,9 +1,9 @@
 {
-  "name": "@polaris/sync-identity-resolver-v1",
+  "name": "@polaris/processor-attribution-engine-v3",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris identity stage (sync pipeline, stage 2). Consumes raw.events, resolves each event to a profile via find-or-create/merge against the profile store, stamps profile ids onto the envelope, and emits identified.events plus identity.* v2 and profile.updated facts. The profile store's only sync-path writer.",
+  "description": "Polaris attribution engine v3. Consumes resolved.events and keys attribution_touchpoint_chains on profile_id, so a chain follows the PERSON: touchpoints collected while anonymous stay on the same chain as the purchase made after login. Rows are disjoint from v1/v2 by processor_version in the primary key.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,7 +24,7 @@
     "format": "biome format --write src test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "POLARIS_SERVICE_NAME=sync-identity POLARIS_HTTP_PORT=4018 POLARIS_SYNC_IDENTITY_CATALOG_ROOT=../../../.. tsx watch src/main.ts",
+    "dev": "POLARIS_SERVICE_NAME=attribution-engine POLARIS_HTTP_PORT=4020 tsx watch src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {
@@ -32,14 +32,12 @@
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "@polaris/shared-metrics": "workspace:*",
-    "@polaris/shared-policy": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-schemas": "workspace:*",
     "@polaris/shared-service-bootstrap": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0",
-    "yaml": "2.9.0",
     "zod": "^4.4.3"
   }
 }

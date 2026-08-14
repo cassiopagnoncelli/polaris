@@ -1,0 +1,52 @@
+{
+  "event_id": "018f1b9e-7b50-7b12-dddd-000000000001",
+  "event": "attribution.touchpoint_captured",
+  "schema_version": 1,
+  "project_id": "checkout",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:02.000Z",
+  "source": {
+    "type": "internal",
+    "id": "attribution-engine",
+    "sdk": null,
+    "sdk_version": null
+  },
+  "identity": {
+    "anonymous_id": "anon_X",
+    "session_id": null,
+    "customer_id": null,
+    "device_id": null
+  },
+  "context": {
+    "ip": null,
+    "user_agent": null,
+    "locale": null,
+    "page": null,
+    "campaign": null
+  },
+  "properties": {
+    "touchpoint_id": "tp_88dd54798947e6dafcad507aa237bc51",
+    "primary_identifier_kind": "profile_id",
+    "primary_identifier_value": "01a00000-0000-7000-8000-00000000f001",
+    "campaign": {
+      "source": "google",
+      "medium": "cpc",
+      "name": "spring_sale",
+      "term": "running shoes",
+      "content": "ad_a",
+      "click_id": "gclid_123"
+    },
+    "source_event_id": "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+    "observed_at": "2026-05-14T12:00:00.000Z",
+    "run_id": "run_fixture"
+  },
+  "processor": {
+    "name": "attribution-engine",
+    "version": "v3",
+    "ran_at": "2026-05-14T12:00:02.000Z",
+    "run_id": "run_fixture"
+  },
+  "processor_name": "attribution-engine",
+  "processor_version": "v3"
+}

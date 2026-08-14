@@ -14,6 +14,12 @@ next to each service:
 | `sessionizer v1`                         | `async/computation/sessionizer/v1/Dockerfile`                | `polaris/processor-sessionizer-v1`               | 4012 |
 | `geoip-enricher v1`                      | `sync/legacy/geoip-enricher/v1/Dockerfile`             | `polaris/processor-geoip-enricher-v1`            | 4013 |
 | `attribution-engine v1`                  | `async/computation/attribution-engine/v1/Dockerfile`         | `polaris/processor-attribution-engine-v1`        | 4014 |
+| `sync-enrichment runtime v1`             | `sync/enrichment/runtime/v1/Dockerfile`               | `polaris/sync-enrichment-runtime-v1`             | 4015 |
+| `clickhouse-sink v1`                     | `async/warehouse/clickhouse-sink/v1/Dockerfile`       | `polaris/consumer-clickhouse-sink-v1`            | 4016 |
+| `sessionizer v2`                         | `async/computation/sessionizer/v2/Dockerfile`         | `polaris/processor-sessionizer-v2`               | 4017 |
+| `sync-identity resolver v1`              | `sync/identity/resolver/v1/Dockerfile`                | `polaris/sync-identity-resolver-v1`              | 4018 |
+| `attribution-engine v2`                  | `async/computation/attribution-engine/v2/Dockerfile`  | `polaris/processor-attribution-engine-v2`        | 4019 |
+| `attribution-engine v3`                  | `async/computation/attribution-engine/v3/Dockerfile`  | `polaris/processor-attribution-engine-v3`        | 4020 |
 | `webhook-sink v1`                        | `sync/destinations/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
 | `meta-capi v1`                           | `sync/destinations/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
 | `tiktok v1`                              | `sync/destinations/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
@@ -22,6 +28,32 @@ next to each service:
 
 The polaris-cli image is a CLI bin, not a long-running server — it has no
 exposed port and no `HEALTHCHECK`.
+
+**This table is the port registry, and keeping it current is the point.**
+It went five services stale, and every one of the resulting collisions
+was invisible to typecheck, lint and tests:
+
+  * `sync-identity` shipped on 4011 (inherited from the legacy
+    identity-resolver chassis it was copied from) while its dev script
+    and its Prometheus scrape job both said 4014 — which is
+    attribution-engine's port. In a container the stage was never
+    scraped; the job scraped ATTRIBUTION metrics and labelled them
+    `sync-identity-resolver`. Mislabelled data is worse than missing.
+  * `sessionizer v2` shipped on 4012, v1's port, so the two versions
+    that exist precisely to run side by side could not both start.
+  * `attribution-engine v2` shipped on 4014, v1's port, for the same
+    reason.
+
+Two rules follow, and they cost nothing at the time:
+
+1. A new version gets a NEW port, never its predecessor's. Coexistence
+   is the whole reason a new major exists; two versions on one port
+   cannot coexist on one host.
+2. Add the row here in the same change that adds the Dockerfile, and
+   check the Dockerfile, the `dev` script, and the Prometheus scrape job
+   agree. Those three drifting apart is what produced every case above.
+
+Next free port: 4021 (processors), 5005 (destination consumers).
 
 ## Architectural decisions
 

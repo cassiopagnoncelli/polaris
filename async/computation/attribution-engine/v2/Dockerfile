@@ -67,9 +67,9 @@ ENV NODE_ENV=production \
     POLARIS_GIT_SHA="${POLARIS_GIT_SHA}" \
     POLARIS_BUILD_TIME="${POLARIS_BUILD_TIME}" \
     POLARIS_HTTP_HOST=0.0.0.0 \
-    POLARIS_HTTP_PORT=4014
+    POLARIS_HTTP_PORT=4019
 
-EXPOSE 4014
+EXPOSE 4019
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:${POLARIS_HTTP_PORT}/health" >/dev/null 2>&1 || exit 1

@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1.6
 #
-# Polaris identity stage (sync/identity/resolver v1) production image.
+# Polaris attribution-engine v1 processor production image.
 #
 # Built from the repository root. See `infra/docker/base.Dockerfile` for
 # the canonical template and `infra/docker/README.md` for the build-arg
 # contract.
 #
 # Build:
-#   docker build -f sync/identity/resolver/v1/Dockerfile \
+#   docker build -f async/computation/attribution-engine/v1/Dockerfile \
 #     --build-arg POLARIS_BUILD_VERSION=$(git describe --tags --always) \
 #     --build-arg POLARIS_GIT_SHA=$(git rev-parse HEAD) \
 #     --build-arg POLARIS_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-#     -t polaris/sync-identity-resolver-v1:dev .
+#     -t polaris/processor-attribution-engine-v1:dev .
 
 # -----------------------------------------------------------------------------
 # Stage 1: builder
@@ -27,9 +27,9 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-RUN pnpm --filter "@polaris/sync-identity-resolver-v1..." run build
+RUN pnpm --filter "@polaris/processor-attribution-engine-v1..." run build
 
-RUN pnpm --filter "@polaris/sync-identity-resolver-v1" deploy --prod /deploy
+RUN pnpm --filter "@polaris/processor-attribution-engine-v1" deploy --prod /deploy
 
 RUN test -f /deploy/dist/main.js \
     || (echo "missing /deploy/dist/main.js — pnpm build did not emit" && exit 1)
@@ -43,8 +43,8 @@ ARG POLARIS_BUILD_VERSION="0.0.0-dev"
 ARG POLARIS_GIT_SHA="unknown"
 ARG POLARIS_BUILD_TIME="1970-01-01T00:00:00Z"
 
-LABEL org.opencontainers.image.title="polaris-processor-identity-resolver-v1" \
-      org.opencontainers.image.description="Polaris identity-resolver processor v1" \
+LABEL org.opencontainers.image.title="polaris-processor-attribution-engine-v1" \
+      org.opencontainers.image.description="Polaris attribution-engine processor v1" \
       org.opencontainers.image.vendor="Polaris" \
       org.opencontainers.image.licenses="UNLICENSED" \
       org.opencontainers.image.version="${POLARIS_BUILD_VERSION}" \
@@ -59,11 +59,6 @@ WORKDIR /app
 
 COPY --from=builder --chown=polaris:polaris /deploy /app
 
-# Per-project identity overrides (`identity:` blocks — denylist, narrowed
-# semantic parameters) are read from here at boot; see src/overrides.ts.
-# `POLARIS_SYNC_IDENTITY_CATALOG_ROOT` defaults to ".", i.e. /app.
-COPY --from=builder --chown=polaris:polaris /workspace/catalog/projects /app/catalog/projects
-
 USER polaris
 
 ENV NODE_ENV=production \
@@ -72,9 +67,9 @@ ENV NODE_ENV=production \
     POLARIS_GIT_SHA="${POLARIS_GIT_SHA}" \
     POLARIS_BUILD_TIME="${POLARIS_BUILD_TIME}" \
     POLARIS_HTTP_HOST=0.0.0.0 \
-    POLARIS_HTTP_PORT=4018
+    POLARIS_HTTP_PORT=4020
 
-EXPOSE 4018
+EXPOSE 4020
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:${POLARIS_HTTP_PORT}/health" >/dev/null 2>&1 || exit 1

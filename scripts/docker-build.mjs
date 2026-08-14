@@ -101,6 +101,16 @@ const services = [
     image: "polaris/processor-attribution-engine-v1",
   },
   {
+    name: "attribution-engine-v2",
+    dockerfile: "async/computation/attribution-engine/v2/Dockerfile",
+    image: "polaris/processor-attribution-engine-v2",
+  },
+  {
+    name: "attribution-engine-v3",
+    dockerfile: "async/computation/attribution-engine/v3/Dockerfile",
+    image: "polaris/processor-attribution-engine-v3",
+  },
+  {
     name: "webhook-sink",
     dockerfile: "sync/destinations/webhook-sink/v1/Dockerfile",
     image: "polaris/consumer-webhook-sink-v1",
