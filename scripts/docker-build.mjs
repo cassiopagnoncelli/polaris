@@ -61,6 +61,11 @@ const services = [
     image: "polaris/processor-analytics-projector-v1",
   },
   {
+    name: "sync-identity",
+    dockerfile: "sync/identity/resolver/v1/Dockerfile",
+    image: "polaris/sync-identity-resolver-v1",
+  },
+  {
     name: "identity-resolver",
     dockerfile: "sync/legacy/identity-resolver/v1/Dockerfile",
     image: "polaris/processor-identity-resolver-v1",

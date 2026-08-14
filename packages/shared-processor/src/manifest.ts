@@ -165,6 +165,29 @@ export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
  * manifests are expected to set `release_status` and at least one fixture
  * pair (the per-processor `manifest.test.ts` enforces it).
  */
+/**
+ * A semantic parameter: a value that changes EMITTED EVENTS.
+ *
+ * Per `docs/architecture/05-processors-and-replay.md`
+ * § "Per-Project Semantic Parameters", these live in the manifest (never
+ * `project_config`, never env) with a declared default and bounds. A
+ * project may NARROW one in `catalog/projects/<id>.yaml`; it may never
+ * widen it, and introducing the capability at all requires a new
+ * processor version.
+ *
+ * Declaring the bounds here rather than in code is what makes the
+ * question "which value produced this output" answerable from a git sha
+ * — the precondition for a reproducible rebuild.
+ */
+const processorSemanticParameterSchema = z
+  .object({
+    default: z.number(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+  })
+  .strict();
+export type ProcessorSemanticParameter = z.infer<typeof processorSemanticParameterSchema>;
+
 export const processorManifestSchema = z
   .object({
     name: processorNameSchema,
@@ -180,6 +203,7 @@ export const processorManifestSchema = z
     replay: processorReplaySchema.optional(),
     replay_notes: z.string().trim().min(1).max(8192).optional(),
     fixtures: z.array(processorFixtureSchema).optional(),
+    semantic_parameters: z.record(z.string(), processorSemanticParameterSchema).optional(),
   })
   .strict();
 export type ProcessorManifest = z.infer<typeof processorManifestSchema>;
@@ -223,10 +247,16 @@ export interface LoadProcessorManifestOptions {
 const PIPELINE_PLANES = ["sync", "async"] as const;
 
 /**
- * Resolve `<root>/{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`.
+ * Find the manifest for `(name, version)` anywhere in the pipeline tree.
  *
- * Returns the first existing path, or `null` with the list of locations
- * searched so the caller can report something actionable.
+ * Scans `<root>/{sync,async}/<stage>/<dir>/<version>/processor.manifest.yaml`
+ * and matches on the manifest BODY, not on the directory name. The
+ * directory is a convention; the manifest is the truth. That distinction
+ * matters here because a unit's path encodes its pipeline and stage
+ * (`sync/identity/resolver/v1`) while its component name encodes its
+ * identity (`sync-identity-resolver`) — the two are deliberately not the
+ * same string, and a resolver that assumed they were would only find
+ * units whose directory happened to repeat their name.
  */
 function resolveManifestPath(
   root: string,
@@ -246,9 +276,30 @@ function resolveManifestPath(
       continue; // plane absent — fine, try the other
     }
     for (const stage of stages) {
-      const candidate = join(planeDir, stage, name, version, "processor.manifest.yaml");
-      searched.push(candidate);
-      if (existsAsFile(candidate)) return { path: candidate, searched };
+      const stageDir = join(planeDir, stage);
+      let units: string[];
+      try {
+        units = readdirSync(stageDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+          .map((e) => e.name)
+          .sort();
+      } catch {
+        continue;
+      }
+      for (const unit of units) {
+        const candidate = join(stageDir, unit, version, "processor.manifest.yaml");
+        if (!existsAsFile(candidate)) continue;
+        searched.push(candidate);
+        // Cheap pre-filter on the declared name before a full parse.
+        try {
+          const text = readFileSync(candidate, "utf8");
+          const declared = /^name:\s*(\S+)\s*$/m.exec(text)?.[1];
+          if (declared === name) return { path: candidate, searched };
+        } catch {
+          // Unreadable file: leave it in `searched` so the caller can
+          // report where it looked, and keep going.
+        }
+      }
     }
   }
   return { path: null, searched };

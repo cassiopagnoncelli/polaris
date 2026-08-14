@@ -281,3 +281,90 @@ async function publishDerived(
     deps.metrics?.onEmitted?.();
   }
 }
+
+// ---------------------------------------------------------------------
+// Streaming runtime
+//
+// Wraps `handleEvent` in the transport lifecycle every processor shares:
+// subscribe to the input families, run the handler per message, and stop
+// cleanly. Kept separate from `handleEvent` so the behavioural suite can
+// exercise the decision logic without a broker.
+// ---------------------------------------------------------------------
+
+import {
+  type PolarisConsumer,
+  STREAM_FAMILY_RAW_EVENTS,
+  type SyncIsolationLookup,
+  type TransportMessageHandler,
+  consumerFamiliesFor,
+  decodeEvent,
+  sharedOnlyIsolationLookup,
+} from "@polaris/shared-transport";
+
+export interface IdentityStageRuntime {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  /** Exposed for tests that drive one message without a broker. */
+  readonly handler: TransportMessageHandler;
+}
+
+export interface IdentityStageRuntimeDeps extends IdentityStageDeps {
+  readonly consumer: PolarisConsumer;
+  readonly isolation?: SyncIsolationLookup;
+  readonly isolatedProjects?: ReadonlyArray<string>;
+  /**
+   * Per-message activation gate. `false` skips the event entirely —
+   * including the spine publish, because a disabled stage must not emit
+   * a half-resolved spine that downstream stages would treat as
+   * authoritative.
+   */
+  readonly isEnabled?: (projectId: string, environment: string) => Promise<boolean> | boolean;
+}
+
+export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRuntime {
+  const isolatedProjects = deps.isolatedProjects ?? [];
+
+  const handler: TransportMessageHandler = async (payload) => {
+    // Tombstones and bodiless messages are skipped, not failed: nothing
+    // to resolve, and throwing would rewind the partition on a message
+    // that will never decode.
+    const value = payload.message.value;
+    if (value === null) return;
+    const raw = decodeEvent(value) as Record<string, unknown>;
+
+    if (deps.isEnabled !== undefined) {
+      const enabled = await deps.isEnabled(
+        String(raw["project_id"] ?? ""),
+        String(raw["environment"] ?? ""),
+      );
+      if (!enabled) return;
+    }
+
+    await handleEvent(deps, raw);
+  };
+
+  let started = false;
+  return {
+    handler,
+    async start(): Promise<void> {
+      if (started) return;
+      started = true;
+      const families = consumerFamiliesFor(STREAM_FAMILY_RAW_EVENTS, isolatedProjects);
+      await deps.consumer.subscribe({ families: [...families] });
+      deps.logger.info(
+        { component: "sync-identity.runtime", families, isolated_projects: isolatedProjects },
+        "identity stage subscribed to raw.events",
+      );
+      await deps.consumer.runEach(handler);
+    },
+    async stop(): Promise<void> {
+      if (!started) return;
+      started = false;
+      await deps.consumer.disconnect();
+    },
+  };
+}
+
+// Referenced so the isolation lookup default stays discoverable to
+// readers even though the consumer resolves families itself.
+export const DEFAULT_ISOLATION: SyncIsolationLookup = sharedOnlyIsolationLookup;
