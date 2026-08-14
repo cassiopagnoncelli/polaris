@@ -87,8 +87,8 @@ export interface DestinationInstance {
  * Contract for reading destination instances. Production wires the Kysely
  * adapter; tests use the in-memory adapter.
  *
- * The contract is intentionally narrow: one `findById` and one `findActive`
- * (to seed the subscribe loop's per-vendor list). Operational write
+ * The contract is intentionally narrow: one `findById` and one fan-out
+ * lookup. Operational write
  * commands (`polaris destinations create`, `enable`, `disable`, ...) live
  * in the CLI and write through `@polaris/shared-db` directly — they do not
  * go through this reader.
@@ -97,11 +97,20 @@ export interface DestinationInstanceReader {
   /** Read one instance by id. Returns `null` when not found. */
   findById(destination_id: string): Promise<DestinationInstance | null>;
   /**
-   * List active instances for a (vendor, environment) pair. Used by the
-   * runtime's subscribe loop on boot when the host has not pre-supplied a
-   * list of destination ids.
+   * List active instances for a `(vendor, environment, project)` triple —
+   * the runtime's fan-out targets for one envelope.
+   *
+   * `projectId` is a routing key, not a label, and that is a correction. This
+   * resolved on `(vendor, environment)` alone, so an event from project A was
+   * delivered to project B's destination row of the same vendor in the same
+   * environment: `project_id` rode the envelope and was stamped onto metrics
+   * and delivery records, but nothing routed on it.
    */
-  findActiveByVendor(vendor: string, environment: string): Promise<readonly DestinationInstance[]>;
+  findActiveByVendorAndProject(
+    vendor: string,
+    environment: string,
+    projectId: string,
+  ): Promise<readonly DestinationInstance[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,15 +138,17 @@ export class InMemoryDestinationInstanceReader implements DestinationInstanceRea
     return this.byId.get(destination_id) ?? null;
   }
 
-  async findActiveByVendor(
+  async findActiveByVendorAndProject(
     vendor: string,
     environment: string,
+    projectId: string,
   ): Promise<readonly DestinationInstance[]> {
     const matches: DestinationInstance[] = [];
     for (const instance of this.byId.values()) {
       if (
         instance.vendor === vendor &&
         instance.environment === environment &&
+        instance.project_id === projectId &&
         instance.status === "active"
       ) {
         matches.push(instance);
@@ -188,9 +199,10 @@ export function createKyselyDestinationInstanceReader(
     return row === undefined ? null : (row as DestinationInstance);
   }
 
-  async function findActiveByVendor(
+  async function findActiveByVendorAndProject(
     vendor: string,
     environment: string,
+    projectId: string,
   ): Promise<readonly DestinationInstance[]> {
     const rows = await db
       .selectFrom("destinations")
@@ -211,12 +223,13 @@ export function createKyselyDestinationInstanceReader(
       ])
       .where("vendor", "=", vendor)
       .where("environment", "=", environment)
+      .where("project_id", "=", projectId)
       .where("status", "=", "active")
       .execute();
     return rows as readonly DestinationInstance[];
   }
 
-  return { findById, findActiveByVendor };
+  return { findById, findActiveByVendorAndProject };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,10 +259,10 @@ interface CacheEntry {
  * same `findById` contract so the runtime does not know whether it is
  * talking to PostgreSQL or the cache.
  *
- * `findActiveByVendor` is intentionally **not** cached: the runtime calls
- * it once at boot (to seed the per-vendor list), not on every event. A
- * stale list there would cause new instances to be missed until restart;
- * `findById` is the per-event path that benefits from caching.
+ * `findActiveByVendorAndProject` is intentionally **not** cached here: the
+ * runtime keeps its own short-TTL list per `(project, environment)`, because
+ * that list decides whether a brand-new destination receives traffic at all
+ * and wants a tighter window than the 60s `findById` cache.
  */
 export class DestinationInstanceCache implements DestinationInstanceReader {
   readonly #reader: DestinationInstanceReader;
@@ -302,11 +315,12 @@ export class DestinationInstanceCache implements DestinationInstanceReader {
     return instance;
   }
 
-  async findActiveByVendor(
+  async findActiveByVendorAndProject(
     vendor: string,
     environment: string,
+    projectId: string,
   ): Promise<readonly DestinationInstance[]> {
-    return this.#reader.findActiveByVendor(vendor, environment);
+    return this.#reader.findActiveByVendorAndProject(vendor, environment, projectId);
   }
 
   #evictIfFull(): void {

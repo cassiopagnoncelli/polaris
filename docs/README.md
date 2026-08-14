@@ -42,7 +42,7 @@ SDKs / producers
 
 ## Non-Negotiable Rules
 
-- Polaris is internal infrastructure, not an external multi-tenant SaaS product. Cross-project visibility within the organization is allowed; project boundaries are an operational scoping device, not a security perimeter.
+- Polaris is internal infrastructure, not an external multi-tenant SaaS product. Cross-project visibility within the organization is allowed; project boundaries are an operational scoping device, not a security perimeter. Two consequences worth stating plainly, because both are easy to misread as isolation guarantees: **delivery routes on `project_id`** — an event from one project reaches only that project's destinations — but **the control-plane database holds every project's vendor credentials in plaintext**, so anyone who can read it can read all of them. The first is correctness; the second is the standing cost of storing per-project secrets there ([Control Plane — Secrets](./architecture/02-control-plane.md)).
 - `project_id` is first-class and required.
 - `environment` is stamped by the ingester from the API key, not accepted from producers.
 - Raw events are immutable, append-only, and replayable within the operational retention window.

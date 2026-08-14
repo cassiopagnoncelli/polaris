@@ -794,10 +794,15 @@ it would be incoherent, so the filter lands with this work.
   `activeTargets` cache key gains project.
 - The `polaris-destination-id` header override (the replay path,
   `runtime.ts:280-281`) returns before fan-out resolution and is unaffected.
-- **Pre-merge gate:** join `delivery_records` against `destinations` to
-  enumerate instances currently receiving foreign-project events. That query
-  is the blast radius, it must be reviewed and signed off before merge, and
-  every delivery it lists will stop.
+- **Pre-merge gate, discharged.** The plan called for joining
+  `delivery_records` against `destinations` to enumerate instances currently
+  receiving foreign-project events, on the grounds that every delivery it
+  listed would stop. The gate was right and is now moot: the platform is
+  pre-production, so there is no delivery history to enumerate and no
+  dependency to break. The query
+  (`scripts/fanout-cross-project-blast-radius.sql`) was deleted with the
+  filter rather than left as a script whose header instructs the reader to run
+  it against a production that does not exist.
 
 ## 9. Replay
 
@@ -889,6 +894,12 @@ dual-read — the variables are simply unread — but rollback stays a pure imag
 revert with no manifest surgery under incident pressure. A single sweep PR
 deletes them once every service has been stable for a release.
 
+**Discharged, because the premise does not hold here.** The insurance is for a
+deployed fleet with a previous image to revert to; this platform is
+pre-production and has neither. C12 therefore ran immediately rather than a
+release later. The reasoning above stands for the first cutover made after a
+production deployment exists.
+
 ## 12. Observability
 
 Following the `polaris_<component>_<thing>_<unit>` convention already in use:
@@ -920,11 +931,11 @@ covers both mechanisms failing.
 | C5 | Admin UI Variables panel per §3.6 — `admin/pages/project-config.ts`, three mutation routes, env tabs, effective view, free-form add, CAS conflict handling | C4 | yes |
 | C6 | **LANDED then REVERSED.** `07eb4cb` shipped `createSecretResolver`, the transient/permanent split and five consumers off `process.env` (card `FR74FN42`). Superseded when per-project secrets became stored values: the resolver, its adapters and the Vault client had no callers left and were deleted (§6). The `process.env` half of the work stands. | C2 | yes |
 | C7 | `scripts/lint-process-env.mjs` + full violation allowlist | C2 | yes |
-| C8 | Fan-out project filter + pre-merge blast-radius query | C2 | yes |
+| C8 | **LANDED.** Fan-out project filter — `findActiveByVendorAndProject`, and the target cache keyed by project as well as environment. The pre-merge blast-radius query it was gated on is gone with it: the gate existed to enumerate live deliveries the filter would stop, and a pre-production platform has none | C2 | yes |
 | C9 | Test-harness helpers: `seedProjectConfig`, docker-compose and acceptance/smoke fixture migration. **Partly landed:** `tests/integration/project-config.test.ts` covers write → NOTIFY → store against real PostgreSQL | C4 | yes |
 | C10 | `scripts/backfill-project-config.mjs` | C4 | yes |
 | C11 | Per-service cutover: config path in, env path out, allowlist entry deleted, backfill run. **All six participating components landed** — ingest, meta-capi, ga4, tiktok, braze, webhook-sink. The other ten services have no per-project configuration to move (§7); a cutover card for them would have had nothing in it | C7, C9, C10 | 6-way |
-| C12 | Env-var sweep PR: delete the inert deployment-manifest vars one release after C11 | C11 | — |
+| C12 | **LANDED.** The two per-project override strings are out of `docs/deployment/config-reference.md`, replaced by a note naming what they became and how to migrate an environment that still sets one. The one-release delay §11 specifies was rollback insurance for a deployed fleet; there is none | C11 | — |
 | C13 | Docs: architecture 02/05/06/11, secret-rotation runbooks, `.env.example` rewrite, `docs/README.md:45` perimeter wording | C11 | — |
 
 Critical path is C0 → C1 → C2 → C4 → C11. C3 runs alongside C2; C5–C10 all

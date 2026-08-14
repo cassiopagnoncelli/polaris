@@ -79,10 +79,6 @@ const ALLOW = new Map([
     "build stamps injected by the container build; read once at startup for /health",
   ],
   [
-    "packages/shared-secrets/src/providers/env.ts",
-    "the env secret provider's own default source; callers pass a frozen snapshot in production",
-  ],
-  [
     "packages/shared-control-plane/src/resolver.ts",
     "reads POLARIS_TOKEN to resolve the operator actor, which precedes any config load",
   ],
@@ -109,19 +105,16 @@ const ALLOW = new Map([
   ["packages/web-sdk/src/sdk.ts", "published SDK; bundler-replaced build flag"],
 
   // --- known debt --------------------------------------------------------
-  // Entries here are DEBT, not approval, and neither is a project-config
-  // cutover: both read ClickHouse CONNECTION settings, which are deployment
-  // facts like the Postgres DSN, not per-project values. They are listed
-  // because each bypasses the sanctioned reader rather than because a cutover
-  // will delete them.
-  [
-    "processors/analytics-projector/v1/src/app.ts",
-    "TODO: calls clickhouseEnvSchema.parse(process.env) directly; should take a loadEnv() snapshot",
-  ],
-  [
-    "consumers/clickhouse-sink/v1/src/config.ts",
-    "TODO: defaults its processEnv parameter to process.env; should require the snapshot",
-  ],
+  // Empty, and worth keeping the heading to say so.
+  //
+  // Two entries lived here, both reading ClickHouse CONNECTION settings —
+  // deployment facts like the Postgres DSN, not per-project values, so neither
+  // was waiting on a project-config cutover. They were listed because each
+  // bypassed the sanctioned reader. Both are fixed:
+  // analytics-projector now composes an optional `clickhouse` section into its
+  // config schema instead of parsing `process.env` at the point of use, and
+  // clickhouse-sink's loader no longer takes a `processEnv` defaulting to
+  // `process.env`.
 ]);
 
 /**

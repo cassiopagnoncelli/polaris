@@ -141,10 +141,27 @@ blocks below.
 | --- | --- | --- |
 | `POLARIS_INGEST_DEDUPE_DEFAULT_WINDOW_SEC` | optional | `900` (15 min) |
 | `POLARIS_INGEST_DEDUPE_MAX_WINDOW_SEC` | optional | `86400` (24 h) |
-| `POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS` | optional | empty; `project_id=seconds,...` |
 | `POLARIS_INGEST_REDIS_KEY_PREFIX` | optional | `polaris:ingest:dedupe` |
 | `POLARIS_INGEST_REDIS_OP_TIMEOUT_MS` | optional | `50` |
 | `POLARIS_INGEST_MAX_BATCH_EVENTS` | optional | `1000` |
+
+#### Removed: the per-project override strings
+
+`POLARIS_INGEST_PROJECT_DEDUPE_WINDOWS` and `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES`
+are gone. They were comma-separated `project_id=value` strings parsed by hand,
+which meant adding a project was a global env-var edit and a redeploy, with no
+validation, no audit and no per-key history.
+
+Both moved into `project_config` under the `ingest` namespace
+(`dedupe_window_sec`, `rate_limit_rps`), set with `polaris config set` or the
+admin UI's Variables panel and picked up by running replicas without a restart.
+The remaining `POLARIS_INGEST_DEDUPE_*` and `POLARIS_RATE_LIMIT_*` variables are
+unchanged: they are the fleet-wide defaults a project's value overrides.
+
+If you have an environment that still sets either string, `node
+scripts/backfill-project-config.mjs --service ingester-api --env <env>` reads
+them from that environment and seeds the equivalent rows. Nothing reads them at
+runtime any more, so an unmigrated value is silently the deployment default.
 
 #### rateLimit
 
@@ -152,7 +169,6 @@ blocks below.
 | --- | --- | --- |
 | `POLARIS_RATE_LIMIT_PER_API_KEY_RPS` | optional | `1000` (0 disables, fail-open) |
 | `POLARIS_RATE_LIMIT_WINDOW_SECONDS` | optional | `1` |
-| `POLARIS_RATE_LIMIT_PROJECT_OVERRIDES` | optional | empty; `project_id=rps,...` |
 | `POLARIS_RATE_LIMIT_REDIS_KEY_PREFIX` | optional | `polaris:ingest:rl` |
 | `POLARIS_RATE_LIMIT_REDIS_OP_TIMEOUT_MS` | optional | `50` |
 

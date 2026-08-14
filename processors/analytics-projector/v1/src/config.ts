@@ -1,4 +1,6 @@
 import {
+  type ClickHouseConfig,
+  clickhouseEnvSchema,
   composeConfigSchema,
   type HttpConfig,
   httpEnvSchema,
@@ -80,8 +82,47 @@ export interface AnalyticsProjectorRuntimeConfig {
    */
   readonly postgres: PostgresConfig;
   readonly rabbitmq: RabbitmqConfig;
+  /**
+   * ClickHouse connection, or `undefined` when the deployment sets none.
+   *
+   * Optional because the projector's ClickHouse use is optional: it does not
+   * write to ClickHouse, it POLLS `system.*` for the health gauges behind the
+   * three v1 ClickHouse alerts. A local or test run without ClickHouse skips
+   * the poller and is otherwise complete.
+   *
+   * This section is why {@link optionalClickhouseEnvSchema} exists. The app
+   * used to read `process.env` directly at the point of use — gating on
+   * `POLARIS_CLICKHOUSE_URL` and calling `clickhouseEnvSchema.parse(process.env)`
+   * inside `buildApp` — which bypassed the sanctioned reader, and with it the
+   * `.env` cascade that `loadConfigWithDefaults` applies. A developer with the
+   * URL in `.env.local` got config from the file and no ClickHouse probe.
+   */
+  readonly clickhouse: ClickHouseConfig | undefined;
   readonly projector: AnalyticsProjectorConfig;
 }
+
+/**
+ * `clickhouseEnvSchema`, but absent rather than invalid when the deployment
+ * sets no ClickHouse URL.
+ *
+ * `clickhouseEnvSchema` requires `POLARIS_CLICKHOUSE_URL`, which is right for
+ * a service that cannot run without ClickHouse. This processor can. Composing
+ * the required schema directly would make every ClickHouse-less deployment
+ * fail to boot; making the URL itself optional inside the shared schema would
+ * weaken it for the services that genuinely require it. So the gate lives
+ * here, in the one config that wants it.
+ *
+ * A URL that is present but malformed still fails, and deliberately: that is a
+ * deployment error, not an opt-out.
+ */
+const optionalClickhouseEnvSchema = z
+  .unknown()
+  .transform((env) => {
+    if (env === null || typeof env !== "object") return undefined;
+    const url = (env as Record<string, unknown>)["POLARIS_CLICKHOUSE_URL"];
+    return url === undefined || url === "" ? undefined : env;
+  })
+  .pipe(z.union([clickhouseEnvSchema, z.undefined()]));
 
 /**
  * Compose the runtime config schema. Kept as a function so test runs can
@@ -94,6 +135,7 @@ export function analyticsProjectorConfigSchema() {
     http: httpEnvSchema,
     postgres: postgresEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
+    clickhouse: optionalClickhouseEnvSchema,
     projector: analyticsProjectorEnvSchema,
   });
 }

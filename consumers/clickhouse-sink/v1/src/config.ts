@@ -118,12 +118,19 @@ export function clickhouseSinkConfigSchema() {
   });
 }
 
-export function loadClickhouseSinkConfig(
-  processEnv: NodeJS.ProcessEnv = process.env,
-): ClickhouseSinkRuntimeConfig {
+/**
+ * Load the runtime config.
+ *
+ * Takes no `processEnv`. It used to accept one defaulting to `process.env`,
+ * which meant this module read the environment directly — bypassing
+ * `@polaris/shared-config` as the single sanctioned reader for no benefit,
+ * since every caller used the default. `loadConfigWithDefaults` reads the
+ * environment and applies the `.env` cascade itself, which is the whole point
+ * of routing through it.
+ */
+export function loadClickhouseSinkConfig(): ClickhouseSinkRuntimeConfig {
   return loadConfigWithDefaults({
     serviceName: SINK_SERVICE_NAME,
     schema: clickhouseSinkConfigSchema(),
-    processEnv,
   }) as ClickhouseSinkRuntimeConfig;
 }

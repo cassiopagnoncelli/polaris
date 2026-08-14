@@ -372,12 +372,17 @@ describe("destination runtime — fan-out to active instances", () => {
   }
 
   function makeStreamPayload(headers: MessageHeaders = {}) {
+    return makeStreamPayloadFor(makeEnvelope(), headers);
+  }
+
+  /** Same payload shape, for an envelope the caller chose — e.g. another project. */
+  function makeStreamPayloadFor(envelope: NormalizableEnvelope, headers: MessageHeaders = {}) {
     return {
       stream: "analytics.events-0",
       family: "analytics.events",
       partition: 0,
       message: {
-        value: Buffer.from(JSON.stringify(makeEnvelope()), "utf8"),
+        value: Buffer.from(JSON.stringify(envelope), "utf8"),
         headers,
         offset: "42",
         key: null,
@@ -412,6 +417,50 @@ describe("destination runtime — fan-out to active instances", () => {
     await consumer.handler(makeStreamPayload());
 
     expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test1"]);
+  });
+
+  it("skips instances belonging to another PROJECT", async () => {
+    // The cross-project disclosure this filter closes. Fan-out resolved on
+    // `(vendor, environment)` alone, so `analytics.events` — one shared stream
+    // carrying every project's traffic — delivered storefront's events to
+    // checkout's destination row whenever both ran the same vendor in the same
+    // environment. `project_id` rode the envelope and was stamped onto metrics
+    // and delivery records the whole time; nothing routed on it.
+    //
+    // Note this is invisible to a single-project fixture, which is why it did
+    // not surface for so long: every other test in this file uses one project.
+    const env = makeEnv();
+    env.instances.set(
+      secondInstance({ destination_id: "polaris_dst_other_project", project_id: "checkout" }),
+    );
+    const consumer = buildConsumer(env);
+
+    await consumer.handler(makeStreamPayload());
+
+    expect(env.records.snapshot().map((r) => r.destination_id)).toEqual(["polaris_dst_test1"]);
+    expect(env.delivererCalls).toHaveLength(1);
+  });
+
+  it("caches the target list per project, not per environment", async () => {
+    // The cache key had to gain `project` with the filter. Keyed by
+    // environment alone it would serve the first project's target list to
+    // every project on the stream for a whole TTL window — reintroducing the
+    // cross-project delivery through the cache after the query was fixed.
+    const env = makeEnv();
+    env.instances.set(
+      secondInstance({ destination_id: "polaris_dst_other_project", project_id: "checkout" }),
+    );
+    const consumer = buildConsumer(env);
+
+    // storefront first, populating the cache under whatever key it uses.
+    await consumer.handler(makeStreamPayload());
+    // Then checkout, inside the same TTL window.
+    await consumer.handler(
+      makeStreamPayloadFor(makeEnvelope({ project_id: "checkout", event_id: "second-event-id" })),
+    );
+
+    const byDestination = env.records.snapshot().map((r) => r.destination_id);
+    expect(byDestination).toEqual(["polaris_dst_test1", "polaris_dst_other_project"]);
   });
 
   it("a destination-id header pins the envelope to one instance (the replay path)", async () => {

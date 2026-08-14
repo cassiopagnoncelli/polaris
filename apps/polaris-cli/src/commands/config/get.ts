@@ -72,10 +72,31 @@ export function buildConfigGetRunner(hooks: ConfigHooks = {}) {
       // `row.value` arrived masked from the query layer. Only a secret key
       // needs the second read; asking for a non-secret one would be a wasted
       // query and a disclosure call that discloses nothing.
-      const value =
-        args.reveal === true && row.is_secret
-          ? await store.reveal({ ...scope, namespace, configKey })
-          : row.value;
+      let value = row.value;
+      if (args.reveal === true && row.is_secret) {
+        // Logged, and at warn. This is the only path by which a stored secret
+        // leaves the control plane on an operator's say-so, and the record of
+        // who read what is the thing an incident responder wants afterwards.
+        //
+        // A log line is weaker than an `audit_records` row and is a deliberate
+        // choice, not an oversight: every other read on this platform is
+        // unaudited, and auditing this one alone would imply a guarantee the
+        // rest of the read surface does not make. If the threat model comes to
+        // demand it, the honest change is to audit reads as a class.
+        ctx.logger.warn(
+          {
+            audit_action: "config.reveal",
+            project_id: scope.projectId,
+            environment: scope.environment,
+            namespace,
+            config_key: configKey,
+            actor_source: ctx.actor.source,
+            actor_label: ctx.actor.label,
+          },
+          "secret value revealed to an operator",
+        );
+        value = await store.reveal({ ...scope, namespace, configKey });
+      }
       emit(ctx, row, value);
     } finally {
       await store.close();

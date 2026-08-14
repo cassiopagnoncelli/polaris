@@ -24,7 +24,6 @@
 import { hostname } from "node:os";
 
 import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/shared-clickhouse";
-import { clickhouseEnvSchema } from "@polaris/shared-config";
 import { closeDb, createDb } from "@polaris/shared-db";
 import { createLogger, type Logger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
@@ -212,9 +211,11 @@ export async function buildAnalyticsProjectorApp(
   });
 
   // ---- optional ClickHouse probe poller (PI2CRFZC) ---------------------
-  // When `POLARIS_CLICKHOUSE_URL` is set in the deployment env, the
-  // projector also runs a periodic probe loop that re-publishes
-  // ClickHouse's `system.*` health signals as Polaris Prometheus gauges.
+  // When the deployment configures ClickHouse, the projector also runs a
+  // periodic probe loop that re-publishes ClickHouse's `system.*` health
+  // signals as Polaris Prometheus gauges. `config.clickhouse` is `undefined`
+  // when no URL is set — see the section's note in `config.ts` for why the
+  // gate moved out of this function and into the schema.
   // The probes power the three v1 ClickHouse alerts
   // (PolarisClickHouseIngestionLagWarn / ...Page / ...MVFailure). When
   // the env is absent the poller is skipped — local-only test or dev
@@ -222,9 +223,9 @@ export async function buildAnalyticsProjectorApp(
   const probeMetrics = new ClickHouseProbeMetrics();
   let probeClient: ClickHouseOperatorClient | null = null;
   let probePoller: ClickHouseProbePoller | null = null;
-  if (process.env["POLARIS_CLICKHOUSE_URL"] !== undefined) {
+  if (config.clickhouse !== undefined) {
     try {
-      const clickhouseConfig = clickhouseEnvSchema.parse(process.env);
+      const clickhouseConfig = config.clickhouse;
       if (clickhouseConfig.operator !== undefined) {
         const builtClient = createClickHouseClient({
           role: "operator",

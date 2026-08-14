@@ -272,7 +272,41 @@ export function renderProjectConfigPanel(input: ProjectConfigPanelInput): Html {
       }
       ${renderTable(input, entries)}
       ${renderAddForm(input)}
+      ${renderRevealHint(input, entries)}
     </section>
+  `;
+}
+
+/**
+ * How to read a masked value back — as a command, not a button.
+ *
+ * The same call `pages/keys.ts` makes for key material, and for the same
+ * reason: a credential rendered in a browser lands in the DOM, devtools,
+ * bfcache, screenshots, and any proxy that logs response bodies. A reveal
+ * route here would be a second disclosure path bought for the convenience of
+ * not opening a terminal, on a design whose value comes from having few.
+ *
+ * Rendered only when the scope actually has a secret, so a project with none
+ * does not get told how to reveal one.
+ */
+function renderRevealHint(
+  input: ProjectConfigPanelInput,
+  entries: readonly EffectiveEntry[],
+): Html {
+  const secret = entries.find(
+    (entry) => entry.declared?.secret === true || entry.stored?.is_secret === true,
+  );
+  if (secret === undefined) return html``;
+  return html`
+    <h3>Reading a masked value</h3>
+    <p class="muted">
+      Secret values show as <code>[redacted]</code> here and in exports, and
+      are never rendered in a browser. Read one from a terminal:
+    </p>
+    <code class="cli"
+      >polaris config get --project ${input.projectId} --env ${input.environment} --namespace
+      ${secret.namespace} --key ${secret.key} --reveal</code
+    >
   `;
 }
 

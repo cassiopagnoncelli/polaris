@@ -17,8 +17,9 @@
  *   2. **Per message:**
  *      - extract the replay context from headers; suppress if not allowed,
  *      - resolve the fan-out targets: every ACTIVE destination instance
- *        of this vendor in the envelope's environment, or the single
- *        instance pinned by a `polaris-destination-id` header (replay),
+ *        of this vendor belonging to the envelope's PROJECT and
+ *        environment, or the single instance pinned by a
+ *        `polaris-destination-id` header (replay),
  *      - then, for each target:
  *      - read the destination instance from the cache (PostgreSQL on miss),
  *      - drop if the instance status is not `active`,
@@ -217,8 +218,9 @@ export interface DestinationConsumerOptions<Payload> {
    */
   readonly consumerBuildVersion?: string;
   /**
-   * How long the per-environment list of active destination instances is
-   * held before it is re-read from PostgreSQL. Defaults to 10_000 ms.
+   * How long the per-`(project, environment)` list of active destination
+   * instances is held before it is re-read from PostgreSQL. Defaults to
+   * 10_000 ms.
    *
    * The list drives the fan-out in the transport handler (see
    * `resolveFanoutTargets`), so it is consulted once per message and has
@@ -294,13 +296,19 @@ export function createDestinationConsumer<Payload>(
   const activeInstanceTtlMs = options.activeInstanceTtlMs ?? DEFAULT_ACTIVE_INSTANCE_TTL_MS;
 
   /**
-   * Per-environment cache of active destination ids for this vendor.
+   * Per-`(project, environment)` cache of active destination ids for this
+   * vendor.
    *
-   * `DestinationInstanceReader.findActiveByVendor` is a table scan on
-   * `(vendor, environment, status)`; the fan-out consults it once per
-   * message, so it is cached behind a short TTL. Keyed by environment
-   * because one consumer process serves whatever environments appear on
-   * the stream, and each has its own destination rows.
+   * `findActiveByVendorAndProject` is a table scan on
+   * `(vendor, environment, project_id, status)`; the fan-out consults it once
+   * per message, so it is cached behind a short TTL. One consumer process
+   * serves whatever projects and environments appear on the shared stream, and
+   * each pair has its own destination rows.
+   *
+   * The key gained `project` with the fan-out filter. Keyed by environment
+   * alone it was not merely coarse — it was the cache for a lookup that
+   * ignored the project, so one project's target list was served to every
+   * project on the stream.
    */
   const activeTargets = new Map<string, { ids: readonly string[]; expiresAt: number }>();
 
@@ -312,16 +320,21 @@ export function createDestinationConsumer<Payload>(
     if (pinned !== undefined) return [pinned];
 
     const environment = envelope.environment;
+    const projectId = envelope.project_id;
+    // NUL-joined; project ids and environments both forbid NUL, so no pair of
+    // distinct scopes can collide on one key.
+    const cacheKey = `${projectId}\0${environment}`;
     const nowMs = now().getTime();
-    const cached = activeTargets.get(environment);
+    const cached = activeTargets.get(cacheKey);
     if (cached !== undefined && cached.expiresAt > nowMs) return cached.ids;
 
-    const rows = await options.instances.findActiveByVendor(
+    const rows = await options.instances.findActiveByVendorAndProject(
       options.descriptor.identity.vendor,
       environment,
+      projectId,
     );
     const ids = rows.map((row) => row.destination_id);
-    activeTargets.set(environment, { ids, expiresAt: nowMs + activeInstanceTtlMs });
+    activeTargets.set(cacheKey, { ids, expiresAt: nowMs + activeInstanceTtlMs });
     return ids;
   }
 
@@ -416,7 +429,16 @@ export function createDestinationConsumer<Payload>(
     // `analytics.events` is the shared canonical stream. Its producer
     // (analytics-projector) knows nothing about destinations — one
     // envelope is fanned out here, at the consumer, to every ACTIVE
-    // instance of this consumer's vendor in the envelope's environment.
+    // instance of this consumer's vendor belonging to the envelope's PROJECT
+    // and environment.
+    //
+    // `project_id` is a routing key, and that took a correction. Fan-out
+    // resolved on `(vendor, environment)` alone, so an event from project A
+    // was delivered to project B's destination row of the same vendor:
+    // `project_id` rode the envelope and was stamped onto metrics and
+    // delivery records, but nothing routed on it. Resolving per-project
+    // CONFIG while routing ignored the project would have been incoherent on
+    // top of being a cross-project disclosure.
     //
     // A `polaris-destination-id` header overrides the fan-out and pins
     // the envelope to exactly one instance. That is the replay path:
@@ -426,7 +448,7 @@ export function createDestinationConsumer<Payload>(
     const targets = await resolveFanoutTargets(payload, envelope);
     if (targets.length === 0) {
       // Not an error: a vendor with no destination rows for this
-      // environment is the normal state of a consumer nobody has
+      // project and environment is the normal state of a consumer nobody has
       // enabled yet. Counted so "why is nothing arriving?" has an
       // answer on the /metrics endpoint.
       metrics.incrementSkipped({
