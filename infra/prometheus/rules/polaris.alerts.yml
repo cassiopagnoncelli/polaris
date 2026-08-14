@@ -426,3 +426,33 @@ groups:
             Suggests credential confusion or a script wielding stale
             tokens. See the runbook to investigate.
           runbook_url: docs/operations/runbook-replay-stuck.md
+      - alert: PolarisDestinationBreakerOpen
+        expr: max by (vendor, destination_id, environment) (polaris_destination_breaker_state) == 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Destination {{ $labels.destination_id }} ({{ $labels.vendor }}) is circuit-broken"
+          description: >-
+            The runtime has stopped attempting deliveries to this instance after
+            consecutive transient vendor failures, and is probing once per
+            cooldown. Events are parked in retry tiers, not dropped, and will
+            flow once the vendor recovers. Held for 5m so a brief vendor blip
+            that the breaker itself absorbs does not page anyone — the breaker
+            working as intended is not an incident.
+
+      - alert: PolarisDestinationFreshnessSlo
+        expr: >-
+          histogram_quantile(0.99, sum by (vendor, environment, le)
+            (rate(polaris_destination_freshness_seconds_bucket[10m]))) > 900
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Destination freshness p99 for {{ $labels.vendor }} is over 15 minutes"
+          description: >-
+            p99 occurred_at-to-delivered has exceeded 15 minutes for 15 minutes.
+            This measures staleness at the VENDOR, so it catches the case every
+            duration panel misses: a vendor answering quickly while the consumer
+            runs far behind. Check consumer lag and the retry tiers before
+            suspecting the vendor.

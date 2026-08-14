@@ -95,7 +95,7 @@ import {
   type TransportMessageHandler,
   type TransportMessagePayload,
 } from "@polaris/shared-transport";
-
+import { breakerKey, DestinationCircuitBreaker } from "./breaker.js";
 import {
   type DeliveryRecord,
   type DeliveryRecordErrorClass,
@@ -206,6 +206,15 @@ export interface DestinationConsumerOptions<Payload> {
    */
   readonly rateLimiter?: DestinationRateLimiterLike;
   /**
+   * Per-instance circuit breaker. Defaults to a fresh in-memory one.
+   *
+   * Deliberately NOT shared across replicas: a shared breaker would let one
+   * replica's bad luck stop every replica, and would need consensus about
+   * who owns the half-open probe. Each replica discovering the vendor is
+   * down independently costs a few extra requests and needs no coordination.
+   */
+  readonly breaker?: DestinationCircuitBreaker;
+  /**
    * Destination-side dedupe window. Defaults to a fresh
    * `InMemoryDestinationDedupe`. Hosts that want a different window
    * (or a future Redis adapter) inject here.
@@ -265,6 +274,7 @@ export interface DestinationConsumer {
   readonly metrics: DestinationMetrics;
   /** Rate limiter the runtime is wired to. */
   readonly rateLimiter: DestinationRateLimiterLike;
+  readonly breaker: DestinationCircuitBreaker;
   /** Dedupe window the runtime is wired to. */
   readonly dedupe: DestinationDedupe;
 }
@@ -308,6 +318,7 @@ export function createDestinationConsumer<Payload>(
 ): DestinationConsumer {
   const now = options.now ?? (() => new Date());
   const rateLimiter = options.rateLimiter ?? new DestinationRateLimiter();
+  const breaker = options.breaker ?? new DestinationCircuitBreaker();
   const dedupe = options.dedupe ?? new InMemoryDestinationDedupe();
   const metrics = options.metrics ?? new DestinationMetrics();
   const allowReplay = options.allowReplay ?? false;
@@ -375,6 +386,7 @@ export function createDestinationConsumer<Payload>(
       logger: options.logger,
       now,
       rateLimiter,
+      breaker,
       dedupe,
       metrics,
       allowReplay,
@@ -508,6 +520,7 @@ export function createDestinationConsumer<Payload>(
           logger: options.logger,
           now,
           rateLimiter,
+          breaker,
           dedupe,
           metrics,
           allowReplay,
@@ -577,7 +590,7 @@ export function createDestinationConsumer<Payload>(
     await options.consumer.disconnect();
   }
 
-  return { start, stop, handler, handleEvent, metrics, rateLimiter, dedupe };
+  return { start, stop, handler, handleEvent, metrics, rateLimiter, breaker, dedupe };
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +612,7 @@ interface ProcessOneInput<Payload> {
   readonly logger: Logger;
   readonly now: () => Date;
   readonly rateLimiter: DestinationRateLimiterLike;
+  readonly breaker: DestinationCircuitBreaker;
   readonly dedupe: DestinationDedupe;
   readonly metrics: DestinationMetrics;
   readonly allowReplay: boolean;
@@ -624,6 +638,7 @@ async function processOne<Payload>(
     logger,
     now,
     rateLimiter,
+    breaker,
     dedupe,
     metrics,
     allowReplay,
@@ -1000,6 +1015,60 @@ async function processOne<Payload>(
   // without one is a destination row that does not exist, which step 1 already
   // handles. A credential that is present but wrong is the vendor's 401, and
   // that has always been the deliverer's to report.
+  // The breaker sits after the gate and the claim but BEFORE the rate-limit
+  // lease: a destination that is cut off should not spend a concurrency slot
+  // or an RPS entry to find that out. The claim is released so the event can
+  // be delivered by the retry that follows.
+  const breakerScope = breakerKey(instance.destination_id, instance.environment);
+  const breakerDecision = breaker.check(breakerScope);
+  metrics.setBreakerState(instanceLabels, breakerDecision.state);
+  if (!breakerDecision.allowed) {
+    await releaseClaim();
+    logger.warn(
+      {
+        component: "destination.runtime",
+        ...instanceLabels,
+        event_id: envelope.event_id,
+        breaker_state: breakerDecision.state,
+        retry_after_ms: breakerDecision.retryAfterMs,
+      },
+      "destination circuit breaker is open — not attempting delivery",
+    );
+    return recordOutcome({
+      ...outcomeBuildVersion,
+      records,
+      metrics,
+      logger,
+      identity,
+      instance,
+      envelope,
+      attempt,
+      startedAt,
+      now,
+      // Retryable, not a drop: the event is fine and the vendor is expected
+      // back. It parks in a tier and returns after the cooldown.
+      status: "failed_retryable",
+      error_class: "transient",
+      vendor_response_code: null,
+      vendor_response_summary: `circuit breaker ${breakerDecision.state}`,
+      dedupe_key: null,
+      delivery_key,
+      logLine: "destination circuit breaker open",
+      labels: instanceLabels,
+      ...(payload !== undefined
+        ? {
+            retryPark: {
+              payload,
+              component: identity.component,
+              delayMs: retryDelayMsFor(instance.retry_policy, attempt),
+            },
+          }
+        : { rethrow: new Error(`circuit breaker ${breakerDecision.state}`) }),
+      producer,
+      ...(dlqRecords !== undefined ? { dlqRecords } : {}),
+    });
+  }
+
   const lease = await rateLimiter.acquire(instance);
   metrics.observeRateLimitWaitMs(instanceLabels, lease.waited_ms);
 
@@ -1062,6 +1131,14 @@ async function processOne<Payload>(
   // the cache's TTL either way, so clearing an alias would be theatre.
 
   if (deliveryResult.kind === "accepted") {
+    // The vendor answered. A successful half-open probe closes the breaker
+    // outright rather than counting down toward closed.
+    breaker.onSuccess(breakerScope);
+    metrics.observeFreshnessMs(
+      instanceLabels,
+      deliveryFinishedAt.getTime() - Date.parse(envelope.occurred_at),
+    );
+    metrics.setBreakerState(instanceLabels, breaker.stateOf(breakerScope));
     // Extends this caller's claim to the full window. Until now the claim
     // was short-lived on purpose; the vendor has accepted, so the key is
     // genuinely spent.
@@ -1089,6 +1166,10 @@ async function processOne<Payload>(
   }
 
   if (deliveryResult.kind === "failed_retryable") {
+    // Only TRANSIENT failures feed the breaker. A permanent failure means
+    // this event was wrong, not that the vendor is — counting those would
+    // let a burst of malformed events stop delivery of everything else.
+    metrics.setBreakerState(instanceLabels, breaker.onFailure(breakerScope));
     // The claim goes back before the record is written. This event comes
     // round again when its retry tier expires, and it must not find its own
     // claim in the way.

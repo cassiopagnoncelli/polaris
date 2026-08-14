@@ -552,6 +552,112 @@
       ],
       "title": "Planned skips by reason (gate / unmapped, 5m, ops)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "How stale an event was when the VENDOR accepted it, not how long the HTTP call took. A destination whose vendor answers in 40ms while its consumer sits an hour behind looks perfectly healthy on the duration panels \u2014 the lag is upstream of the only thing they measure. Measured from occurred_at (the producer's clock), because the question is how stale the vendor's picture of this customer is, and the customer acted at occurred_at.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (vendor, le) (rate(polaris_destination_freshness_seconds_bucket{vendor=~\"$vendor\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "{{vendor}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Freshness p99 per vendor (occurred_at -> delivered, 5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "2 means the runtime is refusing deliveries to this instance without calling the vendor, after consecutive transient failures. 1 is a probe in flight. Breakers are per REPLICA and in-memory, so several series for one destination_id is expected \u2014 each replica discovers the vendor is down independently, which is what avoids needing consensus about who owns the probe.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["max", "lastNotNull"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (vendor, destination_id) (polaris_destination_breaker_state{vendor=~\"$vendor\", environment=\"$environment\"})",
+          "legendFormat": "{{vendor}} / {{destination_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Circuit breaker state per destination (0 closed / 1 half-open / 2 open)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

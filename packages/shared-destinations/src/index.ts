@@ -21,6 +21,13 @@
  */
 
 export {
+  type BreakerDecision,
+  type BreakerOptions,
+  type BreakerState,
+  breakerKey,
+  DestinationCircuitBreaker,
+} from "./breaker.js";
+export {
   createKyselyDeliveryRecordRepository,
   DELIVERY_RECORD_ERROR_CLASSES,
   DELIVERY_RECORD_STATUSES,
@@ -104,9 +111,11 @@ export {
   type DeliveryKeyInput,
 } from "./idempotency.js";
 export {
+  DESTINATION_FRESHNESS_BUCKETS_SECONDS,
   type DestinationMetricLabels,
   DestinationMetrics,
   type DestinationOutcomeLabels,
+  METRIC_DESTINATION_BREAKER_STATE,
   METRIC_DESTINATION_DELIVERY_DURATION_MS_LAST,
   METRIC_DESTINATION_EVENTS_CONSUMED_TOTAL,
   METRIC_DESTINATION_EVENTS_DEDUPED_TOTAL,
@@ -116,6 +125,7 @@ export {
   METRIC_DESTINATION_EVENTS_FAILED_TOTAL,
   METRIC_DESTINATION_EVENTS_RETRY_TOTAL,
   METRIC_DESTINATION_EVENTS_SKIPPED_TOTAL,
+  METRIC_DESTINATION_FRESHNESS_SECONDS,
   METRIC_DESTINATION_RATE_LIMIT_WAIT_MS_LAST,
   METRIC_DESTINATION_REPLAY_SUPPRESSED_TOTAL,
   type MetricSample,

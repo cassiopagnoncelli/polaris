@@ -41,6 +41,16 @@ export const METRIC_DESTINATION_EVENTS_DLQ_TOTAL = "polaris_destination_events_d
 export const METRIC_DESTINATION_EVENTS_RETRY_TOTAL = "polaris_destination_events_retry_total";
 export const METRIC_DESTINATION_EVENTS_SKIPPED_TOTAL = "polaris_destination_events_skipped_total";
 export const METRIC_DESTINATION_EVENTS_DEDUPED_TOTAL = "polaris_destination_events_deduped_total";
+/**
+ * Circuit-breaker state per destination instance: 0 closed, 1 half-open,
+ * 2 open.
+ *
+ * A gauge rather than a counter, because the question an operator asks is
+ * "is this destination cut off right now?" — and a counter of trips answers
+ * a different one. The numeric encoding is what lets a single panel show
+ * every instance's state at a glance and an alert fire on `== 2`.
+ */
+export const METRIC_DESTINATION_BREAKER_STATE = "polaris_destination_breaker_state";
 export const METRIC_DESTINATION_REPLAY_SUPPRESSED_TOTAL =
   "polaris_destination_replay_suppressed_total";
 export const METRIC_DESTINATION_DELIVERY_DURATION_MS_LAST =
@@ -84,6 +94,33 @@ export const DESTINATION_DELIVERY_DURATION_BUCKETS_SECONDS: readonly number[] = 
  * wait histogram. Most waits are below 100ms (token-bucket happy path);
  * the upper end of the range accommodates back-pressured leases.
  */
+/**
+ * End-to-end freshness: `occurred_at` to the moment the vendor accepted.
+ *
+ * The number a destination's SLO is actually about. Delivery DURATION only
+ * covers the HTTP call, so a destination whose vendor answers in 40ms while
+ * its consumer sits an hour behind looks perfectly healthy on every existing
+ * panel — the lag is upstream of the only thing being measured.
+ *
+ * Measured from `occurred_at`, the producer's clock, not `ingested_at`. That
+ * makes it sensitive to producer clock skew, and it is still the right
+ * choice: the question is "how stale is what the vendor knows about this
+ * customer", and the customer did the thing at `occurred_at`.
+ */
+export const METRIC_DESTINATION_FRESHNESS_SECONDS = "polaris_destination_freshness_seconds";
+
+/**
+ * Buckets from a second to six hours.
+ *
+ * Wide, because the two failure modes have very different scales: a
+ * rate-limited destination runs seconds behind, while one whose consumer has
+ * been down since the morning runs hours behind, and a p99 that saturates at
+ * the top bucket cannot tell an operator which they have.
+ */
+export const DESTINATION_FRESHNESS_BUCKETS_SECONDS: readonly number[] = Object.freeze([
+  1, 5, 15, 60, 300, 900, 3600, 10_800, 21_600,
+]);
+
 export const DESTINATION_RATE_LIMIT_WAIT_BUCKETS_SECONDS: readonly number[] = Object.freeze([
   0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30,
 ]);
@@ -223,6 +260,37 @@ export class DestinationMetrics {
       labelRecord,
       value / 1000,
     );
+  }
+
+  /**
+   * Record how stale an event was when the vendor accepted it.
+   *
+   * Only on acceptance. A failed delivery has no freshness — the vendor does
+   * not know about the event at all — and folding failures in would make the
+   * SLO improve every time a destination started dropping traffic.
+   */
+  observeFreshnessMs(labels: DestinationMetricLabels, value: number): void {
+    // A negative value means the producer's clock is ahead of ours. Clamped
+    // rather than dropped: the delivery happened, and a missing observation
+    // would quietly bias the percentile toward the slow tail.
+    this.observeHistogram(
+      METRIC_DESTINATION_FRESHNESS_SECONDS,
+      DESTINATION_FRESHNESS_BUCKETS_SECONDS,
+      toLabelRecord(labels),
+      Math.max(0, value) / 1000,
+    );
+  }
+
+  /**
+   * Publish a breaker's current state.
+   *
+   * Called on every transition rather than on a timer, so the series moves
+   * the moment the breaker does. A gauge left un-updated would report a
+   * destination as cut off long after it recovered.
+   */
+  setBreakerState(labels: DestinationMetricLabels, state: "closed" | "half_open" | "open"): void {
+    const numeric = state === "open" ? 2 : state === "half_open" ? 1 : 0;
+    this.recordGauge(METRIC_DESTINATION_BREAKER_STATE, toLabelRecord(labels), numeric);
   }
 
   /**

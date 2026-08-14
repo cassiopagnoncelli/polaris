@@ -21,9 +21,11 @@ import type { MessageHeaders, TransportMessagePayload } from "@polaris/shared-tr
 import { describe, expect, it } from "vitest";
 
 import {
+  breakerKey,
   createDestinationConsumer,
   type Deliverer,
   type DeliveryRecord,
+  DestinationCircuitBreaker,
   type DestinationDescriptor,
   type DestinationInstance,
   DestinationInstanceCache,
@@ -1370,5 +1372,89 @@ describe("destination runtime — the routing gate", () => {
     });
     expect(other.delivererCalls).toHaveLength(0);
     expect(lastRecord(other)?.status).toBe("skipped_filtered");
+  });
+});
+
+describe("destination runtime — circuit breaker", () => {
+  it("cuts off delivery after consecutive transient failures", async () => {
+    // Without this the runtime keeps asking a vendor that is down, and each
+    // ask costs a concurrency slot, an RPS entry, a delivery_records row and
+    // a parked message that comes back to ask again.
+    let vendorCalls = 0;
+    const env = makeEnv({
+      deliverer: async () => {
+        vendorCalls += 1;
+        return { kind: "failed_retryable", error_class: "transient", vendor_response_code: "503" };
+      },
+    });
+    const breaker = new DestinationCircuitBreaker({ failureThreshold: 3, cooldownMs: 30_000 });
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+      breaker,
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await consumer.handleEvent({
+        envelope: makeEnvelope({ event_id: `breaker-${String(i)}` }),
+        destination_id: SEED_INSTANCE.destination_id,
+        payload: makeFakeTransportPayload(),
+      });
+    }
+    expect(vendorCalls).toBe(3);
+
+    // Fourth event: refused without reaching the vendor at all.
+    await consumer.handleEvent({
+      envelope: makeEnvelope({ event_id: "breaker-after" }),
+      destination_id: SEED_INSTANCE.destination_id,
+      payload: makeFakeTransportPayload(),
+    });
+    expect(vendorCalls).toBe(3);
+
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("failed_retryable");
+    expect(rec?.vendor_response_summary).toMatch(/circuit breaker open/);
+  });
+
+  it("a permanent failure does not feed the breaker", async () => {
+    // A 400 means this event was wrong; a 500 means the vendor is. Counting
+    // both would let a burst of malformed events from one producer stop
+    // delivery of everything else — a data-quality problem turned into an
+    // outage.
+    let vendorCalls = 0;
+    const env = makeEnv({
+      deliverer: async () => {
+        vendorCalls += 1;
+        return { kind: "failed_permanent", error_class: "permanent", vendor_response_code: "400" };
+      },
+    });
+    const breaker = new DestinationCircuitBreaker({ failureThreshold: 2, cooldownMs: 30_000 });
+    const consumer = createDestinationConsumer({
+      descriptor: env.descriptor,
+      consumer: buildConsumerStub(),
+      producer: makeProducerStub({ producerSends: env.producerSends }),
+      instances: env.instances,
+      records: env.records,
+      logger: noopLogger,
+      dedupe: env.dedupe,
+      breaker,
+    });
+
+    for (let i = 0; i < 4; i++) {
+      await consumer.handleEvent({
+        envelope: makeEnvelope({ event_id: `perm-${String(i)}` }),
+        destination_id: SEED_INSTANCE.destination_id,
+        payload: makeFakeTransportPayload(),
+      });
+    }
+    expect(vendorCalls).toBe(4);
+    expect(
+      breaker.stateOf(breakerKey(SEED_INSTANCE.destination_id, SEED_INSTANCE.environment)),
+    ).toBe("closed");
   });
 });
