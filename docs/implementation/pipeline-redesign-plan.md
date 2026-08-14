@@ -21,9 +21,11 @@ programme (`project-config-plan.md`), which has landed, and does not replace it.
 
 This is the "R programme". It restructures Polaris's processing model around
 the shape that Segment's pipeline settled on, adapted to Polaris's RabbitMQ
-backbone, file-heavy semantics, and internal posture. It is deliberately a
-map of everything required, sequenced; individual workstreams get their own
-cards.
+backbone, file-heavy semantics, and internal posture. The reference model is
+preserved in full: all five sync stages **and all six async pipelines** —
+journeys and scheduled warehouse/profile syncs included — have designed,
+sequenced workstreams. It is deliberately a map of everything required;
+individual workstreams get their own cards.
 
 ---
 
@@ -156,13 +158,13 @@ pipeline without adding latency to it:
 
 | Process | Polaris implementation |
 |---|---|
-| Warehouse sync | `clickhouse-sink` (exists; streaming, not scheduled — deliberate divergence from Segment, whose batching exists because customer warehouses are slow; ClickHouse is ours and takes streams) |
+| Warehouse sync | Two halves: `clickhouse-sink` (exists; streaming — ClickHouse is ours and takes streams) **plus scheduled batch exports** to object storage: the raw archive (replay beyond the 90-day stream window) and Parquet loads for any external warehouse (§6.2) |
 | Derived facts | sessionizer, attribution-engine — now consuming `resolved.events`, keyed by `profile_id` |
 | Trait & audience computation | new scheduled jobs: code-defined trait/audience definitions computed from ClickHouse projections, written into the profile store, changes emitted on `profile.events` |
 | Retroactive merges | new worker consuming `identity.merged`: maintains the ClickHouse merge map; history is re-interpreted at read time, never rewritten |
-| Profiles sync | `profile.updated` events → clickhouse-sink → `profiles` table in ClickHouse (streaming; no scheduler needed) |
+| Profiles sync | `profile.updated` events → clickhouse-sink → `profiles` table in ClickHouse (streaming), plus the scheduled profile export riding the warehouse-export job (§6.2) |
 | Reverse ETL | new `consumers/reverse-etl`: scheduled repo-defined ClickHouse queries whose rows re-enter the platform as canonical events through the ingester |
-| Journeys | deferred; designed on top of audiences + `profile.events` later (§11) |
+| Journeys | `journey-orchestrator` processor: versioned code-defined journeys, participant state machine in Postgres, wait timers, actions as canonical events through the existing destination path (§6.1) |
 
 ### 2.2 Stream families, before and after
 
@@ -425,12 +427,76 @@ gates, golden-fixture testing — the processor chassis is already built.
 
 | Segment async process | Polaris today | Target | Work |
 |---|---|---|---|
-| Warehouse sync | `clickhouse-sink` streams `analytics.events` + 4 derived families into `analytics_raw` / `analytics_processed` | Same sink, consuming `resolved.events` as the source-fact input; `analytics_raw` gains `profile_id`, `traits_version` columns | Additive DDL + MV update (rebuild machinery exists); flip input family; **give clickhouse-sink a Dockerfile + build entry** (it has none) |
+| Warehouse sync | `clickhouse-sink` streams `analytics.events` + 4 derived families into `analytics_raw` / `analytics_processed`. No batch loads, no archive: replay dies at the 90-day stream retention, which `03-rabbitmq-streams.md` already names as the gap | Streaming half: same sink, consuming `resolved.events` as the source-fact input; `analytics_raw` gains `profile_id`, `traits_version`. Scheduled half: batch exports to object storage — the raw archive + Parquet warehouse loads (§6.2) | Additive DDL + MV update (rebuild machinery exists); flip input family; **give clickhouse-sink a Dockerfile + build entry** (it has none); the export job (§6.2) |
 | Trait & audience computation | Nothing | Trait definitions as code (`catalog/traits/*.ts`: key, type, projection-backed SQL); scheduled compute (host cron + `polaris traits compute`, same pattern as the attribution prune); writes via profile store, bumps `traits_version`, emits `trait.computed` + `profile.updated`. Audiences: code-defined predicates over traits/projections; membership in `audience_memberships` (PG runtime state); transitions emit `audience.entered` / `audience.exited` on `profile.events` | New: definitions loader, compute runner, membership table, CLI verbs, catalog events. Trait SQL reads **projections only** (service role) — a governance line that keeps trait compute off `analytics_raw` |
 | Retroactive profile merges | Explicitly deferred in three files; replay cannot express it | Merge worker consumes `identity.merged` v2 → upserts ClickHouse `profile_merge_map` (ReplacingMergeTree) backing a `profile_canonical` dictionary; person-keyed queries and projections resolve `dictGetOrDefault('profile_canonical', ...)` at read time. **History is never rewritten** — immutability holds; re-interpretation happens at read. Optional: schedule a `clickhouse-rebuild` for materialized person-keyed projections | New worker (small — one consumer, one upsert), dict DDL, projection guidance in `07-clickhouse.md`. No destination re-sends after merges (Segment doesn't either) |
-| Profiles sync | Nothing | `profile.updated` events flow through clickhouse-sink into a `profiles` ClickHouse table (`ReplacingMergeTree(traits_version)`) — streaming, no scheduler, reuses the sink wholesale | Sink routing entry + DDL + MV |
+| Profiles sync | Nothing | `profile.updated` events flow through clickhouse-sink into a `profiles` ClickHouse table (`ReplacingMergeTree(traits_version)`) — streaming, reuses the sink wholesale — and the scheduled export job pushes the unified-profiles snapshot to the warehouse tier alongside events (§6.2) | Sink routing entry + DDL + MV; profiles slice of the export job |
 | Reverse ETL | Nothing (`consumers/reverse-etl/` is in the blessed repo shape but absent) | `consumers/reverse-etl/v1`: repo-defined SQL (file-heavy) against projections; schedule + enablement + params in `project_config`; each run POSTs resulting canonical events to the ingester with `source.type: internal` — full validation/policy/dedupe applies; trait-shaped results ride `user.identified`-family events | New consumer + `polaris reverse-etl run <job>` cron verb + job SQL registry; run records reuse `processor_runs` shape |
-| Journeys | Nothing | Deferred (§11): state machine over `profile.events` + audiences + a timer store; not designed here | — |
+| Journeys | Nothing | `journey-orchestrator` processor advancing profiles through code-defined, versioned journeys: triggers, waits, branches, actions (§6.1) | New processor + `journey_participants` table + timer sweep + catalog events; sequenced last (needs audiences) |
+
+### 6.1 Journey orchestration
+
+Sequenced last because it stands on audiences, but designed now so nothing
+upstream forecloses it. Everything is existing Polaris idiom:
+
+- **Definitions are code**, like traits and mappings:
+  `catalog/journeys/<name>.v<N>.ts` declares a versioned step graph —
+  *trigger* (audience entered, or an event predicate), *wait* (duration or
+  until-timestamp), *branch* (predicate over profile traits / audience
+  membership), *action* (emit a canonical `journey.*` event). Any change to
+  the graph is a new journey version; participants finish on the version
+  they entered (the processor semantic-immutability rule, applied to
+  journeys).
+- **Runtime** is a normal processor, `processors/journey-orchestrator/v1`,
+  consuming `resolved.events` + `profile.events` (triggers and branch
+  inputs arrive per-profile-ordered on the spine's partition key). State is
+  one Postgres table, `journey_participants` `(journey, journey_version,
+  project_id, environment, profile_id, current_step, status, entered_at,
+  wait_until)` — runtime state, rebuildable, DB-light-legal. Entry is
+  idempotent per `(journey, profile_id)`; re-entry policy is declared per
+  journey.
+- **Waits** are `wait_until` rows swept by a timer (the crontab + CLI-verb
+  pattern the attribution prune already uses; in-process sweep with jitter
+  if latency ever matters). No new scheduler infrastructure.
+- **Actions are events, never vendor calls.** A step that messages a user
+  emits `journey.step_reached` (or a domain event) onto `profile.events`;
+  the existing destination path — subscriptions, consent, normalize, map,
+  deliver — carries it to Braze or any vendor. The orchestrator gets no
+  network access and no vendor semantics, preserving the adapter rule.
+- **Observability**: `journey.entered` / `.step_advanced` / `.exited`
+  catalog events flow to ClickHouse through the sink like every other
+  derived fact, so journey funnels are projections, not bespoke storage.
+
+### 6.2 Scheduled warehouse and profile exports (the archive)
+
+The scheduled-batch half of the reference model, which streaming ClickHouse
+ingestion does not cover, and the piece that lifts replay beyond the 90-day
+stream window (`03-rabbitmq-streams.md` names this exact gap: "long-term raw
+replay should eventually come from an object-storage archive").
+
+- **Raw archive**: a small archiver consumer on `raw.events` writing
+  size/time-bounded batches to object storage as partitioned NDJSON
+  (`project/environment/date/partition-offset-range`), checkpointed like
+  every consumer. The archive becomes the replay source for windows older
+  than stream retention; `shared-replay` gains an archive
+  `ReplayExecutorSource` next to the stream driver — the planner and
+  executor contracts already abstract the source, so this is an adapter,
+  not a redesign.
+- **Warehouse loads**: a scheduled export job (`polaris warehouse export`,
+  host cron — the existing pattern) writing Parquet snapshots of the
+  projection tables and `analytics_raw` slices to the same object-storage
+  tier, partitioned by day. That tier *is* "your data warehouse" for any
+  internal consumer that is not ClickHouse (Spark, DuckDB, pandas, a future
+  lakehouse); loads into a second OLAP store, if one ever exists, read from
+  these files rather than re-tapping the pipeline.
+- **Profiles Sync**: the same job exports the unified-profiles snapshot
+  (profiles + traits + merge map) on the same schedule, satisfying the
+  reference model's "profiles pushed down into your warehouse" without a
+  second mechanism.
+- Export queries run under the `operator` ClickHouse profile through
+  `shared-clickhouse` (they legitimately read `analytics_raw` with the
+  sanctioned dedupe idiom), and every run writes a job record — same
+  lifecycle shape as `clickhouse_rebuild_jobs`.
 
 ---
 
@@ -470,7 +536,8 @@ M6  Retire: analytics-projector (activation-disable, then delete),
     M4/M5 verify), enriched.events + analytics.events families
     (decommission = topology migration; retention is declaration-time).
 M7  Support plane: merge worker + merge dictionary (R4), traits/audiences
-    (R5, R6), reverse ETL (R7).
+    (R5, R6), reverse ETL (R7), warehouse exports + archive (R10),
+    journeys (R11).
 ```
 
 Replay across the cutover: `raw.events` replays reach `profile-resolver`
@@ -496,13 +563,17 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 | R6 | Audiences | M | R5 | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
 | R7 | Reverse ETL | M | R5 | `consumers/reverse-etl/v1`; job SQL registry; cron verb; ingester round-trip |
 | R8 | Sessionizer v2 + attribution v3 | M | R2 | M5 as its own stream — mechanical rekeying to `profile_id`, new majors, fixture refresh |
-| R9 | Hardening (rolling) | S× | parallel | Items in §9 not consumed by R1–R8 |
+| R9 | Hardening (rolling) | S× | parallel | Items in §9 not consumed by other workstreams |
+| R10 | Warehouse exports + raw archive | M | R2 (events); R5 (profiles slice) | §6.2: archiver consumer on `raw.events`; `polaris warehouse export` cron verb; Parquet snapshots; archive `ReplayExecutorSource` for `shared-replay`; export job records |
+| R11 | Journey orchestration | L | R6 | §6.1: definition loader, `journey-orchestrator` v1, `journey_participants`, wait sweep, `journey.*` catalog events, funnels projection |
 
 Critical path: **R0 → R1 → R2 → R3**, with R8 and R4 fanning out after R2.
-R5→R6→R7 are sequential among themselves but independent of R3. The C
-programme has landed in full, so the R programme starts unblocked: R3 builds
-directly on `project_config`, the per-consumer config slices, and the
-project-scoped fan-out.
+R5→R6→R7 are sequential among themselves but independent of R3. R10's
+archiver needs only R2's spine (its profiles slice waits on R5). R11 closes
+the programme after R6 — the full reference model, including journeys, is
+then live. The C programme has landed in full, so the R programme starts
+unblocked: R3 builds directly on `project_config`, the per-consumer config
+slices, and the project-scoped fan-out.
 
 ---
 
@@ -556,8 +627,10 @@ independent hardening.
   Polaris keeps transformations in versioned, golden-tested code. We move
   only *selection* (subscriptions, filters, consent) into config values —
   the narrowed rule already drew this line.
-- **Scheduled warehouse batching.** ClickHouse takes streams; the sink
-  stays streaming.
+- **Batching into our own OLAP store.** ClickHouse takes streams, so its
+  ingestion stays streaming; the reference model's scheduled-batch
+  semantics live where they earn their keep — the exports and archive
+  (§6.2) — not in the sink.
 - **Per-instance delivery infrastructure.** Vendor-level consumers fanning
   to instances in-process stay; per-instance streams would multiply the
   operational surface for no current need. If one instance's lag or rate
@@ -566,8 +639,6 @@ independent hardening.
 - **Inline resolution in the ingest HTTP path.** Ingest stays thin;
   resolution is the first hop behind the broker. The SDK-visible latency
   contract is unchanged.
-- **Journey orchestration now.** It sits on audiences + timers and has no
-  consumer yet; designing it before audiences exist would be fiction.
 
 ## 11. Non-goals and deferrals
 
@@ -575,12 +646,9 @@ independent hardening.
 - Probabilistic / heuristic matching (`confidence='candidate'` stays
   reserved; only deterministic evidence in v1).
 - RBAC / consumer-side access control (unchanged trusted-operator posture).
-- Object-storage raw archive (replay beyond the 90-day window) — separate
-  programme; this plan neither needs nor blocks it.
 - Customer deletion — the designed-not-built tombstone flow in
   `01-event-contract.md` gains a natural anchor (the profile) but remains
   deferred until a project needs it.
-- Journeys (§10).
 
 ## 12. Decision log
 
