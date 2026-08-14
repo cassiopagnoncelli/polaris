@@ -710,25 +710,26 @@ M2  Land profile-store migrations + the two stage processors:
 M3  clickhouse-sink v2: add resolved.events to the source-fact input set
     (new columns nullable/default).
 
-    Overlap needs care, and the naive reading is wrong. Both feeds carry
-    the SAME event_id and therefore the same `analytics_raw` sort key
-    `(project_id, environment, event, event_id)`. ReplacingMergeTree does
-    collapse them to one row — but it keeps the row with the highest
-    `_version`, and among equal versions the winner is arbitrary. The two
-    rows are NOT interchangeable: only the resolved-path row carries
-    `profile_id` and `traits_version`. A dual-run that lets the old path
-    win silently produces un-enriched analytical rows.
+    The overlap needs one deliberate mechanism, not luck. Both feeds
+    carry the SAME event_id and sort key, and today `_version` falls back
+    to `ingested_at` milliseconds for every row — nothing populates it,
+    and the spine rightly preserves `ingested_at` verbatim (restamping a
+    passthrough fact would corrupt lag metrics and replay ordering).
+    Equal versions make the ReplacingMergeTree winner and argMax reads
+    arbitrary, and only the resolved-path row carries `profile_id`: an
+    unlucky collapse yields silently un-enriched analytical rows.
 
-    So: verify parity from `analytics_ingest_log` (append-only, keeps both
-    rows distinctly with transport lineage — this is exactly what it is
-    for), never by reading `analytics_raw` during the overlap. Then make
-    the resolved path win deterministically before the overlap begins,
-    either by ranking `_version` on the source family or by cutting the
-    sink's input over rather than overlapping it. Confirm the choice
-    against the DDL when the card is written; do not assume dedupe alone
-    resolves it.
+    The schema already reserved the answer: the spine populates
+    `_version` explicitly — the "set by the analytics processor" role the
+    DDL comment describes but nothing fills — with a value ranked above
+    the ingested_at fallback and monotonic under replay (exact scheme
+    decided on the R2 card). Deterministic winner; the dual-run
+    philosophy survives intact.
 
-    Only then drop analytics.events from the sink's subscriptions.
+    Verify parity from `analytics_ingest_log` (append-only, keeps both
+    feeds' rows distinctly with transport lineage — exactly what it is
+    for), never from `analytics_raw` during the overlap. Then drop
+    analytics.events from the sink's subscriptions.
 M4  Destination consumers: flip input family to resolved.events and adopt
     the routing gate + profile-aware normalize (pickBestIdentity prefers
     canonical_customer_id / profile_id; GA4 client_id from anonymous_id —
@@ -852,7 +853,9 @@ independent hardening.
   0005); stale runtime header comment.
 - Doc drift: `docs/README.md` links to a nonexistent
   `docs/implementation/kanban.md` and to ADRs outside the repo;
-  `shared-db` types 12 of 18 tables.
+  `shared-db` types 12 of 18 tables; the `analytics_raw` DDL comment
+  claims "the analytics processor" sets `_version` — nothing does, every
+  row rides the `ingested_at` fallback (M3 makes the comment true).
 
 ---
 
