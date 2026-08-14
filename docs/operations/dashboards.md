@@ -107,10 +107,15 @@ Panels and the metric each uses:
   non-zero rate means something is publishing to an exchange with no
   binding. See
   [runbook-rabbitmq-topology.md](runbook-rabbitmq-topology.md).
-- **No Polaris-side publish-failure counter.** The proxy is the ingester's
-  per-batch reject counter with `reason="publish_failed"`. A dedicated
-  `polaris_ingest_publish_failed_total` would let us split publish vs
-  serializer vs batch-flush failures; not in v1.
+- **Publish outcomes have dedicated counters.**
+  `polaris_ingest_publish_success_total` and
+  `polaris_ingest_publish_failed_total` are emitted per envelope by the
+  ingest handler, the latter carrying `reason` (the error name). This
+  entry previously said no such counter existed and to use the per-batch
+  reject counter as a proxy — that was written before the counters
+  landed and outlived them. A doc asserting a metric does not exist is
+  as costly as a panel referencing one that does not: it talks the next
+  author out of a query that would have worked.
 - **No fleet-wide broker health roll-up.** `up{job=...}` is the v1 sentinel.
 
 ## Processors
