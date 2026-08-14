@@ -177,7 +177,7 @@ every stream-attached unit of them lives under `async/` (§2.3):
 | Trait & audience computation | `async/computation/`: sessionizer v2 and attribution-engine v3 — background aggregations over the spine, keyed by `profile_id` (§2.4) — plus code-defined computed traits and audiences from ClickHouse projections, written into the profile store, changes emitted on `profile.events` |
 | Retroactive merges | new worker consuming `identity.merged`: maintains the ClickHouse merge map; history is re-interpreted at read time, never rewritten |
 | Profiles sync | `profile.updated` events → clickhouse-sink → `profiles` table in ClickHouse (streaming), plus the scheduled profile export riding the warehouse-export job (§6.2) |
-| Reverse ETL | new `consumers/reverse-etl`: scheduled repo-defined ClickHouse queries whose rows re-enter the platform as canonical events through the ingester |
+| Reverse ETL | new `async/reverse-etl/runner`: scheduled repo-defined ClickHouse queries whose rows re-enter the platform as canonical events through the ingester |
 | Journeys | `journey-orchestrator` processor: versioned code-defined journeys, participant state machine in Postgres, wait timers, actions as canonical events through the existing destination path (§6.1) |
 
 ### 2.2 Stream families, before and after
@@ -238,12 +238,14 @@ async/                             the six async pipelines
     clickhouse-sink/v1/            streaming loads (moves out of consumers/ —
                                    it was never a destination)
     archiver/v1/                   raw.events -> object storage        (R10)
-    export/                        scheduled Parquet job               (R10)
+    export/v1/                     scheduled Parquet job               (R10)
   computation/                     "trait & audience computation"
     sessionizer/v2/                background aggregations over the
     attribution-engine/v3/         spine (§2.4)
-    traits/                        computed-trait definitions + runner (R5)
-    audiences/                     audience definitions + runner       (R6)
+    traits/v1/                     compute runner (definitions live in
+                                   catalog/traits/, like schemas)      (R5)
+    audiences/v1/                  membership runner (definitions in
+                                   catalog/audiences/)                 (R6)
   merges/
     merge-worker/v1/               retroactive merges                  (R4)
   profiles-sync/
@@ -417,7 +419,7 @@ today; cross-project identity stays out of scope.
    `profile_id`). Repoint the loser's identifier rows to the winner, stamp
    `merged_into` on the loser, insert `profile_merges` + `identity_links`
    evidence, emit `identity.merged` (schema v2, carrying both profile ids).
-   The retroactive-merge worker (§7.3) picks it up from `identity.events`.
+   The retroactive-merge worker (§6, R4) picks it up from `identity.events`.
 6. If the event is identify-family (`user.identified`), merge-patch its
    traits into `profiles.traits`, bump `traits_version`, emit
    `profile.updated` on `profile.events`.
@@ -450,7 +452,7 @@ Properties worth stating:
   producer cannot inflate one profile into a hot row that stalls its
   partition.
 - **Throughput.** One transaction per event on the spine. At Polaris's
-  internal volumes this holds with the two partial indexes above;
+  internal volumes this holds on `profile_identifiers`' primary-key lookup;
   the escape hatch, when needed, is a read-through Redis cache of
   `identifier → profile_id` for the no-write fast path (the overwhelming
   majority of events bind nothing new), invalidated on merge. Build it when
@@ -508,7 +510,7 @@ traits. Target:
   carrying traits as properties, alongside its current local-persistence
   behavior. `track()` is unchanged.
 - Traits mutate profiles **only** via identify-family events (plus computed
-  traits and reverse ETL, §7). Last-write-wins per key at the resolver, which
+  traits and reverse ETL, §6). Last-write-wins per key at the resolver, which
   is safe because all events carrying a given `customer_id` serialize on one
   partition.
 - The four unregistered mapper events (`payment.approved`,
@@ -542,7 +544,7 @@ gates, golden-fixture testing — the processor chassis is already built.
 | Trait & audience computation | Nothing | Trait definitions as code (`catalog/traits/*.ts`: key, type, projection-backed SQL); scheduled compute (host cron + `polaris traits compute`, same pattern as the attribution prune); writes via profile store, bumps `traits_version`, emits `trait.computed` + `profile.updated`. Audiences: code-defined predicates over traits/projections; membership in `audience_memberships` (PG runtime state); transitions emit `audience.entered` / `audience.exited` on `profile.events` | New: definitions loader, compute runner, membership table, CLI verbs, catalog events. Trait SQL reads **projections only** (service role) — a governance line that keeps trait compute off `analytics_raw` |
 | Retroactive profile merges | Explicitly deferred in three files; replay cannot express it | Merge worker consumes `identity.merged` v2 → upserts ClickHouse `profile_merge_map` (ReplacingMergeTree) backing a `profile_canonical` dictionary; person-keyed queries and projections resolve `dictGetOrDefault('profile_canonical', ...)` at read time. **History is never rewritten** — immutability holds; re-interpretation happens at read. Optional: schedule a `clickhouse-rebuild` for materialized person-keyed projections | New worker (small — one consumer, one upsert), dict DDL, projection guidance in `07-clickhouse.md`. No destination re-sends after merges (Segment doesn't either) |
 | Profiles sync | Nothing | `profile.updated` events flow through clickhouse-sink into a `profiles` ClickHouse table (`ReplacingMergeTree(traits_version)`) — streaming, reuses the sink wholesale — and the scheduled export job pushes the unified-profiles snapshot to the warehouse tier alongside events (§6.2) | Sink routing entry + DDL + MV; profiles slice of the export job |
-| Reverse ETL | Nothing (`consumers/reverse-etl/` is in the blessed repo shape but absent) | `consumers/reverse-etl/v1`: repo-defined SQL (file-heavy) against projections; schedule + enablement + params in `project_config`; each run POSTs resulting canonical events to the ingester with `source.type: internal` — full validation/policy/dedupe applies; trait-shaped results ride `user.identified`-family events | New consumer + `polaris reverse-etl run <job>` cron verb + job SQL registry; run records reuse `processor_runs` shape |
+| Reverse ETL | Nothing (a reverse-ETL consumer is in the blessed repo shape but absent) | `async/reverse-etl/runner/v1`: repo-defined SQL (file-heavy) against projections; schedule + enablement + params in `project_config`; each run POSTs resulting canonical events to the ingester with `source.type: internal` — full validation/policy/dedupe applies; trait-shaped results ride `user.identified`-family events | New consumer + `polaris reverse-etl run <job>` cron verb + job SQL registry; run records reuse `processor_runs` shape |
 | Journeys | Nothing | `journey-orchestrator` processor advancing profiles through code-defined, versioned journeys: triggers, waits, branches, actions (§6.1) | New processor + `journey_participants` table + timer sweep + catalog events; sequenced last (needs audiences) |
 
 ### 6.1 Journey orchestration
@@ -558,7 +560,7 @@ upstream forecloses it. Everything is existing Polaris idiom:
   the graph is a new journey version; participants finish on the version
   they entered (the processor semantic-immutability rule, applied to
   journeys).
-- **Runtime** is a normal processor, `processors/journey-orchestrator/v1`,
+- **Runtime** is a normal processor, `async/journeys/orchestrator/v1`,
   consuming `resolved.events` + `profile.events` (triggers and branch
   inputs arrive per-profile-ordered on the spine's partition key). State is
   one Postgres table, `journey_participants` `(journey, journey_version,
@@ -621,9 +623,12 @@ M0  Repo re-layout (R0L): processors/ and consumers/ move under sync/
     names and versions unchanged — moves are non-semantic; everything
     after this is born in place.
 M1  Provision identified.events + resolved.events (width 6, matching
-    raw.events) + profile.events (width 3); declare identity-resolver,
-    enrichment, and merge-worker component queues. Topology change,
-    runbook exists.
+    raw.events) + profile.events (width 3); declare the sync-identity,
+    sync-enrichment, and merge-worker component queues. The new stage
+    components are named for their tree path, NOT "identity-resolver":
+    the legacy processor keeps running through M6, and reusing its
+    component name would share its retry/redeliver/DLQ queues during
+    coexistence. Topology change, runbook exists.
 M2  Land profile-store migrations + the two stage processors:
     sync/identity/resolver v1 (raw.events -> identified.events, plus
     identity.events v2 + profile.events) and sync/enrichment v1
@@ -671,7 +676,7 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 
 | # | Workstream | Size | Depends on | Contents |
 |---|---|---|---|---|
-| R0 | Contract evolution | M | — | Accept this doc; envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing events and `user.identified`; SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
+| R0 | Contract evolution | M | — | Envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing mapper events (incl. `user.identified`); SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
 | R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
 | R1 | Profile store + the two spine stages | L | R0, R0L | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); MaxMind backend; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
 | R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`) |
