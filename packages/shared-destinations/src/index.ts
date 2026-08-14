@@ -65,10 +65,16 @@ export {
   type RecordDlqInput,
 } from "./db/dlq-records.js";
 export {
+  type DedupeClaim,
   type DestinationDedupe,
   InMemoryDestinationDedupe,
   type InMemoryDestinationDedupeOptions,
 } from "./dedupe.js";
+export {
+  createRedisDestinationDedupe,
+  type DestinationDedupeRedisClient,
+  type RedisDestinationDedupeOptions,
+} from "./dedupe-redis.js";
 export {
   POLARIS_HEADER_CONSUMER_VERSION,
   POLARIS_HEADER_DELIVERER_VERSION,

@@ -555,18 +555,27 @@ describe("destination runtime — fan-out to active instances", () => {
       now: () => new Date(nowMs),
     });
 
-    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
+    // A DISTINCT event per send. This test is about the instance cache, not
+    // about dedupe, and re-sending one event would now be refused by the
+    // dedupe claim — correctly. It did not use to be: `seen()` compared an
+    // entry stamped with the runtime's (here fake) clock against the dedupe's
+    // own `Date.now`, so any test with a custom clock silently ran with the
+    // window disabled.
+    const nth = (n: number) =>
+      makeStreamPayloadFor(makeEnvelope({ event_id: `ttl-probe-${String(n)}` }));
+
+    await consumer.handler(nth(1), TEST_MESSAGE_CONTEXT);
     expect(env.records.snapshot()).toHaveLength(1);
 
     // A destination created after the first message is invisible until
     // the TTL lapses — the cache is what keeps the fan-out from querying
     // PostgreSQL on every event.
     env.instances.set(secondInstance());
-    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
+    await consumer.handler(nth(2), TEST_MESSAGE_CONTEXT);
     expect(env.records.snapshot()).toHaveLength(2);
 
     nowMs += 10_001;
-    await consumer.handler(makeStreamPayload(), TEST_MESSAGE_CONTEXT);
+    await consumer.handler(nth(3), TEST_MESSAGE_CONTEXT);
     expect(
       env.records.snapshot().filter((r) => r.destination_id === "polaris_dst_test2"),
     ).toHaveLength(1);

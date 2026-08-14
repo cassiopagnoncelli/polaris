@@ -831,8 +831,12 @@ async function processOne<Payload>(
   }
 
   // 4. Destination-side dedupe.
-  const dedupedAt = await dedupe.seen(instance.destination_id, delivery_key);
-  if (dedupedAt !== undefined) {
+  // A CLAIM, not a check. `seen()` then deliver was check-then-act: two
+  // replicas both missed, both delivered, both marked. Only one caller is
+  // told to proceed now, and the loser is the duplicate.
+  const claim = await dedupe.claim(instance.destination_id, delivery_key, startedAt.getTime());
+  if (claim.kind === "duplicate") {
+    const dedupedAt = claim.deliveredAt;
     metrics.incrementDeduped(instanceLabels);
     logger.info(
       {
@@ -840,12 +844,26 @@ async function processOne<Payload>(
         ...instanceLabels,
         event_id: envelope.event_id,
         delivery_key,
-        previously_delivered_at: new Date(dedupedAt).toISOString(),
+        // Absent when the holder is a claim nobody has confirmed yet —
+        // another replica is mid-delivery for this exact event right now.
+        ...(dedupedAt !== undefined
+          ? { previously_delivered_at: new Date(dedupedAt).toISOString() }
+          : { concurrent_claim: true }),
       },
-      "destination dedupe window already saw this event — skipping",
+      "destination dedupe window already holds this event — skipping",
     );
     return null;
   }
+
+  /**
+   * Give the claim back on a path that never reached the vendor.
+   *
+   * Every exit between the claim and `invokeDeliverer` is one where nothing
+   * was sent, so holding the key would only refuse a later replay of an
+   * event this instance never delivered. Cheap to call and safe to repeat —
+   * `release` ignores a claim that has already been confirmed.
+   */
+  const releaseClaim = (): Promise<void> => dedupe.release(instance.destination_id, delivery_key);
 
   // 5. Normalize.
   const normalizeOutcome = normalizeForDestination(envelope, {
@@ -859,6 +877,7 @@ async function processOne<Payload>(
       : {}),
   });
   if (normalizeOutcome.kind === "drop") {
+    await releaseClaim();
     return recordDrop({
       records,
       metrics,
@@ -881,6 +900,7 @@ async function processOne<Payload>(
   // 6. Map.
   const mapper: Mapper<Payload> | undefined = descriptor.mappers[normalized.event];
   if (mapper === undefined) {
+    await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
       records,
@@ -916,6 +936,7 @@ async function processOne<Payload>(
   try {
     mapResult = mapper(mapperContext);
   } catch (err) {
+    await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
       records,
@@ -941,6 +962,7 @@ async function processOne<Payload>(
 
   if (mapResult.kind === "skip") {
     metrics.incrementSkipped({ ...instanceLabels, reason: mapResult.reason });
+    await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
       records,
@@ -1040,6 +1062,9 @@ async function processOne<Payload>(
   // the cache's TTL either way, so clearing an alias would be theatre.
 
   if (deliveryResult.kind === "accepted") {
+    // Extends this caller's claim to the full window. Until now the claim
+    // was short-lived on purpose; the vendor has accepted, so the key is
+    // genuinely spent.
     await dedupe.mark(instance.destination_id, delivery_key, deliveryFinishedAt.getTime());
     return recordOutcome({
       ...outcomeBuildVersion,
@@ -1064,6 +1089,10 @@ async function processOne<Payload>(
   }
 
   if (deliveryResult.kind === "failed_retryable") {
+    // The claim goes back before the record is written. This event comes
+    // round again when its retry tier expires, and it must not find its own
+    // claim in the way.
+    await dedupe.release(instance.destination_id, delivery_key);
     return recordOutcome({
       ...outcomeBuildVersion,
       records,
@@ -1120,6 +1149,11 @@ async function processOne<Payload>(
       ...(dlqRecords !== undefined ? { dlqRecords } : {}),
     });
   }
+
+  // Neither accepted nor retryable: the claim must go back, or the key stays
+  // blocked for its TTL and a replay of this event would be refused by a
+  // delivery that never happened.
+  await dedupe.release(instance.destination_id, delivery_key);
 
   // failed_permanent
   return recordOutcome({
