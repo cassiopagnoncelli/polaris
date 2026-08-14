@@ -139,18 +139,25 @@ profile-resolver        Stage 2  Resolve: match identifiers against the
 resolved.events         THE canonical spine. Same event_id as the source
     |                   event; envelope now carries platform-owned
     |                   `profile` and `enrichment` blocks
-    |
-    +--> destination consumers   Stage 4  Route & filter: per-instance
-    |         |                           subscriptions, consent, project
-    |         |                           scoping; then normalize -> map
-    |         v
-    |    vendor APIs             Stage 5  Deliver: batching, retries with
-    |                                     real backoff, rate limits, DLQs,
-    |                                     delivery records
-    |
-    +--> clickhouse-sink -> analytics_raw (+ profile_id)   [support plane]
-    +--> sessionizer v2         -> session.events           [support plane]
-    +--> attribution-engine v3  -> attribution.events       [support plane]
+    v
+destination consumers   Stage 4  Route & filter: per-instance
+    |                            subscriptions, consent, project scoping;
+    |                            then normalize -> map
+    v
+vendor APIs             Stage 5  Deliver: batching, retries with real
+                                 backoff, rate limits, DLQs, delivery
+                                 records
+```
+
+The main pipeline is only the line above. Everything else that reads
+`resolved.events` is a **support-plane tap on the spine — a reader, not a
+stage**:
+
+```text
+resolved.events --> clickhouse-sink        --> analytics_raw (+ profile_id)
+resolved.events --> sessionizer v2         --> session.events
+resolved.events --> attribution-engine v3  --> attribution.events
+resolved.events --> journey-orchestrator   --> profile.events   (R11, later)
 ```
 
 **The support plane** is everything asynchronous that feeds or reads the main
@@ -214,6 +221,34 @@ pairwise-ledger semantics (including the known dead branch and the
 partial-supersede-on-double-conflict defect in
 `processors/identity-resolver/v1/src/runtime.ts:555`) are not carried
 forward — the profile store's find-or-create is the v2 semantics.
+
+### 2.4 What "sessionizer v2" and "attribution-engine v3" are
+
+Not new components, and not stages 4–5: they are the next directory
+versions (`processors/<name>/v<N>/`) of two derived-fact processors that
+already exist, and they live on the support plane. Each re-homes its input
+to `resolved.events` and re-keys its state from "best raw identifier"
+(`customer_id > anonymous_id > session_id`) to the stamped `profile_id`.
+That change alters emitted events — session boundaries and ids, chain
+identity — so the semantic-immutability rule forces a new major version
+rather than an in-place change. Sessionizer is at v1 today, hence v2;
+attribution-engine already has v1 and v2 in-tree (v2 added the 90-day
+inactivity window), hence v3.
+
+| | today | at v2 / v3 |
+|---|---|---|
+| sessionizer | keys Redis windows on raw identifiers; a login flips the key, orphaning the pre-login session with no `session.ended` | keys on `profile_id`; login no longer moves the key, so the session survives identify (rotation shrinks to rare merge moments) |
+| attribution-engine | keys chains on raw identifiers; chains fragment exactly at the anonymous→known transition | keys on `profile_id`; one chain per person across the transition |
+
+Everything else carries forward unchanged: the Redis TTL mechanics and
+deterministic session-id derivation, the campaign tuple, touchpoint
+hashing, the Postgres chain store. Cutover mechanics are already proven by
+attribution v1/v2 coexistence (activation gates, `processor_version` in
+the chain PK, disjoint state per version).
+
+In reference-model terms they are background computation, like trait and
+audience computation — they read the spine the way clickhouse-sink does.
+Stages 4–5 belong exclusively to the destination consumers.
 
 ---
 
