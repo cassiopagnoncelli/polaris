@@ -451,6 +451,17 @@ Properties worth stating:
   refused with a metric and an `identity.link_rejected` fact — a runaway
   producer cannot inflate one profile into a hot row that stalls its
   partition.
+- **Merge safety.** Two guards against merge storms — the classic
+  identity-graph incident, where one promiscuous identifier (a kiosk
+  device, `customer_id: "guest"`, a bot's anonymous_id) chain-merges
+  thousands of profiles into one: an **identifier value denylist** in
+  catalog policy (the forbidden-fields pattern; denylisted values resolve
+  as if absent) and a **merge-rate breaker** — a profile that exceeds the
+  merge-rate bound stops accepting merges and emits an
+  `identity.merge_suspended` fact for operator review. Both change
+  emitted events → semantic parameters, and both ship inside R1:
+  retrofitting either after the resolver is live is a new major version
+  under the immutability rule.
 - **Throughput.** One transaction per event on the spine. At Polaris's
   internal volumes this holds on `profile_identifiers`' primary-key lookup;
   the escape hatch, when needed, is a read-through Redis cache of
@@ -465,6 +476,17 @@ the winner, so the read path is always one hop — `merged_into` is audit, not
 routing, and chains never need traversal. Losers keep their row (tombstone)
 so historical `profile_id` stamps in ClickHouse remain explainable through
 `profile_merges`.
+
+**Un-merge is replay, not surgery.** A wrong merge (a support agent
+logging into customer accounts; a denylist gap) is repaired by rebuilding
+the project's profile store from `raw.events` under corrected policy:
+`polaris profiles rebuild --project` pauses the resolver via its
+activation gate, truncates the project's profile rows, replays the window
+through the resolver, and resumes. The store is derived state, so this is
+the same replay-as-repair contract every processor already honors;
+ClickHouse follows through the merge dictionary (R4). Rebuild depth is
+bounded by `raw.events` retention until the archive lands — R10 is what
+makes un-merge complete.
 
 ### 4.4 The envelope: `profile` and `enrichment` blocks
 
@@ -534,6 +556,31 @@ Stage 2/3 mechanics that come free from existing infrastructure: super-stream
 partition ordering, Postgres checkpoints, poison→DLQ, run records, activation
 gates, golden-fixture testing — the processor chassis is already built.
 
+### 5.1 Beyond the stages: governance and event observability (R12)
+
+Two operational surfaces the stage table cannot express. Both additive;
+together they are most of the distance between "sound architecture" and
+the operational loop that makes reference products trustworthy.
+
+- **Violations quarantine.** Today a rejected event returns a reason code
+  and vanishes — schema governance without the feedback loop. R12 adds a
+  short-retention `rejected.events` family (the diagnostics-stream
+  pattern): after rejecting, the ingester fire-and-forget publishes a
+  violation record — reason, field paths, and a **redacted** sample. The
+  policy-before-any-logging rule extends to the quarantine: events
+  rejected for forbidden fields contain exactly the payloads the policy
+  blocks, so raw samples never land. Violation records are wrapper
+  documents, not canonical envelopes (a rejected event failed envelope
+  validation by definition); the family feeds one small ClickHouse
+  violations table for dashboards plus per-event-type volume-anomaly
+  alerts, and never feeds destinations. The quarantine publish is
+  fail-open — ingest never blocks on it.
+- **Event-level tracing.** `polaris events trace <event_id>` joins what
+  already exists — `analytics_ingest_log` transport lineage, processor
+  stamps, `delivery_records`, the DLQ ledgers — into one answer to
+  "where is my event". A live tail rides the transport's timestamp
+  attach. Pure read-side; deepens as R2/R3 land but useful from day one.
+
 ---
 
 ## 6. Async-pipeline gap analysis
@@ -576,6 +623,11 @@ upstream forecloses it. Everything is existing Polaris idiom:
   the existing destination path — subscriptions, consent, normalize, map,
   deliver — carries it to Braze or any vendor. The orchestrator gets no
   network access and no vendor semantics, preserving the adapter rule.
+- **Loop guard.** The orchestrator never treats `journey.*`-namespaced
+  events as triggers. Its own emissions ride `profile.events`, which it
+  also consumes — a journey that could trigger on journey output is a
+  feedback loop by construction, so the exclusion is structural, not
+  per-definition discipline.
 - **Observability**: `journey.entered` / `.step_advanced` / `.exited`
   catalog events flow to ClickHouse through the sink like every other
   derived fact, so journey funnels are projections, not bespoke storage.
@@ -645,7 +697,10 @@ M4  Destination consumers: flip input family to resolved.events and adopt
     kills the delivery-key shortcut; Braze/Meta gain traits and stable
     external ids). webhook-sink first (exemplar + SPEC.md), then the four
     vendors, one PR each. The C8 project filter is already live, so the
-    per-project rollout is safe by construction.
+    per-project rollout is safe by construction. Before each vendor's live
+    flip, run the new-path consumer in the existing `test` mode alongside
+    the old path and diff `delivery_records` payloads — parity of
+    transformation, not just volume (M3 covers volume).
 M5  sessionizer v2 + attribution-engine v3: input resolved.events, keyed
     by profile_id. Sessions stop orphaning at login (key is stable across
     identify); chains stop fragmenting at anonymous→known. Both are new
@@ -678,17 +733,18 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 |---|---|---|---|---|
 | R0 | Contract evolution | M | — | Envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing mapper events (incl. `user.identified`); SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
 | R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
-| R1 | Profile store + the two spine stages | L | R0, R0L | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); MaxMind backend; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
-| R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`) |
-| R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
+| R1 | Profile store + the two spine stages | L | R0, R0L | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); **merge safeguards: identifier denylist + merge-rate breaker + `identity.merge_suspended` (§4.2 — must ship inside R1, not after)**; MaxMind backend + mmdb refresh job; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
+| R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`, onboarding "project or source?" guidance) |
+| R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; per-instance circuit breakers (trip on consecutive vendor 5xx, half-open probes); per-destination freshness SLO panels; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
 | R4 | Retroactive merge | M | R2 | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring |
 | R5 | Traits + profiles sync | M | R2 | Trait definition loader + `polaris traits compute` cron verb; `profiles` CH table fed from `profile.events`; `profile.updated` end-to-end |
 | R6 | Audiences | M | R5 | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
 | R7 | Reverse ETL | M | R5 | `consumers/reverse-etl/v1`; job SQL registry; cron verb; ingester round-trip |
 | R8 | Sessionizer v2 + attribution v3 | M | R2 | M5 as its own stream — mechanical rekeying to `profile_id`, new majors, fixture refresh |
 | R9 | Hardening (rolling) | S× | parallel | Items in §9 not consumed by other workstreams |
-| R10 | Warehouse exports + raw archive | M | R2 (events); R5 (profiles slice) | §6.2: archiver consumer on `raw.events`; `polaris warehouse export` cron verb; Parquet snapshots; archive `ReplayExecutorSource` for `shared-replay`; export job records |
+| R10 | Warehouse exports + raw archive | M | R2 (events); R5 (profiles slice) | §6.2: archiver consumer on `raw.events`; `polaris warehouse export` cron verb; Parquet snapshots; archive `ReplayExecutorSource` for `shared-replay`; export job records. Also unlocks full-depth profile rebuilds (§4.3) |
 | R11 | Journey orchestration | L | R6 | §6.1: definition loader, `journey-orchestrator` v1, `journey_participants`, wait sweep, `journey.*` catalog events, funnels projection |
+| R12 | Governance & event observability | M | R0 (parallel; deepens after R2/R3) | §5.1: `rejected.events` quarantine with redacted samples; violations table + per-event-type volume-anomaly alerts; `polaris events trace` + live tail |
 
 Critical path: **R0 → R1 → R2 → R3**, with R8 and R4 fanning out after R2.
 R0L is mechanical, runs parallel with R0, and lands first so R1's
@@ -696,9 +752,26 @@ components are born under the new tree.
 R5→R6→R7 are sequential among themselves but independent of R3. R10's
 archiver needs only R2's spine (its profiles slice waits on R5). R11 closes
 the programme after R6 — the full reference model, including journeys, is
-then live. The C programme has landed in full, so the R programme starts
+then live. R12 runs parallel from the start — its tracing view deepens as
+R2/R3 land. The C programme has landed in full, so the R programme starts
 unblocked: R3 builds directly on `project_config`, the per-consumer config
 slices, and the project-scoped fan-out.
+
+### 8.1 Stack impact
+
+The full programme — gold-standard items included — adds **one service
+and one data artifact** to the stack: object storage for the
+archive/export tier (R10; MinIO locally, managed S3-compatible in
+production — kept thin because ClickHouse exports Parquet to S3
+natively, so bulk data never flows through Node) and the MaxMind database
+plus its refresh job (R1). Two boring npm dependencies come with them
+(`mmdb-lib`, `@aws-sdk/client-s3`). Deliberately **not** added: a
+workflow engine (journeys are a Postgres table + the crontab sweep), a
+stream-processing framework (traits are scheduled ClickHouse queries
+over projections), a schema registry (the catalog is the registry), a
+separate identity service (the store is Postgres behind the resolver).
+Any card that arrives wanting more than these two additions is deviating
+from this plan and gets flagged.
 
 ---
 
@@ -788,3 +861,4 @@ independent hardening.
 | Traits mutate only via identify-family events (+ computed/reverse-ETL writers) | Traits on any `track` context | One serialization point per customer partition; last-write-wins stays explainable |
 | Audiences/traits computed from projections only | Compute from `analytics_raw` | Keeps trait compute on the service role and inside the sanctioned query surface |
 | Reverse ETL re-enters through the ingester | Direct publish to `raw.events` | Full validation/policy/dedupe for free; `source.type: internal` marks provenance; no second write path to audit |
+| Stay on RabbitMQ for the R programme | Switch to Kafka "to unlock gold standard" | None of the gold-standard gaps are broker-shaped (all seven are store logic, harness code, or read-side tooling); delayed retries are strictly better on RabbitMQ (broker-owned TTL tiers vs consumer-slept backoff); the streams migration just landed; `shared-transport` is a port, so the option survives. Recorded flip conditions: static-assignment toil at sustained multi-team scale, a hard multi-DC replication requirement, or org-level adoption of a Flink-class processing layer |

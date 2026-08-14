@@ -249,6 +249,7 @@ R8  Sessionizer v2 + attribution v3  async/computation, profile_id-keyed
 R9  Rolling hardening backlog
 R10 Warehouse exports + raw archive  scheduled batch tier; replay past 90 days
 R11 Journey orchestration
+R12 Governance & event observability violations quarantine; event tracing
 ```
 
 Critical path: `R0 → R1 → R2 → R3`; R8 and R4 fan out after R2;
