@@ -35,7 +35,9 @@ import {
   positiveIntSchema,
   postgresEnvSchema,
   type RabbitmqConfig,
+  type RedisConfig,
   rabbitmqEnvSchema,
+  redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
 } from "@polaris/shared-config";
@@ -91,6 +93,21 @@ export interface BrazeRuntimeConfig {
   readonly http: HttpConfig;
   readonly rabbitmq: RabbitmqConfig;
   readonly postgres: PostgresConfig;
+  /**
+   * Redis backs the multi-replica dedupe claim and the global RPS budget.
+   *
+   * Required configuration, like Postgres: without it two replicas can
+   * double-send the same event and each allows the full `max_rps`, which
+   * are the two defects those adapters exist to fix. A single-replica
+   * deployment still needs a Redis to point at — running without one is not
+   * a supported shape, it is the old bug with a shorter name.
+   *
+   * Redis being UNREACHABLE at runtime is different and is handled: both
+   * adapters catch and degrade to their per-process implementations with a
+   * warning, so a cache outage slows correctness guarantees rather than
+   * halting delivery.
+   */
+  readonly redis: RedisConfig;
   readonly braze: BrazeConfig;
 }
 
@@ -100,6 +117,7 @@ export function brazeConfigSchema() {
     http: httpEnvSchema,
     rabbitmq: rabbitmqEnvSchema,
     postgres: postgresEnvSchema,
+    redis: redisEnvSchema,
     braze: brazeEnvSchema,
   });
 }

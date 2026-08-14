@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@polaris/shared-db": "workspace:*",
+    "ioredis": "^5.4.2",
     "@polaris/shared-destination-normalize": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "@polaris/shared-logger": "workspace:*",

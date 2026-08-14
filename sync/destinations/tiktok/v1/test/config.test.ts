@@ -24,6 +24,10 @@ const BASE_ENV: Record<string, string> = {
   POLARIS_RABBITMQ_CLIENT_ID: "tiktok",
   POLARIS_RABBITMQ_TLS: "false",
   POLARIS_POSTGRES_HOST: "localhost",
+  // Required since the destination runtime gained Redis-backed dedupe and a
+  // global RPS budget: both are per-process without it, which is the
+  // multi-replica double-send this configuration exists to prevent.
+  POLARIS_REDIS_HOST: "localhost",
   POLARIS_POSTGRES_DATABASE: "polaris",
   POLARIS_POSTGRES_USER: "polaris",
   POLARIS_POSTGRES_PASSWORD: "polaris",

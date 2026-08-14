@@ -30,15 +30,18 @@
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
+  createDestinationSharedState,
   createDestinationTransportHooks,
   createKyselyDeliveryRecordRepository,
   createKyselyDestinationInstanceReader,
   createKyselyDlqRecordRepository,
   type DeliveryRecordRepository,
   type DestinationConsumer,
+  type DestinationDedupe,
   DestinationInstanceCache,
   type DestinationInstanceReader,
   DestinationMetrics,
+  type DestinationRateLimiterLike,
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
@@ -81,6 +84,14 @@ import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
  * drive the runtime in isolation.
  */
 export interface BuildAppOptions {
+  /**
+   * Override the dedupe window. Tests inject an in-memory one; production
+   * takes whatever `createDestinationSharedState` resolved, which is Redis
+   * when it is reachable.
+   */
+  readonly dedupe?: DestinationDedupe;
+  /** Override the rate limiter. Same reasoning as `dedupe`. */
+  readonly rateLimiter?: DestinationRateLimiterLike;
   readonly config: WebhookSinkRuntimeConfig;
   /** Extra readiness probes plugged into `/ready`. */
   readonly readinessProbes?: ReadonlyArray<ReadinessProbe>;
@@ -253,8 +264,17 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     );
   });
 
+  // Redis-backed dedupe + global RPS. Falls back to the per-process pair
+  // when Redis is absent, with a warning — see `createDestinationSharedState`.
+  const sharedState = await createDestinationSharedState({
+    redis: config.redis,
+    logger: consumerLogger,
+  });
+
   const runtime = createDestinationConsumer({
     descriptor,
+    dedupe: options.dedupe ?? sharedState.dedupe,
+    rateLimiter: options.rateLimiter ?? sharedState.rateLimiter,
     // R3B: the exemplar flip. Webhook-sink reads the spine's OUTPUT, so its
     // passthrough payload carries the profile and enrichment blocks the
     // identity and enrichment stages wrote — which is the whole point of

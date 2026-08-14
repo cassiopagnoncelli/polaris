@@ -142,6 +142,12 @@ export {
   type RedisRateLimiterOptions,
 } from "./rate-limiter-redis.js";
 export {
+  createDestinationSharedState,
+  type DestinationRedisConfig,
+  type DestinationSharedState,
+  type DestinationSharedStateOptions,
+} from "./redis-bootstrap.js";
+export {
   type ApplyReplayPolicyInput,
   applyReplayPolicy,
   POLARIS_HEADER_REPLAY,

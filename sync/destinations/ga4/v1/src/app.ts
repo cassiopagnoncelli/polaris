@@ -25,15 +25,18 @@
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
+  createDestinationSharedState,
   createDestinationTransportHooks,
   createKyselyDeliveryRecordRepository,
   createKyselyDestinationInstanceReader,
   createKyselyDlqRecordRepository,
   type DeliveryRecordRepository,
   type DestinationConsumer,
+  type DestinationDedupe,
   DestinationInstanceCache,
   type DestinationInstanceReader,
   DestinationMetrics,
+  type DestinationRateLimiterLike,
   type DlqRecordRepository,
 } from "@polaris/shared-destinations";
 import { createLogger, type Logger } from "@polaris/shared-logger";
@@ -70,6 +73,14 @@ import { CONSUMER_VENDOR, CONSUMER_VERSION } from "./descriptor-identity.js";
 import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
 
 export interface BuildAppOptions {
+  /**
+   * Override the dedupe window. Tests inject an in-memory one; production
+   * takes whatever `createDestinationSharedState` resolved, which is Redis
+   * when it is reachable.
+   */
+  readonly dedupe?: DestinationDedupe;
+  /** Override the rate limiter. Same reasoning as `dedupe`. */
+  readonly rateLimiter?: DestinationRateLimiterLike;
   readonly config: Ga4RuntimeConfig;
   readonly readinessProbes?: ReadonlyArray<ReadinessProbe>;
   readonly shutdownTasks?: ReadonlyArray<ShutdownTask>;
@@ -206,8 +217,17 @@ export async function buildGa4App(options: BuildAppOptions): Promise<BuiltGa4App
     );
   });
 
+  // Redis-backed dedupe + global RPS. Falls back to the per-process pair
+  // when Redis is absent, with a warning — see `createDestinationSharedState`.
+  const sharedState = await createDestinationSharedState({
+    redis: config.redis,
+    logger: consumerLogger,
+  });
+
   const runtime = createDestinationConsumer({
     descriptor,
+    dedupe: options.dedupe ?? sharedState.dedupe,
+    rateLimiter: options.rateLimiter ?? sharedState.rateLimiter,
     // MVKUP64R: reads the spine's output. The profile and enrichment blocks
     // the identity and enrichment stages wrote are what this vendor's mapper
     // now keys on; see SPEC.md for the per-vendor delta.
