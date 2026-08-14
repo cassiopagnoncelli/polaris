@@ -49,6 +49,55 @@ SELECT
     properties,
     processor_name,
     processor_version,
+    profile,
+    -- _version fallback. Producers should populate _version, but if they
+    -- omit it (zero value) we fall back to the ingest timestamp so
+    -- ReplacingMergeTree's collapse logic still sees a monotonic value.
+    if(_version = 0, toUnixTimestamp64Milli(ingested_at), _version) AS _version,
+    -- Transport lineage, stamped by clickhouse-sink on INSERT. These
+    -- were Kafka Engine virtual columns; the names are unchanged so
+    -- every existing lineage query still resolves.
+    now64(3)        AS _consumed_at,
+    _topic          AS _topic,
+    _partition      AS _partition,
+    _offset         AS _offset
+FROM polaris.analytics_events_queue;
+
+-- --------------------------------------------------------------------
+-- Additive migration (M3 profile columns).
+--
+-- `CREATE MATERIALIZED VIEW IF NOT EXISTS` is a no-op against a view
+-- that already exists, so an existing database would keep the OLD body
+-- and never select the new column. `MODIFY QUERY` re-applies the
+-- definition above.
+--
+-- MODIFY QUERY rather than DROP + CREATE, deliberately: a dropped MV is
+-- not reading while it is gone, and every row the sink inserts in that
+-- window reaches neither its target table nor the ingest log. The source
+-- is a Null engine, so there is nothing to replay from — silent,
+-- unrecoverable loss during a schema migration. MODIFY QUERY swaps the
+-- definition with no such gap.
+-- --------------------------------------------------------------------
+
+ALTER TABLE polaris.analytics_mv_queue_to_ingest_log ON CLUSTER '{cluster}'
+MODIFY QUERY
+SELECT
+    event_id,
+    event,
+    schema_version,
+    project_id,
+    environment,
+    occurred_at,
+    ingested_at,
+    source,
+    identity,
+    context,
+    consent,
+    privacy,
+    properties,
+    processor_name,
+    processor_version,
+    profile,
     -- _version fallback. Producers should populate _version, but if they
     -- omit it (zero value) we fall back to the ingest timestamp so
     -- ReplacingMergeTree's collapse logic still sees a monotonic value.

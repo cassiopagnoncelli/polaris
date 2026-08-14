@@ -3,6 +3,7 @@ import {
   ANALYTICS_QUEUE_TABLE,
   type AnalyticsQueueRow,
   type AnalyticsSinkWriter,
+  buildClickHouseVersion,
 } from "@polaris/shared-clickhouse";
 import {
   DeferredCheckpointStore,
@@ -156,7 +157,9 @@ describe("toQueueRow", () => {
       occurred_at: "2026-08-01T10:00:00.000Z",
       processor_name: "analytics-projector",
       processor_version: "v1",
-      _version: 1234,
+      // Built from the family + ingested_at, not copied off the envelope
+      // — see the dedicated test below.
+      _version: Date.parse("2026-08-01T10:00:01.000Z"),
       // These were Kafka Engine virtual columns; the sink stamps them now.
       _topic: "analytics.events-2",
       _partition: 2,
@@ -177,8 +180,25 @@ describe("toQueueRow", () => {
     expect(row?.consent).toBe("");
   });
 
-  it("defaults _version to 0 so the MV fallback applies", () => {
-    const row = toQueueRow(payload(envelope({ _version: undefined })), silentLogger);
+  it("builds _version from the envelope's ingest time, not from a _version field", () => {
+    // The sink used to read `envelope._version` and default to 0, which
+    // meant EVERY row was 0 — nothing has ever set that field, and it is
+    // not on the canonical envelope (a `.strict()` schema would reject
+    // it). The MVs' ingest-ms fallback did all the work, and during the
+    // M3 dual-run that fallback ties the two feeds.
+    //
+    // `_version` is now built here, from the producing family and the
+    // envelope's own `ingested_at`. An envelope carrying a stray
+    // `_version` no longer influences it.
+    const body = envelope({ _version: 999 });
+    const row = toQueueRow(payload(body), silentLogger);
+    expect(row?._version).toBe(Date.parse(String(body["ingested_at"])));
+  });
+
+  it("falls back to 0 for an unparseable ingest timestamp, so the MV guard catches it", () => {
+    // 0 is the one value the MVs still rewrite. Better to hand the row
+    // to that guard than to sort it to the bottom of its key forever.
+    const row = toQueueRow(payload(envelope({ ingested_at: "not-a-timestamp" })), silentLogger);
     expect(row?._version).toBe(0);
   });
 
@@ -513,6 +533,7 @@ describe("derived-event routing", () => {
 
     expect(subscriptions[0]).toEqual([
       "analytics.events",
+      "resolved.events",
       "enriched.events",
       "session.events",
       "identity.events",
@@ -545,8 +566,10 @@ describe("derived-event routing", () => {
     await runtime.stop();
 
     expect(subscriptions[0]).toContain("analytics.events.project-alpha");
+    expect(subscriptions[0]).toContain("resolved.events.project-alpha");
     expect(subscriptions[0]).toContain("session.events.project-alpha");
-    expect(subscriptions[0]).toHaveLength(10);
+    // Six families, each shared + one isolated project.
+    expect(subscriptions[0]).toHaveLength(12);
   });
 });
 
@@ -651,5 +674,121 @@ describe("checkpoint safety", () => {
     await runtime.stop();
     expect(batches).toHaveLength(1);
     expect(await underlying.read("sink", "analytics.events-2")).toBe("7");
+  });
+});
+
+describe("the dual-run: resolved.events alongside analytics.events", () => {
+  // M3 puts the SAME event on two feeds at once. They share an event_id
+  // deliberately — two sightings of one fact, not two facts — so they
+  // share a sort key in `analytics_raw` and collapse into each other.
+  // These tests pin the three things that make the collapse land on the
+  // enriched row instead of a coin flip.
+
+  it("routes resolved.events to the SOURCE table, not the derived one", async () => {
+    // It carries the customer's event, enriched — not a fact ABOUT an
+    // event. Landing it in analytics_processed would keep profile_id out
+    // of analytics_raw entirely, which is the whole point of M3.
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+
+    await runtime.handler(
+      payload(envelope(), { family: "resolved.events", stream: "resolved.events-0", partition: 0 }),
+      {},
+    );
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.table).toBe(ANALYTICS_QUEUE_TABLE);
+  });
+
+  it("routes an isolated project's resolved family to the source table too", async () => {
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+
+    await runtime.handler(
+      payload(envelope(), {
+        family: "resolved.events.project-alpha",
+        stream: "resolved.events.project-alpha-0",
+        partition: 0,
+      }),
+      {},
+    );
+
+    expect(writes[0]?.table).toBe(ANALYTICS_QUEUE_TABLE);
+  });
+
+  it("ranks a resolved row above its legacy twin, for the same event", async () => {
+    // THE collapse-deciding property. Both rows carry the same event_id
+    // AND the same ingested_at (the spine preserves it verbatim), so
+    // without the stage rank they would tie and ReplacingMergeTree would
+    // pick arbitrarily — half the surviving rows missing profile_id.
+    const body = envelope();
+    const legacy = toQueueRow(payload(body), silentLogger) as AnalyticsQueueRow;
+    const resolved = toQueueRow(
+      payload(body, { family: "resolved.events", stream: "resolved.events-0", partition: 0 }),
+      silentLogger,
+    ) as AnalyticsQueueRow;
+
+    expect(resolved._version).toBeGreaterThan(legacy._version);
+    // And the legacy value still equals the MVs' own ingest-ms fallback,
+    // so rows merged before this scheme existed sort identically.
+    expect(legacy._version).toBe(Date.parse(String(body["ingested_at"])));
+  });
+
+  it("re-derives the same version on a replay, so reruns collapse instead of ratcheting", async () => {
+    // Built from the envelope's ingested_at rather than the sink's clock.
+    // A wall-clock version would make every replay outrank the original
+    // and march the version forward on each rerun.
+    const body = envelope();
+    const first = toQueueRow(payload(body), silentLogger) as AnalyticsQueueRow;
+    const replayed = toQueueRow(
+      payload(body, {
+        stream: "analytics.events-7",
+        partition: 7,
+        message: { ...payload(body).message, offset: "999" },
+      }),
+      silentLogger,
+    ) as AnalyticsQueueRow;
+
+    expect(replayed._version).toBe(first._version);
+  });
+
+  it("carries the profile block through to the queue row", async () => {
+    const body = {
+      ...envelope(),
+      profile: {
+        profile_id: "019ffe00-0000-7000-8000-00000000f001",
+        canonical_customer_id: "cus_1",
+        traits: { tier: "gold" },
+        traits_version: 7,
+      },
+    };
+    const row = toQueueRow(
+      payload(body, { family: "resolved.events", stream: "resolved.events-0", partition: 0 }),
+      silentLogger,
+    ) as AnalyticsQueueRow;
+
+    // The whole block travels: the MV extracts profile_id/traits_version
+    // today, and reaching `traits` later should need no change here.
+    expect(JSON.parse(row.profile)).toEqual(body.profile);
+  });
+
+  it('renders an absent profile as the empty string, not "null"', async () => {
+    // Matches how every other optional block is rendered, and is what
+    // makes JSONExtract downstream yield '' / 0 rather than parsing the
+    // four-character document `null`.
+    const row = toQueueRow(payload(envelope()), silentLogger) as AnalyticsQueueRow;
+    expect(row.profile).toBe("");
+  });
+
+  it("agrees with the version helper the DDL comment documents", async () => {
+    const body = envelope();
+    const row = toQueueRow(
+      payload(body, { family: "resolved.events", stream: "resolved.events-0", partition: 0 }),
+      silentLogger,
+    ) as AnalyticsQueueRow;
+
+    expect(row._version).toBe(
+      buildClickHouseVersion({ stage: "resolved", ingestedAt: String(body["ingested_at"]) }),
+    );
   });
 });

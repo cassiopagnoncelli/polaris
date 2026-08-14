@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_ingest_log ON CLUSTER '{cluster}'
     properties        String,
     processor_name    LowCardinality(String),
     processor_version LowCardinality(String),
+    -- The `profile` block as delivered. This table is the PARITY surface
+    -- for the M3 dual-run — the only place the same event_id from both
+    -- feeds coexists as two rows rather than collapsing — so it has to
+    -- carry the field that tells them apart.
+    profile           String    DEFAULT '',
     _version          UInt64,
 
     -- Diagnostic columns: filled by the MV that reads from the ingestion
@@ -57,3 +62,22 @@ PARTITION BY toYYYYMM(ingested_at)
 ORDER BY (project_id, environment, ingested_at, event_id)
 TTL toDateTime(ingested_at) + INTERVAL 30 DAY
 SETTINGS index_granularity = 8192;
+
+-- --------------------------------------------------------------------
+-- Additive migration (M3 profile columns).
+--
+-- `CREATE ... IF NOT EXISTS` above is idempotent for a FRESH database:
+-- run it twice, get one table. It is not idempotent for a schema CHANGE
+-- — against a database that already has this object it does nothing at
+-- all, silently and successfully, and without the new columns.
+--
+-- So each file carries its own migration, immediately after the
+-- definition it amends. Ordering then takes care of itself: the file
+-- that owns a table adds the table's columns before any later file
+-- reads them. A central migration file cannot do that — it would have
+-- to sort after every CREATE and before every MV that selects the new
+-- column, and those two constraints have no common solution.
+-- --------------------------------------------------------------------
+
+ALTER TABLE polaris.analytics_ingest_log ON CLUSTER '{cluster}'
+    ADD COLUMN IF NOT EXISTS profile String DEFAULT '' AFTER processor_version;

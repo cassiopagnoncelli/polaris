@@ -70,6 +70,18 @@ export interface AnalyticsQueueRow {
   readonly properties: string;
   readonly processor_name: string;
   readonly processor_version: string;
+  /**
+   * The `profile` block as a JSON string, or `""` when the event carries
+   * none. The MV extracts `profile_id` / `traits_version` from it into
+   * typed columns; the block travels whole so a later reader can reach
+   * `traits` without a schema change here.
+   */
+  readonly profile: string;
+  /**
+   * ReplacingMergeTree revision. Built by `buildClickHouseVersion` from
+   * the producing stage and `ingested_at` — see `version.ts` for why the
+   * dual-run makes this load-bearing.
+   */
   readonly _version: number;
   /** Concrete partition stream the message came from. */
   readonly _topic: string;

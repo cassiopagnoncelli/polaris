@@ -71,6 +71,11 @@ const services = [
     image: "polaris/sync-enrichment-runtime-v1",
   },
   {
+    name: "clickhouse-sink",
+    dockerfile: "async/warehouse/clickhouse-sink/v1/Dockerfile",
+    image: "polaris/consumer-clickhouse-sink-v1",
+  },
+  {
     name: "identity-resolver",
     dockerfile: "sync/legacy/identity-resolver/v1/Dockerfile",
     image: "polaris/processor-identity-resolver-v1",

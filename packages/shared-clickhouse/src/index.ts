@@ -86,6 +86,7 @@ export {
   type CreateAnalyticsSinkWriterInput,
   createAnalyticsSinkWriter,
 } from "./sink.js";
+export { buildClickHouseVersion, type ClickHouseVersionStage } from "./version.js";
 export type {
   AnalyticsIngestLogRow,
   AnalyticsProcessedRow,

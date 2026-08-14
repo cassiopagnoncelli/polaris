@@ -20,10 +20,32 @@
 --   "Query Patterns".
 --
 -- _version:
---   Monotonic per-event-key revision. Set by the analytics processor
---   when it writes to `analytics.events`. Defaults to ingestion ms
---   in the ingestion interface table so out-of-band replays still produce
---   stable orderings.
+--   Monotonic per-event-key revision, deciding which copy of a fact
+--   survives the collapse. Built by the clickhouse-sink as
+--
+--       (stage_rank * 2^48) + ingested_at_ms
+--
+--   where stage_rank is 0 for the legacy `analytics.events` feed and 1
+--   for the spine's `resolved.events`. See
+--   packages/shared-clickhouse/src/version.ts for the full rationale.
+--
+--   Three consequences, each deliberate:
+--     * during the M3 dual-run the same event arrives on both feeds with
+--       the same event_id and the same ingested_at, so without a rank
+--       they would tie and ReplacingMergeTree would pick arbitrarily —
+--       half the surviving rows missing the profile columns. The rank
+--       makes the enriched row win every time.
+--     * rank 0 reproduces the MVs' old `ingested_at` fallback exactly,
+--       so rows merged before this scheme existed sort identically
+--       under it and nothing needs backfilling.
+--     * the value is a pure function of (stage, ingested_at), and the
+--       spine preserves ingested_at verbatim, so a replay re-derives the
+--       same number and collapses onto the original instead of
+--       ratcheting the version forward on every rerun.
+--
+--   The MVs keep their `if (_version = 0, toUnixTimestamp64Milli(...))`
+--   guard for writers that bypass the sink; the sink itself no longer
+--   emits 0.
 --
 -- TTL:
 --   400 days, matching the production-readiness data lifecycle
@@ -75,6 +97,23 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_raw ON CLUSTER '{cluster}'
     processor_name    LowCardinality(String),
     processor_version LowCardinality(String),
 
+    -- The person this event belongs to, resolved by the identity stage
+    -- and extracted from the envelope's `profile` block. Empty string
+    -- for rows from the legacy `analytics.events` feed (no profile
+    -- plane behind it) and for events the spine could not resolve to a
+    -- person — both are real states, and neither is an error.
+    --
+    -- Not in the sort key. The key is the DEDUPE key, and profile_id is
+    -- mutable: a merge repoints a person's identifiers, so keying on it
+    -- would make the same event dedupe differently before and after a
+    -- merge. Person-keyed reads join through the merge dictionary (R4)
+    -- instead.
+    profile_id        String    DEFAULT '',
+    -- The traits snapshot's version at the moment this event was
+    -- enriched, which is what makes a historical delivery explainable
+    -- after the profile has moved on. 0 when no snapshot was carried.
+    traits_version    UInt64    DEFAULT 0,
+
     -- ReplacingMergeTree version column.
     _version          UInt64
 )
@@ -83,3 +122,25 @@ PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (project_id, environment, event, event_id)
 TTL toDateTime(occurred_at) + INTERVAL 400 DAY
 SETTINGS index_granularity = 8192;
+
+-- --------------------------------------------------------------------
+-- Additive migration (M3 profile columns).
+--
+-- `CREATE ... IF NOT EXISTS` above is idempotent for a FRESH database:
+-- run it twice, get one table. It is not idempotent for a schema CHANGE
+-- — against a database that already has this object it does nothing at
+-- all, silently and successfully, and without the new columns.
+--
+-- So each file carries its own migration, immediately after the
+-- definition it amends. Ordering then takes care of itself: the file
+-- that owns a table adds the table's columns before any later file
+-- reads them. A central migration file cannot do that — it would have
+-- to sort after every CREATE and before every MV that selects the new
+-- column, and those two constraints have no common solution.
+-- --------------------------------------------------------------------
+
+ALTER TABLE polaris.analytics_raw ON CLUSTER '{cluster}'
+    ADD COLUMN IF NOT EXISTS profile_id String DEFAULT '' AFTER processor_version;
+
+ALTER TABLE polaris.analytics_raw ON CLUSTER '{cluster}'
+    ADD COLUMN IF NOT EXISTS traits_version UInt64 DEFAULT 0 AFTER profile_id;

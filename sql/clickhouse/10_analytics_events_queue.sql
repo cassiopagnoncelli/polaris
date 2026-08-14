@@ -74,6 +74,15 @@ CREATE TABLE IF NOT EXISTS polaris.analytics_events_queue ON CLUSTER '{cluster}'
     -- nothing and risk a silent behaviour difference between the two MVs.
     processor_name    LowCardinality(String),
     processor_version LowCardinality(String),
+
+    -- The envelope's `profile` block as raw JSON, stamped by the spine
+    -- (`sync/identity/resolver` writes the ids, `sync/enrichment` adds
+    -- the traits snapshot). Empty for the legacy `analytics.events`
+    -- feed, which has no profile plane behind it. The MV extracts
+    -- `profile_id` / `traits_version` into typed columns; the block
+    -- travels whole so reaching `traits` later needs no change here.
+    profile           String    DEFAULT '',    -- JSON object
+
     _version          UInt64    DEFAULT 0,
 
     -- Transport lineage, stamped by clickhouse-sink. These were Kafka
@@ -94,3 +103,22 @@ ENGINE = Null;
 -- SELECT by construction; the two materialized views
 -- (21_mv_queue_to_ingest_log.sql, 31_mv_queue_to_raw.sql) are the only
 -- sanctioned readers.
+
+-- --------------------------------------------------------------------
+-- Additive migration (M3 profile columns).
+--
+-- `CREATE ... IF NOT EXISTS` above is idempotent for a FRESH database:
+-- run it twice, get one table. It is not idempotent for a schema CHANGE
+-- — against a database that already has this object it does nothing at
+-- all, silently and successfully, and without the new columns.
+--
+-- So each file carries its own migration, immediately after the
+-- definition it amends. Ordering then takes care of itself: the file
+-- that owns a table adds the table's columns before any later file
+-- reads them. A central migration file cannot do that — it would have
+-- to sort after every CREATE and before every MV that selects the new
+-- column, and those two constraints have no common solution.
+-- --------------------------------------------------------------------
+
+ALTER TABLE polaris.analytics_events_queue ON CLUSTER '{cluster}'
+    ADD COLUMN IF NOT EXISTS profile String DEFAULT '' AFTER processor_version;

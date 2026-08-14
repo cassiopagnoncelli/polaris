@@ -14,11 +14,19 @@
  * Polaris streams carry two kinds of fact, and they answer different
  * questions:
  *
- *   analytics.events     what a producer reported   -> analytics_events_queue
+ *   analytics.events     \  what a producer         -> analytics_events_queue
+ *   resolved.events      /   reported
  *   enriched.events      \
  *   session.events        \  what Polaris concluded -> analytics_processed_queue
  *   identity.events       /
  *   attribution.events   /
+ *
+ * `resolved.events` joins the source side during the M3 dual-run. It is
+ * the same fact as its `analytics.events` twin — same `event_id`, so the
+ * two collapse in `analytics_raw` — carrying the `profile` block the
+ * legacy feed cannot produce. `_version` is what makes the collapse pick
+ * the enriched row every time instead of a coin flip; see
+ * `@polaris/shared-clickhouse/version.ts`.
  *
  * The split is made here, at INSERT time, rather than by a WHERE clause
  * in each materialized view. A filter would have to be right in three
@@ -92,6 +100,8 @@ import {
   ANALYTICS_QUEUE_TABLE,
   type AnalyticsQueueRow,
   type AnalyticsSinkWriter,
+  buildClickHouseVersion,
+  type ClickHouseVersionStage,
 } from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
 import {
@@ -104,6 +114,7 @@ import {
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
   STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,
   type TransportMessageHandler,
   type TransportMessagePayload,
@@ -114,7 +125,7 @@ import type { SinkMetrics } from "./metrics.js";
 
 /**
  * Families carrying derived facts. Everything the sink reads that is not
- * `analytics.events` lands in `analytics_processed_queue`.
+ * a SOURCE-FACT family lands in `analytics_processed_queue`.
  */
 const DERIVED_STREAM_FAMILIES = [
   STREAM_FAMILY_ENRICHED_EVENTS,
@@ -124,19 +135,57 @@ const DERIVED_STREAM_FAMILIES = [
 ] as const;
 
 /**
- * True when a delivery came from the source-event family.
+ * Families carrying source facts — the event itself, not a fact derived
+ * from it. Both land in `analytics_events_queue` and therefore in
+ * `analytics_raw`.
+ *
+ * TWO of them during the M3 dual-run, which is the point of this
+ * version. `resolved.events` is the spine's output and carries the
+ * `profile` block; `analytics.events` is the legacy projector's output
+ * and does not. They deliberately share `event_id`, because they are two
+ * sightings of one fact — so they collapse into each other in
+ * `analytics_raw`, and `_version` is what decides which survives. See
+ * `@polaris/shared-clickhouse/version.ts`.
+ *
+ * `resolved.events` is NOT a derived family despite arriving from a
+ * processor: the row it produces IS the customer's event, enriched. A
+ * derived family carries facts ABOUT events (`identity.linked`,
+ * `session.started`), which is a different table and a different
+ * question.
+ */
+const SOURCE_STREAM_FAMILIES = [
+  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+] as const;
+
+/**
+ * True when a delivery came from a source-event family.
  *
  * The `.` prefix check covers per-project isolation: an isolated project
- * reads from `analytics.events.<project_id>`, which is still source
- * events and must still route to `analytics_events_queue`. Matching the
- * bare family alone would silently divert every isolated project's
- * events into the derived table.
+ * reads from `<family>.<project_id>`, which is still source events and
+ * must still route to `analytics_events_queue`. Matching the bare family
+ * alone would silently divert every isolated project's events into the
+ * derived table.
  */
 function isSourceEventFamily(family: string): boolean {
-  return (
-    family === STREAM_FAMILY_ANALYTICS_EVENTS ||
-    family.startsWith(`${STREAM_FAMILY_ANALYTICS_EVENTS}.`)
+  return SOURCE_STREAM_FAMILIES.some(
+    (source) => family === source || family.startsWith(`${source}.`),
   );
+}
+
+/**
+ * Which producer's rank a delivery carries into `_version`.
+ *
+ * Read off the FAMILY rather than off the envelope, because the family
+ * is transport truth the sink already holds: an envelope field would
+ * have to be added to a `.strict()` contract every SDK shares, to carry
+ * a value only ClickHouse reads.
+ */
+function versionStageFor(family: string): ClickHouseVersionStage {
+  const resolved =
+    family === STREAM_FAMILY_RESOLVED_EVENTS ||
+    family.startsWith(`${STREAM_FAMILY_RESOLVED_EVENTS}.`);
+  return resolved ? "resolved" : "legacy";
 }
 
 export interface ClickhouseSinkRuntimeDeps {
@@ -276,9 +325,9 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (started) return;
     started = true;
     const isolated = deps.isolatedProjects ?? [];
-    const families = [STREAM_FAMILY_ANALYTICS_EVENTS, ...DERIVED_STREAM_FAMILIES].flatMap(
-      (family) => [...consumerFamiliesFor(family, isolated)],
-    );
+    const families = [...SOURCE_STREAM_FAMILIES, ...DERIVED_STREAM_FAMILIES].flatMap((family) => [
+      ...consumerFamiliesFor(family, isolated),
+    ]);
     await deps.consumer.subscribe({
       families,
       queues: [redeliverQueueName(SINK_COMPONENT)],
@@ -411,9 +460,18 @@ export function toQueueRow(
     properties: json(envelope["properties"]),
     processor_name: str(processor?.["name"]) ?? "",
     processor_version: str(processor?.["version"]) ?? "",
-    // The MVs fall back to the ingest timestamp when this is 0, so an
-    // envelope without an explicit version still collapses monotonically.
-    _version: num(envelope["_version"]) ?? 0,
+    // The whole block, not just the two columns the MV extracts: a later
+    // reader wanting `traits` should not need a change here to get it.
+    profile: json(envelope["profile"]),
+    // Built from the producing stage and the envelope's own
+    // `ingested_at`, so a resolved row outranks its legacy twin for the
+    // same event and a replay re-derives the identical number. The MVs
+    // keep their `_version = 0` fallback for writers that bypass this
+    // sink; nothing this sink emits is 0 any more.
+    _version: buildClickHouseVersion({
+      stage: versionStageFor(payload.family),
+      ingestedAt: ingestedAt,
+    }),
     _topic: payload.stream,
     _partition: payload.partition,
     _offset: Number(payload.message.offset),
