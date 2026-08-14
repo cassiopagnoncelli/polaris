@@ -768,22 +768,26 @@ ClickHouse rebuilds go through the merge dictionary and are deterministic.
 Sequenced like the C programme; one row ≈ one card unless noted. Sizes:
 S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 
-| # | Workstream | Size | Depends on | Contents |
-|---|---|---|---|---|
-| R0 | Contract evolution | M | — | Envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing mapper events (incl. `user.identified`); SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
-| R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
-| R1 | Profile store + the two spine stages | L | R0, R0L | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); **merge safeguards: identifier denylist + merge-rate breaker + `identity.merge_suspended` (§4.2 — must ship inside R1, not after)**; MaxMind backend + mmdb refresh job; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
-| R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`, onboarding "project or source?" guidance) |
-| R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; per-instance circuit breakers (trip on consecutive vendor 5xx, half-open probes); per-destination freshness SLO panels; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
-| R4 | Retroactive merge | M | R2 | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring |
-| R5 | Traits + profiles sync | M | R2 | Trait definition loader + `polaris traits compute` cron verb; `profiles` CH table fed from `profile.events`; `profile.updated` end-to-end |
-| R6 | Audiences | M | R5 | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
-| R7 | Reverse ETL | M | R5 | `consumers/reverse-etl/v1`; job SQL registry; cron verb; ingester round-trip |
-| R8 | Sessionizer v2 + attribution v3 | M | R2 | M5 as its own stream — mechanical rekeying to `profile_id`, new majors, fixture refresh |
-| R9 | Hardening (rolling) | S× | parallel | Items in §9 not consumed by other workstreams |
-| R10 | Warehouse exports + raw archive | M | R2 (events); R5 (profiles slice) | §6.2: archiver consumer on `raw.events`; `polaris warehouse export` cron verb; Parquet snapshots; archive `ReplayExecutorSource` for `shared-replay`; export job records. Also unlocks full-depth profile rebuilds (§4.3) |
-| R11 | Journey orchestration | L | R6 | §6.1: definition loader, `journey-orchestrator` v1, `journey_participants`, wait sweep, `journey.*` catalog events, funnels projection |
-| R12 | Governance & event observability | M | R0 (parallel; deepens after R2/R3) | §5.1: `rejected.events` quarantine with redacted samples; violations table + per-event-type volume-anomaly alerts; `polaris events trace` + live tail |
+Carded on the pm board 2026-08-14 (32 cards, dependency graph wired; the
+pre-card `2WILQRC5` lands this plan's branch on `main` and gates every
+starter). One workstream row maps to one or more cards:
+
+| # | Workstream | Size | Depends on | Cards | Contents |
+|---|---|---|---|---|---|
+| R0 | Contract evolution | M | — | `T3K2KULJ` `FSHHQ4MH` `RDWVV22H` | Envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing mapper events (incl. `user.identified`); SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
+| R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | `7GTZYOYB` | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
+| R1 | Profile store + the two spine stages | L | R0, R0L | `7AJ4O6CW` `XYN5D28L` `32EOJ44P` `VUT47FSY` | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); **merge safeguards: identifier denylist + merge-rate breaker + `identity.merge_suspended` (§4.2 — must ship inside R1, not after)**; MaxMind backend + mmdb refresh job; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
+| R2 | Spine cutover | L | R1 | `F3DBOO9U` `IA4PPS4J` `126EPNIQ` | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`, onboarding "project or source?" guidance) |
+| R3 | Destination platform | L | R2 (M4) | `H05QEWIB` `WE77L4R8` `MVKUP64R` `60L16ALA` | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; per-instance circuit breakers (trip on consecutive vendor 5xx, half-open probes); per-destination freshness SLO panels; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
+| R4 | Retroactive merge | M | R2 | `U2EV9PRG` | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring; `polaris profiles rebuild` (§4.3) |
+| R5 | Traits + profiles sync | M | R2 | `6PRTZ9QY` `ATVSAZHB` | Trait definition loader + `polaris traits compute` cron verb; `profiles` CH table fed from `profile.events`; `profile.updated` end-to-end |
+| R6 | Audiences | M | R5 | `C195TM1C` | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
+| R7 | Reverse ETL | M | R5 | `XTSWPW63` | `async/reverse-etl/runner/v1`; job SQL registry; cron verb; ingester round-trip |
+| R8 | Sessionizer v2 + attribution v3 | M | R2 | `H16JKHSF` `WHYB6L3Q` | M5 as its own stream — mechanical rekeying to `profile_id`, new majors, fixture refresh |
+| R9 | Hardening (rolling) | S× | parallel | `H0GI1EZ0` `2EHGIH6Q` `TWVAPOR8` `LTLKLJIQ` | Items in §9 not consumed by other workstreams |
+| R10 | Warehouse exports + raw archive | M | R2 (events); R5 (profiles slice) | `F4UMQ3SU` `FZF4D8NY` | §6.2: archiver consumer on `raw.events`; `polaris warehouse export` cron verb; Parquet snapshots; archive `ReplayExecutorSource` for `shared-replay`; export job records. Also unlocks full-depth profile rebuilds (§4.3) |
+| R11 | Journey orchestration | L | R6 | `HTWOJLJK` | §6.1: definition loader, `journey-orchestrator` v1, `journey_participants`, wait sweep, `journey.*` catalog events, funnels projection |
+| R12 | Governance & event observability | M | R0 (parallel; deepens after R2/R3) | `7VO2HFNT` `V3L2TLWC` | §5.1: `rejected.events` quarantine with redacted samples; violations table + per-event-type volume-anomaly alerts; `polaris events trace` + live tail |
 
 Critical path: **R0 → R1 → R2 → R3**, with R8 and R4 fanning out after R2.
 R0L is mechanical, runs parallel with R0, and lands first so R1's
