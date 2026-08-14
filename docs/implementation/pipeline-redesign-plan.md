@@ -1,6 +1,6 @@
 # Pipeline Redesign Plan: the Staged Main Pipeline and the Profile Plane
 
-Status: proposed (decision doc, per the scope-discipline rule in
+Status: accepted 2026-08-14 (decision doc, per the scope-discipline rule in
 `delivery-roadmap.md`). Supersedes the fan-out processing topology described in
 `docs/architecture/00-overview.md` once accepted. Builds on the project-config
 programme (`project-config-plan.md`), which has landed, and does not replace it.

@@ -21,6 +21,7 @@ The implementation board lives at:
 
 - [Implementation Kanban](./kanban.md)
 - [Delivery Roadmap](./delivery-roadmap.md)
+- [Pipeline Redesign Plan](./pipeline-redesign-plan.md) — the accepted R programme (post-P12)
 - [Coverage Matrix](./coverage-matrix.md)
 
 The kanban is intentionally Markdown-based so a human coordinator or a single active worker can update it without a separate tool.
@@ -124,4 +125,8 @@ P12 Release readiness
 ```
 
 See [Delivery Roadmap](./delivery-roadmap.md) for exit criteria.
+
+P0–P12 are complete. Current programme: the pipeline redesign
+(R0L–R11) — see the roadmap's Post-P12 section and the
+[Pipeline Redesign Plan](./pipeline-redesign-plan.md).
 

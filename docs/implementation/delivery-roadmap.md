@@ -225,6 +225,52 @@ Exit criteria:
 - operational owner can run replay dry-run
 - release candidate checklist is complete
 
+## Post-P12: Pipeline Redesign (the R Programme)
+
+P0–P12 delivered the v1 fan-out platform. The accepted redesign
+([pipeline-redesign-plan.md](./pipeline-redesign-plan.md)) restructures it
+into a staged main pipeline (ingest → resolve → enrich → route & filter →
+deliver) with a profile plane and the six async pipelines of the reference
+model, organized in the repo as `{sync,async}/{stage}/{name}/{version}`.
+
+```text
+R0L Pipeline-shaped repo layout      mechanical; parallel with R0, lands first
+R0  Contract evolution               envelope blocks, catalog registration,
+                                     SDK identify() emits traits
+R1  Profile store + spine stages     sync/identity/resolver, sync/enrichment
+R2  Spine cutover                    identified/resolved.events, sink v2,
+                                     projector/geoip/identity-resolver retire
+R3  Destination platform             routing gate, retry ladder, Redis limits
+R4  Retroactive merges               merge worker + ClickHouse merge dictionary
+R5  Traits compute + profiles sync
+R6  Audiences
+R7  Reverse ETL
+R8  Sessionizer v2 + attribution v3  async/computation, profile_id-keyed
+R9  Rolling hardening backlog
+R10 Warehouse exports + raw archive  scheduled batch tier; replay past 90 days
+R11 Journey orchestration
+```
+
+Critical path: `R0 → R1 → R2 → R3`; R8 and R4 fan out after R2;
+R5 → R6 → R7 sequence among themselves; R10 needs R2 (profiles slice R5);
+R11 closes the programme after R6.
+
+Polaris is redesign-delivered when:
+
+1. every event on `resolved.events` carries `profile` + `enrichment`
+2. destinations receive resolved, enriched, filtered events, with
+   subscriptions/filters/consent as configuration values
+3. profiles, traits, computed traits, and audiences exist and are queryable
+4. retroactive merges re-link history at read time via the merge dictionary
+5. events and unified profiles reach the warehouse tier on schedule
+   (exports + object-storage archive)
+6. reverse ETL re-enters the platform through the ingester
+7. journeys advance profiles through waits and branches
+8. the repo tree matches `{sync,async}/{stage}/{name}/{version}`
+
+Workstream detail, migration ladder (M0–M7), and decision log live in the
+plan doc.
+
 ## Scope Discipline
 
 If a task tries to introduce a major new architectural concept, stop and create a new decision doc before coding.
