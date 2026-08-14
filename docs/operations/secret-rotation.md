@@ -76,6 +76,12 @@ meta-capi and tiktok want a JSON document, ga4 wants
 `{measurement_id, api_secret}`, webhook-sink wants a URL or
 `{url, signing_key}`. Polaris only requires it to be non-empty.
 
+One vendor has a rotation that changes routing rather than just credentials:
+adding `firebase_app_id` to a GA4 credential moves app-sourced events onto a
+Firebase data stream, and gets wrong silently if the stream is not configured.
+That one has its own runbook —
+[GA4 Firebase app-stream rotation](ga4-firebase-app-stream-rotation.md).
+
 `--reason` is required and is the whole audit story. The `audit_records`
 row names who rotated what and when, with matching `before`/`after`
 snapshots — the one field that changed is the one field an audit log may

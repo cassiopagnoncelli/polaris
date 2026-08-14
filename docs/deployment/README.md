@@ -130,14 +130,21 @@ Three rules apply at deployment time:
    and the documentation that explains them.
 2. **No secret in image build args.** The Docker `--build-arg` surface
    is for build metadata only ([`infra/docker/README.md`](../../infra/docker/README.md)).
-3. **No secret in logs, audit, DLQ payloads, or delivery records.** This
-   is enforced by Pino redaction (see
+3. **No secret in logs, audit, DLQ payloads, or delivery records.** Three
+   mechanisms, because per-project credentials are now plaintext in the
+   database and one convention would not hold: Pino redaction (see
    [`docs/architecture/09-engineering-standards.md`](../architecture/09-engineering-standards.md)
-   "Logging") and the secret-provider contract (see
-   [`packages/shared-secrets/src/types.ts`](../../packages/shared-secrets/src/types.ts)).
+   "Logging"); masking at the data layer, so a credential never reaches a
+   list view, export or audit snapshot to begin with
+   ([`packages/shared-control-plane/src/secret-masking.ts`](../../packages/shared-control-plane/src/secret-masking.ts));
+   and `Secret<T>` boxing at the point of use, whose `toString` / `toJSON`
+   both yield `[redacted]`
+   ([`packages/shared-project-config/src/secret-box.ts`](../../packages/shared-project-config/src/secret-box.ts)).
 
-Operators provision secret values directly in the chosen provider; the
-runtime resolves references at boot.
+Operators set per-project credentials with `polaris destinations create
+--secret-value` and `polaris config set --secret`, and rotate them with
+`polaris destinations rotate-secret`. Nothing resolves a reference at boot;
+see the [secret rotation runbook](../operations/secret-rotation.md).
 
 ## Observability
 

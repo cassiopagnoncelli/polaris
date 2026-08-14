@@ -197,11 +197,12 @@ confirms each row matches the live consumer code.
   recommended event for recurring billing, so `subscription.renewed`
   is mapped to a snake_case custom event (`subscription_renewed`),
   which GA4 does not cross-channel dedupe. Firebase / app-stream
-  routing (via the resolved secret's optional `firebase_app_id` slot)
-  requires operators to rotate the secret to include the Firebase
+  routing (via the credential's optional `firebase_app_id` slot)
+  requires operators to rotate the credential to include the Firebase
   app id; without it, app-source events flow through the web-stream
-  URL with the synthesized `client_id`. See
-  [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
+  URL with the synthesized `client_id`. Operators have a path:
+  [GA4 Firebase app-stream rotation](../operations/ga4-firebase-app-stream-rotation.md).
+  See [`consumers/ga4/v1/SPEC.md`](../../consumers/ga4/v1/SPEC.md).
 - **Braze v1:** Braze provides no vendor-side event dedupe; the
   Polaris-side `(destination_id, delivery_key)` defense in
   `@polaris/shared-destinations` is the canonical idempotency guard.
