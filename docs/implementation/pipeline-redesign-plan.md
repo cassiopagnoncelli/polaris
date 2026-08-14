@@ -203,12 +203,22 @@ profile.events      —                              NEW: profile.updated,
                                                    audience.entered / .exited
 ```
 
-`resolved.events` partitions by `project_id:environment:profile_id`. This is
-strictly stronger than today's `best_available_identity` key: after Stage 2,
-every event for a person rides one partition regardless of which identifier
-the producer sent, so the sessionizer, the attribution engine, and every
-destination consumer inherit per-person ordering. Width matches `raw.events`
-(6) because it carries the same volume.
+`identified.events` and `resolved.events` partition by
+`project_id:environment:profile_id`. This is strictly stronger than today's
+`best_available_identity` key: after Stage 2, every event for a person rides
+one partition regardless of which identifier the producer sent, so the
+sessionizer, the attribution engine, and every destination consumer inherit
+per-person ordering. Width matches `raw.events` (6) because it carries the
+same volume.
+
+Two mechanics the implementation must respect. First, this is a **new
+builder** (`buildProfilePartitionKey`) beside the existing
+`buildRawEventsPartitionKey`, not an edit to it: the identity fallback
+chain in `partition-key.ts` is a wire contract, and inserting `profile_id`
+at its head would silently re-partition `raw.events` itself mid-deploy —
+the precise failure the streams doc warns about. Second, profile-less
+events (§4.2 step 1) fall back to `event_id`, which is correct: with no
+person to order against, there is no ordering to preserve.
 
 ### 2.3 The repository tree is the pipeline map
 
@@ -224,7 +234,7 @@ sync/                              the main pipeline, in stage order
                                    find-or-create, merge, trait patches;
                                    stamps profile_id
   enrichment/
-    runtime/                       stage 3 runtime — composes the pinned
+    runtime/v1/                    stage 3 runtime — composes the pinned
                                    enricher versions into one process
     traits/v1/                     enricher: latest traits snapshot (store read)
     geoip/v1/                      enricher: geo from context.ip
@@ -260,6 +270,12 @@ Stage 1 (ingest) stays `apps/ingester-api` — it is an HTTP app, not a
 stream worker; the tree hosts stream-attached units. Component names,
 versions, and the processor chassis are unchanged: a directory move is
 non-semantic (the ADR-0005 precedent), so nothing re-versions by moving.
+
+**Every unit sits at exactly four levels**, including the enrichment
+runtime, so the workspace globs stay uniform: `processors/*/*` +
+`consumers/*/*` become `sync/*/*/*` + `async/*/*/*`. A unit that skipped
+its version directory would need a fifth glob and would be the one
+component whose path could not say which version is deployed.
 
 Two structural decisions inside the tree:
 
@@ -427,7 +443,12 @@ today; cross-project identity stays out of scope.
    emitted event. Traits are attached downstream by the enrichment stage —
    a committed-state read by `profile_id`, race-free for this event (the
    event reaches enrichment only after the resolver's transaction commits)
-   and deliberately "latest" for every later one.
+   and deliberately "latest" for every later one. **Commit-before-publish
+   is the invariant that makes this true** — the resolver must complete
+   its Postgres transaction before emitting onto `identified.events`, the
+   ordering v1 already uses. Reversing it would let enrichment read a
+   profile that does not exist yet, and no amount of partition ordering
+   would cover it.
 
 Properties worth stating:
 
@@ -687,10 +708,27 @@ M2  Land profile-store migrations + the two stage processors:
     (identified.events -> resolved.events). analytics-projector keeps
     running; they coexist (different output families).
 M3  clickhouse-sink v2: add resolved.events to the source-fact input set
-    (new columns nullable/default). Overlap with analytics.events is safe:
-    same event_id, same sort key — ReplacingMergeTree collapses. Verify
-    parity (counts by event/day between the two feeds), then drop
-    analytics.events from the sink's subscriptions.
+    (new columns nullable/default).
+
+    Overlap needs care, and the naive reading is wrong. Both feeds carry
+    the SAME event_id and therefore the same `analytics_raw` sort key
+    `(project_id, environment, event, event_id)`. ReplacingMergeTree does
+    collapse them to one row — but it keeps the row with the highest
+    `_version`, and among equal versions the winner is arbitrary. The two
+    rows are NOT interchangeable: only the resolved-path row carries
+    `profile_id` and `traits_version`. A dual-run that lets the old path
+    win silently produces un-enriched analytical rows.
+
+    So: verify parity from `analytics_ingest_log` (append-only, keeps both
+    rows distinctly with transport lineage — this is exactly what it is
+    for), never by reading `analytics_raw` during the overlap. Then make
+    the resolved path win deterministically before the overlap begins,
+    either by ranking `_version` on the source family or by cutting the
+    sink's input over rather than overlapping it. Confirm the choice
+    against the DDL when the card is written; do not assume dedupe alone
+    resolves it.
+
+    Only then drop analytics.events from the sink's subscriptions.
 M4  Destination consumers: flip input family to resolved.events and adopt
     the routing gate + profile-aware normalize (pickBestIdentity prefers
     canonical_customer_id / profile_id; GA4 client_id from anonymous_id —
