@@ -3,7 +3,21 @@
 Status: proposed (decision doc, per the scope-discipline rule in
 `delivery-roadmap.md`). Supersedes the fan-out processing topology described in
 `docs/architecture/00-overview.md` once accepted. Builds on the project-config
-programme (`project-config-plan.md`, C0–C13) and does not replace it.
+programme (`project-config-plan.md`), which has landed, and does not replace it.
+
+> **Landed since first draft (2026-08-13, same day):** the C programme
+> completed on `main` — the admin Variables panel, backfill, validate,
+> process-env lint, the ingester and all five destination-consumer cutovers
+> (consumers now receive a per-`(project, environment)` config slice through
+> `DelivererContext.projectConfig`), and **C8**: destination fan-out routes on
+> `project_id`, closing the cross-project delivery defect this plan cited.
+> Separately, per-project secret storage was reversed: the secret resolver and
+> Vault layer are deleted; `destinations.secret_ref` is now write-only
+> plaintext `secret_value` (rotated via `polaris destinations rotate-secret`)
+> and `project_config.is_secret_ref` became `is_secret`. Consequences for this
+> plan: R3's routing gate rides the landed config seam instead of introducing
+> one; nothing here depended on Vault; R7's reverse-ETL ingester key is an
+> `is_secret` config value. Affected sections are amended below.
 
 This is the "R programme". It restructures Polaris's processing model around
 the shape that Segment's pipeline settled on, adapted to Polaris's RabbitMQ
@@ -318,7 +332,10 @@ Properties worth stating:
   unique constraints serialize. Correctness never depends on partition
   placement; partitioning is a throughput and locality optimization.
 - **Bounds.** Identifier bindings per (profile, kind) are capped
-  (default 100, a `project_config` value). At the cap, the binding is
+  (default 100). The cap changes emitted events, which makes it a
+  **semantic parameter**: manifest-declared default + bound, per-project
+  override in `catalog/projects/<id>.yaml` — never `project_config` — per
+  the rule in `05-processors-and-replay.md`. At the cap, the binding is
   refused with a metric and an `identity.link_rejected` fact — a runaway
   producer cannot inflate one profile into a hot row that stalls its
   partition.
@@ -365,8 +382,9 @@ and `enrichment`.
 platform resolution stay in separate blocks with separate owners — the same
 split as `occurred_at` vs `ingested_at`.
 
-Traits snapshots are size-guarded (cap per `project_config`, default 32 KiB;
-over-cap events carry `traits: null` + a metric, never a dropped event).
+Traits snapshots are size-guarded (default 32 KiB; a semantic parameter like
+the identifier cap — manifest default + bound, catalog override; over-cap
+events carry `traits: null` + a metric, never a dropped event).
 
 ### 4.5 The identify contract (SDK change)
 
@@ -394,7 +412,7 @@ traits. Target:
 | 1 | Ingest (Protocols) | **Strong.** API-key auth with trusted stamping, file-backed catalog + Zod validation, two-tier forbidden-field policy, dedupe lease, per-event batch results | Unchanged in shape | Register the 4 missing events; load per-project policy overrides (wired but never populated); nothing structural |
 | 2 | Identity resolution (Unify) | Pairwise link ledger; no person, no graph reads, no envelope effect; nobody consumes the output | Profile store + find-or-create + merge inline on the spine; `profile` stamped on every event | §4 entirely: migrations, `profile-resolver` resolve sub-stage, `identity.events` v2, CLI surface (`polaris profiles show/links`), metrics |
 | 3 | Enrichment | Geo-only, emitted as *sibling* events nothing joins; production backend is a no-op (no MaxMind, `source:"no_lookup"`); no traits anywhere | Traits snapshot + geo stamped on the spine event | Enrich sub-stage (reuses geoip transform code as a library); real MaxMind backend; traits snapshot plumbing |
-| 4 | Per-destination processing | Filter = "does a hand-written mapper exist"; fan-out ignores `project_id` (cross-project delivery defect, C8); consent dimensions hard-coded per vendor; planned skip indistinguishable from failure in `delivery_records` | Routing gate before normalize: per-instance event subscriptions, property filters, consent requirements, project scoping — all config *values*; mappers stay code and stay the terminal safety | Subscription/filter evaluator in `shared-destinations` harness; config schema (`destinations.config` + `project_config`); C8 lands inside this; distinct `skipped_unmapped` / `skipped_filtered` delivery statuses |
+| 4 | Per-destination processing | Fan-out is project-scoped (C8) and per-project config slices reach every consumer (C11) — but nothing *filters* on them yet: event selection is still "does a hand-written mapper exist"; consent dimensions hard-coded per vendor; planned skip indistinguishable from failure in `delivery_records` | Routing gate before normalize: per-instance event subscriptions, property filters, consent requirements — all config *values* riding the landed slice; mappers stay code and stay the terminal safety | Subscription/filter evaluator in `shared-destinations` harness; config schema (`destinations.config` + `project_config`); distinct `skipped_unmapped` / `skipped_filtered` delivery statuses |
 | 5 | Delivery | Normalize/map/deliver contract solid; but retry ladder provisioned and unused (failures rewind with no backoff), `dead_letter_threshold` unreachable (attempt counter never increments), `retry_policy` stored and never read, dedupe + rate limiting single-process in-memory | Real tiered retries via the existing `<component>.retry.*` queues with attempt propagation; `retry_policy` maps to tier schedules; Redis-backed delivery dedupe + rate limiting so replicas > 1 are safe | Wire `republishToRetry` into the destination error path; Redis adapters for dedupe/limiter; consolidate the 5× copy-pasted ~370-line `app.ts` into the harness while touching all five |
 
 Stage 2/3 mechanics that come free from existing infrastructure: super-stream
@@ -438,7 +456,8 @@ M4  Destination consumers: flip input family to resolved.events and adopt
     canonical_customer_id / profile_id; GA4 client_id from anonymous_id —
     kills the delivery-key shortcut; Braze/Meta gain traits and stable
     external ids). webhook-sink first (exemplar + SPEC.md), then the four
-    vendors, one PR each. Ordered after C8's blast-radius query.
+    vendors, one PR each. The C8 project filter is already live, so the
+    per-project rollout is safe by construction.
 M5  sessionizer v2 + attribution-engine v3: input resolved.events, keyed
     by profile_id. Sessions stop orphaning at login (key is stable across
     identify); chains stop fragmenting at anonymous→known. Both are new
@@ -471,7 +490,7 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 | R0 | Contract evolution | M | — | Accept this doc; envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing events and `user.identified`; SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
 | R1 | Profile store + resolver | L | R0 | §4 migrations; `profile-resolver` v1 (resolve + enrich sub-stages, manifests, golden fixtures); MaxMind backend; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
 | R2 | Spine cutover | L | R1 | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`) |
-| R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values); C8 project scoping; profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
+| R3 | Destination platform | L | R2 (M4) | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
 | R4 | Retroactive merge | M | R2 | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring |
 | R5 | Traits + profiles sync | M | R2 | Trait definition loader + `polaris traits compute` cron verb; `profiles` CH table fed from `profile.events`; `profile.updated` end-to-end |
 | R6 | Audiences | M | R5 | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
@@ -481,8 +500,9 @@ S ≤ 2 days, M ≤ 1 week, L > 1 week of focused work.
 
 Critical path: **R0 → R1 → R2 → R3**, with R8 and R4 fanning out after R2.
 R5→R6→R7 are sequential among themselves but independent of R3. The C
-programme interleaves: R3 consumes C2/C4 (config store) and C8; the C11
-per-service cutovers and R2/R4 touch disjoint code.
+programme has landed in full, so the R programme starts unblocked: R3 builds
+directly on `project_config`, the per-consumer config slices, and the
+project-scoped fan-out.
 
 ---
 
@@ -497,8 +517,12 @@ independent hardening.
 - GA4 `client_id`-from-delivery-key shortcut — profile-aware normalize (R3/M4).
 - Sessionizer login-orphan and attribution chain fragmentation — R8.
 
+**Already fixed on `main` since first draft:**
+- Fan-out ignores `project_id` (cross-project delivery) — C8 landed,
+  including the project-keyed target cache; the blast-radius gate was
+  deleted as moot (pre-production, no delivery history to break).
+
 **Consumed by workstreams:**
-- Fan-out ignores `project_id` (cross-project delivery) — C8, lands inside R3.
 - Retry ladder dead; `dead_letter_threshold` unreachable; `retry_policy`
   never read — R3.
 - In-memory dedupe/rate-limit unsafe beyond one replica — R3.
