@@ -229,7 +229,7 @@ Exit criteria:
 
 P0–P12 delivered the v1 fan-out platform. The accepted redesign
 ([pipeline-redesign-plan.md](./pipeline-redesign-plan.md)) restructures it
-into a staged main pipeline (ingest → resolve → enrich → route & filter →
+into a staged main pipeline (ingest → resolve → enrich → transform →
 deliver) with a profile plane and the six async pipelines of the reference
 model, organized in the repo as `{sync,async}/{stage}/{name}/{version}`.
 
