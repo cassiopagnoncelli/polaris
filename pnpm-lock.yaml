@@ -285,6 +285,42 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  async/computation/attribution-engine/v3:
+    dependencies:
+      '@polaris/shared-config':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-config
+      '@polaris/shared-db':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-db
+      '@polaris/shared-logger':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-logger
+      '@polaris/shared-metrics':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-metrics
+      '@polaris/shared-processor':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-processor
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
+      '@polaris/shared-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-service-bootstrap
+      '@polaris/shared-transport':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-transport
+      kysely:
+        specifier: ^0.29.0
+        version: 0.29.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   async/computation/sessionizer/v1:
     dependencies:
       '@polaris/shared-config':
