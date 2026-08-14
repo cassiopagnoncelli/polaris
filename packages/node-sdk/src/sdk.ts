@@ -69,6 +69,13 @@ import type {
  */
 const DEFAULT_SDK_VERSION = SDK_VERSION;
 
+/**
+ * Canonical event `identify()` emits. Registered in the catalog with a
+ * `.passthrough()` property schema, because traits are project semantics
+ * the platform does not enumerate.
+ */
+const USER_IDENTIFIED_EVENT = "user.identified";
+
 interface PersistentIdentity {
   anonymous_id: string | null;
   session_id: string | null;
@@ -246,22 +253,35 @@ export class PolarisNodeSdk {
   }
 
   /**
-   * Associate a `customer_id` with subsequent events. The Node SDK does
-   * NOT auto-emit an identify-style event in v1, and does NOT store
-   * traits — emitting an identify event with traits is the caller's job
-   * via `track("user.identified", ...)` if they want it. This matches
-   * the SDK Standards principle of "transport + identity helpers, not
-   * analytics engine".
+   * Associate a `customer_id` with subsequent events AND emit
+   * `user.identified` carrying the traits.
    *
-   * The `traits` parameter is accepted to keep the signature compatible
-   * with the architecture-doc API surface, but currently ignored. Future
-   * versions may emit an identify event when an authoritative event
-   * exists in the catalog.
+   * v1 accepted `traits` and discarded them because no authoritative
+   * event existed in the catalog to carry them; this comment deferred to
+   * "future versions may emit an identify event when an authoritative
+   * event exists". It does now — `user.identified` v1 is registered, and
+   * the identity stage merge-patches its properties into the profile
+   * store. This remains a transport helper, not an analytics engine: the
+   * SDK enqueues one canonical event and interprets nothing.
+   *
+   * Ordering is load-bearing. The customer id is set BEFORE the event is
+   * built, so the envelope carries `anonymous_id` AND `customer_id`
+   * together. That co-occurrence is precisely what lets the resolver bind
+   * both identifiers to one profile; emitting first would leave the
+   * anonymous history unlinked.
+   *
+   * Fire-and-forget, so `identify()` keeps its synchronous, non-throwing
+   * contract. Enqueue failures reach the configured error handler exactly
+   * like any other dropped event.
    */
-  public identify(customerId: string, _traits?: IdentifyTraits): void {
+  public identify(customerId: string, traits?: IdentifyTraits): void {
     this.assertOpen();
     assertValidCustomerId(customerId);
     this.identity.customer_id = customerId;
+
+    void this.track(USER_IDENTIFIED_EVENT, { ...(traits ?? {}) }).catch((err: unknown) => {
+      this.invokeOnError(err instanceof Error ? err : new Error(String(err)));
+    });
   }
 
   /**

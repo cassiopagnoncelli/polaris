@@ -232,7 +232,10 @@ describe("PolarisNodeSdk identify / reset", () => {
     sdk.reset();
     await sdk.track("page.viewed", {});
     await sdk.flush();
-    const events = transport.sends[0] ?? [];
+    // Filter to the events under test: `identify()` now also enqueues a
+    // `user.identified`, so positional indices would silently shift under
+    // any future emission change.
+    const events = (transport.sends[0] ?? []).filter((e) => e.event === "page.viewed");
     const before = events[0];
     const after = events[1];
     expect(after?.identity.customer_id).toBeNull();
@@ -252,6 +255,49 @@ describe("PolarisNodeSdk identify / reset", () => {
     const after = events[1];
     expect(after?.identity.anonymous_id).toBe(before?.identity.anonymous_id);
     expect(after?.identity.session_id).not.toBe(before?.identity.session_id);
+  });
+
+  it("identify emits user.identified carrying the traits", async () => {
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    sdk.identify("cus_123", { tier: "gold", ltv_band: "high" });
+    await sdk.flush();
+    const identified = (transport.sends[0] ?? []).find((e) => e.event === "user.identified");
+    expect(identified).toBeDefined();
+    expect(identified?.properties).toEqual({ tier: "gold", ltv_band: "high" });
+  });
+
+  it("stamps customer_id ON the identify event itself, alongside anonymous_id", async () => {
+    // This co-occurrence is the whole point: the resolver binds the two
+    // identifiers to one profile because they arrive on the same event.
+    // Emitting before setting identity would leave anonymous history
+    // unlinked forever.
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    const anonymousBefore = sdk.getIdentity().anonymous_id;
+    sdk.identify("cus_123");
+    await sdk.flush();
+    const identified = (transport.sends[0] ?? []).find((e) => e.event === "user.identified");
+    expect(identified?.identity.customer_id).toBe("cus_123");
+    expect(identified?.identity.anonymous_id).toBe(anonymousBefore);
+  });
+
+  it("emits with empty properties when no traits are supplied", async () => {
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    sdk.identify("cus_123");
+    await sdk.flush();
+    const identified = (transport.sends[0] ?? []).find((e) => e.event === "user.identified");
+    expect(identified?.properties).toEqual({});
+  });
+
+  it("identify stays synchronous and does not throw on a failing queue", async () => {
+    // The contract is fire-and-forget: a queue problem reaches onError,
+    // never the caller, because identify() returns void.
+    const transport = new FakeTransport(async (_a, e) => acceptAll(e));
+    const sdk = new PolarisNodeSdk(baseOptions({ transport }));
+    expect(() => sdk.identify("cus_123", { tier: "gold" })).not.toThrow();
+    await sdk.flush();
   });
 
   it("identify rejects empty customer_id", () => {

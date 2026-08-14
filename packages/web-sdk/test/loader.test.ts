@@ -74,10 +74,19 @@ describe("drainLoaderQueue", () => {
     await drainLoaderQueue(sdk, q);
     expect(sends.length).toBeGreaterThanOrEqual(1);
     const eventsSent = sends.flat();
-    expect(eventsSent.length).toBe(2);
-    expect(eventsSent[0]?.event).toBe("page.viewed");
-    expect(eventsSent[1]?.event).toBe("checkout.started");
-    expect(eventsSent[0]?.identity.customer_id).toBe("cus_123");
+    // `identify()` now enqueues `user.identified` as well, so the queue
+    // replays FOUR events: the identify emission followed by the two
+    // tracked ones. Order is what this test is really about — the
+    // identify must land first so the tracked events carry the customer
+    // id it set.
+    expect(eventsSent.map((e) => e.event)).toEqual([
+      "user.identified",
+      "page.viewed",
+      "checkout.started",
+    ]);
+    for (const sent of eventsSent) {
+      expect(sent.identity.customer_id).toBe("cus_123");
+    }
   });
 
   it("invokes onUnknownCommand for unrecognised tuples", async () => {

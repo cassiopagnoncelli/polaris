@@ -50,6 +50,51 @@ describe("PolarisWebSdk — identity surface", () => {
     expect(sdk.getEnvelopeIdentity().customer_id).toBeNull();
   });
 
+  it("identify emits user.identified carrying the traits, with identity already set", async () => {
+    // The co-occurrence of anonymous_id and customer_id ON this event is
+    // what lets the resolver bind both to one profile. Identity is set
+    // before the event is built for exactly that reason.
+    const sent: Array<{ event: string; properties: unknown; customer: string | null }> = [];
+    const sdk = new PolarisWebSdk({
+      transport: {
+        send: async (events) => {
+          for (const e of events) {
+            sent.push({
+              event: e.event,
+              properties: e.properties,
+              customer: e.identity.customer_id,
+            });
+          }
+          return acceptAll(events);
+        },
+      },
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
+    const anonymousBefore = sdk.getEnvelopeIdentity().anonymous_id;
+
+    sdk.identify("cus_42", { tier: "gold" });
+    await sdk.flush();
+
+    const identified = sent.find((e) => e.event === "user.identified");
+    expect(identified).toBeDefined();
+    expect(identified?.properties).toEqual({ tier: "gold" });
+    expect(identified?.customer).toBe("cus_42");
+    expect(sdk.getEnvelopeIdentity().anonymous_id).toBe(anonymousBefore);
+  });
+
+  it("identify without traits emits empty properties and never throws", async () => {
+    const sdk = new PolarisWebSdk({
+      transport: { send: async (e) => acceptAll(e) },
+      startupEagerFlushWindowMs: 0,
+      steadyFlushIntervalMs: 0,
+      flushOnPagehide: false,
+    });
+    expect(() => sdk.identify("cus_42")).not.toThrow();
+    await sdk.flush();
+  });
+
   it("getIdentityManager exposes the underlying manager for diagnostics", () => {
     const sdk = new PolarisWebSdk({
       startupEagerFlushWindowMs: 0,

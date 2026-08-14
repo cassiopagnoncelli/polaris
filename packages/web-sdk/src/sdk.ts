@@ -89,6 +89,13 @@ import type {
   WebSdkOptions,
 } from "./types.js";
 
+/**
+ * Canonical event `identify()` emits. Registered in the catalog with a
+ * `.passthrough()` property schema, because traits are project semantics
+ * the platform does not enumerate.
+ */
+const USER_IDENTIFIED_EVENT = "user.identified";
+
 const DEFAULT_MAX_QUEUE_SIZE = 1_000;
 const DEFAULT_EAGER_WINDOW_MS = 15_000;
 const DEFAULT_EAGER_DEBOUNCE_MS = 100;
@@ -229,9 +236,33 @@ export class PolarisWebSdk {
     return this.identityManager.toEnvelopeIdentity();
   }
 
-  /** Associate a `customer_id` with subsequent events. */
+  /**
+   * Associate a `customer_id` with subsequent events AND emit
+   * `user.identified` carrying the traits.
+   *
+   * The identity manager still owns local persistence (cookie →
+   * localStorage → sessionStorage → memory), unchanged. What is new is
+   * that traits no longer stop there: `user.identified` v1 is registered
+   * in the catalog and the identity stage merge-patches its properties
+   * into the profile store. Before that event existed, the manager
+   * accepted `traits` and dropped them, because there was nowhere for
+   * them to go.
+   *
+   * Ordering is load-bearing. Identity is set BEFORE the event is built,
+   * so the envelope carries `anonymous_id` and `customer_id` together —
+   * the co-occurrence the resolver binds into one profile. Emitting first
+   * would leave the anonymous history unlinked.
+   *
+   * Fire-and-forget, so `identify()` keeps its synchronous, non-throwing
+   * contract. A queue failure surfaces through `onError` like any other
+   * dropped event.
+   */
   public identify(customerId: string, traits?: IdentifyTraits): void {
     this.identityManager.identify(customerId, traits);
+
+    void this.track(USER_IDENTIFIED_EVENT, { ...(traits ?? {}) }).catch((err: unknown) => {
+      this.invokeOnError(err instanceof Error ? err : new Error(String(err)));
+    });
   }
 
   /** Clear customer identity, rotate session, and (by default) rotate anonymous. */

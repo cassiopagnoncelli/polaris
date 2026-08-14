@@ -139,8 +139,10 @@ public identify(customerId: string, traits?: IdentifyTraits): void;
 
 - Sets `identity.customer_id` for all future events.
 - Touches the activity clock, which resets the 30-minute inactivity timer.
-- Does **not** emit an identify event. The downstream identity resolver picks up the link from the `anonymous_id + customer_id` overlap on the next event. If you want a dedicated event, call `track("user.identified", ...)` yourself.
-- `traits` is accepted to match the architecture-doc signature but **not stored**.
+- **Emits `user.identified`** carrying `traits` as the event properties. The identity stage merge-patches those properties into the profile store (last-write-wins per key) and bumps the profile's `traits_version`.
+- Identity is set **before** the event is built, so the emitted envelope carries `anonymous_id` and `customer_id` together. That co-occurrence is what lets the resolver bind both identifiers to one profile — it is the reason the ordering is not an implementation detail.
+- Fire-and-forget: `identify()` stays synchronous and never throws on a queue problem. Failures surface through `onError`, like any other dropped event.
+- `traits` is optional. Omitting it emits the event with empty properties, which still performs the identifier binding.
 
 ### Node
 
@@ -148,7 +150,9 @@ public identify(customerId: string, traits?: IdentifyTraits): void;
 public identify(customerId: string, traits?: IdentifyTraits): void;
 ```
 
-Same behaviour as Web: sets `identity.customer_id`, does not emit an event, does not store `traits`.
+Same behaviour as Web: sets `identity.customer_id` and emits `user.identified` with the traits.
+
+> **Changed.** Earlier versions accepted `traits` and discarded them, because no authoritative event existed in the catalog to carry them — the guidance was to call `track("user.identified", ...)` yourself. `user.identified` v1 is now registered, so the SDK does it. If your code already emits that event manually after `identify()`, you will now send two; drop the manual call.
 
 ### Validation
 
