@@ -294,6 +294,50 @@ export function parseRoutingGateConfig(value: unknown): RoutingGateConfig | unde
   };
 }
 
+/**
+ * Resolve the gate config for one instance from both config planes.
+ *
+ * Precedence follows `docs/implementation/project-config-plan.md` §3.3:
+ *
+ *   project_config[namespace].routing  ->  destinations.config.routing
+ *
+ * Merged per SECTION, not wholesale. An instance that declares only
+ * `subscriptions` narrows which events it wants while still inheriting the
+ * project's filters and consent requirements; replacing the whole block
+ * would make an instance-level subscription list silently discard a
+ * project-wide consent requirement, which is the direction of a compliance
+ * mistake rather than an inconvenience.
+ *
+ * A section declared at both levels is taken from the instance entire — a
+ * union of two subscription lists would let the project widen what an
+ * instance asked to narrow, and there would be no way to express "only
+ * these events" at all.
+ */
+export function resolveRoutingGateConfig(input: {
+  readonly projectValues: Readonly<Record<string, unknown>> | undefined;
+  /**
+   * `destinations.config`. Optional because it crosses a database and JSON
+   * boundary, where a declared type is a claim rather than a guarantee — a
+   * row read by an older select list, or any reader that predates the
+   * column, hands over an object without it.
+   */
+  readonly instanceValues: Readonly<Record<string, unknown>> | undefined;
+}): RoutingGateConfig | undefined {
+  const project = parseRoutingGateConfig(input.projectValues?.[ROUTING_GATE_CONFIG_KEY]);
+  const instance = parseRoutingGateConfig(input.instanceValues?.[ROUTING_GATE_CONFIG_KEY]);
+  if (project === undefined) return instance;
+  if (instance === undefined) return project;
+
+  const subscriptions = instance.subscriptions ?? project.subscriptions;
+  const filters = instance.filters ?? project.filters;
+  const requireConsent = instance.requireConsent ?? project.requireConsent;
+  return {
+    ...(subscriptions !== undefined ? { subscriptions } : {}),
+    ...(filters !== undefined ? { filters } : {}),
+    ...(requireConsent !== undefined ? { requireConsent } : {}),
+  };
+}
+
 /** Distinguishes "absent, fine" from "present and wrong" without throwing. */
 const INVALID = Symbol("invalid");
 type Invalid = typeof INVALID;

@@ -68,6 +68,10 @@ const SEED_INSTANCE: DestinationInstance = {
   // their original semantics; the replay-specific tests below override
   // this to `false` when the suppression gate is what's being tested.
   replay_opt_in: true,
+  // `destinations.config`: the per-instance half of the gate's precedence
+  // chain. Empty here so the seed overrides nothing, which is the state of
+  // every instance nobody has configured.
+  config: {},
 };
 
 function makeEnvelope(overrides: Partial<NormalizableEnvelope> = {}): NormalizableEnvelope {
@@ -1274,6 +1278,25 @@ describe("destination runtime — the routing gate", () => {
     // consent independently. So a broken config degrades to yesterday's
     // behaviour rather than muting a destination over a typo.
     const env = makeEnv({ projectConfig: gated({ subscriptions: { events: "not-a-list" } }) });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(env.delivererCalls).toHaveLength(1);
+  });
+
+  it("lets the instance's own config override the project's", async () => {
+    // The precedence chain end to end: two instances of one vendor in one
+    // project can want different events. Without this the gate would only
+    // ever be a project-wide switch.
+    const env = makeEnv({
+      projectConfig: gated({ subscriptions: { events: ["something.else"] } }),
+      instance: {
+        ...SEED_INSTANCE,
+        config: { routing: { subscriptions: { events: ["payment.approved"] } } },
+      },
+    });
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),

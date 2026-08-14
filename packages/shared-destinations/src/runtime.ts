@@ -105,7 +105,7 @@ import type { DestinationInstance, DestinationInstanceReader } from "./db/destin
 import type { DlqRecordRepository } from "./db/dlq-records.js";
 import { type DestinationDedupe, InMemoryDestinationDedupe } from "./dedupe.js";
 import { publishToDestinationDlq } from "./dlq.js";
-import { evaluateGate, parseRoutingGateConfig, ROUTING_GATE_CONFIG_KEY } from "./gate.js";
+import { evaluateGate, resolveRoutingGateConfig } from "./gate.js";
 import { buildDeliveryKey } from "./idempotency.js";
 import { DestinationMetrics } from "./metrics.js";
 import { DestinationRateLimiter } from "./rate-limiter.js";
@@ -784,7 +784,10 @@ async function processOne<Payload>(
   // going to consume it.
   const gateDecision = evaluateGate({
     envelope,
-    config: parseRoutingGateConfig(projectConfigValues[ROUTING_GATE_CONFIG_KEY]),
+    config: resolveRoutingGateConfig({
+      projectValues: projectConfigValues,
+      instanceValues: instance.config,
+    }),
     vendorConsent: descriptor.requiredConsent,
   });
   if (gateDecision.kind === "skip") {
@@ -1468,4 +1471,7 @@ const PLACEHOLDER_INSTANCE: DestinationInstance = {
   // Placeholder is opt-out: this row only stamps DLQ headers on
   // pre-resolve failures; it never goes through the replay gate.
   replay_opt_in: false,
+  // No instance was resolved, so there is no instance configuration. Empty
+  // is also the safe value for the gate: it overrides nothing.
+  config: {},
 };

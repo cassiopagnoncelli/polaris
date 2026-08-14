@@ -81,6 +81,26 @@ export interface DestinationInstance {
    * destination).
    */
   readonly replay_opt_in: boolean;
+  /**
+   * Per-instance configuration bag.
+   *
+   * The narrow half of the precedence chain in
+   * `docs/implementation/project-config-plan.md` §3.3:
+   *
+   *   schema defaults -> project_config[namespace] -> destinations.config
+   *
+   * A value belongs here when the consumer's own code interprets it AND it
+   * varies between two instances of the same vendor in the same project —
+   * two webhook sinks pointing at different teams, each wanting different
+   * events. Anything the shared runtime interprets belongs in a typed
+   * COLUMN instead (`max_rps`, `retry_policy`, `replay_opt_in`), and
+   * anything shared across the project belongs in `project_config`.
+   *
+   * Never mapping semantics. `assertNoMappingSemantics` guards the keys of
+   * the project bag at its write path; this column has no CLI write path
+   * yet, so the same guard must be wired when one is added.
+   */
+  readonly config: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -193,6 +213,7 @@ export function createKyselyDestinationInstanceReader(
         "retry_policy",
         "dead_letter_threshold",
         "replay_opt_in",
+        "config",
       ])
       .where("destination_id", "=", destination_id)
       .executeTakeFirst();
@@ -220,6 +241,7 @@ export function createKyselyDestinationInstanceReader(
         "retry_policy",
         "dead_letter_threshold",
         "replay_opt_in",
+        "config",
       ])
       .where("vendor", "=", vendor)
       .where("environment", "=", environment)

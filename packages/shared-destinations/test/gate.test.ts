@@ -14,7 +14,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { evaluateGate, type GateEnvelope, parseRoutingGateConfig } from "../src/gate.js";
+import {
+  evaluateGate,
+  type GateEnvelope,
+  parseRoutingGateConfig,
+  resolveRoutingGateConfig,
+} from "../src/gate.js";
 
 function envelope(overrides: Partial<GateEnvelope> = {}): GateEnvelope {
   return {
@@ -313,6 +318,56 @@ describe("parseRoutingGateConfig", () => {
         filters: [{ path: "properties.a", op: "equals", value: { b: 1 } }],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("resolveRoutingGateConfig — instance over project", () => {
+  const project = {
+    routing: {
+      subscriptions: { prefixes: ["payment."] },
+      filters: [{ path: "properties.plan", op: "equals", value: "pro" }],
+      requireConsent: ["marketing"],
+    },
+  };
+
+  it("falls back to the project when the instance says nothing", () => {
+    expect(resolveRoutingGateConfig({ projectValues: project, instanceValues: {} })).toEqual(
+      parseRoutingGateConfig(project.routing),
+    );
+  });
+
+  it("uses the instance alone when the project says nothing", () => {
+    const instanceValues = { routing: { subscriptions: { events: ["order.placed"] } } };
+    expect(resolveRoutingGateConfig({ projectValues: {}, instanceValues })).toEqual({
+      subscriptions: { events: ["order.placed"] },
+    });
+  });
+
+  it("overrides only the sections the instance declares", () => {
+    // Two webhook sinks in one project, each wanting different events, must
+    // still both inherit the project's consent requirement. Replacing the
+    // whole block on a subscription override would drop it silently — the
+    // direction of a compliance mistake, not an inconvenience.
+    const resolved = resolveRoutingGateConfig({
+      projectValues: project,
+      instanceValues: { routing: { subscriptions: { events: ["order.placed"] } } },
+    });
+    expect(resolved).toEqual({
+      subscriptions: { events: ["order.placed"] },
+      filters: [{ path: "properties.plan", op: "equals", value: "pro" }],
+      requireConsent: ["marketing"],
+    });
+  });
+
+  it("takes an overridden section entire rather than unioning it", () => {
+    // A union would let the project widen what an instance asked to narrow,
+    // leaving no way to express "only these events".
+    const resolved = resolveRoutingGateConfig({
+      projectValues: project,
+      instanceValues: { routing: { subscriptions: { events: ["order.placed"] } } },
+    });
+    expect(resolved?.subscriptions).toEqual({ events: ["order.placed"] });
+    expect(resolved?.subscriptions?.prefixes).toBeUndefined();
   });
 });
 
