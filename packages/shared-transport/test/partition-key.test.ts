@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildProfilePartitionKey,
   buildRawEventsPartitionKey,
   partitionForKey,
+  resolveProfilePartitionKey,
   resolveRawEventsPartitionKey,
 } from "../src/partition-key.js";
 
@@ -216,5 +218,112 @@ describe("partitionForKey", () => {
   it("rejects a non-positive partition count", () => {
     expect(() => partitionForKey("k", 0)).toThrow(RangeError);
     expect(() => partitionForKey("k", 1.5)).toThrow(RangeError);
+  });
+});
+
+// ---------------------------------------------------------------------
+// Spine partitioning (`identified.events`, `resolved.events`).
+// ---------------------------------------------------------------------
+
+describe("buildProfilePartitionKey", () => {
+  const base = {
+    project_id: "storefront",
+    environment: "production",
+    event_id: "019ffe00-0000-7000-8000-0000000000ee",
+  };
+  const PROFILE = "019ffe00-0000-7000-8000-00000000aaaa";
+
+  it("keys on the resolved profile", () => {
+    expect(buildProfilePartitionKey({ ...base, profile_id: PROFILE })).toBe(
+      `storefront:production:${PROFILE}`,
+    );
+  });
+
+  it("falls back to event_id when the event has no profile", () => {
+    // No person to order against, so there is no ordering to preserve.
+    // Spreading these across partitions also keeps unresolvable traffic
+    // from piling onto partition 0.
+    const resolved = resolveProfilePartitionKey({ ...base, profile_id: null });
+    expect(resolved.source).toBe("event_id");
+    expect(resolved.key).toBe(`storefront:production:${base.event_id}`);
+  });
+
+  it("treats an empty profile id as absent", () => {
+    expect(resolveProfilePartitionKey({ ...base, profile_id: "" }).source).toBe("event_id");
+    expect(resolveProfilePartitionKey({ ...base, profile_id: undefined }).source).toBe("event_id");
+  });
+
+  it("gives one person one partition regardless of identifier churn", () => {
+    // The whole point of the spine key. The same person arrives first
+    // anonymous, then known; under the raw rule these two events hash to
+    // DIFFERENT partitions because the key upgrades from anonymous_id to
+    // customer_id. Keyed on the profile, they do not.
+    const partitions = 6;
+    const anonymousPhase = buildProfilePartitionKey({ ...base, profile_id: PROFILE });
+    const knownPhase = buildProfilePartitionKey({
+      ...base,
+      event_id: "019ffe00-0000-7000-8000-0000000000ff",
+      profile_id: PROFILE,
+    });
+    expect(partitionForKey(anonymousPhase, partitions)).toBe(
+      partitionForKey(knownPhase, partitions),
+    );
+
+    const rawAnonymous = buildRawEventsPartitionKey({
+      ...base,
+      identity: { anonymous_id: "anon_1", customer_id: null },
+    });
+    const rawKnown = buildRawEventsPartitionKey({
+      ...base,
+      identity: { anonymous_id: "anon_1", customer_id: "cus_1" },
+    });
+    expect(rawAnonymous).not.toBe(rawKnown);
+  });
+
+  it("rejects missing scope fields rather than silently misrouting", () => {
+    expect(() =>
+      buildProfilePartitionKey({ ...base, project_id: "", profile_id: PROFILE }),
+    ).toThrow(RangeError);
+    expect(() => buildProfilePartitionKey({ ...base, event_id: "", profile_id: null })).toThrow(
+      RangeError,
+    );
+  });
+});
+
+describe("raw partition key is unchanged by the spine work", () => {
+  // REGRESSION GUARD. `buildRawEventsPartitionKey` is a wire contract:
+  // raw.events is partitioned by it in production right now. Adding
+  // profile_id to its fallback chain would silently re-partition that
+  // stream mid-deploy, which is why the spine got its own builder. These
+  // vectors are the contract, pinned literally.
+  it("produces the documented key for each fallback rung", () => {
+    const base = {
+      project_id: "storefront",
+      environment: "production",
+      event_id: "019ffe00-0000-7000-8000-0000000000ee",
+    };
+    expect(buildRawEventsPartitionKey({ ...base, identity: { customer_id: "cus_1" } })).toBe(
+      "storefront:production:cus_1",
+    );
+    expect(buildRawEventsPartitionKey({ ...base, identity: { anonymous_id: "anon_1" } })).toBe(
+      "storefront:production:anon_1",
+    );
+    expect(buildRawEventsPartitionKey({ ...base, identity: { session_id: "sess_1" } })).toBe(
+      "storefront:production:sess_1",
+    );
+    expect(buildRawEventsPartitionKey({ ...base, identity: {} })).toBe(
+      `storefront:production:${base.event_id}`,
+    );
+  });
+
+  it("still ignores device_id, which was never in the chain", () => {
+    expect(
+      buildRawEventsPartitionKey({
+        project_id: "p",
+        environment: "development",
+        event_id: "e",
+        identity: { device_id: "dev_1" },
+      }),
+    ).toBe("p:development:e");
   });
 });

@@ -12,7 +12,7 @@
  * active isolation per triple"), this test fails LOUDLY rather than
  * letting a duplicate-active state reach production.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,18 +27,25 @@ function readMigration(): string {
 }
 
 /**
- * The CHECK on `topic_family` was widened by a later migration when
- * `session.events` became a canonical family (it was only ever an
- * auto-created Redpanda topic before). The invariant under test is
- * "every canonical family is allowed by the live schema", so the
- * assertion reads both files.
+ * The CHECK on `topic_family` gets widened whenever a family joins
+ * `CANONICAL_STREAM_FAMILIES` — first for `session.events` (previously an
+ * auto-created Redpanda topic), then for the three the pipeline redesign
+ * adds.
+ *
+ * The invariant is "every canonical family is allowed by the LIVE schema",
+ * which is a property of all the migrations together, not of any one file.
+ * Naming each widening made this test fail on the addition itself rather
+ * than on a regression, so read every migration that touches the
+ * constraint instead.
  */
 function readFamilyCheckSql(): string {
-  const widen = resolve(
-    HERE,
-    "../../../db/migrations/20260810000002_add_session_events_topic_family.sql",
-  );
-  return `${readMigration()}\n${readFileSync(widen, "utf8")}`;
+  const dir = resolve(HERE, "../../../db/migrations");
+  return readdirSync(dir)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .map((file) => readFileSync(resolve(dir, file), "utf8"))
+    .filter((sql) => sql.includes("topic_isolations_topic_family_allowed"))
+    .join("\n");
 }
 
 describe("topic_isolations migration: schema invariants", () => {

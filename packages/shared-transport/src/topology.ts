@@ -32,11 +32,25 @@ import {
   retryExchangeName,
   retryQueueName,
   STREAM_DIAGNOSTICS_EVENTS,
+  STREAM_FAMILY_IDENTIFIED_EVENTS,
   streamExchangeName,
 } from "./streams.js";
 
 /** Retention for the SDK diagnostics stream. Short by design. */
 export const DIAGNOSTICS_RETENTION_DAYS = 7;
+
+/**
+ * Retention for `identified.events`, the intermediate family between the
+ * two spine stages.
+ *
+ * Short on purpose: it is fully regenerable by replaying `raw.events`
+ * through the identity stage, so keeping it for the raw window would
+ * reserve disk for data that is already recoverable. It is never a replay
+ * anchor — `raw.events` remains the only stream anyone replays from. The
+ * window only has to cover the gap between the two stages plus enough
+ * slack to survive an enrichment outage.
+ */
+export const IDENTIFIED_EVENTS_RETENTION_DAYS = 7;
 
 /**
  * Per-stream storage cap. RabbitMQ streams need a size bound as well as an
@@ -86,9 +100,25 @@ export function defaultSuperStreams(config: RabbitmqConfig): ReadonlyArray<Super
   return CANONICAL_STREAM_FAMILIES.map((family) => ({
     family,
     partitions: partitionsForFamily(config, family),
-    retentionDays: config.streamRetentionDays,
+    retentionDays: defaultRetentionDaysForFamily(config.streamRetentionDays, family),
     maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
   }));
+}
+
+/**
+ * Retention for one family. Everything defaults to the configured window
+ * (90 days), which is what `raw.events` needs as the replay anchor;
+ * `identified.events` is capped shorter for the reason on
+ * {@link IDENTIFIED_EVENTS_RETENTION_DAYS}.
+ *
+ * Clamped rather than fixed so an operator who deliberately shortens the
+ * global window is not silently overridden upward here.
+ */
+export function defaultRetentionDaysForFamily(defaultDays: number, family: string): number {
+  if (family === STREAM_FAMILY_IDENTIFIED_EVENTS) {
+    return Math.min(IDENTIFIED_EVENTS_RETENTION_DAYS, defaultDays);
+  }
+  return defaultDays;
 }
 
 /**
@@ -107,6 +137,15 @@ export function diagnosticsSuperStream(config: RabbitmqConfig): SuperStreamSpec 
 
 /** Every Polaris component that owns a retry/DLQ queue set. */
 export const POLARIS_COMPONENTS = [
+  // Spine stages (R1B, R1C). Named for their tree path, deliberately NOT
+  // "identity-resolver": the legacy processor keeps running through the
+  // M6 retirement, and reusing its component name would make the new
+  // stage share its retry/redeliver/DLQ queues during coexistence — two
+  // different semantics dead-lettering into one place.
+  "sync-identity",
+  "sync-enrichment",
+  // Retroactive-merge worker (R4).
+  "merge-worker",
   "geoip-enricher",
   "sessionizer",
   "identity-resolver",

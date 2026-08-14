@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  IDENTIFIED_EVENTS_RETENTION_DAYS,
   declareComponentQueues,
   declareSuperStream,
   declareTopologyOnChannel,
@@ -127,12 +128,36 @@ describe("defaultSuperStreams", () => {
     const specs = defaultSuperStreams(testRabbitmqConfig);
     expect(specs.map((s) => s.family)).toEqual([
       "raw.events",
+      "identified.events",
+      "resolved.events",
+      "profile.events",
       "identity.events",
       "enriched.events",
       "session.events",
       "attribution.events",
       "analytics.events",
     ]);
+  });
+
+  it("caps identified.events retention short, since it is regenerable", () => {
+    // It sits between the two spine stages and is reproducible by
+    // replaying raw.events through the identity stage, so holding it for
+    // the raw window would reserve disk for recoverable data. Nothing
+    // replays from it — raw.events stays the only replay anchor.
+    const specs = defaultSuperStreams(testRabbitmqConfig);
+    const identified = specs.find((s) => s.family === "identified.events");
+    const raw = specs.find((s) => s.family === "raw.events");
+    expect(identified?.retentionDays).toBe(IDENTIFIED_EVENTS_RETENTION_DAYS);
+    expect(raw?.retentionDays).toBe(testRabbitmqConfig.streamRetentionDays);
+    expect(identified?.retentionDays).toBeLessThan(raw?.retentionDays ?? 0);
+  });
+
+  it("never lengthens retention beyond a deliberately short global window", () => {
+    // Clamped, not fixed: an operator who shortens the global window is
+    // not silently overridden upward for this family.
+    const tight = { ...testRabbitmqConfig, streamRetentionDays: 2 };
+    const identified = defaultSuperStreams(tight).find((s) => s.family === "identified.events");
+    expect(identified?.retentionDays).toBe(2);
   });
 
   it("leaves the diagnostics stream undeclared until something produces to it", () => {

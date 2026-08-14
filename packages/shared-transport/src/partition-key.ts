@@ -87,6 +87,85 @@ export function resolveRawEventsPartitionKey(input: PartitionKeyInput): {
   };
 }
 
+// ---------------------------------------------------------------------
+// Profile-keyed partitioning (the spine).
+//
+// `identified.events` and `resolved.events` partition on the RESOLVED
+// person rather than on whichever identifier the producer happened to
+// send. That is strictly stronger than the raw rule: once the identity
+// stage has stamped a `profile_id`, every event for a person hashes to one
+// partition even as that person moves from anonymous to known, so the
+// sessionizer, the attribution engine and every destination consumer
+// inherit per-person ordering for free.
+//
+// This is a SEPARATE builder, not a new branch inside
+// `resolveIdentity`. `buildRawEventsPartitionKey`'s fallback chain is a
+// wire contract: `raw.events` is partitioned by it today, and inserting
+// `profile_id` at its head would silently re-partition that stream
+// mid-deploy — the exact failure `docs/architecture/03-rabbitmq-streams.md`
+// warns about, since two instances disagreeing about the mapping breaks
+// per-identity ordering. Keeping them apart means the raw rule is
+// provably untouched (there is a regression test asserting it).
+//
+// See `docs/implementation/pipeline-redesign-plan.md` §2.2.
+// ---------------------------------------------------------------------
+
+/** Minimal shape required to compute a spine partition key. */
+export interface ProfilePartitionKeyInput {
+  readonly project_id: string;
+  readonly environment: string;
+  /**
+   * Resolved profile, or `null` for an event the identity stage could not
+   * resolve (no strong identifiers). Such events are stamped
+   * `profile: null` and continue down the spine — they are never dropped.
+   */
+  readonly profile_id: string | null | undefined;
+  readonly event_id: string;
+}
+
+/** Which value the spine key ended up built from. */
+export type ProfilePartitionKeySource = "profile_id" | "event_id";
+
+/**
+ * Compute the partition key for `identified.events` / `resolved.events`.
+ *
+ * Falls back to `event_id` when there is no profile, which is the correct
+ * degenerate case rather than a compromise: with no person to order
+ * against there is no ordering to preserve, and spreading unresolvable
+ * events across partitions keeps them from piling onto partition 0.
+ */
+export function buildProfilePartitionKey(input: ProfilePartitionKeyInput): string {
+  return resolveProfilePartitionKey(input).key;
+}
+
+/**
+ * Same as `buildProfilePartitionKey` but also reports which source was
+ * used, so a processor can emit a metric on how often it is partitioning
+ * unresolved traffic — a rising `event_id` share means identity resolution
+ * is degrading, and per-person ordering downstream degrades with it.
+ */
+export function resolveProfilePartitionKey(input: ProfilePartitionKeyInput): {
+  readonly key: string;
+  readonly identity: string;
+  readonly source: ProfilePartitionKeySource;
+} {
+  const projectId = requireField(input.project_id, "project_id");
+  const environment = requireField(input.environment, "environment");
+  const eventId = requireField(input.event_id, "event_id");
+
+  const profileId = nonEmpty(input.profile_id);
+  const resolved =
+    profileId !== undefined
+      ? { value: profileId, source: "profile_id" as const }
+      : { value: eventId, source: "event_id" as const };
+
+  return {
+    key: `${projectId}:${environment}:${resolved.value}`,
+    identity: resolved.value,
+    source: resolved.source,
+  };
+}
+
 /**
  * Map a partition key to a partition index.
  *

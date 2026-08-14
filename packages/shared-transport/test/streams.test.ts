@@ -31,12 +31,20 @@ describe("canonical stream constants", () => {
     expect(STREAM_DIAGNOSTICS_EVENTS).toBe("polaris.diagnostics.events");
   });
 
-  it("lists every canonical family, including session.events", () => {
+  it("lists every canonical family, including session.events and the spine", () => {
     // `session.events` became canonical with the RabbitMQ migration: the
     // sessionizer always emitted it, but RabbitMQ's topic auto-creation
     // hid the fact that it was never declared anywhere.
+    //
+    // The three spine families come from the pipeline redesign.
+    // Membership is load-bearing beyond this package: `topic_isolations`
+    // mirrors this list in a CHECK, so a family missing here cannot be
+    // isolated for a project.
     expect(CANONICAL_STREAM_FAMILIES).toEqual([
       "raw.events",
+      "identified.events",
+      "resolved.events",
+      "profile.events",
       "identity.events",
       "enriched.events",
       "session.events",

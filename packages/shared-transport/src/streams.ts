@@ -46,6 +46,39 @@ export const STREAM_FAMILY_ATTRIBUTION_EVENTS = "attribution.events" as const;
 export const STREAM_FAMILY_ANALYTICS_EVENTS = "analytics.events" as const;
 
 /**
+ * Intermediate family between the two spine stages: the identity stage
+ * emits here, the enrichment stage consumes here.
+ *
+ * Short retention and deliberately NOT a replay anchor. It is fully
+ * regenerable — replaying `raw.events` through the identity stage
+ * reproduces it — so retaining it for the raw window would cost disk for
+ * data that is already recoverable. `raw.events` remains the only stream
+ * anyone replays from.
+ */
+export const STREAM_FAMILY_IDENTIFIED_EVENTS = "identified.events" as const;
+
+/**
+ * THE canonical spine. Carries the same `event_id` as the source event,
+ * now with the platform-owned `profile` and `enrichment` blocks attached.
+ *
+ * Everything downstream reads this: destination consumers (stages 4-5),
+ * the ClickHouse sink, and the async computation processors. Partitioned
+ * by `profile_id`, so per-person ordering holds regardless of which
+ * identifier a producer sent.
+ */
+export const STREAM_FAMILY_RESOLVED_EVENTS = "resolved.events" as const;
+
+/**
+ * Profile-plane facts: `profile.updated`, and later `trait.computed` and
+ * `audience.entered` / `.exited`.
+ *
+ * Narrower than the spine (profile changes are far rarer than events) and
+ * consumed by the ClickHouse sink, which is what makes trait history exist
+ * at all — `profiles.traits` in Postgres holds only the current value.
+ */
+export const STREAM_FAMILY_PROFILE_EVENTS = "profile.events" as const;
+
+/**
  * Optional SDK diagnostics stream. Operators opt projects in per
  * environment. Diagnostics events use the canonical envelope but always
  * carry a `polaris.diagnostics.*` event name. Not consumed by processors
@@ -65,6 +98,9 @@ export const STREAM_DIAGNOSTICS_EVENTS = "polaris.diagnostics.events" as const;
  */
 export const CANONICAL_STREAM_FAMILIES = [
   STREAM_FAMILY_RAW_EVENTS,
+  STREAM_FAMILY_IDENTIFIED_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+  STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,

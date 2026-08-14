@@ -43,7 +43,7 @@
 // working provisioning config):
 //   POLARIS_RABBITMQ_URL                  default amqp://polaris:polaris@localhost:5672
 //   POLARIS_RABBITMQ_PARTITIONS           default 3
-//   POLARIS_RABBITMQ_PARTITION_OVERRIDES  default "raw.events=6"
+//   POLARIS_RABBITMQ_PARTITION_OVERRIDES  default "raw.events=6,identified.events=6,resolved.events=6"
 //   POLARIS_RABBITMQ_STREAM_RETENTION_DAYS default 90
 
 import {
@@ -51,6 +51,7 @@ import {
   DEFAULT_STREAM_MAX_BYTES,
   declareComponentQueues,
   declareSuperStream,
+  defaultRetentionDaysForFamily,
   deleteComponentQueues,
   deleteSuperStream,
   POLARIS_COMPONENTS,
@@ -62,7 +63,7 @@ const DEFAULT_URL = "amqp://polaris:polaris@localhost:5672";
 // raw.events carries every project's full firehose; the derived families
 // carry a subset. Six partitions there and three elsewhere is the default
 // documented in docs/implementation/rabbitmq-redesign-plan.md.
-const DEFAULT_PARTITION_OVERRIDES = "raw.events=6";
+const DEFAULT_PARTITION_OVERRIDES = "raw.events=6,identified.events=6,resolved.events=6";
 
 function envOr(key, fallback) {
   const value = process.env[key];
@@ -100,10 +101,19 @@ export function buildPlan(options = {}) {
   // The SDK diagnostics stream is deliberately not declared: nothing
   // produces to it yet. See defaultSuperStreams() in
   // packages/shared-transport/src/topology.ts.
+  //
+  // Retention is delegated to defaultRetentionDaysForFamily() rather than
+  // applied flat, because it is no longer uniform: `identified.events`
+  // sits between the two spine stages and is fully regenerable from
+  // `raw.events`, so it is capped short. This script used to compute the
+  // spec itself, which meant a retention rule added in the package
+  // silently did not reach the broker — declarations are idempotent but
+  // NON-reconciling, so the wrong value would then persist until someone
+  // migrated the stream by hand.
   const superStreams = CANONICAL_STREAM_FAMILIES.map((family) => ({
     family,
     partitions: widthFor(family),
-    retentionDays,
+    retentionDays: defaultRetentionDaysForFamily(retentionDays, family),
     maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
   }));
 
