@@ -66,6 +66,13 @@ export interface PublishTarget {
 export interface IdentityStageMetrics {
   readonly onEmitted?: () => void;
   readonly onSkipped?: (reason: string) => void;
+  /**
+   * What the stage DECIDED for this event: `created`, `bound`, `merged`
+   * or `unidentified`. Distinct from `onEmitted` because a merge and an
+   * ordinary bind both emit one spine event, and only one of them is the
+   * failure mode the safeguards exist to catch.
+   */
+  readonly onOutcome?: (outcome: string) => void;
 }
 
 export interface IdentityStageDeps {
@@ -149,6 +156,9 @@ export async function handleEvent(
     partitionKey,
   });
   deps.metrics?.onEmitted?.();
+  // The decision, recorded after the spine publish so a failed publish
+  // does not book an outcome the pipeline never saw.
+  deps.metrics?.onOutcome?.(resolution.kind);
 
   // ---- publish derived facts ----
   //
@@ -192,6 +202,10 @@ async function publishDerived(
   }
 
   if (resolution.mergeSuspended !== null) {
+    // The breaker tripped. Recorded as a skipped-with-reason so an alert
+    // can fire on it: a merge that did not happen is exactly a skip, and
+    // it is the signal that a merge storm is underway.
+    deps.metrics?.onSkipped?.("merge_suspended");
     identityEvents.push(
       buildMergeSuspendedEvent({
         source: raw,
@@ -229,6 +243,7 @@ async function publishDerived(
   // same way so an operator sees one stream of "a binding did not
   // happen, here is why".
   for (const rejected of denylisted) {
+    deps.metrics?.onSkipped?.("link_rejected_denylisted");
     identityEvents.push(
       buildLinkRejectedEvent({
         source: raw,
@@ -240,6 +255,7 @@ async function publishDerived(
     );
   }
   for (const rejected of resolution.rejected) {
+    deps.metrics?.onSkipped?.(`link_rejected_${rejected.reason}`);
     identityEvents.push(
       buildLinkRejectedEvent({
         source: raw,

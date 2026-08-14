@@ -226,6 +226,13 @@ export async function buildSyncEnrichmentApp(
           reason,
         });
       },
+      onOutcome: (outcome: string) => {
+        metrics.incrementOutcome({
+          processor_name: PROCESSOR_NAME,
+          processor_version: PROCESSOR_VERSION,
+          outcome,
+        });
+      },
     },
     isEnabled: async (projectId: string, environment: string) =>
       gate.isEnabled({ project_id: projectId, environment }),

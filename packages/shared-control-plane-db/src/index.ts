@@ -116,6 +116,19 @@ export {
   type SourceRow,
 } from "./queries/projects.js";
 export {
+  findProfileById,
+  findProfileByIdentifier,
+  findProfilesByIdentifierValue,
+  type IdentifierLookup,
+  type IdentityLinkRow,
+  listIdentityLinks,
+  listProfileIdentifiers,
+  listProfileMerges,
+  type ProfileIdentifierRow,
+  type ProfileMergeRow,
+  type ProfileRow,
+} from "./queries/profiles.js";
+export {
   type CompleteReplayJobInput,
   type FailReplayJobInput,
   findReplayJobById,

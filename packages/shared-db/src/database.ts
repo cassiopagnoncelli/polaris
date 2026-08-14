@@ -826,8 +826,16 @@ export interface ProfilesTable {
  * `profile_identifiers` — the resolved graph.
  *
  * One row per known identifier. The primary key
- * `(project_id, environment, kind, value)` is both the resolver's hot-path
- * read and the constraint that makes concurrent find-or-create safe.
+ * `(project_id, environment, kind, value)` is the resolver's hot-path read
+ * and the constraint that keeps one identifier pointing at one profile.
+ *
+ * It does NOT, on its own, make concurrent find-or-create safe — a claim
+ * this comment used to make. Two workers seeing the same brand-new
+ * identifier both find no row, both create a profile, and the key then
+ * lets only one of them own the identifier; the loser is left holding an
+ * orphan. The resolver takes an advisory lock per identifier to close
+ * that window (`sync/identity/resolver/v1/src/repository.ts`), and
+ * `tests/integration/spine-profile-store.test.ts` holds it shut.
  *
  * `identity_links` remains the EVIDENCE ledger explaining why a binding
  * exists; this table is the answer to "who is this?".

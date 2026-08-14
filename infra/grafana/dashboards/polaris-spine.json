@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Polaris processors v1: per-processor consumed/emitted/failed/retry/DLQ rates and observed lag. Panels reference `polaris_processor_*` metrics defined in packages/shared-processor/src/metrics.ts. The $processor_name variable picks one of the five processors (analytics-projector, identity-resolver, sessionizer, geoip-enricher, attribution-engine).",
+  "description": "The two spine stages: identity resolution and enrichment. Both fail open, so read the outcome panels, not just throughput.",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -36,8 +36,8 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. The v1 scrape config (`infra/prometheus/prometheus.yml`) lists `analytics-projector` explicitly; future processors join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`, `attribution-engine`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels \u2014 feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `processor_dlq_records` table directly via the DLQ triage runbook (P10-006).",
-        "mode": "markdown"
+        "mode": "markdown",
+        "content": "# Polaris \u2014 Spine\n\nThe two stages of the main pipeline that resolve and enrich every event:\n\n```\nraw.events -> sync-identity-resolver -> identified.events -> sync-enrichment-runtime -> resolved.events\n```\n\n**Read the outcome panels first.** Both stages FAIL OPEN by design \u2014 a missing profile row, an over-size trait snapshot, an absent geo database and an event with no IP all produce a well-formed event with null-ish blocks. None of them raises the failure counter, so a silent degradation is invisible in throughput and error panels and visible only here.\n\n`merge_suspended` on the safeguards panel is the merge-rate breaker tripping: a profile absorbing more merges than policy allows inside its window. It is the signature of a promiscuous identifier (a kiosk device, `customer_id: \"guest\"`, a bot) chain-merging strangers into one person. Alert: `PolarisIdentityMergeBreakerTripped`.\n\nRunbooks: `docs/operations/runbook-processor-lag.md`, `docs/operations/runbook-spine-dual-run-parity.md`."
       },
       "pluginVersion": "11.4.0",
       "title": "About this dashboard",
@@ -87,12 +87,21 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (processor_name) (rate(polaris_processor_events_consumed_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m]))",
+          "expr": "sum by (processor_name) (rate(polaris_processor_events_consumed_total{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"}[5m]))",
           "legendFormat": "{{processor_name}} \u2014 consumed",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (processor_name) (rate(polaris_processor_events_emitted_total{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{processor_name}} \u2014 emitted",
+          "refId": "B"
         }
       ],
-      "title": "Events consumed (5m, ops)",
+      "title": "Throughput by stage (5m, ops)",
       "type": "timeseries"
     },
     {
@@ -108,7 +117,10 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 10
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "unit": "ops"
         },
@@ -139,12 +151,116 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (processor_name) (rate(polaris_processor_events_emitted_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{processor_name}} \u2014 emitted",
+          "expr": "sum by (processor_name, reason) (rate(polaris_processor_events_failed_total{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{processor_name}} \u2014 {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Events emitted (5m, ops)",
+      "title": "Failures by stage (5m, ops)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (processor_name, partition) (polaris_processor_lag_ms_last{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"})",
+          "legendFormat": "{{processor_name}} p{{partition}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Consumer lag by stage (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (processor_name, le) (rate(polaris_processor_handler_duration_seconds_bucket{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"}[5m])))",
+          "legendFormat": "{{processor_name}} p99",
+          "refId": "A"
+        }
+      ],
+      "title": "Handler duration p99 by stage (s)",
       "type": "timeseries"
     },
     {
@@ -173,9 +289,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 24
       },
-      "id": 4,
+      "id": 6,
       "options": {
         "legend": {
           "displayMode": "table",
@@ -194,12 +310,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (processor_name, reason) (rate(polaris_processor_events_failed_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{processor_name}} / {{reason}}",
+          "expr": "sum by (outcome) (rate(polaris_processor_outcome_total{processor_name=\"sync-identity-resolver\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{outcome}}",
           "refId": "A"
         }
       ],
-      "title": "Failures by reason (5m, ops)",
+      "title": "Identity resolution mix (5m, ops)",
       "type": "timeseries"
     },
     {
@@ -215,7 +331,7 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 5
+            "fillOpacity": 10
           },
           "unit": "ops"
         },
@@ -225,9 +341,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 24
       },
-      "id": 5,
+      "id": 7,
       "options": {
         "legend": {
           "displayMode": "table",
@@ -246,21 +362,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (processor_name) (rate(polaris_processor_events_retry_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{processor_name}} \u2014 retry",
+          "expr": "sum(rate(polaris_processor_outcome_total{processor_name=\"sync-identity-resolver\", outcome=\"merged\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "merges",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum by (processor_name) (rate(polaris_processor_events_dlq_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{processor_name}} \u2014 DLQ",
-          "refId": "B"
         }
       ],
-      "title": "Retry and DLQ rates (5m, ops)",
+      "title": "Merge rate (5m, ops)",
       "type": "timeseries"
     },
     {
@@ -276,24 +383,27 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 5
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "normal"
+            }
           },
-          "unit": "ms"
+          "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 32
       },
-      "id": 6,
+      "id": 8,
       "options": {
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["max", "lastNotNull"]
+          "calcs": ["mean", "max"]
         },
         "tooltip": {
           "mode": "multi",
@@ -307,64 +417,12 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (processor_name, partition) (polaris_processor_lag_ms_last{processor_name=~\"$processor_name\", environment=\"$environment\"})",
-          "legendFormat": "{{processor_name}} / p{{partition}}",
+          "expr": "sum by (outcome) (rate(polaris_processor_outcome_total{processor_name=\"sync-enrichment-runtime\", environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{outcome}}",
           "refId": "A"
         }
       ],
-      "title": "Per-processor lag (ms, last observed; gauge \u2014 see About panel)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 5
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 22
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": ["max", "lastNotNull"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max by (processor_name) (polaris_processor_handler_duration_ms_last{processor_name=~\"$processor_name\", environment=\"$environment\"})",
-          "legendFormat": "{{processor_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Per-message handler duration (ms, last observed)",
+      "title": "Enrichment outcomes (5m, ops)",
       "type": "timeseries"
     },
     {
@@ -386,11 +444,11 @@
               },
               {
                 "color": "yellow",
-                "value": 1
+                "value": 0.001
               },
               {
                 "color": "red",
-                "value": 5
+                "value": 0.1
               }
             ]
           },
@@ -400,11 +458,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
+        "w": 12,
+        "x": 12,
         "y": 32
       },
-      "id": 8,
+      "id": 9,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -425,140 +483,18 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (processor_name) (rate(polaris_processor_events_dlq_total{processor_name=~\"$processor_name\", environment=\"$environment\"}[15m]))",
-          "legendFormat": "{{processor_name}}",
+          "expr": "sum by (processor_name, reason) (rate(polaris_processor_events_skipped_total{processor_name=~\"sync-identity-resolver|sync-enrichment-runtime\", environment=\"$environment\"}[15m]))",
+          "legendFormat": "{{processor_name}} \u2014 {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "DLQ growth rate by processor (15m, ops)",
+      "title": "Safeguards and degradations (15m, ops) \u2014 merge_suspended, link_rejected_*, traits_over_cap, profile_missing",
       "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 5
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 40
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": ["mean", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.5, sum by (le, processor_name) (rate(polaris_processor_lag_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
-          "legendFormat": "p50 {{processor_name}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.99, sum by (le, processor_name) (rate(polaris_processor_lag_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
-          "legendFormat": "p99 {{processor_name}}",
-          "refId": "B"
-        }
-      ],
-      "title": "End-to-end (raw\u2192analytics) lag p50/p99 (5m, seconds)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 5
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 40
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": ["mean", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.5, sum by (le, processor_name) (rate(polaris_processor_handler_duration_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
-          "legendFormat": "p50 {{processor_name}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.99, sum by (le, processor_name) (rate(polaris_processor_handler_duration_seconds_bucket{processor_name=~\"$processor_name\", environment=\"$environment\"}[5m])))",
-          "legendFormat": "p99 {{processor_name}}",
-          "refId": "B"
-        }
-      ],
-      "title": "Per-message handler duration p50/p99 (5m, seconds)",
-      "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["polaris", "processors"],
+  "tags": ["polaris", "spine", "identity", "enrichment"],
   "templating": {
     "list": [
       {
@@ -598,52 +534,6 @@
         "name": "environment",
         "query": "development,staging,production",
         "type": "custom"
-      },
-      {
-        "current": {
-          "text": "All",
-          "value": ".*"
-        },
-        "options": [
-          {
-            "text": "All",
-            "value": ".*",
-            "selected": true
-          },
-          {
-            "text": "analytics-projector",
-            "value": "analytics-projector"
-          },
-          {
-            "text": "identity-resolver",
-            "value": "identity-resolver"
-          },
-          {
-            "text": "sessionizer",
-            "value": "sessionizer"
-          },
-          {
-            "text": "geoip-enricher",
-            "value": "geoip-enricher"
-          },
-          {
-            "text": "attribution-engine",
-            "value": "attribution-engine"
-          },
-          {
-            "text": "sync-identity-resolver",
-            "value": "sync-identity-resolver"
-          },
-          {
-            "text": "sync-enrichment-runtime",
-            "value": "sync-enrichment-runtime"
-          }
-        ],
-        "label": "Processor",
-        "name": "processor_name",
-        "query": ".*,analytics-projector,identity-resolver,sessionizer,geoip-enricher,attribution-engine,sync-identity-resolver,sync-enrichment-runtime",
-        "type": "custom",
-        "includeAll": false
       }
     ]
   },
@@ -653,8 +543,8 @@
   },
   "timepicker": {},
   "timezone": "utc",
-  "title": "Polaris \u2014 Processors",
-  "uid": "polaris-processors",
+  "title": "Polaris \u2014 Spine",
+  "uid": "polaris-spine",
   "version": 1,
   "weekStart": ""
 }

@@ -60,7 +60,7 @@ export interface ProcessorRunListRow {
 }
 
 export interface ProcessorsRunsListHooks {
-  readonly openStore?: () => ProcessorsRunsListStore;
+  readonly openStore?: (env: NodeJS.ProcessEnv) => ProcessorsRunsListStore;
 }
 
 export const processorsRunsListCommand: CommandDefinition = {
@@ -106,7 +106,7 @@ export function buildProcessorsRunsListRunner(hooks: ProcessorsRunsListHooks = {
         : {}),
     };
 
-    const store = openStore();
+    const store = openStore(ctx.env);
     try {
       const rows = await store.list(scope);
       emit(ctx, scope, rows);
@@ -119,8 +119,12 @@ export function buildProcessorsRunsListRunner(hooks: ProcessorsRunsListHooks = {
 
 const runProcessorsRunsList = buildProcessorsRunsListRunner();
 
-function defaultStore(): ProcessorsRunsListStore {
-  const handle = connectDb();
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorsRunsListStore {
+  // `connectDb({ env })`, not `connectDb()`: command.ts states the MUST —
+  // reading process.env directly leaks the developer's real environment
+  // into tests meaning to exercise the "no var set" path. These two were
+  // the only call sites of 56 that omitted it.
+  const handle = connectDb({ env });
   return {
     list: (scope) => listProcessorRuns(handle.db, scope, DEFAULT_LIMIT),
     close: () => handle.close(),

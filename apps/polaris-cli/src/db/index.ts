@@ -143,6 +143,20 @@ export {
   type UpdateDestinationOpsInput,
   unsetProjectConfigValueWithAudit,
   updateDestinationOpsWithAudit,
+  // ---- profile plane (read-only) ----------------------------------------
+  // The identity stage is the profile store's only sync-path writer, so the
+  // CLI reads and never writes. `polaris profiles rebuild` lands with R4 as
+  // an audited mutation, not as a query.
+  findProfileById,
+  findProfileByIdentifier,
+  findProfilesByIdentifierValue,
+  type IdentityLinkRow,
+  listIdentityLinks,
+  listProfileIdentifiers,
+  listProfileMerges,
+  type ProfileIdentifierRow,
+  type ProfileMergeRow,
+  type ProfileRow,
 } from "@polaris/shared-control-plane-db";
 
 // ---- executor progress --------------------------------------------------

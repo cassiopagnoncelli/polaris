@@ -83,6 +83,39 @@ scrape_configs:
           polaris_component: processor
 
   # ---------------------------------------------------------------
+  # The spine — `sync/identity/resolver/v1` and
+  # `sync/enrichment/runtime/v1`, stages 2 and 3 of the main pipeline.
+  #
+  # Both expose the `polaris_processor_*` families plus
+  # `polaris_processor_outcome_total`, which is the one that matters for
+  # these two: both stages FAIL OPEN, so a missing profile row or an
+  # absent geo database produces a well-formed event and never touches
+  # the failure counters. The outcome label is where a silent
+  # degradation becomes visible.
+  #
+  # Ports match the `dev` scripts and the Dockerfiles (4014 / 4015).
+  # ---------------------------------------------------------------
+  - job_name: polaris-sync-identity
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4014"]
+        labels:
+          polaris_service: sync-identity
+          polaris_processor_name: sync-identity-resolver
+          polaris_processor_version: v1
+          polaris_component: processor
+
+  - job_name: polaris-sync-enrichment
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4015"]
+        labels:
+          polaris_service: sync-enrichment
+          polaris_processor_name: sync-enrichment-runtime
+          polaris_processor_version: v1
+          polaris_component: processor
+
+  # ---------------------------------------------------------------
   # RabbitMQ. The `rabbitmq_prometheus` plugin (enabled in
   # infra/rabbitmq/enabled_plugins) serves Prometheus metrics on
   # :15692/metrics. `polaris-rabbitmq` is the container name from

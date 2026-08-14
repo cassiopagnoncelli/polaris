@@ -60,6 +60,14 @@ export interface PublishTarget {
 export interface EnrichmentStageMetrics {
   readonly onEmitted?: () => void;
   readonly onSkipped?: (reason: string) => void;
+  /**
+   * What each enricher resolved, as `<enricher>:<kind>` — e.g.
+   * `traits:resolved`, `geo:no_ip`. Both enrichers fail open, so their
+   * outcomes are invisible in the failure counters by design; this is
+   * the only place a geo outage is distinguishable from a population of
+   * server-side events with no IP.
+   */
+  readonly onOutcome?: (outcome: string) => void;
 }
 
 export interface EnrichmentStageDeps {
@@ -157,6 +165,8 @@ export async function handleEvent(
     partitionKey,
   });
   deps.metrics?.onEmitted?.();
+  deps.metrics?.onOutcome?.(`traits:${traits.kind}`);
+  deps.metrics?.onOutcome?.(`geo:${geo.kind}`);
 
   return {
     profileId,

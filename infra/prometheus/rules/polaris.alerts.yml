@@ -158,6 +158,40 @@ groups:
   - name: polaris-processors
     interval: 30s
     rules:
+      - alert: PolarisIdentityMergeBreakerTripped
+        expr: |
+          sum by (processor_name, processor_version, environment) (
+            rate(polaris_processor_events_skipped_total{
+              processor_name="sync-identity-resolver", reason="merge_suspended"
+            }[5m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: processor
+          team: platform-data
+        annotations:
+          summary: "Identity merge-rate breaker tripping in {{ $labels.environment }}"
+          description: |
+            The identity stage is REFUSING merges: a profile has absorbed
+            more merges inside its policy window than the breaker allows.
+            This is the signature of a promiscuous identifier — a kiosk
+            device, `customer_id: "guest"`, a shared bot id — chain-merging
+            strangers into one mega-profile.
+
+            The breaker is doing its job, so the graph has stopped growing;
+            what it cannot do is undo merges already committed. Every
+            minute it keeps tripping is a minute of events resolving to a
+            profile that may already be wrong, which is why this pages
+            rather than warns.
+
+            Find the offending value in `identity.merge_suspended` events,
+            add it to the project's `identity.denylist` in
+            catalog/projects/<id>.yaml, then rebuild the affected profiles
+            — merges are derived state and repair is a rebuild under
+            corrected policy, not an inverse operation.
+          runbook_url: docs/operations/runbook-identity-merge-storm.md
+
       - alert: PolarisProcessorDLQGrowthWarn
         expr: polaris:processor_dlq_growth:rate1m > 100
         for: 5m

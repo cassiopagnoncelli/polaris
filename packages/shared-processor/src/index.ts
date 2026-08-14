@@ -142,6 +142,7 @@ export {
   METRIC_PROCESSOR_LAG_MS_LAST,
   type MetricSample,
   type ProcessorFailureLabels,
+  type ProcessorOutcomeLabels,
   type ProcessorMetricLabels,
   ProcessorMetrics,
 } from "./metrics.js";

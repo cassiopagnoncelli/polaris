@@ -210,3 +210,24 @@ describe("PROMETHEUS_CONTENT_TYPE", () => {
     expect(PROMETHEUS_CONTENT_TYPE).toBe("text/plain; version=0.0.4; charset=utf-8");
   });
 });
+
+describe("processor outcome counter exposition", () => {
+  it("carries real HELP text and a counter type", () => {
+    // An unregistered name falls back to "Polaris metric." and, because
+    // `metricTypeFor` reads the suffix, still types correctly — so the
+    // fallback is invisible until someone reads the scrape and cannot
+    // tell what the series means. This asserts the registration, not the
+    // suffix rule.
+    const text = toPrometheusText([
+      {
+        name: "polaris_processor_outcome_total",
+        labels: { processor_name: "sync-identity-resolver", outcome: "merged" },
+        value: 3,
+      },
+    ]);
+
+    expect(text).toContain("# TYPE polaris_processor_outcome_total counter");
+    expect(text).toContain("# HELP polaris_processor_outcome_total Count of processor decisions");
+    expect(text).not.toContain("# HELP polaris_processor_outcome_total Polaris metric.");
+  });
+});

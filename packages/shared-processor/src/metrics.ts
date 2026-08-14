@@ -50,6 +50,31 @@ export const METRIC_PROCESSOR_EVENTS_RETRY_TOTAL = "polaris_processor_events_ret
  * an operator decision never pages anyone.
  */
 export const METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL = "polaris_processor_events_skipped_total";
+/**
+ * Domain OUTCOMES, labelled by `outcome`.
+ *
+ * The six counters above answer "did the processor cope?" — consumed,
+ * emitted, failed, retried, dead-lettered, skipped. None of them answers
+ * "what did it decide?", and for the spine stages that second question
+ * is the operational one. The identity stage's merge rate is not a
+ * failure, not a skip and not distinguishable from any other emission,
+ * yet a merge storm is the failure mode the whole safeguard set exists
+ * to catch.
+ *
+ * Deliberately generic rather than `polaris_identity_merges_total`: a
+ * per-stage metric name would need a new registry entry, a new HELP
+ * string and a new dashboard query for every stage that ever wants one.
+ * `outcome` is a low-cardinality label whose values are a closed set per
+ * processor, which is what a label is for.
+ */
+/**
+ * Module-private, unlike its six siblings above — they are exported and
+ * carried in the dead-export baseline, and that baseline says shrink it,
+ * do not grow it. The metric NAME is the contract; it is pinned by the
+ * exposition test in `@polaris/shared-metrics` and by the dashboards
+ * that query it.
+ */
+const METRIC_PROCESSOR_OUTCOME_TOTAL = "polaris_processor_outcome_total";
 export const METRIC_PROCESSOR_LAG_MS_LAST = "polaris_processor_lag_ms_last";
 export const METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST =
   "polaris_processor_handler_duration_ms_last";
@@ -145,6 +170,17 @@ export interface ProcessorFailureLabels extends ProcessorMetricLabels {
 }
 
 /**
+ * Labels for `polaris_processor_outcome_total`.
+ *
+ * `outcome` is REQUIRED — an outcome counter with no outcome would just
+ * be a second emission counter — and must come from a closed set the
+ * processor defines. See `incrementOutcome`.
+ */
+export interface ProcessorOutcomeLabels extends ProcessorMetricLabels {
+  readonly outcome: string;
+}
+
+/**
  * Sample shape emitted by `getSamples()`. Mirrors the Prometheus text-format
  * exposition shape so the migration is straightforward.
  */
@@ -221,6 +257,18 @@ export class ProcessorMetrics {
   /** A message acknowledged without being acted on. See the metric's doc. */
   incrementSkipped(labels: ProcessorFailureLabels): void {
     this.incrementByLabels(METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL, toLabelRecord(labels));
+  }
+
+  /**
+   * Record what the processor DECIDED, as opposed to whether it coped.
+   *
+   * `outcome` must be a closed set per processor — the identity stage
+   * emits `created` / `bound` / `merged` / `unidentified`, which is its
+   * whole decision space. Anything unbounded (an id, a value) would make
+   * this a cardinality bomb.
+   */
+  incrementOutcome(labels: ProcessorOutcomeLabels): void {
+    this.incrementByLabels(METRIC_PROCESSOR_OUTCOME_TOTAL, toLabelRecord(labels));
   }
 
   /**

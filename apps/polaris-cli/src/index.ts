@@ -241,6 +241,7 @@ export {
   keysCommand,
   operatorsCommand,
   processorsCommand,
+  profilesCommand,
   projectsCommand,
   sourcesCommand,
   topicsCommand,
@@ -352,6 +353,19 @@ export {
   FORBIDDEN_PROCESSOR_RULE_FLAG_TOKENS,
   rejectProcessorRuleArguments,
 } from "./commands/processors/validation.js";
+export { profilesLinksCommand, profilesShowCommand } from "./commands/profiles/index.js";
+export {
+  buildProfilesLinksRunner,
+  type ProfileLinksDetail,
+  type ProfilesLinksHooks,
+  type ProfilesLinksStore,
+} from "./commands/profiles/links.js";
+export {
+  buildProfilesShowRunner,
+  type ProfileDetail,
+  type ProfilesShowHooks,
+  type ProfilesShowStore,
+} from "./commands/profiles/show.js";
 export {
   projectsListCommand,
   projectsShowCommand,

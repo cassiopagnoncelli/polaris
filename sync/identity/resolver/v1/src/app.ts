@@ -268,6 +268,13 @@ export async function buildSyncIdentityApp(
           reason,
         });
       },
+      onOutcome: (outcome: string) => {
+        metrics.incrementOutcome({
+          processor_name: PROCESSOR_NAME,
+          processor_version: PROCESSOR_VERSION,
+          outcome,
+        });
+      },
     },
     // The activation gate closes the WHOLE stage for a scope, spine
     // publish included: a disabled stage emitting half-resolved spine

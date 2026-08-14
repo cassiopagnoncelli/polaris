@@ -106,3 +106,46 @@ describe("ProcessorMetrics", () => {
     expect(m.getGauge(METRIC_PROCESSOR_LAG_MS_LAST, LABELS)).toBeUndefined();
   });
 });
+
+describe("outcome counter", () => {
+  it("records decisions separately from emissions", () => {
+    // A merge and an ordinary bind both emit exactly one spine event, so
+    // `emitted` cannot tell them apart — and a merge storm is the failure
+    // mode the identity safeguards exist to catch.
+    const metrics = new ProcessorMetrics();
+    const identity = { processor_name: "sync-identity-resolver", processor_version: "v1" };
+
+    metrics.incrementOutcome({ ...identity, outcome: "created" });
+    metrics.incrementOutcome({ ...identity, outcome: "merged" });
+    metrics.incrementOutcome({ ...identity, outcome: "merged" });
+
+    const samples = metrics
+      .getSamples()
+      .filter((sample) => sample.name === "polaris_processor_outcome_total");
+    const byOutcome = new Map(samples.map((s) => [s.labels["outcome"], s.value]));
+    expect(byOutcome.get("created")).toBe(1);
+    expect(byOutcome.get("merged")).toBe(2);
+  });
+
+  it("keeps outcomes apart per processor, so one dashboard can hold both stages", () => {
+    const metrics = new ProcessorMetrics();
+    metrics.incrementOutcome({
+      processor_name: "sync-identity-resolver",
+      processor_version: "v1",
+      outcome: "bound",
+    });
+    metrics.incrementOutcome({
+      processor_name: "sync-enrichment-runtime",
+      processor_version: "v1",
+      outcome: "traits:resolved",
+    });
+
+    const samples = metrics
+      .getSamples()
+      .filter((sample) => sample.name === "polaris_processor_outcome_total");
+    expect(samples).toHaveLength(2);
+    expect(new Set(samples.map((s) => s.labels["processor_name"]))).toEqual(
+      new Set(["sync-identity-resolver", "sync-enrichment-runtime"]),
+    );
+  });
+});

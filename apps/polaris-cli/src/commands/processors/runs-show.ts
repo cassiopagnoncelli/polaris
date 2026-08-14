@@ -59,7 +59,7 @@ export interface ProcessorsRunsShowStore {
 }
 
 export interface ProcessorsRunsShowHooks {
-  readonly openStore?: () => ProcessorsRunsShowStore;
+  readonly openStore?: (env: NodeJS.ProcessEnv) => ProcessorsRunsShowStore;
 }
 
 export const processorsRunsShowCommand: CommandDefinition = {
@@ -93,7 +93,7 @@ export function buildProcessorsRunsShowRunner(hooks: ProcessorsRunsShowHooks = {
       throw new UsageError("run_id is required");
     }
 
-    const store = openStore();
+    const store = openStore(ctx.env);
     try {
       const detail = await store.findById(runId);
       if (detail === null) {
@@ -109,8 +109,12 @@ export function buildProcessorsRunsShowRunner(hooks: ProcessorsRunsShowHooks = {
 
 const runProcessorsRunsShow = buildProcessorsRunsShowRunner();
 
-function defaultStore(): ProcessorsRunsShowStore {
-  const handle = connectDb();
+function defaultStore(env: NodeJS.ProcessEnv): ProcessorsRunsShowStore {
+  // `connectDb({ env })`, not `connectDb()`: command.ts states the MUST —
+  // reading process.env directly leaks the developer's real environment
+  // into tests meaning to exercise the "no var set" path. These two were
+  // the only call sites of 56 that omitted it.
+  const handle = connectDb({ env });
   return {
     findById: (runId) => findProcessorRunById(handle.db, runId),
     close: () => handle.close(),

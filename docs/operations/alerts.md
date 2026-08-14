@@ -44,6 +44,7 @@ Alertmanager routing tree consumes that label to decide who and how.
 | `PolarisRabbitMQPublishFailureRate` | page | ingester-api | publish failure rate >0.5% over 1 minute | [RabbitMQ Publish Failures](runbook-rabbitmq-publish-failures.md) |
 | `PolarisRabbitMQConsumerLagWarn` | warn | rabbitmq | `polaris_processor_lag_ms_last` >5 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
 | `PolarisRabbitMQConsumerLagPage` | page | rabbitmq | `polaris_processor_lag_ms_last` >15 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
+| `PolarisIdentityMergeBreakerTripped` | page | processor | identity merge-rate breaker refusing merges for 5 min | [Identity merge storm](runbook-identity-merge-storm.md) |
 | `PolarisProcessorDLQGrowthWarn` | warn | processor | processor DLQ growth >100/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisProcessorDLQGrowthPage` | page | processor | processor DLQ growth >1000/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisDestinationDeliveryFailureRate` | page | destination | per-instance delivery failure rate >1% over 5 minutes | [Destination API Failure](runbook-destination-api-failure.md) |

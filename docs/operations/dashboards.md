@@ -29,6 +29,7 @@ Grafana lands at <http://localhost:3000> (admin/admin, local-only).
 | [Polaris — Ingestion](#ingestion) | `polaris-ingestion` | Accept/reject rate, reject reason breakdown, dedupe, origin/rate-limit, redactions, deprecated schema usage | [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — RabbitMQ](#rabbitmq) | `polaris-rabbitmq` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+| [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, and the safeguard/degradation counters both stages fail open into | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 | [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`packages/shared-destinations/src/metrics.ts`](../../packages/shared-destinations/src/metrics.ts) |
 | [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 
@@ -231,6 +232,44 @@ Panels and the metric each uses:
 - **No projection table freshness signal.** Projections like
   `event-daily-counts` need a `freshness_age_ms` gauge that no current
   emitter produces.
+
+## Spine
+
+**File:** `infra/grafana/dashboards/polaris-spine.json` · **UID:** `polaris-spine` · **Default range:** last 6h
+
+The two stages of the main pipeline that resolve and enrich every event:
+`raw.events → sync-identity-resolver → identified.events → sync-enrichment-runtime → resolved.events`.
+
+**Read the outcome panels first.** Both stages fail open by design — a
+missing profile row, an over-size trait snapshot, an absent geo database
+and an event with no IP all produce a well-formed event with null-ish
+blocks. None raises the failure counter, so a silent degradation is
+invisible in throughput and error panels and visible only in
+`polaris_processor_outcome_total`.
+
+| Panel | Metric expression |
+| --- | --- |
+| Throughput by stage (5m) | `sum by (processor_name) (rate(polaris_processor_events_consumed_total{...}[5m]))` and the `_emitted_` sibling |
+| Failures by stage (5m) | `sum by (processor_name, reason) (rate(polaris_processor_events_failed_total{...}[5m]))` |
+| Consumer lag by stage | `max by (processor_name, partition) (polaris_processor_lag_ms_last{...})` |
+| Handler duration p99 | `histogram_quantile(0.99, sum by (processor_name, le) (rate(polaris_processor_handler_duration_seconds_bucket{...}[5m])))` |
+| Identity resolution mix (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-identity-resolver"}[5m]))` — outcome ∈ `created`, `bound`, `merged`, `unidentified` |
+| Merge rate (5m) | the same series filtered to `outcome="merged"` |
+| Enrichment outcomes (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-enrichment-runtime"}[5m]))` — outcome ∈ `traits:*`, `geo:*` |
+| Safeguards and degradations (15m) | `sum by (processor_name, reason) (rate(polaris_processor_events_skipped_total{...}[15m]))` — reason ∈ `merge_suspended`, `link_rejected_denylisted`, `link_rejected_identifier_cap`, `traits_over_cap`, `profile_missing` |
+
+**Known gaps.**
+
+- `merge rate` counts merges the stage PERFORMED. Merges it refused are
+  on the safeguards panel as `merge_suspended`; a storm shows as the
+  first falling while the second rises.
+- Neither stage sets `concrete_topic` on its metric labels (no processor
+  does — see the Processors section), so panels cannot break down by
+  concrete topic.
+- The enrichment stage's `geo:miss` does not distinguish "the database
+  had no record" from "no database is wired". The `geo.source` field on
+  the emitted event does (`no_lookup` vs a version-stamped backend id),
+  but that is a ClickHouse question, not a Prometheus one.
 
 ## Adding a new dashboard
 

@@ -28,6 +28,7 @@ import { exportCommand } from "./export/index.js";
 import { keysCommand } from "./keys/index.js";
 import { operatorsCommand } from "./operators/index.js";
 import { processorsCommand } from "./processors/index.js";
+import { profilesCommand } from "./profiles/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { replayCommand } from "./replay/index.js";
 import { sourcesCommand } from "./sources/index.js";
@@ -41,6 +42,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   keysCommand,
   destinationsCommand,
   processorsCommand,
+  profilesCommand,
   configCommand,
   operatorsCommand,
   auditCommand,
@@ -63,6 +65,7 @@ export {
   keysCommand,
   operatorsCommand,
   processorsCommand,
+  profilesCommand,
   projectsCommand,
   replayCommand,
   sourcesCommand,
