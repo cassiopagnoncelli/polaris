@@ -561,6 +561,63 @@ components:
                 - "confidential"
                 - "restricted"
           additionalProperties: false
+        profile:
+          nullable: true
+          type: "object"
+          properties:
+            profile_id:
+              type: "string"
+              format: "uuid"
+              pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            canonical_customer_id:
+              nullable: true
+              type: "string"
+              minLength: 1
+              maxLength: 128
+            traits:
+              nullable: true
+              type: "object"
+              additionalProperties: {}
+            traits_version:
+              type: "integer"
+              minimum: 0
+              maximum: 9007199254740991
+          required:
+            - "profile_id"
+            - "canonical_customer_id"
+          additionalProperties: false
+        enrichment:
+          type: "object"
+          properties:
+            geo:
+              nullable: true
+              type: "object"
+              properties:
+                country:
+                  nullable: true
+                  type: "string"
+                  maxLength: 8
+                region:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                city:
+                  nullable: true
+                  type: "string"
+                  maxLength: 128
+                source:
+                  type: "string"
+                  minLength: 1
+                  maxLength: 64
+              required:
+                - "country"
+                - "region"
+                - "city"
+                - "source"
+              additionalProperties: false
+          required:
+            - "geo"
+          additionalProperties: false
       required:
         - "event_id"
         - "event"

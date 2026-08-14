@@ -116,3 +116,75 @@ export const privacySchema = z
     classification: z.enum(["public", "internal", "confidential", "restricted"]).nullish(),
   })
   .strict();
+
+// ---------------------------------------------------------------------
+// Platform-owned resolution blocks (`profile`, `enrichment`).
+//
+// These carry what POLARIS derived about an event, as opposed to
+// `identity`/`context`, which carry what the PRODUCER observed. It is the
+// same split `occurred_at` vs `ingested_at` makes: two writers, two
+// meanings, never merged into one field.
+//
+// Producers cannot forge either block. `producerEnvelopeSchema` simply does
+// not list them and is `.strict()`, so an attempt is rejected as
+// `invalid_envelope` with no extra validation code.
+//
+// Both blocks are filled ACROSS the two spine stages, which is why most
+// fields here are optional:
+//   - the identity stage writes `profile.profile_id` and
+//     `profile.canonical_customer_id`, then emits to `identified.events`;
+//   - the enrichment stage fills `profile.traits` / `profile.traits_version`
+//     and the whole `enrichment` block, then emits to `resolved.events`.
+// A schema demanding traits up front would make the intermediate family
+// unrepresentable.
+//
+// See `docs/implementation/pipeline-redesign-plan.md` §4.4.
+// ---------------------------------------------------------------------
+
+/**
+ * Platform resolution of the person an event belongs to.
+ *
+ * `traits` is a SNAPSHOT taken when the event was enriched, not a live
+ * view: it is "latest as of delivery", and `traits_version` is what keeps a
+ * historical delivery explainable after the profile has moved on. A
+ * snapshot over the size guard is stored as `null` — the event still
+ * carries its `profile_id` and is never dropped — so `traits: null` and
+ * "not enriched yet" are deliberately the same shape.
+ */
+export const profileBlockSchema = z
+  .object({
+    profile_id: uuidSchema,
+    canonical_customer_id: z.string().min(1).max(128).nullable(),
+    traits: z.record(z.string(), z.unknown()).nullable().optional(),
+    traits_version: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+/** Geo enrichment derived from `context.ip`. */
+export const geoEnrichmentSchema = z
+  .object({
+    country: z.string().max(8).nullable(),
+    region: z.string().max(128).nullable(),
+    city: z.string().max(128).nullable(),
+    /**
+     * Provenance of the lookup — the backend id, or `no_ip` / `no_lookup`
+     * when there was nothing to resolve. Present even on a miss, so a null
+     * geo is never ambiguous between "not attempted" and "attempted, found
+     * nothing".
+     */
+    source: z.string().min(1).max(64),
+  })
+  .strict();
+
+/**
+ * Context enrichment attached by the enrichment stage.
+ *
+ * An object of nullable slots rather than one optional block per enricher:
+ * an enricher that ran and found nothing is a different fact from one that
+ * never ran, and the stage always runs all of them.
+ */
+export const enrichmentBlockSchema = z
+  .object({
+    geo: geoEnrichmentSchema.nullable(),
+  })
+  .strict();

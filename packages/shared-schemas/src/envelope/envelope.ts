@@ -2,11 +2,13 @@ import { z } from "zod";
 import {
   consentSchema,
   contextSchema,
+  enrichmentBlockSchema,
   environmentSchema,
   eventNameSchema,
   identitySchema,
   isoUtcTimestampSchema,
   privacySchema,
+  profileBlockSchema,
   schemaVersionSchema,
   sourceSchema,
   uuidSchema,
@@ -45,6 +47,15 @@ export const envelopeSchema = z
     properties: z.record(z.string(), z.unknown()),
     consent: consentSchema.optional(),
     privacy: privacySchema.optional(),
+    /**
+     * Platform-owned resolution blocks, absent on `raw.events` and stamped
+     * by the two spine stages (identity, then enrichment). Optional here
+     * because one schema validates an event at every point on the spine —
+     * before resolution, between the stages, and after enrichment. See
+     * `primitives.ts` and the redesign plan §4.4.
+     */
+    profile: profileBlockSchema.nullable().optional(),
+    enrichment: enrichmentBlockSchema.optional(),
   })
   .strict();
 
@@ -53,7 +64,10 @@ export const envelopeSchema = z
  * send. The ingester stamps `project_id`, `environment`, `ingested_at`,
  * and trusted `source.id` afterwards, so producers may omit them.
  *
- * Even at the producer boundary, unknown top-level fields are rejected.
+ * Even at the producer boundary, unknown top-level fields are rejected —
+ * which is also what stops a producer forging `profile` or `enrichment`:
+ * they are absent from this schema and it is `.strict()`, so the attempt
+ * fails as `invalid_envelope` without a single line of bespoke checking.
  */
 export const producerEnvelopeSchema = z
   .object({
