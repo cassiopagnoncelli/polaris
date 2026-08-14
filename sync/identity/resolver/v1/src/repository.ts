@@ -14,7 +14,7 @@
  */
 
 import type { Database } from "@polaris/shared-db";
-import type { Kysely, Transaction } from "kysely";
+import { type Kysely, sql, type Transaction } from "kysely";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 
 import type { CollectedIdentifier, IdentityPolicy, StrongIdentityKind } from "./transform.js";
@@ -98,6 +98,18 @@ export function createKyselyProfileRepository(db: Kysely<Database>): ProfileRepo
   };
 }
 
+/**
+ * The string an identifier's advisory lock is taken on.
+ *
+ * Scoped to (project, environment) as well as (kind, value), so two
+ * projects that happen to share a customer id never queue behind each
+ * other — identity graphs are project-bounded, and the lock should be
+ * too.
+ */
+function identifierLockKey(input: ResolveInput, identifier: CollectedIdentifier): string {
+  return `polaris:identity:${input.projectId}:${input.environment}:${identifier.kind}:${identifier.value}`;
+}
+
 function unidentifiedResult(): ResolutionResult {
   return {
     kind: "unidentified",
@@ -116,6 +128,36 @@ async function runResolution(
   trx: Transaction<Database>,
   input: ResolveInput,
 ): Promise<ResolutionResult> {
+  // Step 1: take an advisory lock per identifier, before looking anything
+  // up.
+  //
+  // `SELECT ... FOR UPDATE` below locks the rows it FINDS, which is
+  // exactly nothing on an identifier nobody has bound yet — and that is
+  // the first-sighting case. Two workers seeing the same brand-new
+  // customer_id at once both matched zero rows, both took the
+  // create-a-profile branch, and both inserted a `profiles` row; the
+  // identifier's primary key then let only one of them own it, so the
+  // loser walked away holding a profile id with no identifier pointing
+  // at it, and stamped that orphan onto the spine. One person, two
+  // profiles, silently.
+  //
+  // An advisory lock has no such gap: it is taken on a VALUE rather than
+  // on a row, so it exists whether or not the row does. It is
+  // transaction-scoped (`_xact_`), so it releases on commit or abort
+  // with no unlock path to forget, and it is taken in the canonical
+  // (kind, value) order the caller already sorted the identifiers into,
+  // so two events touching the same pair queue rather than deadlock.
+  //
+  // Cost is one round trip per identifier — at most two in v1 — against
+  // a lock table that lives in shared memory. A hash collision between
+  // two unrelated identifiers costs a needless wait and nothing else.
+  for (const identifier of input.identifiers) {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${identifierLockKey(
+      input,
+      identifier,
+    )}, 0))`.execute(trx);
+  }
+
   // Step 2: look up every identifier, locking matched rows FOR UPDATE in
   // the canonical order the caller already sorted them into. Consistent
   // lock ordering across workers is what keeps two events touching the

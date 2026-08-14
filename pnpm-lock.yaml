@@ -1063,6 +1063,12 @@ importers:
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../packages/shared-transport
+      '@polaris/sync-enrichment-traits-v1':
+        specifier: workspace:*
+        version: link:../sync/enrichment/traits/v1
+      '@polaris/sync-identity-resolver-v1':
+        specifier: workspace:*
+        version: link:../sync/identity/resolver/v1
       kysely:
         specifier: ^0.29.0
         version: 0.29.0

@@ -11,9 +11,11 @@
     "@polaris/shared-control-plane-db": "workspace:*",
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-environments": "workspace:*",
-    "@polaris/shared-project-config": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-project-config": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
+    "@polaris/sync-enrichment-traits-v1": "workspace:*",
+    "@polaris/sync-identity-resolver-v1": "workspace:*",
     "kysely": "^0.29.0"
   }
 }
