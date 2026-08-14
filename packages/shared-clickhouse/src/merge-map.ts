@@ -51,7 +51,7 @@ export interface MergeMapStore {
 }
 
 export function createMergeMapStore(input: {
-  underlying: UnderlyingClickHouseClient;
+  readonly underlying: UnderlyingClickHouseClient;
 }): MergeMapStore {
   return {
     async chainedInto(query): Promise<readonly MergeMapChainEntry[]> {

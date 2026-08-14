@@ -20,6 +20,7 @@ next to each service:
 | `sync-identity resolver v1`              | `sync/identity/resolver/v1/Dockerfile`                | `polaris/sync-identity-resolver-v1`              | 4018 |
 | `attribution-engine v2`                  | `async/computation/attribution-engine/v2/Dockerfile`  | `polaris/processor-attribution-engine-v2`        | 4019 |
 | `attribution-engine v3`                  | `async/computation/attribution-engine/v3/Dockerfile`  | `polaris/processor-attribution-engine-v3`        | 4020 |
+| `merge-worker v1`                        | `async/merges/merge-worker/v1/Dockerfile`             | `polaris/processor-merge-worker-v1`              | 4021 |
 | `webhook-sink v1`                        | `sync/destinations/webhook-sink/v1/Dockerfile`                | `polaris/consumer-webhook-sink-v1`               | 5000 |
 | `meta-capi v1`                           | `sync/destinations/meta-capi/v1/Dockerfile`                   | `polaris/consumer-meta-capi-v1`                  | 5001 |
 | `tiktok v1`                              | `sync/destinations/tiktok/v1/Dockerfile`                      | `polaris/consumer-tiktok-v1`                     | 5003 |
@@ -53,7 +54,7 @@ Two rules follow, and they cost nothing at the time:
    check the Dockerfile, the `dev` script, and the Prometheus scrape job
    agree. Those three drifting apart is what produced every case above.
 
-Next free port: 4021 (processors), 5005 (destination consumers).
+Next free port: 4022 (processors), 5005 (destination consumers).
 
 ## Architectural decisions
 

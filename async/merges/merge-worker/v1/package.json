@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/merge-worker-v1",
+  "name": "@polaris/processor-merge-worker-v1",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@polaris/shared-clickhouse": "workspace:*",
+    "kysely": "^0.29.0",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
