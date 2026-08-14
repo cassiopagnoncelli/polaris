@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.15
         version: 2.4.15
+      '@polaris/shared-clickhouse':
+        specifier: workspace:*
+        version: link:packages/shared-clickhouse
       '@polaris/shared-control-plane-db':
         specifier: workspace:*
         version: link:packages/shared-control-plane-db

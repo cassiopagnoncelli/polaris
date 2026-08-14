@@ -29,8 +29,8 @@
  */
 
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createKyselyProfileRepository } from "@polaris/sync-identity-resolver-v1";
 import { createKyselyProfileReader } from "@polaris/sync-enrichment-traits-v1";
+import { createKyselyProfileRepository } from "@polaris/sync-identity-resolver-v1";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

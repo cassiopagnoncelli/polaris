@@ -235,3 +235,16 @@ scrape_configs:
         labels:
           polaris_service: otel-collector
           polaris_component: observability
+
+  # Retroactive-merge worker (U2EV9PRG). Keeps polaris.profile_merge_map
+  # current so person-keyed ClickHouse reads resolve a merged profile to its
+  # survivor. Port 4021 per infra/docker/README.md — a NEW port, never a
+  # predecessor's, so a rollback cannot have two versions on one target.
+  - job_name: polaris-merge-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4021"]
+        labels:
+          polaris_service: merge-worker
+          polaris_processor_name: merge-worker
+          polaris_processor_version: v1
