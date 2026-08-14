@@ -215,3 +215,13 @@ When Meta breaks compatibility (typical cadence: ~quarterly), a new consumer ver
 ## Migration notes
 
 n/a — v1 is the initial release.
+
+## The resolved.events flip (MVKUP64R)
+
+Meta CAPI reads `resolved.events`. One delta.
+
+**`external_id` prefers `profile.canonical_customer_id`**, falling back to the producer's `user_id` exactly as before when nothing was resolved. Hashing is unchanged — lowercased, trimmed, sha256 — so the value stays comparable to ids Meta already holds.
+
+`external_id` is Meta's cross-session join key, so it should carry the most durable id Polaris has. `user_id` is what one event's producer happened to send; `canonical_customer_id` is the identity stage's conclusion after reconciling every identifier ever seen for the person. Two producers spelling the same customer differently used to land as two Meta users and now converge.
+
+Dedupe keys are untouched. `em`, `ph` and `anon_id` are untouched.

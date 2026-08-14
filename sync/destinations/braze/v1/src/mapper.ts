@@ -207,6 +207,63 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
 };
 
 /**
+ * Profile traits Braze accepts as custom attributes.
+ *
+ * An ALLOWLIST, not a passthrough, and the reason is that Braze's attribute
+ * space is a shared namespace an operator curates: forwarding every trait
+ * would let a new field in the profile store silently create an attribute
+ * in Braze, which is how a vendor account fills with junk nobody can
+ * attribute to a decision. Adding a trait here is that decision.
+ *
+ * Reserved Braze keys are NOT forwardable through this path even if a trait
+ * shares the name — `email`, `phone`, `country` and `language` are set from
+ * the canonical identity and context above, and a trait must not be able to
+ * overwrite them. `applyTraitAttributes` enforces that independently of
+ * this list, so a mistake here cannot become an identity mistake.
+ */
+export const BRAZE_TRAIT_ATTRIBUTES: readonly string[] = Object.freeze([
+  "tier",
+  "plan",
+  "lifecycle_stage",
+  "lifetime_value",
+  "first_purchase_at",
+  "last_purchase_at",
+  "total_orders",
+]);
+
+/** Braze slots this mapper owns; a trait may never write one. */
+const BRAZE_RESERVED_ATTRIBUTE_KEYS: readonly string[] = Object.freeze([
+  "external_id",
+  "user_alias",
+  "device_id",
+  "email",
+  "phone",
+  "country",
+  "language",
+  "_update_existing_only",
+]);
+
+/**
+ * Copy allowlisted traits onto the attribute object.
+ *
+ * `null` traits — no snapshot, or one over the size guard — leave the
+ * attribute exactly as it was, which is what makes this safe to run on an
+ * envelope that has not been enriched.
+ */
+function applyTraitAttributes(
+  attribute: Record<string, unknown>,
+  traits: Readonly<Record<string, unknown>> | null,
+): void {
+  if (traits === null) return;
+  for (const key of BRAZE_TRAIT_ATTRIBUTES) {
+    if (BRAZE_RESERVED_ATTRIBUTE_KEYS.includes(key)) continue;
+    const value = traits[key];
+    if (value === undefined || value === null) continue;
+    attribute[key] = value;
+  }
+}
+
+/**
  * `user.identified` → `attributes[]` entry.
  *
  * First-touch identification: Braze creates the user profile when one
@@ -237,6 +294,7 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
     _update_existing_only: boolean;
     country?: string;
     language?: string;
+    [trait: string]: unknown;
   } = {
     _update_existing_only: false,
   };
@@ -250,6 +308,7 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
   if (ctx.normalized.context.locale !== null) {
     attribute.language = ctx.normalized.context.locale;
   }
+  applyTraitAttributes(attribute, ctx.normalized.traits);
 
   attachDeviceIdIfApp(attribute, identifier, ctx.normalized);
   const frozen = Object.freeze(attribute) as BrazeAttributeObject;

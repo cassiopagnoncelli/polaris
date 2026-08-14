@@ -413,3 +413,32 @@ describe("marketing-denied LDU stamping", () => {
     expect(result.payload.data_processing_options).toBeUndefined();
   });
 });
+
+describe("external_id — the resolved customer id (MVKUP64R)", () => {
+  it("prefers canonical_customer_id over the producer's user_id", () => {
+    // Meta's cross-session join key should carry the most durable id we
+    // have. Two producers spelling the same customer differently used to
+    // land as two Meta users and now converge.
+    const base = fixtureNormalizedEvent();
+    const normalized = {
+      ...base,
+      identity: { ...base.identity, user_id: "producer_spelling", canonical_customer_id: "cus_1" },
+    };
+    const result = checkoutStartedMapper({ normalized } as never);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.user_data.external_id).toEqual([sha256Hex("cus_1")]);
+  });
+
+  it("keeps prior behaviour when nothing was resolved", () => {
+    // An analytics.events envelope, or a person the resolver has not linked
+    // to a customer id. Nothing changes for traffic off the spine.
+    const base = fixtureNormalizedEvent();
+    const normalized = {
+      ...base,
+      identity: { ...base.identity, user_id: "producer_spelling", canonical_customer_id: null },
+    };
+    const result = checkoutStartedMapper({ normalized } as never);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.user_data.external_id).toEqual([sha256Hex("producer_spelling")]);
+  });
+});

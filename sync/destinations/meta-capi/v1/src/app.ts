@@ -58,6 +58,7 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -206,6 +207,10 @@ export async function buildMetaCapiApp(options: BuildAppOptions): Promise<BuiltM
 
   const runtime = createDestinationConsumer({
     descriptor,
+    // MVKUP64R: reads the spine's output. The profile and enrichment blocks
+    // the identity and enrichment stages wrote are what this vendor's mapper
+    // now keys on; see SPEC.md for the per-vendor delta.
+    inputFamily: STREAM_FAMILY_RESOLVED_EVENTS,
     consumerBuildVersion:
       config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,

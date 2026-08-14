@@ -126,12 +126,7 @@ export const checkoutStartedMapper: Mapper<Ga4EventPayload> = (
   // (which gets stamped on `delivery_records.dedupe_key`) so operators
   // have a stable Polaris-side handle when triaging duplicate
   // deliveries inside Polaris; on the GA4 side the event just lands.
-  return buildResult(
-    GA4_EVENT_BEGIN_CHECKOUT,
-    params,
-    ctx.normalized.event_id,
-    resolveAppInstanceId(ctx.normalized),
-  );
+  return buildResult(GA4_EVENT_BEGIN_CHECKOUT, params, ctx.normalized.event_id, ctx.normalized);
 };
 
 /**
@@ -165,7 +160,7 @@ export const paymentApprovedMapper: Mapper<Ga4EventPayload> = (
   if (transactionId !== null) params.transaction_id = transactionId;
 
   const dedupeKey = transactionId ?? ctx.normalized.event_id;
-  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey, resolveAppInstanceId(ctx.normalized));
+  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey, ctx.normalized);
 };
 
 /**
@@ -180,12 +175,7 @@ export const userIdentifiedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(
-    GA4_EVENT_LOGIN,
-    params,
-    ctx.normalized.event_id,
-    resolveAppInstanceId(ctx.normalized),
-  );
+  return buildResult(GA4_EVENT_LOGIN, params, ctx.normalized.event_id, ctx.normalized);
 };
 
 /**
@@ -202,12 +192,7 @@ export const signupCompletedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(
-    GA4_EVENT_SIGN_UP,
-    params,
-    ctx.normalized.event_id,
-    resolveAppInstanceId(ctx.normalized),
-  );
+  return buildResult(GA4_EVENT_SIGN_UP, params, ctx.normalized.event_id, ctx.normalized);
 };
 
 /**
@@ -243,7 +228,7 @@ export const subscriptionRenewedMapper: Mapper<Ga4EventPayload> = (
     GA4_EVENT_SUBSCRIPTION_RENEWED,
     params,
     ctx.normalized.event_id,
-    resolveAppInstanceId(ctx.normalized),
+    ctx.normalized,
   );
 };
 
@@ -255,14 +240,49 @@ function buildResult(
   eventName: string,
   params: ParamsBuilder,
   dedupeKey: string,
-  appInstanceId: string | null,
+  normalized: NormalizedEvent,
 ): MapperResult<Ga4EventPayload> {
+  const appInstanceId = resolveAppInstanceId(normalized);
   const payload: Ga4EventPayload = {
     name: eventName,
     ...(Object.keys(params).length > 0 ? { params: freezeParams(params) } : {}),
     ...(appInstanceId !== null ? { app_instance_id: appInstanceId } : {}),
+    client_id: resolveClientId(normalized),
   };
   return { kind: "mapped", payload, dedupe_key: dedupeKey };
+}
+
+/**
+ * The GA4 web-stream `client_id`.
+ *
+ * GA4 treats `client_id` as the browser instance — the thing a session
+ * belongs to. Until now the deliverer synthesized it from `delivery_key`,
+ * which is derived per (destination, event_id, identity) and is therefore
+ * DIFFERENT FOR EVERY EVENT. GA4 has consequently been seeing one
+ * single-event user per delivery: no sessions, no returning users, no
+ * funnels that span two events. That is not a tuning issue, it is the
+ * metric being wrong, and it is why the synthesis is deleted here rather
+ * than left behind a flag.
+ *
+ * Order:
+ *
+ *   1. `anonymous_id`  — the SDK's per-browser id, which is what GA4 means.
+ *   2. `profile_id`    — the platform's person, available on every resolved
+ *                        envelope. Coarser than a browser: a person on two
+ *                        devices becomes one GA4 client rather than two.
+ *                        Correct for a backend event that has no browser to
+ *                        name, and stable, which is the property that
+ *                        matters most.
+ *   3. `best_identity` — normalize drops an envelope with no usable
+ *                        identity at all, so this always resolves and the
+ *                        function never has to invent a value.
+ */
+export function resolveClientId(normalized: NormalizedEvent): string {
+  return (
+    normalized.identity.anonymous_id ??
+    normalized.identity.profile_id ??
+    normalized.best_identity.value
+  );
 }
 
 /**

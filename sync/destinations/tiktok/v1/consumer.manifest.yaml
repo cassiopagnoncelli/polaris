@@ -25,7 +25,8 @@ description: |
   deduplicates cross-channel attempts.
 
 inputs:
-  - analytics.events
+  # MVKUP64R: flipped to the spine's output.
+  - resolved.events
 
 outputs:
   # TikTok consumers do not emit Polaris events back into the

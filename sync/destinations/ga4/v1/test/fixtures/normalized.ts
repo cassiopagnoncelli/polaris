@@ -120,6 +120,10 @@ export function fixtureDelivererContext(
   const base: DelivererContext<Ga4EventPayload> = {
     payload: {
       name: "begin_checkout",
+      // The mapper's side channel. GA4 reads this as the browser instance,
+      // so the fixture carries the envelope's anonymous_id rather than the
+      // per-event delivery_key the deliverer used to synthesize.
+      client_id: "anon_int_ga4",
       params: {
         currency: "USD",
         value: 199.95,

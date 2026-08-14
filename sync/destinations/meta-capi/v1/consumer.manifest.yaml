@@ -25,7 +25,8 @@ description: |
   attempts.
 
 inputs:
-  - analytics.events
+  # MVKUP64R: flipped to the spine's output.
+  - resolved.events
 
 outputs:
   # Meta CAPI consumers do not emit Polaris events back into the

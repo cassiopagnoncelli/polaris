@@ -123,7 +123,11 @@ describe("buildGa4Deliverer — accepted path", () => {
     await deliver(ctx);
 
     const body = JSON.parse(calls[0]?.body ?? "");
-    expect(body.client_id).toBe(ctx.delivery_key);
+    // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
+    // new single-event user on every delivery; the mapper now supplies a
+    // stable id from the canonical identity.
+    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.events).toHaveLength(1);
     expect(body.events[0].name).toBe(ctx.payload.name);
   });
@@ -330,9 +334,16 @@ describe("buildRequestBody", () => {
   it("wraps the per-event payload in { client_id, events: [...] }", () => {
     const ctx = fixtureDelivererContext();
     const body = buildRequestBody(ctx);
-    expect(body.client_id).toBe(ctx.delivery_key);
+    // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
+    // new single-event user on every delivery; the mapper now supplies a
+    // stable id from the canonical identity.
+    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.app_instance_id).toBeUndefined();
-    expect(body.events).toEqual([ctx.payload]);
+    // `client_id` is a side channel: it belongs on the request wrapper and
+    // must not be echoed inside the events[] entry GA4 parses.
+    const { client_id: _client_id, ...wireEvent } = ctx.payload;
+    expect(body.events).toEqual([wireEvent]);
   });
 
   it("flips to { app_instance_id, events: [...] } when the mapper supplied a hint AND the secret carries firebase_app_id (KCS3ATPC)", () => {
@@ -340,6 +351,7 @@ describe("buildRequestBody", () => {
       payload: {
         name: "purchase",
         params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
+        client_id: "anon_int_ga4",
         app_instance_id: "11111111-2222-3333-4444-555555555555",
       },
     });
@@ -361,11 +373,16 @@ describe("buildRequestBody", () => {
       payload: {
         name: "purchase",
         params: { currency: "USD", value: 49.99 },
+        client_id: "anon_int_ga4",
         app_instance_id: "11111111-2222-3333-4444-555555555555",
       },
     });
     const body = buildRequestBody(ctx, { measurement_id: "G-XYZ", api_secret: "s1" });
-    expect(body.client_id).toBe(ctx.delivery_key);
+    // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
+    // new single-event user on every delivery; the mapper now supplies a
+    // stable id from the canonical identity.
+    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.app_instance_id).toBeUndefined();
     // The Polaris-internal hint is still stripped from the wire event payload — operators
     // who haven't rotated their secret get a clean web-stream payload, not a half-routed body.
@@ -391,6 +408,7 @@ describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
         payload: {
           name: "purchase",
           params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
+          client_id: "anon_int_ga4",
           app_instance_id: "11111111-2222-3333-4444-555555555555",
         },
       }),
@@ -415,6 +433,7 @@ describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
         payload: {
           name: "purchase",
           params: { currency: "USD", value: 49.99 },
+          client_id: "anon_int_ga4",
           app_instance_id: "11111111-2222-3333-4444-555555555555",
         },
       }),

@@ -679,3 +679,51 @@ describe("CANONICAL_TO_BRAZE_FAMILY", () => {
     expect(CANONICAL_TO_BRAZE_FAMILY["user.identified"]).toBe("attributes");
   });
 });
+
+describe("trait attributes (MVKUP64R)", () => {
+  function withTraits(traits: Readonly<Record<string, unknown>> | null) {
+    return fixtureMapperContext({ traits });
+  }
+
+  it("forwards allowlisted traits as Braze custom attributes", () => {
+    const result = userIdentifiedMapper(withTraits({ tier: "gold", plan: "pro" }));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
+    expect(attribute["tier"]).toBe("gold");
+    expect(attribute["plan"]).toBe("pro");
+  });
+
+  it("ignores a trait that is not on the allowlist", () => {
+    // Braze's attribute space is a namespace an operator curates. A new
+    // field in the profile store must not silently create an attribute
+    // there — adding one is a decision, made in BRAZE_TRAIT_ATTRIBUTES.
+    const result = userIdentifiedMapper(withTraits({ tier: "gold", internal_risk_score: 0.93 }));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
+    expect(attribute["internal_risk_score"]).toBeUndefined();
+  });
+
+  it("never lets a trait overwrite an identity slot", () => {
+    // `email` is set from the canonical identity above. A trait of the same
+    // name reaching it would be an identity bug wearing an attribute's
+    // clothes, so the reserved list is enforced independently of the
+    // allowlist rather than by trusting the allowlist to omit it.
+    const base = fixtureNormalizedEvent();
+    const result = userIdentifiedMapper(
+      fixtureMapperContext({
+        traits: { email: "attacker@example.com", external_id: "someone_else" },
+      }),
+    );
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
+    expect(attribute["email"]).toBe(base.identity.email);
+    expect(attribute["external_id"]).not.toBe("someone_else");
+  });
+
+  it("leaves the attribute untouched when there are no traits", () => {
+    const result = userIdentifiedMapper(withTraits(null));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
+    expect(attribute["tier"]).toBeUndefined();
+  });
+});

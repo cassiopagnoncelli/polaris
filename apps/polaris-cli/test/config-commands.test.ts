@@ -83,6 +83,60 @@ const BASE_ARGS = {
   reason: "rotating credentials",
 };
 
+describe("config set — routing gate validation", () => {
+  // The gate degrades to "unconfigured" on a value it cannot parse, which is
+  // right at delivery time — a typo must not mute a destination — but it
+  // makes the typo invisible at write time. These pin the refusal.
+
+  it("stores a well-formed routing config", async () => {
+    const { store, calls } = recordingStore();
+    const runner = buildConfigSetRunner({ openStore: () => store });
+    await runner(
+      {
+        ...BASE_ARGS,
+        key: "routing",
+        value: JSON.stringify({ subscriptions: { events: ["payment.approved"] } }),
+      },
+      makeContext(),
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  it("refuses a filter on a root the gate cannot address", async () => {
+    // `identity` is deliberately unfilterable. Accepting this would store a
+    // rule that reads as working and silently never matches.
+    const { store, calls } = recordingStore();
+    const runner = buildConfigSetRunner({ openStore: () => store });
+    await expect(
+      runner(
+        {
+          ...BASE_ARGS,
+          key: "routing",
+          value: JSON.stringify({ filters: [{ path: "identity.email", op: "exists" }] }),
+        },
+        makeContext(),
+      ),
+    ).rejects.toThrow(/routing gate configuration/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses an unknown operator and writes nothing", async () => {
+    const { store, calls } = recordingStore();
+    const runner = buildConfigSetRunner({ openStore: () => store });
+    await expect(
+      runner(
+        {
+          ...BASE_ARGS,
+          key: "routing",
+          value: JSON.stringify({ filters: [{ path: "properties.a", op: "matches", value: "x" }] }),
+        },
+        makeContext(),
+      ),
+    ).rejects.toThrow(/routing gate configuration/);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("config set — schema-declared secret keys", () => {
   it("FORCES is_secret on a secret-typed key even when --secret is omitted", async () => {
     // The behaviour changed shape here, and the reason is worth keeping. This

@@ -38,6 +38,20 @@ export interface Ga4EventPayload {
    * when the canonical envelope reports an app source.
    */
   readonly app_instance_id?: string;
+  /**
+   * Side channel, like `app_instance_id` above: the deliverer lifts this to
+   * the request wrapper's `client_id` and it never appears inside the
+   * `events[]` entry. Resolved by the mapper, which is the only stage that
+   * can see the canonical identity.
+   *
+   * REQUIRED, deliberately. As an optional slot the deliverer needed a
+   * fallback, the only sane fallback was the `delivery_key` synthesis this
+   * change exists to delete, and that fallback silently reinstated the old
+   * behaviour for any payload built by hand — including the two deliverer
+   * tests that were asserting it. A required field makes the mapper the
+   * single place a `client_id` can come from.
+   */
+  readonly client_id: string;
 }
 
 /**

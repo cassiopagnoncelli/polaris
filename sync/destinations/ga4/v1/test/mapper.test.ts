@@ -26,6 +26,7 @@ import {
   GA4_LOGIN_METHOD_POLARIS,
   paymentApprovedMapper,
   resolveAppInstanceId,
+  resolveClientId,
   signupCompletedMapper,
   subscriptionRenewedMapper,
   userIdentifiedMapper,
@@ -254,6 +255,36 @@ describe("subscriptionRenewedMapper", () => {
     const result = subscriptionRenewedMapper(ctx);
     if (result.kind !== "mapped") throw new Error("expected mapped");
     expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+  });
+});
+
+describe("resolveClientId — the GA4 web-stream client", () => {
+  it("uses anonymous_id, which is what GA4 means by a client", () => {
+    expect(resolveClientId(fixtureNormalizedEvent())).toBe(
+      fixtureNormalizedEvent().identity.anonymous_id,
+    );
+  });
+
+  it("falls back to profile_id for an event with no browser", () => {
+    // A backend event has no anonymous_id. Coarser than a browser — one
+    // person on two devices becomes one GA4 client — but stable, which is
+    // the property that matters.
+    const base = fixtureNormalizedEvent();
+    const normalized = {
+      ...base,
+      identity: { ...base.identity, anonymous_id: null, profile_id: "prof_1" },
+    };
+    expect(resolveClientId(normalized)).toBe("prof_1");
+  });
+
+  it("never returns the delivery key, which changed on every event", () => {
+    // The defect this replaces: `client_id` was the per-event delivery_key,
+    // so GA4 saw one single-event user per delivery — no sessions, no
+    // returning users. Any stable value beats it; an unstable one is the bug.
+    const base = fixtureNormalizedEvent();
+    const a = resolveClientId(base);
+    const b = resolveClientId({ ...base, event_id: "a-different-event-id" });
+    expect(a).toBe(b);
   });
 });
 

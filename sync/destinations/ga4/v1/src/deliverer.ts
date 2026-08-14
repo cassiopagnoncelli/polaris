@@ -196,11 +196,9 @@ export function buildGa4Deliverer(options: BuildDelivererOptions): Deliverer<Ga4
  * Build the GA4 Measurement Protocol request body. Public so tests can
  * assert the wrapper shape independent of the network call.
  *
- * `client_id` is required by GA4. We synthesize it from the canonical
- * `delivery_key` so the same canonical envelope produces the same
- * `client_id` across retries; in a future minor version the canonical
- * `anonymous_id` will surface to the deliverer and become the source
- * of truth for `client_id`.
+ * `client_id` is required by GA4 and arrives on the payload side channel,
+ * resolved by the mapper from the canonical identity — `anonymous_id`
+ * first, which is what GA4 means by a client. See `resolveClientId`.
  *
  * `timestamp_micros` is microseconds since the Unix epoch; GA4 accepts
  * up to ~72h in the past. We derive it from the payload metadata only
@@ -212,7 +210,11 @@ export function buildRequestBody(
   context: DelivererContext<Ga4EventPayload>,
   secret?: ResolvedGa4Secret,
 ): Ga4RequestBody {
-  const { app_instance_id: payloadAppInstanceId, ...wireEvent } = context.payload;
+  const {
+    app_instance_id: payloadAppInstanceId,
+    client_id: payloadClientId,
+    ...wireEvent
+  } = context.payload;
   const events = [wireEvent as Ga4EventPayload];
   // App-stream routing only fires when BOTH the mapper supplied a hint
   // AND the operator's secret carries `firebase_app_id`. Operators on a
@@ -223,7 +225,13 @@ export function buildRequestBody(
   if (payloadAppInstanceId !== undefined && secret?.firebase_app_id !== undefined) {
     return Object.freeze({ app_instance_id: payloadAppInstanceId, events }) as Ga4RequestBody;
   }
-  return Object.freeze({ client_id: context.delivery_key, events }) as Ga4RequestBody;
+  // `context.delivery_key` used to stand in here. It is derived per
+  // (destination, event_id, identity), so it changed on every event and GA4
+  // saw one single-event user per delivery — no sessions, no returning
+  // users, no funnel spanning two events. The mapper now resolves a stable
+  // id from the canonical identity; see `resolveClientId`. No fallback:
+  // `client_id` is required on the payload, so there is no path back.
+  return Object.freeze({ client_id: payloadClientId, events }) as Ga4RequestBody;
 }
 
 // ---------------------------------------------------------------------------

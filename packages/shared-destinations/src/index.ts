@@ -82,6 +82,17 @@ export {
   publishToDestinationDlq,
 } from "./dlq.js";
 export {
+  FILTER_OPERATORS,
+  FILTERABLE_ROOTS,
+  type FilterableRoot,
+  type FilterOperator,
+  type PropertyFilter,
+  parseRoutingGateConfig,
+  ROUTING_GATE_CONFIG_KEY,
+  type RoutingGateConfig,
+  type SubscriptionConfig,
+} from "./gate.js";
+export {
   buildDeliveryKey,
   DELIVERY_KEY_PREFIX,
   type DeliveryKeyInput,

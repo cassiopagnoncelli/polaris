@@ -206,3 +206,27 @@ Braze typically maintains backward compatibility on the REST surface; semantic b
 ## Migration notes
 
 n/a — v1 is the initial release.
+
+## The resolved.events flip (MVKUP64R)
+
+Braze reads `resolved.events`. One delta.
+
+**`user.identified` forwards profile traits as custom attributes**, from an allowlist:
+
+| Attribute | |
+|---|---|
+| `tier` | |
+| `plan` | |
+| `lifecycle_stage` | |
+| `lifetime_value` | |
+| `first_purchase_at` | |
+| `last_purchase_at` | |
+| `total_orders` | |
+
+An allowlist rather than a passthrough because Braze's attribute space is a shared namespace an operator curates: forwarding every trait would let a new field in the profile store silently create an attribute in Braze, which is how a vendor account fills with junk nobody can attribute to a decision. Adding a trait to `BRAZE_TRAIT_ATTRIBUTES` is that decision.
+
+Reserved slots — `external_id`, `user_alias`, `device_id`, `email`, `phone`, `country`, `language`, `_update_existing_only` — are set from the canonical identity and context, and a trait can never write one. That guard is enforced independently of the allowlist, so a mistake in the list cannot become an identity mistake.
+
+Traits arrive already redacted and hashed by normalize on the same rules as `properties`, so a `traits.email` would be `email_sha256` before it ever reached here. It is on the reserved list regardless.
+
+An envelope with `traits: null` — not enriched, or a snapshot over the size guard — produces exactly the attribute it produced before the flip.

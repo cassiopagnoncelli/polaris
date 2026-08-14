@@ -38,6 +38,13 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
           minimum: 1,
           type: "integer",
         },
+        routing: {
+          additionalProperties: {},
+          propertyNames: {
+            type: "string",
+          },
+          type: "object",
+        },
       },
       type: "object",
     },
@@ -58,6 +65,13 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
           maximum: 9007199254740991,
           minimum: 1,
           type: "integer",
+        },
+        routing: {
+          additionalProperties: {},
+          propertyNames: {
+            type: "string",
+          },
+          type: "object",
         },
       },
       type: "object",
@@ -102,6 +116,13 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
           minimum: 1,
           type: "integer",
         },
+        routing: {
+          additionalProperties: {},
+          propertyNames: {
+            type: "string",
+          },
+          type: "object",
+        },
       },
       type: "object",
     },
@@ -123,6 +144,13 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
           minimum: 1,
           type: "integer",
         },
+        routing: {
+          additionalProperties: {},
+          propertyNames: {
+            type: "string",
+          },
+          type: "object",
+        },
       },
       type: "object",
     },
@@ -139,6 +167,13 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
           maximum: 9007199254740991,
           minimum: 1,
           type: "integer",
+        },
+        routing: {
+          additionalProperties: {},
+          propertyNames: {
+            type: "string",
+          },
+          type: "object",
         },
       },
       type: "object",

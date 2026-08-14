@@ -20,6 +20,12 @@
 
 import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
 import { MappingSemanticsError } from "@polaris/shared-control-plane";
+import {
+  FILTER_OPERATORS,
+  FILTERABLE_ROOTS,
+  parseRoutingGateConfig,
+  ROUTING_GATE_CONFIG_KEY,
+} from "@polaris/shared-destinations";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { MaskedSecretWriteError } from "../../db/index.js";
@@ -105,6 +111,23 @@ export function buildConfigSetRunner(hooks: ConfigHooks = {}) {
       PROJECT_CONFIG_SCHEMAS[namespace]?.secretKeys.project.includes(configKey) === true;
     const isSecret = secretDeclared || args.secret === true;
     const value = parseConfigValue(args.value, isSecret);
+
+    // The routing gate degrades to "unconfigured" on a value it cannot
+    // parse, which is the right behaviour at DELIVERY time — a typo must not
+    // mute a destination — but it makes a typo invisible at WRITE time: the
+    // set succeeds, the operator believes the gate is on, and every event
+    // keeps flowing. Refusing here is where the mistake is still cheap and
+    // still attached to the person who made it.
+    if (configKey === ROUTING_GATE_CONFIG_KEY && parseRoutingGateConfig(value) === undefined) {
+      throw new UsageError(
+        `"${ROUTING_GATE_CONFIG_KEY}" is not a valid routing gate configuration. ` +
+          "Expected an object with optional `subscriptions` " +
+          "({ events?: string[], prefixes?: string[] }), `filters` " +
+          `([{ path, op, value? }] where path starts with one of ${FILTERABLE_ROOTS.join(", ")} ` +
+          `and op is one of ${FILTER_OPERATORS.join(", ")}), and \`requireConsent\` ` +
+          "(a list of consent dimensions).",
+      );
+    }
 
     const store = openStore();
     try {

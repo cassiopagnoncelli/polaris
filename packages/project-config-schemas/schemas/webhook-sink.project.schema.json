@@ -6,6 +6,13 @@
       "maximum": 9007199254740991,
       "minimum": 1,
       "type": "integer"
+    },
+    "routing": {
+      "additionalProperties": {},
+      "propertyNames": {
+        "type": "string"
+      },
+      "type": "object"
     }
   },
   "type": "object"

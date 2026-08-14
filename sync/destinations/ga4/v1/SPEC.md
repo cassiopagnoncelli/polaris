@@ -220,3 +220,19 @@ When Google breaks compatibility on the Measurement Protocol (historically Googl
 ## Migration notes
 
 n/a — v1 is the initial release.
+
+## The resolved.events flip (MVKUP64R)
+
+GA4 reads `resolved.events`. One delta, and it is a correction rather than an addition.
+
+**`client_id` is now the canonical `anonymous_id`.** It used to be `delivery_key`, which is derived per `(destination, event_id, identity)` — a different value on every event. GA4 treats `client_id` as the browser instance, so it has been seeing **one single-event user per delivery**: no sessions, no returning users, no funnel spanning two events. Reports built on this data before the flip are not comparable to reports built after, and the difference is not a tuning change.
+
+Resolution order (`resolveClientId`):
+
+| | Source | Why |
+|---|---|---|
+| 1 | `identity.anonymous_id` | The SDK's per-browser id — what GA4 means by a client. |
+| 2 | `identity.profile_id` | For a backend event with no browser. Coarser: one person on two devices becomes one GA4 client. |
+| 3 | `best_identity.value` | Normalize drops an envelope with no usable identity, so this always resolves. |
+
+The synthesis is deleted, not flagged off, and `client_id` is a REQUIRED field on the mapper payload — as an optional slot the deliverer needed a fallback, and the only sane fallback was the old behaviour.

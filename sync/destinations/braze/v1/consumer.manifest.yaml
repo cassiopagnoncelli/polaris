@@ -30,7 +30,8 @@ description: |
   documents the divergence in full.
 
 inputs:
-  - analytics.events
+  # MVKUP64R: flipped to the spine's output.
+  - resolved.events
 
 outputs:
   # Braze consumers do not emit Polaris events back into the platform.

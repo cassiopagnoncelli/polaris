@@ -223,3 +223,9 @@ When TikTok breaks compatibility (TikTok historically bumps Events API minor ver
 ## Migration notes
 
 n/a — v1 is the initial release.
+
+## The resolved.events flip (MVKUP64R)
+
+TikTok reads `resolved.events`. **No mapper delta.** TikTok's `external_id` already derives from the shared normalize layer's best-available identity, so the flip changes what that resolves to — the platform's `canonical_customer_id` ahead of the producer's `user_id`, per `pickBestIdentity` — without any vendor-specific code changing.
+
+That is the point of putting the preference in the shared layer: a vendor that was already asking the right question needs no edit to get the better answer.

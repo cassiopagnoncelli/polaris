@@ -53,6 +53,28 @@ const DECLARATION_BASENAME = "project-config.ts";
  */
 const ALLOW = new Map([]);
 
+/**
+ * Keys whose reader is a SHARED package rather than the declaring component.
+ *
+ * Not an exemption. Each entry names the file that must contain the key, and
+ * that file is searched exactly as a component's own `src/` would be — the
+ * question "is anything actually reading this?" still has to be answered, it
+ * is just asked of the right tree.
+ *
+ * The distinction this draws is the one `allow_replay` got wrong in the other
+ * direction. That key was declared by meta-capi, read by nobody, and looked
+ * fine because the reader was ASSUMED to be somewhere shared; the check was
+ * built to catch exactly that. But a key genuinely read by shared code is a
+ * different case, and refusing it would push authors toward the worse fix —
+ * sprinkling a token reference in the consumer to satisfy a grep.
+ *
+ * A key belongs here only when the shared reader applies it on the
+ * component's behalf and the component itself has no business touching it.
+ * The routing gate qualifies: it runs inside `processOne`, before the
+ * consumer's mapper or deliverer is reached at all.
+ */
+const SHARED_RUNTIME_READERS = new Map([["routing", "packages/shared-destinations/src/gate.ts"]]);
+
 function walk(dir, out = []) {
   let entries;
   try {
@@ -99,7 +121,7 @@ export function declaredKeys(schema) {
  * property accesses) would miss the destructuring and index forms that are
  * perfectly legitimate ways to read one.
  */
-export function unreadKeys(keys, files) {
+export function unreadKeys(keys, files, rootDir = DEFAULT_ROOT) {
   const haystack = files
     .filter((f) => !f.endsWith(`${sep}${DECLARATION_BASENAME}`))
     .map((f) => {
@@ -110,7 +132,20 @@ export function unreadKeys(keys, files) {
       }
     })
     .join("\n");
-  return keys.filter((key) => !haystack.includes(key));
+  return keys.filter((key) => {
+    const sharedReader = SHARED_RUNTIME_READERS.get(key);
+    if (sharedReader !== undefined) {
+      // Same question, asked of the declared reader. A stale entry here —
+      // pointing at a file that no longer mentions the key — fails exactly
+      // as an unread component key does.
+      try {
+        return !readFileSync(join(rootDir, sharedReader), "utf8").includes(key);
+      } catch {
+        return true;
+      }
+    }
+    return !haystack.includes(key);
+  });
 }
 
 function main() {
@@ -156,7 +191,7 @@ function main() {
       continue;
     }
 
-    for (const key of unreadKeys(keys, files)) {
+    for (const key of unreadKeys(keys, files, root)) {
       if (ALLOW.has(`${entry.namespace}::${key}`)) continue;
       violations.push({
         namespace: entry.namespace,

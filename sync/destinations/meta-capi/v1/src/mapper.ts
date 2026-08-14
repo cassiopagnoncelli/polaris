@@ -270,8 +270,22 @@ export function buildUserData(normalized: NormalizedEvent): MetaCapiUserData {
   if (normalized.identity.phone_sha256 !== null) {
     userData.ph = [normalized.identity.phone_sha256];
   }
-  if (normalized.identity.user_id !== null) {
-    userData.external_id = [sha256Hex(normalized.identity.user_id.toLowerCase().trim())];
+  // `external_id` is Meta's cross-session join key, so it should carry the
+  // most durable id Polaris has for the person. `canonical_customer_id` is
+  // the identity stage's conclusion after reconciling every identifier ever
+  // seen; `user_id` is what this one event's producer happened to send. Two
+  // producers spelling the same customer differently used to land as two
+  // Meta users and now converge.
+  //
+  // Prior behaviour is preserved exactly when there is no resolution to
+  // use — an envelope off `analytics.events`, or a person the resolver has
+  // not linked to a customer id — so nothing changes for traffic that has
+  // not been through the spine. The hashing is unchanged (lowercased,
+  // trimmed, sha256), which is what keeps the value comparable to the ids
+  // Meta already holds for this account.
+  const externalIdSource = normalized.identity.canonical_customer_id ?? normalized.identity.user_id;
+  if (externalIdSource !== null) {
+    userData.external_id = [sha256Hex(externalIdSource.toLowerCase().trim())];
   }
   if (normalized.identity.anonymous_id !== null) {
     userData.anon_id = sha256Hex(normalized.identity.anonymous_id);
