@@ -164,6 +164,7 @@ export {
   type DestinationConsumerOptions,
   type HandleEventFn,
   type HandleEventInput,
+  type ProjectConfigLookup,
 } from "./runtime.js";
 export {
   type CreateDestinationTransportHooksInput,
