@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CommandContext } from "../src/command.js";
 import { buildTraitsComputeRunner } from "../src/commands/traits/compute.js";
+import { createTraitEventEmitter } from "../src/commands/traits/emitter.js";
 import { buildRegisteredTraitsRunner } from "../src/commands/traits/registration.js";
 
 function makeContext(captured: string[]): CommandContext {
@@ -97,5 +98,97 @@ describe("registered traits runner", () => {
     } as unknown as Parameters<typeof buildRegisteredTraitsRunner>[0];
 
     expect(() => buildRegisteredTraitsRunner(ctx)).toThrow(/POLARIS_CLICKHOUSE_URL is required/);
+  });
+});
+
+describe("trait event emitter", () => {
+  it("derives ids per (run, profile) so a restarted run collapses", async () => {
+    // A traits run has no source event to derive from. Deriving from
+    // (runId, profileId) makes a re-run of the SAME run produce the same
+    // ids, which ReplacingMergeTree collapses — rather than double-counting
+    // a nightly job somebody restarted.
+    const published: Array<{ event: Record<string, unknown> }> = [];
+    const emitter = createTraitEventEmitter({
+      producer: {
+        publishEvent: async (input: { event: Record<string, unknown> }) => {
+          published.push({ event: input.event });
+          return { stream: "profile.events-0", partition: 0 };
+        },
+      } as never,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-15T03:35:00.000Z"),
+    });
+
+    const update = {
+      projectId: "storefront",
+      environment: "production",
+      profileId: "01930000-0000-7000-8000-0000000000aa",
+      traitsVersion: 7,
+      traits: { orders_30d: 3 },
+      removedKeys: [],
+      runId: "run-1",
+    };
+    await emitter.profileUpdated(update);
+    await emitter.profileUpdated(update);
+
+    expect(published[0]?.event["event_id"]).toBe(published[1]?.event["event_id"]);
+  });
+
+  it("gives a different run different ids", async () => {
+    // A new run genuinely observed different values, so it is a new fact.
+    const published: Array<Record<string, unknown>> = [];
+    const emitter = createTraitEventEmitter({
+      producer: {
+        publishEvent: async (input: { event: Record<string, unknown> }) => {
+          published.push(input.event);
+          return { stream: "profile.events-0", partition: 0 };
+        },
+      } as never,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-15T03:35:00.000Z"),
+    });
+
+    const base = {
+      projectId: "storefront",
+      environment: "production",
+      profileId: "01930000-0000-7000-8000-0000000000aa",
+      traitsVersion: 7,
+      traits: { orders_30d: 3 },
+      removedKeys: [],
+    };
+    await emitter.profileUpdated({ ...base, runId: "run-1" });
+    await emitter.profileUpdated({ ...base, runId: "run-2" });
+
+    expect(published[0]?.["event_id"]).not.toBe(published[1]?.["event_id"]);
+  });
+
+  it("stamps writer=computed_traits and carries removed keys", async () => {
+    // `profile.updated`'s schema has carried this writer enum since it
+    // shipped; this is the writer that makes the third value real.
+    const published: Array<Record<string, unknown>> = [];
+    const emitter = createTraitEventEmitter({
+      producer: {
+        publishEvent: async (input: { event: Record<string, unknown> }) => {
+          published.push(input.event);
+          return { stream: "profile.events-0", partition: 0 };
+        },
+      } as never,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-15T03:35:00.000Z"),
+    });
+
+    await emitter.profileUpdated({
+      projectId: "storefront",
+      environment: "production",
+      profileId: "01930000-0000-7000-8000-0000000000aa",
+      traitsVersion: 8,
+      traits: {},
+      removedKeys: ["orders_30d"],
+      runId: "run-1",
+    });
+
+    const props = published[0]?.["properties"] as Record<string, unknown>;
+    expect(props["writer"]).toBe("computed_traits");
+    expect(props["removed_keys"]).toEqual(["orders_30d"]);
   });
 });

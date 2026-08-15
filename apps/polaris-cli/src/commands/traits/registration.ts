@@ -27,12 +27,19 @@
 
 import { runTraits, type TraitRunResult } from "@polaris/processor-traits-v1";
 import { createClickHouseClient } from "@polaris/shared-clickhouse";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
+import {
+  createPolarisProducer,
+  createTransportConnection,
+  sharedOnlyIsolationLookup,
+} from "@polaris/shared-transport";
 import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext } from "../../command.js";
 import { applyProfileTraitChange, connectDb, findProfilesWithTraits } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import type { TraitsComputeRunner } from "./compute.js";
+import { createTraitEventEmitter } from "./emitter.js";
 
 const CLICKHOUSE_URL_ENV = "POLARIS_CLICKHOUSE_URL";
 const CLICKHOUSE_USER_ENV = "POLARIS_CLICKHOUSE_SERVICE_USER";
@@ -63,8 +70,19 @@ export function buildRegisteredTraitsRunner(ctx: CommandContext): TraitsComputeR
   const handle = connectDb({ env: ctx.env });
   const runId = `polaris_trun_${uuidv7()}`;
 
+  // A short-lived connection per invocation, like the replay commands'. The
+  // process exits after one run; a pooled producer would outlive nothing.
+  const connection = createTransportConnection({
+    rabbitmq: loadConfigWithDefaults({ serviceName: "polaris-cli", schema: rabbitmqEnvSchema }),
+  });
+  const producer = createPolarisProducer({
+    connection,
+    producerName: "polaris-cli.traits-compute",
+  });
+
   return {
     async run({ projectId, environment, traits }): Promise<TraitRunResult> {
+      await producer.connect();
       try {
         return await runTraits({
           projectId,
@@ -93,19 +111,23 @@ export function buildRegisteredTraitsRunner(ctx: CommandContext): TraitsComputeR
               return { traitsVersion: applied?.traitsVersion ?? 0 };
             },
           },
-          emitter: {
-            profileUpdated: async (input) => {
-              ctx.logger.info(
-                { audit_action: "traits.profile_updated", ...input },
-                "profile traits updated",
-              );
-            },
-            traitComputed: async (input) => {
-              ctx.logger.info({ audit_action: "traits.computed", ...input }, "trait computed");
-            },
-          },
+          // Published onto `profile.events`, not logged. Logging left
+          // computed traits in an operator's log file and out of the spine,
+          // which meant `polaris.profiles` in ClickHouse — a table whose
+          // whole premise is that stream being trait history — was fed only
+          // by the identity stage.
+          emitter: createTraitEventEmitter({
+            producer,
+            // Shared streams only. A CLI invocation has no control-plane
+            // isolation cache, and publishing an isolated project's traits
+            // to the shared family would be worse than the extra hop the
+            // cache saves: the consumer reads both.
+            isolation: sharedOnlyIsolationLookup,
+            now: () => new Date(),
+          }),
         });
       } finally {
+        await producer.disconnect().catch(() => {});
         await clickhouse.close();
         await handle.close();
       }

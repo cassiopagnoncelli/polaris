@@ -9,9 +9,12 @@
  * it gets switched off.
  */
 
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { findTraitSqlProblems, stripComments, tablesReferenced } from "../lint-trait-sql.mjs";
+import { findTraitSqlProblems, stripComments, tablesReferenced, walk } from "../lint-trait-sql.mjs";
 
 describe("findTraitSqlProblems", () => {
   it("accepts a definition reading an allowed projection", () => {
@@ -64,5 +67,29 @@ describe("findTraitSqlProblems", () => {
   it("is case-insensitive and prefix-agnostic", () => {
     const src = "const t = { sql: `select x FROM POLARIS.ANALYTICS_RAW` };";
     expect(findTraitSqlProblems(src, "t.ts")).toHaveLength(1);
+  });
+});
+
+describe("walk", () => {
+  it("does not descend into node_modules", () => {
+    // The catalog is a workspace package. Once pnpm links its dependencies
+    // it has its own `node_modules`, and walking it made this check report
+    // that zod's `union.test.ts` reads a projection called `both`.
+    const root = mkdtempSync(join(tmpdir(), "trait-sql-"));
+    mkdirSync(join(root, "node_modules", "zod"), { recursive: true });
+    writeFileSync(join(root, "node_modules", "zod", "union.test.ts"), "from analytics_raw");
+    writeFileSync(join(root, "orders-30d.ts"), "from event_daily_counts");
+
+    expect(walk(root).map((file: string) => file.slice(root.length + 1))).toEqual([
+      "orders-30d.ts",
+    ]);
+  });
+
+  it("skips dist, so a built copy is not linted twice", () => {
+    const root = mkdtempSync(join(tmpdir(), "trait-sql-"));
+    mkdirSync(join(root, "dist"), { recursive: true });
+    writeFileSync(join(root, "dist", "orders-30d.ts"), "from analytics_raw");
+
+    expect(walk(root)).toEqual([]);
   });
 });

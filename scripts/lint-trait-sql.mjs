@@ -96,7 +96,12 @@ export function findTraitSqlProblems(contents, file) {
   return problems;
 }
 
-function walk(dir, out = []) {
+// The catalog is a workspace package, so it has its OWN `node_modules` once
+// pnpm links its dependencies. Walking it made this check read zod's test
+// suite and report that `union.test.ts` queries a projection called `both`.
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
+
+export function walk(dir, out = []) {
   let entries;
   try {
     entries = readdirSync(dir);
@@ -104,6 +109,7 @@ function walk(dir, out = []) {
     return out;
   }
   for (const entry of entries) {
+    if (SKIP_DIRS.has(entry) || entry.startsWith(".")) continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) walk(full, out);
     else if (full.endsWith(".ts") && !full.endsWith("types.ts") && !full.endsWith("index.ts")) {

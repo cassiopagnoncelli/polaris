@@ -52,10 +52,10 @@ import {
   declareComponentQueues,
   declareSuperStream,
   defaultRetentionDaysForFamily,
-  parsePartitionOverrides,
   deleteComponentQueues,
   deleteSuperStream,
   POLARIS_COMPONENTS,
+  parsePartitionOverrides,
   RETRY_BACKOFF_TIERS_MS,
 } from "@polaris/shared-transport";
 import { connect } from "amqplib";
