@@ -75,12 +75,36 @@ import type { Logger } from "@polaris/shared-logger";
  * NOT cut over take that dependency too.
  */
 export interface ProjectConfigLookup {
-  /** Cache-only. Returns an empty object on a miss; never performs I/O. */
-  valuesFor(projectId: string, environment: string): Readonly<Record<string, unknown>>;
+  /**
+   * Cache-only. Returns empty values and a null version on a miss; never
+   * performs I/O.
+   *
+   * ONE call returning both, deliberately. The routing gate reads the
+   * values and the delivery row records the version, and a second read for
+   * the version could straddle a config invalidation — leaving a row that
+   * names a version which did not produce the decision it describes. That
+   * is a worse failure than no version at all, because it looks like an
+   * answer.
+   */
+  resolve(projectId: string, environment: string): ResolvedProjectConfig;
+}
+
+/** A project's config slice plus the version that produced it. */
+export interface ResolvedProjectConfig {
+  readonly values: Readonly<Record<string, unknown>>;
+  /**
+   * `project_config_versions.version`, stringified. `null` when no store
+   * was consulted — a consumer running on deployment defaults has no
+   * version to name, and NULL says exactly that.
+   */
+  readonly version: string | null;
 }
 
 /** Shared so a cold path does not allocate an object per delivery. */
-const EMPTY_CONFIG: Readonly<Record<string, unknown>> = Object.freeze({});
+const EMPTY_CONFIG: ResolvedProjectConfig = Object.freeze({
+  values: Object.freeze({}),
+  version: null,
+});
 
 import {
   type CanonicalStreamFamily,
@@ -762,12 +786,21 @@ async function processOne<Payload>(
     return null;
   }
 
+  // Resolved once, here, and used by the gate, the deliverer and every
+  // delivery row. Cache-only and synchronous, so resolving it before the
+  // test-mode short circuit costs nothing and lets even that row name the
+  // configuration that produced it.
+  const resolvedConfig =
+    projectConfig?.resolve(envelope.project_id, envelope.environment) ?? EMPTY_CONFIG;
+  const projectConfigValues = resolvedConfig.values;
+
   if (instance.mode === "test") {
     // Test mode = no network delivery. The runtime still records a
     // delivery row so smoke tests / smoke harness can assert end-to-end
     // shape, but it short-circuits before mapping / delivering.
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -801,8 +834,6 @@ async function processOne<Payload>(
   // Resolved ONCE, here, and reused by the deliverer below. Two separate
   // `valuesFor` calls could straddle a config invalidation and hand the gate
   // and the deliverer different slices for the same event.
-  const projectConfigValues =
-    projectConfig?.valuesFor(envelope.project_id, envelope.environment) ?? EMPTY_CONFIG;
 
   // 3. Gate: is this event FOR this instance at all?
   //
@@ -822,6 +853,7 @@ async function processOne<Payload>(
   if (gateDecision.kind === "skip") {
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -895,6 +927,7 @@ async function processOne<Payload>(
     await releaseClaim();
     return recordDrop({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -919,6 +952,7 @@ async function processOne<Payload>(
     await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -955,6 +989,7 @@ async function processOne<Payload>(
     await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -981,6 +1016,7 @@ async function processOne<Payload>(
     await releaseClaim();
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -1037,6 +1073,7 @@ async function processOne<Payload>(
     );
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -1099,6 +1136,7 @@ async function processOne<Payload>(
     lease.release();
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -1146,6 +1184,7 @@ async function processOne<Payload>(
     await dedupe.mark(instance.destination_id, delivery_key, deliveryFinishedAt.getTime());
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -1177,6 +1216,7 @@ async function processOne<Payload>(
     await dedupe.release(instance.destination_id, delivery_key);
     return recordOutcome({
       ...outcomeBuildVersion,
+      configVersion: resolvedConfig.version,
       records,
       metrics,
       logger,
@@ -1303,6 +1343,12 @@ interface RecordOutcomeInput {
   readonly skipReason?: string;
   /** Operational build version (M0DROHV3) stamped on the row. Forwarded by the runtime from `DestinationConsumerOptions.consumerBuildVersion`. */
   readonly consumerBuildVersion?: string;
+  /**
+   * Project-config version in force for this delivery. Comes from the same
+   * single `resolve` the routing gate read, so the row and the decision it
+   * describes can never name different versions.
+   */
+  readonly configVersion?: string | null;
   /** When set, the runtime publishes the original payload to the DLQ. */
   readonly payloadForDlq?: TransportMessagePayload;
   /**
@@ -1342,6 +1388,10 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
     ...(input.consumerBuildVersion !== undefined
       ? { consumer_build_version: input.consumerBuildVersion }
       : {}),
+    // Always written, including as null: the column's job is to answer
+    // "which configuration produced this?", and a null answers it — no
+    // store was consulted — where an absent key answers nothing.
+    config_version: input.configVersion ?? null,
     normalize_version: input.identity.normalizeVersion,
     mapper_version: input.identity.mapperVersion,
     deliverer_version: input.identity.delivererVersion,
@@ -1501,6 +1551,8 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
 interface RecordDropInput {
   /** Operational build version, same as every other outcome carries. */
   readonly consumerBuildVersion?: string;
+  /** Project-config version, same as every other outcome carries. */
+  readonly configVersion?: string | null;
   readonly records: DeliveryRecordRepository;
   readonly metrics: DestinationMetrics;
   readonly logger: Logger;
@@ -1534,6 +1586,7 @@ async function recordDrop(input: RecordDropInput): Promise<DeliveryRecord> {
     ...(input.consumerBuildVersion !== undefined
       ? { consumerBuildVersion: input.consumerBuildVersion }
       : {}),
+    configVersion: input.configVersion ?? null,
     records: input.records,
     metrics: input.metrics,
     logger: input.logger,

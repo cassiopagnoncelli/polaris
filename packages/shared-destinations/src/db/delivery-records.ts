@@ -219,6 +219,15 @@ export interface DeliveryRecord {
   readonly consumer_version: string;
   /** Operational build version (M0DROHV3); see DeliveryRecordsTable. */
   readonly consumer_build_version: string | null;
+  /**
+   * `project_config_versions.version` in force when this delivery was
+   * produced, as a string — `bigint` reads back that way.
+   *
+   * NULL when no project-config store was consulted, which is honest rather
+   * than missing: a consumer without one ran on deployment defaults and
+   * there is no version to name.
+   */
+  readonly config_version: string | null;
   readonly normalize_version: string;
   readonly mapper_version: string;
   readonly deliverer_version: string;
@@ -255,6 +264,8 @@ export interface RecordDeliveryInput {
    * callers that don't know about the new slot still write valid rows.
    */
   readonly consumer_build_version?: string | null;
+  /** See `DeliveryRecord.config_version`. */
+  readonly config_version?: string | null;
   readonly normalize_version: string;
   readonly mapper_version: string;
   readonly deliverer_version: string;
@@ -350,6 +361,7 @@ export class InMemoryDeliveryRecordRepository implements DeliveryRecordRepositor
       environment: input.environment,
       consumer_version: input.consumer_version,
       consumer_build_version: input.consumer_build_version ?? null,
+      config_version: input.config_version ?? null,
       normalize_version: input.normalize_version,
       mapper_version: input.mapper_version,
       deliverer_version: input.deliverer_version,
@@ -446,6 +458,7 @@ export function createKyselyDeliveryRecordRepository(
         environment: input.environment,
         consumer_version: input.consumer_version,
         consumer_build_version: input.consumer_build_version ?? null,
+        config_version: input.config_version ?? null,
         normalize_version: input.normalize_version,
         mapper_version: input.mapper_version,
         deliverer_version: input.deliverer_version,
@@ -543,6 +556,7 @@ interface DeliveryRecordRow {
   environment: string;
   consumer_version: string;
   consumer_build_version: string | null;
+  config_version: string | null;
   normalize_version: string;
   mapper_version: string;
   deliverer_version: string;
@@ -566,6 +580,7 @@ function toRecord(row: DeliveryRecordRow): DeliveryRecord {
     environment: row.environment,
     consumer_version: row.consumer_version,
     consumer_build_version: row.consumer_build_version,
+    config_version: row.config_version === null ? null : String(row.config_version),
     normalize_version: row.normalize_version,
     mapper_version: row.mapper_version,
     deliverer_version: row.deliverer_version,

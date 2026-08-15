@@ -19,10 +19,13 @@ import { isPolarisEnvironment } from "@polaris/shared-environments";
 import type { ProjectConfigStore } from "./store.js";
 
 /** Shared so a cold path does not allocate per delivery. */
-const EMPTY: Readonly<Record<string, unknown>> = Object.freeze({});
+const EMPTY_RESOLVED = Object.freeze({ values: Object.freeze({}), version: null });
 
 export interface DestinationProjectConfigLookup {
-  valuesFor(projectId: string, environment: string): Readonly<Record<string, unknown>>;
+  resolve(
+    projectId: string,
+    environment: string,
+  ): { readonly values: Readonly<Record<string, unknown>>; readonly version: string | null };
 }
 
 export function createDestinationProjectConfigLookup(input: {
@@ -31,20 +34,25 @@ export function createDestinationProjectConfigLookup(input: {
   readonly namespace: string;
 }): DestinationProjectConfigLookup {
   return {
-    valuesFor(projectId, environment) {
+    resolve(projectId, environment) {
       // The envelope's environment is stamped by the ingester from the API
       // key, so it is trustworthy — but it arrives here as a plain string
       // through the runtime's seam, and a value outside the closed set would
       // build a cache key that can never hit. Falling back to empty keeps a
       // malformed envelope on deployment defaults instead of throwing inside
       // a delivery.
-      if (!isPolarisEnvironment(environment)) return EMPTY;
+      if (!isPolarisEnvironment(environment)) return EMPTY_RESOLVED;
       const snapshot = input.store.peek({
         projectId,
         environment,
         namespace: input.namespace,
       });
-      return snapshot?.values ?? EMPTY;
+      if (snapshot === undefined) return EMPTY_RESOLVED;
+      // Values and version from ONE peek. Reading the version separately
+      // could straddle an invalidation and produce a delivery row naming a
+      // version that did not produce the decision it describes — which
+      // looks like an answer and is worse than none.
+      return { values: snapshot.values, version: String(snapshot.version) };
     },
   };
 }

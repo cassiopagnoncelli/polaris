@@ -139,7 +139,12 @@ interface TestEnv {
   dedupe: InMemoryDestinationDedupe;
   mapperCalls: MapperCall<TestPayload>[];
   delivererCalls: DelivererCall<TestPayload>[];
-  projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
+  projectConfig?: {
+    resolve: (
+      p: string,
+      e: string,
+    ) => { values: Readonly<Record<string, unknown>>; version: string | null };
+  };
   producerSends: ProducerSend[];
   descriptor: DestinationDescriptor<TestPayload>;
 }
@@ -155,7 +160,12 @@ function makeEnv({
   mapper?: Mapper<TestPayload>;
   deliverer?: Deliverer<TestPayload>;
   requiredConsent?: { marketing?: boolean; analytics?: boolean };
-  projectConfig?: { valuesFor: (p: string, e: string) => Readonly<Record<string, unknown>> };
+  projectConfig?: {
+    resolve: (
+      p: string,
+      e: string,
+    ) => { values: Readonly<Record<string, unknown>>; version: string | null };
+  };
 } = {}): TestEnv {
   const records = new InMemoryDeliveryRecordRepository();
   const instances = new InMemoryDestinationInstanceReader();
@@ -1216,8 +1226,10 @@ describe("destination runtime — per-project configuration", () => {
     // added and never populated and every test would still have passed.
     const env = makeEnv({
       projectConfig: {
-        valuesFor: (projectId) =>
-          projectId === "storefront" ? { graph_host: "graph-staging.facebook.com" } : {},
+        resolve: (projectId) =>
+          projectId === "storefront"
+            ? { values: { graph_host: "graph-staging.facebook.com" }, version: "42" }
+            : { values: {}, version: null },
       },
     });
     const consumer = buildConsumer(env);
@@ -1243,7 +1255,7 @@ describe("destination runtime — per-project configuration", () => {
   });
 
   it("hands an empty slice for a project the lookup does not know", async () => {
-    const env = makeEnv({ projectConfig: { valuesFor: () => ({}) } });
+    const env = makeEnv({ projectConfig: { resolve: () => ({ values: {}, version: null }) } });
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),
@@ -1259,12 +1271,12 @@ describe("destination runtime — the routing gate", () => {
   // the pipeline at the right point, and does not fire when unconfigured.
 
   function gated(config: unknown) {
-    return { valuesFor: () => ({ routing: config }) };
+    return { resolve: () => ({ values: { routing: config }, version: "7" }) };
   }
 
   it("does not gate when the project has no routing config", async () => {
     // The landing property. Every destination shipping today runs this path.
-    const env = makeEnv({ projectConfig: { valuesFor: () => ({}) } });
+    const env = makeEnv({ projectConfig: { resolve: () => ({ values: {}, version: null }) } });
     const consumer = buildConsumer(env);
     await consumer.handleEvent({
       envelope: makeEnvelope(),
@@ -1477,5 +1489,57 @@ describe("destination runtime — build version on every row", () => {
         expect(rec?.status).toBe("dropped_consent");
         expect(rec?.consumer_build_version).toBe("build-42");
       });
+  });
+});
+
+describe("destination runtime — config_version on the row", () => {
+  it("stamps the version that produced the decision", async () => {
+    // The column's docblock promised "what configuration produced this
+    // delivery stays answerable later" and nothing wrote it. It matters more
+    // now the routing gate decides WHETHER an event reaches a vendor at all:
+    // a skipped row without a version is a verdict without the statute.
+    const env = makeEnv({
+      projectConfig: { resolve: () => ({ values: { graph_host: "h" }, version: "42" }) },
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(lastRecord(env)?.config_version).toBe("42");
+  });
+
+  it("writes NULL when no store was consulted, which is an answer", async () => {
+    // A consumer running on deployment defaults has no version to name, and
+    // NULL says exactly that — as opposed to the absent key it used to be,
+    // which said nothing.
+    const env = makeEnv();
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    expect(lastRecord(env)?.config_version).toBeNull();
+  });
+
+  it("stamps the same version on a GATE SKIP as the gate read", async () => {
+    // The row and the decision it describes can never name different
+    // versions, because both come from one `resolve`.
+    const env = makeEnv({
+      projectConfig: {
+        resolve: () => ({
+          values: { routing: { subscriptions: { events: ["something.else"] } } },
+          version: "99",
+        }),
+      },
+    });
+    const consumer = buildConsumer(env);
+    await consumer.handleEvent({
+      envelope: makeEnvelope(),
+      destination_id: SEED_INSTANCE.destination_id,
+    });
+    const rec = lastRecord(env);
+    expect(rec?.status).toBe("skipped_filtered");
+    expect(rec?.config_version).toBe("99");
   });
 });
