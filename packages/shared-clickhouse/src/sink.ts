@@ -47,6 +47,21 @@ export const ANALYTICS_QUEUE_TABLE = "analytics_events_queue";
 export const ANALYTICS_PROCESSED_QUEUE_TABLE = "analytics_processed_queue";
 
 /**
+ * Profile-plane events: `profile.created`, `profile.updated`,
+ * `identity.merged`.
+ *
+ * A third queue rather than more rows in `analytics_processed_queue`. A
+ * derived event describes something that HAPPENED; `profile.updated`
+ * describes what is now TRUE of a person. Both are conclusions, and only
+ * one of them is current state — which decides the engine downstream: a log
+ * that keeps every row versus a table that collapses to the latest per
+ * person.
+ *
+ * @see sql/clickhouse/35_profile_events_queue.sql
+ */
+export const PROFILE_EVENTS_QUEUE_TABLE = "profile_events_queue";
+
+/**
  * One row as INSERTed into the ingestion interface table. Field names and
  * types mirror the table's columns exactly; the sink builds these from the
  * canonical envelope plus the transport's lineage.

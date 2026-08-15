@@ -22,7 +22,11 @@
  * @see infra/prometheus/rules/polaris.alerts.yml
  */
 
-import { ANALYTICS_PROCESSED_QUEUE_TABLE, ANALYTICS_QUEUE_TABLE } from "@polaris/shared-clickhouse";
+import {
+  ANALYTICS_PROCESSED_QUEUE_TABLE,
+  ANALYTICS_QUEUE_TABLE,
+  PROFILE_EVENTS_QUEUE_TABLE,
+} from "@polaris/shared-clickhouse";
 import type { MetricSample } from "@polaris/shared-metrics";
 
 export const METRIC_SINK_ROWS_CONSUMED_TOTAL = "polaris_clickhouse_sink_rows_consumed_total";
@@ -35,7 +39,11 @@ export const METRIC_SINK_INSERT_DURATION_MS_LAST =
 export const METRIC_SINK_LAG_SECONDS = "polaris_clickhouse_sink_lag_seconds";
 
 /** The two ingestion interface tables the sink routes between. */
-const SINK_TABLES = [ANALYTICS_QUEUE_TABLE, ANALYTICS_PROCESSED_QUEUE_TABLE] as const;
+const SINK_TABLES = [
+  ANALYTICS_QUEUE_TABLE,
+  ANALYTICS_PROCESSED_QUEUE_TABLE,
+  PROFILE_EVENTS_QUEUE_TABLE,
+] as const;
 
 export class SinkMetrics {
   #consumed = new Map<string, number>();

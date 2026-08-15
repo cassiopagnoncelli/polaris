@@ -4,6 +4,7 @@ import {
   type AnalyticsQueueRow,
   type AnalyticsSinkWriter,
   buildClickHouseVersion,
+  PROFILE_EVENTS_QUEUE_TABLE,
 } from "@polaris/shared-clickhouse";
 import {
   DeferredCheckpointStore,
@@ -508,7 +509,7 @@ describe("derived-event routing", () => {
     expect(await underlying.read("sink", "session.events-1")).toBe("4");
   });
 
-  it("subscribes to the source family and all four derived families", async () => {
+  it("subscribes to the source, derived AND profile families", async () => {
     const subscriptions: string[][] = [];
     const runtime = createRuntime({
       consumer: {
@@ -538,6 +539,10 @@ describe("derived-event routing", () => {
       "session.events",
       "identity.events",
       "attribution.events",
+      // The profile plane. Omitted from the subscription when the routing
+      // branch landed, which meant the sink would have routed
+      // `profile.events` correctly and never received any.
+      "profile.events",
     ]);
   });
 
@@ -568,8 +573,12 @@ describe("derived-event routing", () => {
     expect(subscriptions[0]).toContain("analytics.events.project-alpha");
     expect(subscriptions[0]).toContain("resolved.events.project-alpha");
     expect(subscriptions[0]).toContain("session.events.project-alpha");
+    // The profile plane isolates like every other family: an isolated
+    // project's `profile.events.<id>` is still the profile plane, which is
+    // what the prefix check in `isProfileEventFamily` relies on.
+    expect(subscriptions[0]).toContain("profile.events.project-alpha");
     // Six families, each shared + one isolated project.
-    expect(subscriptions[0]).toHaveLength(12);
+    expect(subscriptions[0]).toHaveLength(14);
   });
 });
 
@@ -790,5 +799,55 @@ describe("the dual-run: resolved.events alongside analytics.events", () => {
     expect(row._version).toBe(
       buildClickHouseVersion({ stage: "resolved", ingestedAt: String(body["ingested_at"]) }),
     );
+  });
+});
+
+describe("clickhouse sink — profile-plane routing", () => {
+  function profilePayload(family: string): TransportMessagePayload {
+    return payload(envelope({ event: "profile.updated" }), {
+      stream: `${family}-0`,
+      family,
+      partition: 0,
+    });
+  }
+
+  it("sends profile.events to its OWN queue, not analytics_processed", async () => {
+    // The criterion, and the reason for it: a derived event records
+    // something that HAPPENED, while `profile.updated` records what is now
+    // TRUE of a person. Only one of those is current state, and mixing them
+    // would force one table to be both a log and a state table.
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(profilePayload("profile.events"), {});
+
+    const tables = writes.map((w) => w.table);
+    expect(tables).toContain(PROFILE_EVENTS_QUEUE_TABLE);
+    expect(tables).not.toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+  });
+
+  it("routes an isolated project's profile family too", async () => {
+    // Per-project isolation reads `<family>.<project_id>`, which is still
+    // the profile plane. The prefix check is what puts an isolated project
+    // in the same table as everyone else.
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(profilePayload("profile.events.acme"), {});
+    expect(writes.map((w) => w.table)).toContain(PROFILE_EVENTS_QUEUE_TABLE);
+  });
+
+  it("still routes derived families to analytics_processed", async () => {
+    // The regression guard on the branch that changed shape: a third
+    // destination added to the wrong side of a ternary is invisible.
+    const { writer, writes } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(
+      payload(envelope({ event: "session.started" }), {
+        stream: "session.events-0",
+        family: "session.events",
+        partition: 0,
+      }),
+      {},
+    );
+    expect(writes.map((w) => w.table)).toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
   });
 });

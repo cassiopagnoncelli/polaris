@@ -102,6 +102,7 @@ import {
   type AnalyticsSinkWriter,
   buildClickHouseVersion,
   type ClickHouseVersionStage,
+  PROFILE_EVENTS_QUEUE_TABLE,
 } from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
 import {
@@ -114,6 +115,7 @@ import {
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
   STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,
   type TransportMessageHandler,
@@ -157,6 +159,24 @@ const SOURCE_STREAM_FAMILIES = [
   STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
 ] as const;
+
+/**
+ * The profile plane. Its own queue, its own table, its own engine.
+ *
+ * Not a derived family despite arriving from the identity stage and the
+ * traits runner: a derived event records something that HAPPENED, while
+ * `profile.updated` records what is now TRUE of a person. Only one of those
+ * is current state, and the difference is what makes `profiles` a
+ * ReplacingMergeTree keyed per trait rather than another log.
+ */
+const PROFILE_STREAM_FAMILIES = [STREAM_FAMILY_PROFILE_EVENTS] as const;
+
+/** True when a delivery came from the profile plane. */
+function isProfileEventFamily(family: string): boolean {
+  return PROFILE_STREAM_FAMILIES.some(
+    (known) => family === known || family.startsWith(`${known}.`),
+  );
+}
 
 /**
  * True when a delivery came from a source-event family.
@@ -228,6 +248,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
   const now = deps.now ?? ((): number => Date.now());
   let sourceBatch: AnalyticsQueueRow[] = [];
   let processedBatch: AnalyticsQueueRow[] = [];
+  let profileBatch: AnalyticsQueueRow[] = [];
   let batchOpenedAt = now();
 
   /**
@@ -246,9 +267,12 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
    * a crash mid-batch already produces.
    */
   async function flush(): Promise<void> {
-    if (sourceBatch.length === 0 && processedBatch.length === 0) return;
+    if (sourceBatch.length === 0 && processedBatch.length === 0 && profileBatch.length === 0) {
+      return;
+    }
     const sourceRows = sourceBatch;
     const processedRows = processedBatch;
+    const profileRows = profileBatch;
     // Swap the buffers before awaiting so a delivery that lands during the
     // INSERT accumulates into the next batch instead of being lost or
     // double-counted. The held checkpoints are taken in the same breath, so
@@ -256,6 +280,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     // partition mid-INSERT belongs to the next batch, not this one.
     sourceBatch = [];
     processedBatch = [];
+    profileBatch = [];
     const held = deps.checkpoints.take();
     batchOpenedAt = now();
     const started = now();
@@ -265,6 +290,12 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
       }
       if (processedRows.length > 0) {
         await deps.writer.insertBatch(processedRows, ANALYTICS_PROCESSED_QUEUE_TABLE);
+      }
+      // Third INSERT, same single-commit contract: the checkpoint advances
+      // only after every write is acknowledged, so a failure here re-reads
+      // all three batches rather than stranding the profile rows.
+      if (profileRows.length > 0) {
+        await deps.writer.insertBatch(profileRows, PROFILE_EVENTS_QUEUE_TABLE);
       }
     } catch (err) {
       // Put these positions back so the transport re-reads these rows
@@ -281,11 +312,15 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (processedRows.length > 0) {
       deps.metrics.recordBatch(processedRows.length, duration, ANALYTICS_PROCESSED_QUEUE_TABLE);
     }
+    if (profileRows.length > 0) {
+      deps.metrics.recordBatch(profileRows.length, duration, PROFILE_EVENTS_QUEUE_TABLE);
+    }
     deps.logger.debug(
       {
         component: "clickhouse-sink.flush",
         rows: sourceRows.length,
         processed_rows: processedRows.length,
+        profile_rows: profileRows.length,
         duration_ms: duration,
       },
       "flushed batch to clickhouse",
@@ -298,17 +333,31 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
       deps.metrics.recordSkipped();
       return;
     }
-    const source = isSourceEventFamily(payload.family);
-    const table = source ? ANALYTICS_QUEUE_TABLE : ANALYTICS_PROCESSED_QUEUE_TABLE;
-    if (source) {
+    // Three destinations now, so the branch is a lookup rather than a
+    // nested ternary: a fourth family added to the wrong side of a `?:` is
+    // invisible, while a missing case here is a table name that does not
+    // exist.
+    const table = isSourceEventFamily(payload.family)
+      ? ANALYTICS_QUEUE_TABLE
+      : isProfileEventFamily(payload.family)
+        ? PROFILE_EVENTS_QUEUE_TABLE
+        : ANALYTICS_PROCESSED_QUEUE_TABLE;
+    if (table === ANALYTICS_QUEUE_TABLE) {
       sourceBatch.push(row);
+    } else if (table === PROFILE_EVENTS_QUEUE_TABLE) {
+      profileBatch.push(row);
     } else {
       processedBatch.push(row);
     }
     deps.metrics.recordConsumed(row.project_id, row.environment, table);
     deps.metrics.recordLag(row.ingested_at, now(), table);
 
-    const full = sourceBatch.length + processedBatch.length >= deps.batchMaxRows;
+    // All THREE buffers count toward the bound. Omitting one would let its
+    // rows sit until the staleness timer regardless of volume — a profile
+    // plane under load would flush on a clock rather than on a batch, and
+    // the row bound would silently mean something different per table.
+    const full =
+      sourceBatch.length + processedBatch.length + profileBatch.length >= deps.batchMaxRows;
     const stale = now() - batchOpenedAt >= deps.batchMaxMs;
     if (full || stale) {
       // Awaiting here is what makes the checkpoint safe: the transport
@@ -325,16 +374,18 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (started) return;
     started = true;
     const isolated = deps.isolatedProjects ?? [];
-    const families = [...SOURCE_STREAM_FAMILIES, ...DERIVED_STREAM_FAMILIES].flatMap((family) => [
-      ...consumerFamiliesFor(family, isolated),
-    ]);
+    const families = [
+      ...SOURCE_STREAM_FAMILIES,
+      ...DERIVED_STREAM_FAMILIES,
+      ...PROFILE_STREAM_FAMILIES,
+    ].flatMap((family) => [...consumerFamiliesFor(family, isolated)]);
     await deps.consumer.subscribe({
       families,
       queues: [redeliverQueueName(SINK_COMPONENT)],
     });
     deps.logger.info(
       { component: "clickhouse-sink.runtime", families, batch_max_rows: deps.batchMaxRows },
-      "clickhouse sink subscribed to source and derived event streams",
+      "clickhouse sink subscribed to source, derived and profile event streams",
     );
     await deps.consumer.runEach(handler);
 

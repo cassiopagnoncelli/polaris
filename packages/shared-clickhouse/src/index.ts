@@ -85,6 +85,7 @@ export {
 export type { ReplayReader } from "./replay.js";
 export {
   ANALYTICS_PROCESSED_QUEUE_TABLE,
+  PROFILE_EVENTS_QUEUE_TABLE,
   ANALYTICS_QUEUE_TABLE,
   type AnalyticsQueueRow,
   type AnalyticsSinkWriter,
