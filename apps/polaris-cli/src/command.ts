@@ -101,6 +101,32 @@ export interface CommandDefinition {
   /**
    * Attach this command to the given commander parent. Implementations
    * typically call `parent.command("foo").description("...")...action(...)`.
+   *
+   * ## If the runner takes hooks, THIS is where they get supplied
+   *
+   * The house pattern is `buildXRunner(hooks)`: the runner holds the
+   * argument parsing and the refusals, and its dependencies — a database
+   * handle, a driver, a query client — arrive as injected hooks so tests can
+   * drive the logic without them. The pattern has one failure mode and this
+   * repository has hit it twice in a day:
+   *
+   *   register: () => deps.runCommand({...}, buildXRunner())   // no hooks
+   *
+   * Every piece tested, every test green, and the command throws "no X
+   * configured" on every real invocation. Both times the runner and its
+   * dependencies existed and were covered; both times nothing constructed
+   * them. `profiles rebuild` shipped that way, and `traits compute` shipped
+   * that way with three crontab lines already pointing at it — a failure
+   * that would have surfaced as a stale trait weeks later rather than as a
+   * red test.
+   *
+   * A unit test cannot catch it, because a unit test supplies its own hooks.
+   * What catches it is remembering that a runner's hooks are only real if
+   * the registration passes them, and asserting the construction refuses
+   * loudly when its configuration is missing — see
+   * `buildRegisteredRebuildDriver` and `buildRegisteredTraitsRunner`, both
+   * of which throw a named-variable error and both of which have a test for
+   * exactly that throw.
    */
   readonly register: (parent: Command, deps: CommandRegistrarDeps) => void;
 }
