@@ -200,6 +200,31 @@ describe("polaris deliveries list", () => {
     expect(flat).not.toMatch(/secret|token|bearer/i);
   });
 
+  it("prints config_version, which is the whole point of recording it", async () => {
+    // The column exists so an operator can answer "Braze went quiet
+    // Tuesday, config was edited Tuesday". Written but not printed, that
+    // answer sits in a table nobody reaches for.
+    const rows = [makeDeliveryRecord({ delivery_id: "del_cfg", config_version: "42" })];
+    const runner = buildDeliveriesListRunner({
+      openStore: () => ({ list: async () => rows, close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await runner({ destinationId: "polaris_dst_meta" }, jsonContext(capture.streams));
+    expect(JSON.parse(capture.stdout.join("")).deliveries[0].config_version).toBe("42");
+  });
+
+  it("shows a dash for a delivery no config produced", async () => {
+    // NULL is an answer — no project-config store was consulted — and the
+    // human output has to render it as one rather than as blank.
+    const rows = [makeDeliveryRecord({ delivery_id: "del_nocfg", config_version: null })];
+    const runner = buildDeliveriesListRunner({
+      openStore: () => ({ list: async () => rows, close: async () => {} }),
+    });
+    const capture = captureOutput();
+    await runner({ destinationId: "polaris_dst_meta" }, makeContext(capture.streams));
+    expect(capture.stdout.join("")).toContain("config=-");
+  });
+
   it("rejects an unknown --status with usage error", async () => {
     const runner = buildDeliveriesListRunner({
       openStore: () => ({ list: async () => [], close: async () => {} }),

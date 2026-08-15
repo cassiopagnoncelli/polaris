@@ -24,7 +24,8 @@
  * Each row prints the operationally-relevant subset:
  *
  *   delivery_id, event_id, event, attempt, status, error_class,
- *   vendor_response_code, finished_at, mapper_version, deliverer_version
+ *   vendor_response_code, config_version, finished_at, mapper_version,
+ *   deliverer_version
  *
  * Secrets are absent by schema design. No filtering needed at the CLI
  * layer.
@@ -180,6 +181,7 @@ interface DeliveryView {
   readonly error_class: string | null;
   readonly vendor_response_code: string | null;
   readonly finished_at: string;
+  readonly config_version: string | null;
   readonly mapper_version: string;
   readonly deliverer_version: string;
 }
@@ -194,6 +196,11 @@ function toView(row: DeliveryRecord): DeliveryView {
     error_class: row.error_class,
     vendor_response_code: row.vendor_response_code,
     finished_at: row.finished_at.toISOString(),
+    // Which project-config version was in force. On a `skipped_filtered`
+    // row this is the difference between "the gate refused this" and "the
+    // gate refused this under THESE rules" — and rules change while rows
+    // do not.
+    config_version: row.config_version,
     mapper_version: row.mapper_version,
     deliverer_version: row.deliverer_version,
   };
@@ -220,6 +227,7 @@ function renderHuman(destination_id: string, views: readonly DeliveryView[]): st
         `attempt=${view.attempt}  event=${view.event}  ` +
         `error_class=${view.error_class ?? "-"}  ` +
         `vendor_code=${view.vendor_response_code ?? "-"}  ` +
+        `config=${view.config_version ?? "-"}  ` +
         `mapper=${view.mapper_version}  deliverer=${view.deliverer_version}`,
     );
   }

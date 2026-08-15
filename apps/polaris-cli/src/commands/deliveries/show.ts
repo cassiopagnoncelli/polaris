@@ -103,6 +103,8 @@ function toJson(row: DeliveryRecord): Record<string, unknown> {
     normalize_version: row.normalize_version,
     mapper_version: row.mapper_version,
     deliverer_version: row.deliverer_version,
+    consumer_build_version: row.consumer_build_version,
+    config_version: row.config_version,
     attempt: row.attempt,
     status: row.status,
     error_class: row.error_class,
@@ -132,6 +134,12 @@ function renderHuman(row: DeliveryRecord): string {
     `normalize_version      ${row.normalize_version}`,
     `mapper_version         ${row.mapper_version}`,
     `deliverer_version      ${row.deliverer_version}`,
+    `consumer_build_version ${row.consumer_build_version ?? "-"}`,
+    // The project-config version in force when this delivery was produced.
+    // On a `skipped_filtered` row it is the difference between "the gate
+    // refused this" and "the gate refused this UNDER THESE RULES" — and
+    // rules change while rows do not.
+    `config_version         ${row.config_version ?? "-"}`,
     `started_at             ${row.started_at.toISOString()}`,
     `finished_at            ${row.finished_at.toISOString()}`,
   ];
