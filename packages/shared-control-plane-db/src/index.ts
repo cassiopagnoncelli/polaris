@@ -219,6 +219,11 @@ export {
   toProcessorSnapshot,
 } from "./mutations/processor-activations.js";
 export {
+  type ProfilePlaneTruncateCounts,
+  type TruncateProfilePlaneInput,
+  truncateProfilePlaneWithAudit,
+} from "./mutations/profile-plane.js";
+export {
   type InvalidateProjectConfigInput,
   invalidateProjectConfigWithAudit,
   MaskedSecretWriteError,

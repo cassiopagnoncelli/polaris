@@ -153,6 +153,7 @@ export {
   TERMINAL_CLICKHOUSE_REBUILD_JOB_STATUSES,
   TERMINAL_REPLAY_JOB_STATUSES,
   type TopicIsolationRow,
+  truncateProfilePlaneWithAudit,
   type UnsetProjectConfigInput,
   type UpdateDestinationOpsInput,
   unsetProjectConfigValueWithAudit,
