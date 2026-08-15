@@ -428,6 +428,70 @@ Rules:
 - Changing a projection's engine after it ships is a rebuild operation (P7-005), not a migration.
 - Ad-hoc operator queries against projection tables use plain `SELECT`; the MV has already deduped.
 
+## Profiles
+
+`polaris.profiles` holds what Polaris currently believes about each person, fed from `profile.events` through its own queue and MV (`sql/clickhouse/35`–`37`).
+
+**One row per `(profile_id, trait_key)`, not per profile.** That follows from a decision made upstream: `profile.updated` carries CHANGED KEYS ONLY, because a full snapshot per update would multiply storage by the trait count. A table keyed per profile cannot absorb a sparse stream — each update would overwrite the whole map with just the keys that changed, and nothing about the write would look wrong.
+
+**Current traits for one person:**
+
+```sql
+SELECT
+    profile_id,
+    mapFromArrays(groupArray(trait_key), groupArray(value)) AS traits,
+    max(traits_version) AS traits_version
+FROM polaris.profiles FINAL
+WHERE project_id = {project:String}
+  AND environment = {environment:String}
+  AND removed = 0
+GROUP BY profile_id;
+```
+
+`FINAL` collapses each `(profile, trait)` to its highest `traits_version`. `removed = 0` filters the tombstones — a trait computed to nothing is stored as a removal at the new version rather than deleted, so the collapse handles it like any other change and no mutation is needed.
+
+`traits_version` is the version, not a timestamp. It is minted by the profile store in the same UPDATE that writes the traits, so it increments once per profile per change regardless of which writer made it. A timestamp would let two writers on clocks a second apart collapse in the wrong order and resurrect a trait the other had just removed.
+
+### Composing with the merge dictionary
+
+The two compose because both key on `profile_id`, which is what `profiles` is sorted by:
+
+```sql
+SELECT
+    dictGetOrDefault(
+        'polaris.profile_canonical', 'winner_profile_id',
+        (project_id, environment, profile_id), profile_id
+    ) AS canonical_profile_id,
+    argMax(value, traits_version) AS value,
+    trait_key
+FROM polaris.profiles FINAL
+WHERE project_id = {project:String}
+  AND environment = {environment:String}
+  AND removed = 0
+GROUP BY canonical_profile_id, trait_key;
+```
+
+`argMax` inside the group is doing real work here, not decoration: after a merge, two formerly-separate profiles resolve to one canonical id and both may carry the same trait. Without `argMax(value, traits_version)` the group would pick arbitrarily between the survivor's value and the tombstoned profile's. With it, the higher version wins — which is the merge's own ordering, since the survivor kept writing after the loser stopped.
+
+### Backfill
+
+The stream only carries changes from the moment the sink started reading it. Profiles that existed before carry traits in PostgreSQL and no corresponding events, so a fresh `profiles` table is not a snapshot of reality — it is a snapshot of everything that has changed since.
+
+Initial load is a one-off export from the profile plane:
+
+```sql
+-- From PostgreSQL, one row per (profile, trait):
+COPY (
+  SELECT project_id, environment, profile_id,
+         key AS trait_key, value #>> '{}' AS value,
+         0 AS removed, traits_version, updated_at
+  FROM profiles, jsonb_each(traits)
+  WHERE traits IS NOT NULL AND traits != '{}'::jsonb
+) TO STDOUT WITH (FORMAT csv);
+```
+
+Load it into `polaris.profiles` directly, not through the queue: the queue's MV expects the `profile.updated` envelope shape, and a backfill has no events to wrap. Because the engine collapses on `traits_version`, a backfilled row and a later streamed change for the same trait resolve correctly whichever arrives first — so the backfill can run while the sink is already consuming, and does not need a maintenance window.
+
 ## Retroactive Merges
 
 History is never rewritten. When the identity stage concludes two profiles were one person, every event already written under the losing profile stays exactly as it was — that row records what Polaris believed when it wrote it, and a delivery made under the loser's id really was made under that id. Rewriting it would make the warehouse disagree with the vendor's own record of the same delivery, and it would be a mutation over an arbitrarily large MergeTree slice besides.
