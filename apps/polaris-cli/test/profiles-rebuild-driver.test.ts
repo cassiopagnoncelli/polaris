@@ -16,6 +16,7 @@ import {
   type RebuildDriverDeps,
   sumInFlight,
 } from "../src/commands/profiles/rebuild-driver.js";
+import { buildRegisteredRebuildDriver } from "../src/commands/profiles/rebuild-registration.js";
 
 vi.mock("../src/db/index.js", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -137,5 +138,26 @@ describe("metrics drain probe", () => {
     await expect(probe({ projectId: "storefront", environment: "staging" })).rejects.toThrow(
       /NOT truncated/,
     );
+  });
+});
+
+describe("registered driver construction", () => {
+  it("refuses without the resolver's metrics endpoint", async () => {
+    // No default, deliberately. A default would let a rebuild run against
+    // whatever answered on localhost, and the one thing the drain probe must
+    // never do is report "drained" because it asked the wrong process.
+    const ctx = {
+      env: {},
+      actor: { source: "operator_token", label: "tester" },
+      logger: { info: () => {} },
+    } as unknown as Parameters<typeof buildRegisteredRebuildDriver>[0];
+
+    expect(() =>
+      buildRegisteredRebuildDriver(ctx, {
+        projectId: "storefront",
+        environment: "staging",
+        reason: "over-merge",
+      }),
+    ).toThrow(/POLARIS_RESOLVER_METRICS_URL is required/);
   });
 });

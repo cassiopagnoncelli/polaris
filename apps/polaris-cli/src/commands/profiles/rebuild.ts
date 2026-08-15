@@ -56,6 +56,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import { buildRegisteredRebuildDriver } from "./rebuild-registration.js";
 
 /** Steps, in the order they must run. */
 export const REBUILD_STEPS = ["pause", "truncate", "replay", "resume"] as const;
@@ -100,7 +101,15 @@ export interface ProfilesRebuildDriver {
 }
 
 export interface ProfilesRebuildHooks {
-  readonly driver?: () => ProfilesRebuildDriver;
+  /**
+   * Built PER INVOCATION, not once at registration: the driver's audit
+   * context carries THIS run's actor and reason, and a driver constructed
+   * at registration would stamp every rebuild with the first one's.
+   */
+  readonly driver?: (
+    ctx: CommandContext,
+    scope: { readonly projectId: string; readonly environment: string; readonly reason: string },
+  ) => ProfilesRebuildDriver;
   readonly generateJobId?: () => string;
 }
 
@@ -139,15 +148,13 @@ export function buildProfilesRebuildRunner(hooks: ProfilesRebuildHooks = {}) {
     }
 
     if (hooks.driver === undefined) {
-      // The driver is the part that talks to the resolver's activation gate
-      // and the replay range. Until it is wired, refusing is the only honest
-      // behaviour: a command that printed a plan and changed nothing would
-      // read as a successful rebuild.
-      throw new UsageError(
-        "profiles rebuild is not wired to a driver in this build — see U2EV9PRG",
-      );
+      // Reachable only from a caller that built the runner without hooks.
+      // The registered command always supplies one; refusing beats
+      // pretending, because a command that printed a plan and changed
+      // nothing would read as a successful rebuild.
+      throw new UsageError("profiles rebuild has no driver configured");
     }
-    const driver = hooks.driver();
+    const driver = hooks.driver(ctx, { projectId, environment, reason });
 
     const jobId = generateJobId();
     const completed: RebuildStep[] = [];
@@ -222,7 +229,7 @@ export const profilesRebuildCommand: CommandDefinition = {
       .action(async (opts: ProfilesRebuildArgs, command: Command) => {
         const wrapped = deps.runCommand<ProfilesRebuildArgs>(
           { id: "profiles.rebuild", mutates: true },
-          buildProfilesRebuildRunner(),
+          buildProfilesRebuildRunner({ driver: buildRegisteredRebuildDriver }),
         );
         await wrapped(opts, command);
       });

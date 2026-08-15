@@ -31,6 +31,18 @@ The command prints this and records `depth_bounded_by: raw_events_retention` wit
 
 If the project's history matters more than the over-merge, do not rebuild. R10 adds an archive replay source that lifts the bound; until it lands, the honest options are to accept the lineage loss or to live with the bad merge.
 
+## Required configuration
+
+`POLARIS_RESOLVER_METRICS_URL` — where `sync-identity` publishes
+`polaris_processor_in_flight`. **No default, deliberately.** A default would
+let a rebuild run against whatever answered on localhost, and the one thing
+the drain probe must never do is report "drained" because it asked the wrong
+process.
+
+`POLARIS_RABBITMQ_STREAM_RETENTION_DAYS` — how far back `raw.events` reaches.
+Defaults to 90 and is reported on the job, not assumed; see the depth
+section above.
+
 ## Production requires an operator token
 
 `--project` is the entire blast radius. A mistyped project id does not fail — it succeeds, against the wrong project, and the only remedy is another rebuild. In `production` the command refuses any actor source other than `operator_token`.

@@ -128,10 +128,12 @@ describe("profiles rebuild", () => {
     await expect(runner({ ...BASE, reason: "" }, makeContext())).rejects.toThrow(/--reason/);
   });
 
-  it("refuses rather than pretending, when no driver is wired", async () => {
-    // A command that printed a plan and changed nothing would read as a
-    // successful rebuild.
+  it("refuses rather than pretending, when no driver is configured", async () => {
+    // Unreachable from the registered command, which always supplies one.
+    // Kept because a programmatic caller that forgets would otherwise get a
+    // rebuild that printed a plan and changed nothing — which reads as
+    // success.
     const runner = buildProfilesRebuildRunner();
-    await expect(runner(BASE, makeContext())).rejects.toThrow(/not wired to a driver/);
+    await expect(runner(BASE, makeContext())).rejects.toThrow(/no driver configured/);
   });
 });
