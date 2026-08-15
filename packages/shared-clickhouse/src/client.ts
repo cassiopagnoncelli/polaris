@@ -27,6 +27,7 @@ import { type ClickHouseHealthProbes, createClickHouseHealthProbes } from "./pro
 import { createProjectionReaders, type ProjectionReaders } from "./projections/index.js";
 import { createOperatorRaw, type OperatorRaw } from "./raw.js";
 import { createReplayReader, type ReplayReader } from "./replay.js";
+import { createTraitQueryReader, type TraitQueryReader } from "./traits.js";
 import type { Logger, MetricsRecorder } from "./types.js";
 
 /**
@@ -38,6 +39,8 @@ export interface ClickHouseServiceClient {
   readonly projections: ProjectionReaders;
   /** `polaris.profile_merge_map` reads and writes. See `merge-map.ts`. */
   readonly mergeMap: MergeMapStore;
+  /** Runs a computed-trait definition's SQL. See `traits.ts`. */
+  readonly traitQuery: TraitQueryReader;
   readonly ingestLog: IngestLogReader;
   readonly health: HealthChecker;
   /** Close the underlying connection pool. Idempotent. */
@@ -52,6 +55,7 @@ export interface ClickHouseOperatorClient {
   readonly role: "operator";
   readonly projections: ProjectionReaders;
   readonly mergeMap: MergeMapStore;
+  readonly traitQuery: TraitQueryReader;
   readonly ingestLog: IngestLogReader;
   readonly health: HealthChecker;
   readonly replay: ReplayReader;
@@ -190,6 +194,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
   // Hung off the client like the projection readers, for the same reason:
   // raw SQL stays inside this package and callers get a typed surface.
   const mergeMap = createMergeMapStore({ underlying });
+  const traitQuery = createTraitQueryReader({ underlying });
   const ingestLog = createIngestLogReader({ underlying });
   const health = createHealthChecker({ underlying });
 
@@ -208,6 +213,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
       role: "service",
       projections,
       mergeMap,
+      traitQuery,
       ingestLog,
       health,
       close,
@@ -231,6 +237,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
     role: "operator",
     projections,
     mergeMap,
+    traitQuery,
     ingestLog,
     health,
     replay,

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CommandContext } from "../src/command.js";
 import { buildTraitsComputeRunner } from "../src/commands/traits/compute.js";
+import { buildRegisteredTraitsRunner } from "../src/commands/traits/registration.js";
 
 function makeContext(captured: string[]): CommandContext {
   return {
@@ -80,5 +81,21 @@ describe("traits compute", () => {
     const parsed = JSON.parse(captured.join(""));
     expect(parsed.traits[0]).toMatchObject({ key: "orders_30d", computed: 1, changed: 1 });
     expect(parsed.profiles_changed).toBe(1);
+  });
+});
+
+describe("registered traits runner", () => {
+  it("refuses without a ClickHouse URL", () => {
+    // The crontab lines point at this command. Without the cluster it reads
+    // projections from, a scheduled run would fail nightly into a log nobody
+    // reads until the trait is months stale — so it fails loudly at
+    // construction with the variable named.
+    const ctx = {
+      env: {},
+      actor: { source: "cli", label: "tester" },
+      logger: { info: () => {} },
+    } as unknown as Parameters<typeof buildRegisteredTraitsRunner>[0];
+
+    expect(() => buildRegisteredTraitsRunner(ctx)).toThrow(/POLARIS_CLICKHOUSE_URL is required/);
   });
 });

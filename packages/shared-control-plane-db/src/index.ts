@@ -224,6 +224,11 @@ export {
   truncateProfilePlaneWithAudit,
 } from "./mutations/profile-plane.js";
 export {
+  applyProfileTraitChange,
+  findProfilesWithTraits,
+  type ProfileTraitsRow,
+} from "./mutations/profile-traits.js";
+export {
   type InvalidateProjectConfigInput,
   invalidateProjectConfigWithAudit,
   MaskedSecretWriteError,

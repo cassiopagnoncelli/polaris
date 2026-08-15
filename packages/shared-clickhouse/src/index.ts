@@ -91,6 +91,11 @@ export {
   type CreateAnalyticsSinkWriterInput,
   createAnalyticsSinkWriter,
 } from "./sink.js";
+export {
+  createTraitQueryReader,
+  type TraitQueryReader,
+  type TraitQueryRow,
+} from "./traits.js";
 export type {
   AnalyticsIngestLogRow,
   AnalyticsProcessedRow,

@@ -34,6 +34,7 @@ import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import { buildRegisteredTraitsRunner } from "./registration.js";
 
 export interface TraitsComputeArgs {
   readonly project?: string;
@@ -137,7 +138,7 @@ export const traitsComputeCommand: CommandDefinition = {
       .action(async (opts: TraitsComputeArgs, command: Command) => {
         const wrapped = deps.runCommand<TraitsComputeArgs>(
           { id: "traits.compute", mutates: true },
-          buildTraitsComputeRunner(),
+          buildTraitsComputeRunner({ runner: buildRegisteredTraitsRunner }),
         );
         await wrapped(opts, command);
       });
