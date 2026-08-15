@@ -198,8 +198,15 @@ services:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-polaris}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-polaris-local-dev}"
     ports:
-      - "${MINIO_HOST_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+      # 9002/9003, NOT MinIO's usual 9000/9001: ClickHouse's native port
+      # is 9000 and is published by the `clickhouse` service in this same
+      # file. Docker only reports that collision when both are up, and the
+      # symptom otherwise is an S3 client getting ClickHouse's "Port 9000
+      # is for clickhouse-client program" back as an XML parse error.
+      # Inside the network MinIO still answers on 9000; only the host
+      # mapping moves.
+      - "${MINIO_HOST_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9003}:9001"
     volumes:
       - minio-data:/data
     healthcheck:
