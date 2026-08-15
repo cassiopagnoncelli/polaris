@@ -75,6 +75,22 @@ export const METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL = "polaris_processor_events_s
  * that query it.
  */
 const METRIC_PROCESSOR_OUTCOME_TOTAL = "polaris_processor_outcome_total";
+/**
+ * Messages a processor is currently handling, per project and environment.
+ *
+ * A gauge, and the reason it exists is `polaris profiles rebuild`: flipping
+ * a processor's activation row stops it taking NEW work and says nothing
+ * about what is already in flight — which is exactly the traffic that would
+ * write into a scope about to be truncated. Without this, a rebuild's drain
+ * check would have to guess, and the only available guesses (a fixed sleep,
+ * or a batch-run table that does not track streaming work) are wrong in the
+ * dangerous direction.
+ *
+ * Incremented before the handler runs and decremented in a `finally`, so a
+ * handler that throws still releases its count.
+ */
+export const METRIC_PROCESSOR_IN_FLIGHT = "polaris_processor_in_flight";
+
 export const METRIC_PROCESSOR_LAG_MS_LAST = "polaris_processor_lag_ms_last";
 export const METRIC_PROCESSOR_HANDLER_DURATION_MS_LAST =
   "polaris_processor_handler_duration_ms_last";
@@ -277,6 +293,14 @@ export class ProcessorMetrics {
    * legacy `_ms_last` gauge AND the `_seconds` histogram so dashboards in
    * transition do not go dark.
    */
+  /**
+   * Publish the in-flight count for a scope. See
+   * `METRIC_PROCESSOR_IN_FLIGHT` for why this is a gauge and who reads it.
+   */
+  setInFlight(labels: ProcessorMetricLabels, value: number): void {
+    this.recordGauge(METRIC_PROCESSOR_IN_FLIGHT, toLabelRecord(labels), value);
+  }
+
   observeLagMs(labels: ProcessorMetricLabels, value: number): void {
     const labelRecord = toLabelRecord(labels);
     this.recordGauge(METRIC_PROCESSOR_LAG_MS_LAST, labelRecord, value);

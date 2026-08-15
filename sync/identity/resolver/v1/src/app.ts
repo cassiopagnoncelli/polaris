@@ -59,10 +59,10 @@ import {
 import type { Kysely } from "kysely";
 
 import type { SyncIdentityRuntimeConfig } from "./config.js";
-import { createKyselyProfileRepository, type ProfileRepository } from "./repository.js";
-import { createRuntime, type IdentityStageRuntime, type StageMetricScope } from "./runtime.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./emit.js";
 import { createPolicyResolver, type ProjectIdentityOverride } from "./policy.js";
+import { createKyselyProfileRepository, type ProfileRepository } from "./repository.js";
+import { createRuntime, type IdentityStageRuntime, type StageMetricScope } from "./runtime.js";
 
 export interface BuildAppOptions {
   readonly config: SyncIdentityRuntimeConfig;
@@ -263,6 +263,9 @@ export async function buildSyncIdentityApp(
     metrics: {
       onConsumed: (scope) => {
         metrics.incrementConsumed({ ...identityLabels(scope) });
+      },
+      onInFlight: (scope, count) => {
+        metrics.setInFlight({ ...identityLabels(scope) }, count);
       },
       onEmitted: (scope) => {
         metrics.incrementEmitted({ ...identityLabels(scope) });

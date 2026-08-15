@@ -25,10 +25,10 @@
 
 import type { Logger } from "@polaris/shared-logger";
 import {
+  buildProfilePartitionKey,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
-  buildProfilePartitionKey,
 } from "@polaris/shared-transport";
 
 import {
@@ -41,10 +41,10 @@ import {
 } from "./emit.js";
 import type { ProfileRepository, ResolutionResult } from "./repository.js";
 import {
-  type IdentityPolicy,
-  type IdentityStageEvent,
   collectIdentifiers,
   extractTraits,
+  type IdentityPolicy,
+  type IdentityStageEvent,
 } from "./transform.js";
 
 export interface PublishTarget {
@@ -94,6 +94,14 @@ export interface StageMetricScope {
 export interface IdentityStageMetrics {
   /** One inbound event the stage acted on. */
   readonly onConsumed?: (scope: StageMetricScope) => void;
+  /**
+   * How many messages the stage is handling right now for this scope.
+   *
+   * Published on entry and exit rather than sampled, because the consumer
+   * of this number — the rebuild's drain check — needs it to reach zero
+   * promptly, not eventually.
+   */
+  readonly onInFlight?: (scope: StageMetricScope, count: number) => void;
   readonly onEmitted?: (scope: StageMetricScope) => void;
   readonly onSkipped?: (scope: StageMetricScope, reason: string) => void;
   /** The handler threw; the transport will retry or dead-letter. */
@@ -355,11 +363,11 @@ async function publishDerived(
 // ---------------------------------------------------------------------
 
 import {
+  consumerFamiliesFor,
+  decodeEvent,
   type PolarisConsumer,
   STREAM_FAMILY_RAW_EVENTS,
   type TransportMessageHandler,
-  consumerFamiliesFor,
-  decodeEvent,
 } from "@polaris/shared-transport";
 
 export interface IdentityStageRuntime {
@@ -391,6 +399,8 @@ export interface IdentityStageRuntimeDeps extends IdentityStageDeps {
 export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRuntime {
   const isolatedProjects = deps.isolatedProjects ?? [];
 
+  /** Per-scope in-flight counts. Keyed `project::environment`. */
+  const inFlight = new Map<string, number>();
   const handler: TransportMessageHandler = async (payload) => {
     // Tombstones and bodiless messages are skipped, not failed: nothing
     // to resolve, and throwing would rewind the partition on a message
@@ -429,6 +439,14 @@ export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRunt
     deps.metrics?.onConsumed?.(labels);
 
     const startedAt = Date.now();
+    // In-flight is published around the handler, not sampled. The reader is
+    // `polaris profiles rebuild`, whose drain check waits for this to reach
+    // zero before truncating a project's profile plane — a count that
+    // lagged reality would let the truncate race the writes it is meant to
+    // exclude.
+    const scopeKey = `${labels.project_id}::${labels.environment}`;
+    inFlight.set(scopeKey, (inFlight.get(scopeKey) ?? 0) + 1);
+    deps.metrics?.onInFlight?.(labels, inFlight.get(scopeKey) ?? 0);
     try {
       await handleEvent(deps, raw, labels);
     } catch (err) {
@@ -437,6 +455,12 @@ export function createRuntime(deps: IdentityStageRuntimeDeps): IdentityStageRunt
       deps.metrics?.onFailed?.(labels, "handler_error");
       throw err;
     } finally {
+      // In the `finally`, so a handler that throws still releases its count.
+      // A leaked count would make the drain wait forever and the rebuild
+      // report a stuck resolver that is not stuck.
+      const remaining = Math.max(0, (inFlight.get(scopeKey) ?? 1) - 1);
+      inFlight.set(scopeKey, remaining);
+      deps.metrics?.onInFlight?.(labels, remaining);
       deps.metrics?.onHandlerDurationMs?.(labels, Date.now() - startedAt);
     }
   };

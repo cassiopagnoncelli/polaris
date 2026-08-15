@@ -11,8 +11,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createMetricsDrainProbe,
   createRebuildDriver,
   type RebuildDriverDeps,
+  sumInFlight,
 } from "../src/commands/profiles/rebuild-driver.js";
 
 vi.mock("../src/db/index.js", async (importOriginal) => {
@@ -93,5 +95,47 @@ describe("rebuild driver", () => {
     );
     await driver.replay(SCOPE);
     expect(order).toEqual(["replay"]);
+  });
+});
+
+describe("metrics drain probe", () => {
+  it("sums in-flight across every series in the scope", async () => {
+    // A stage may be labelled per topic family or partition. Any one of
+    // those being non-zero means work is still landing in the scope, so the
+    // probe sums rather than picking a series.
+    const text = [
+      'polaris_processor_in_flight{project_id="storefront",environment="staging",partition="0"} 2',
+      'polaris_processor_in_flight{project_id="storefront",environment="staging",partition="1"} 3',
+      "# HELP something else",
+    ].join("\n");
+    expect(sumInFlight(text, { projectId: "storefront", environment: "staging" })).toBe(5);
+  });
+
+  it("ignores other projects and environments", async () => {
+    const text = [
+      'polaris_processor_in_flight{project_id="other",environment="staging"} 7',
+      'polaris_processor_in_flight{project_id="storefront",environment="production"} 9',
+      'polaris_processor_in_flight{project_id="storefront",environment="staging"} 1',
+    ].join("\n");
+    expect(sumInFlight(text, { projectId: "storefront", environment: "staging" })).toBe(1);
+  });
+
+  it("reports zero when the scope has no series at all", async () => {
+    // A resolver that has never handled an event for this project publishes
+    // no series for it, and that genuinely is drained.
+    expect(sumInFlight("", { projectId: "storefront", environment: "staging" })).toBe(0);
+  });
+
+  it("THROWS on a failed scrape rather than reading it as drained", async () => {
+    // The dangerous default. An unreachable resolver is indistinguishable
+    // from a busy one from here; treating "cannot tell" as "drained" would
+    // truncate into whatever it is still doing.
+    const probe = createMetricsDrainProbe({
+      metricsUrl: "http://resolver/metrics",
+      fetch: (async () => new Response("nope", { status: 503 })) as typeof globalThis.fetch,
+    });
+    await expect(probe({ projectId: "storefront", environment: "staging" })).rejects.toThrow(
+      /NOT truncated/,
+    );
   });
 });

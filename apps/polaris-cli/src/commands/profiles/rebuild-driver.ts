@@ -67,7 +67,16 @@ export interface RebuildDriverDeps {
     readonly projectId: string;
     readonly environment: string;
   }) => Promise<void>;
-  /** In-flight resolutions for the scope. Zero means drained. */
+  /**
+   * In-flight resolutions for the scope. Zero means drained.
+   *
+   * `createMetricsDrainProbe` builds one from the resolver's own
+   * `/metrics`. Injectable because the alternative sources are all worse
+   * and someone will be tempted: a fixed sleep is a guess, and
+   * `processor_runs` tracks batch runs rather than streaming work — it
+   * would report zero for a resolver mid-flight on a hundred messages and
+   * the truncate would race exactly what the drain excludes.
+   */
   readonly inFlightResolutions: (input: {
     readonly projectId: string;
     readonly environment: string;
@@ -167,4 +176,56 @@ export function createRebuildDriver(deps: RebuildDriverDeps): ProfilesRebuildDri
 
     recordJob: deps.recordJob,
   };
+}
+
+/**
+ * A drain probe that reads the resolver's own in-flight gauge.
+ *
+ * `polaris_processor_in_flight` is published by `sync-identity` around every
+ * handler invocation — incremented before, decremented in a `finally` so a
+ * throwing handler still releases its count. Scraping it is the only source
+ * that answers the question the drain actually asks.
+ *
+ * A scrape failure is NOT treated as zero. An unreachable resolver is
+ * indistinguishable from a busy one from here, and reading "cannot tell" as
+ * "drained" would truncate into whatever it is still doing. Throwing leaves
+ * the recoverable state: paused, plane intact, resumed by the caller.
+ */
+export function createMetricsDrainProbe(input: {
+  readonly metricsUrl: string;
+  readonly fetch?: typeof globalThis.fetch;
+}): (scope: { projectId: string; environment: string }) => Promise<number> {
+  const doFetch = input.fetch ?? globalThis.fetch;
+  return async (scope) => {
+    const response = await doFetch(input.metricsUrl);
+    if (!response.ok) {
+      throw new Error(
+        `resolver /metrics returned ${String(response.status)}; cannot confirm the stage has ` +
+          "drained, so the profile plane was NOT truncated",
+      );
+    }
+    return sumInFlight(await response.text(), scope);
+  };
+}
+
+/**
+ * Sum `polaris_processor_in_flight` across the series matching a scope.
+ *
+ * Summed rather than taking one series because a stage may be labelled per
+ * topic family or partition; any one of those being non-zero means work is
+ * still landing in the scope.
+ */
+export function sumInFlight(
+  prometheusText: string,
+  scope: { projectId: string; environment: string },
+): number {
+  let total = 0;
+  for (const line of prometheusText.split("\n")) {
+    if (!line.startsWith("polaris_processor_in_flight{")) continue;
+    if (!line.includes(`project_id="${scope.projectId}"`)) continue;
+    if (!line.includes(`environment="${scope.environment}"`)) continue;
+    const value = Number.parseFloat(line.slice(line.lastIndexOf("}") + 1).trim());
+    if (Number.isFinite(value)) total += value;
+  }
+  return total;
 }

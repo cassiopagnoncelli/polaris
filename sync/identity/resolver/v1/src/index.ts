@@ -13,15 +13,16 @@
  * how this stage does its job, not what another package may depend on.
  */
 
-export { buildSyncIdentityApp, type BuildAppOptions, type BuiltSyncIdentityApp } from "./app.js";
+export { type BuildAppOptions, type BuiltSyncIdentityApp, buildSyncIdentityApp } from "./app.js";
 export {
   loadSyncIdentityConfig,
   STAGE_SERVICE_NAME,
-  syncIdentityConfigSchema,
-  syncIdentityEnvKeys,
   type SyncIdentityConfig,
   type SyncIdentityRuntimeConfig,
+  syncIdentityConfigSchema,
+  syncIdentityEnvKeys,
 } from "./config.js";
+export { loadProjectIdentityOverrides } from "./overrides.js";
 export {
   createPolicyResolver,
   IdentityPolicyError,
@@ -30,7 +31,6 @@ export {
   type ProjectIdentityOverride,
   resolveIdentityPolicy,
 } from "./policy.js";
-export { loadProjectIdentityOverrides } from "./overrides.js";
 export {
   type BoundIdentifier,
   createKyselyProfileRepository,
