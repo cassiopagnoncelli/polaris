@@ -46,6 +46,7 @@ import {
   rabbitmqEnvSchema,
 } from "@polaris/shared-config";
 import {
+  DEFAULT_RETENTION_DAYS,
   type ExecuteReplayOutcome,
   executeReplay,
   planReplay,
@@ -81,6 +82,14 @@ import {
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo, renderJson } from "../../output.js";
+import { buildArchiveReplaySource, buildMixedReplaySource } from "./archive-adapters.js";
+import {
+  ARCHIVE_BUCKET_ENV,
+  type ArchiveCoverageLookup,
+  type ArchiveIo,
+  archiveEarliestDate,
+  buildArchiveIo,
+} from "./archive-io.js";
 import { buildStreamReplayProducer, buildStreamReplaySource } from "./stream-adapters.js";
 import { rejectReplayPlanArguments } from "./validation.js";
 
@@ -133,7 +142,12 @@ export interface ReplayExecuteAuditContext {
  */
 export interface ReplayExecuteHooks {
   readonly openStore?: () => ReplayExecuteStore;
-  readonly source?: () => ReplayExecutorSource;
+  readonly source?: (plan: ReplayPlan) => ReplayExecutorSource;
+  /**
+   * Oldest day the archive holds, or `null` for "no archive". Injected in
+   * tests; production asks the bucket.
+   */
+  readonly archiveCoverage?: ArchiveCoverageLookup;
   readonly producer?: () => ReplayExecutorProducer;
   readonly now?: () => Date;
   /**
@@ -198,13 +212,36 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
 
     const store = openStore();
     const transportIo = buildDefaultIo ? buildDefaultIo() : null;
+    let archiveIo: ArchiveIo | null = null;
+    // Plan-aware. `source_kind` says which substrate holds the window, and
+    // reading the wrong one is silent: a stream read of an archived window
+    // returns nothing and looks exactly like a window with no events.
     const sourceFactory =
       hooks.source ??
-      (() => {
+      ((plan: ReplayPlan) => {
         if (transportIo === null) {
           throw new Error("replay execute runner: transport I/O unavailable");
         }
-        return transportIo.source;
+        if (plan.source_kind === "stream") return transportIo.source;
+
+        const archive = archiveIo ?? buildArchiveIo(ctx.env);
+        if (archive === null) {
+          throw new UsageError(
+            `replay job "${id}" needs the object-storage archive (source_kind=${plan.source_kind}) ` +
+              `but ${ARCHIVE_BUCKET_ENV} is not set. Point the CLI at the same bucket ` +
+              "async/warehouse/archiver/v1 writes to.",
+          );
+        }
+        archiveIo = archive;
+        const archiveSource = buildArchiveReplaySource({ archive: archive.source });
+        if (plan.source_kind === "archive") return archiveSource;
+        return buildMixedReplaySource({
+          stream: transportIo.source,
+          archive: archiveSource,
+          retentionCutoff: new Date(
+            nowFn().getTime() - DEFAULT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+          ),
+        });
       });
     const producerFactory =
       hooks.producer ??
@@ -225,9 +262,25 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
       // surface it through the CLI's exit-code mapping the same way
       // `replay plan` does.
       const declaration = rowToDeclaration(row);
+      // Ask the archive how far back it goes BEFORE planning. Without this
+      // the planner rejects every window older than retention, which is
+      // the bound the archive exists to lift — the source adapter below
+      // would never be reached.
+      const earliestArchived = await archiveEarliestDate({
+        env: ctx.env,
+        projectId: row.project_id,
+        environment: row.environment,
+        lookup: hooks.archiveCoverage,
+        remember: (io) => {
+          archiveIo = io;
+        },
+      });
       let derived: ReplayPlan;
       try {
-        derived = planReplay(declaration, { now: nowFn() });
+        derived = planReplay(declaration, {
+          now: nowFn(),
+          ...(earliestArchived !== null ? { archiveEarliestDate: earliestArchived } : {}),
+        });
       } catch (err) {
         if (err instanceof ReplayPlanError) {
           throw new UsageError(`replay_plan_rejected:${err.code}: ${err.message}`, {
@@ -252,7 +305,7 @@ export function buildReplayExecuteRunner(hooks: ReplayExecuteHooks = {}) {
         destinationsAcknowledged: derived.destinations_enabled,
       });
 
-      const source = sourceFactory();
+      const source = sourceFactory(derived);
       const producer = producerFactory();
       const logger = hooks.logger?.(ctx) ?? buildLoggerAdapter(ctx);
 

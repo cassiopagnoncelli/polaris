@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  IDENTIFIED_EVENTS_RETENTION_DAYS,
   declareComponentQueues,
   declareSuperStream,
   declareTopologyOnChannel,
   defaultSuperStreams,
   diagnosticsSuperStream,
+  IDENTIFIED_EVENTS_RETENTION_DAYS,
 } from "../src/topology.js";
 import { FakeChannel, testRabbitmqConfig } from "./fakes.js";
 

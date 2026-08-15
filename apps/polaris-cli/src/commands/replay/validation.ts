@@ -175,17 +175,29 @@ export const REPLAY_WINDOW_MS = REPLAY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
  * The `now` parameter is taken from the runner's clock hook so tests
  * pinning `Date.now` deterministically can validate the boundary.
  */
-export function assertWithinReplayWindow(windowFrom: Date, now: Date): void {
+export function assertWithinReplayWindow(
+  windowFrom: Date,
+  now: Date,
+  earliestArchived: Date | null = null,
+): void {
   const earliestAllowed = new Date(now.getTime() - REPLAY_WINDOW_MS);
-  if (windowFrom.getTime() < earliestAllowed.getTime()) {
-    throw new UsageError(
-      `replay_window_exceeded: --from ${windowFrom.toISOString()} is older than the ` +
-        `${REPLAY_WINDOW_DAYS}-day operational retention window ` +
-        `(earliest replayable: ${earliestAllowed.toISOString()}). ` +
-        "Polaris does not promise replay beyond the operational retention window. " +
-        "Archive-restore is future work and would extend the same control plane.",
-    );
-  }
+  if (windowFrom.getTime() >= earliestAllowed.getTime()) return;
+
+  // Past the stream's window. The archive is what makes that survivable,
+  // and it is why this rejection no longer says "archive-restore is future
+  // work" — it is the archiver in `async/warehouse/archiver/v1`, and the
+  // executor reads it through the same plan and the same guardrails.
+  if (earliestArchived !== null && windowFrom.getTime() >= earliestArchived.getTime()) return;
+
+  throw new UsageError(
+    `replay_window_exceeded: --from ${windowFrom.toISOString()} is older than the ` +
+      `${REPLAY_WINDOW_DAYS}-day operational retention window ` +
+      `(earliest replayable: ${earliestAllowed.toISOString()})` +
+      (earliestArchived === null
+        ? ", and no object-storage archive is configured. Set POLARIS_ARCHIVE_BUCKET to the " +
+          "bucket async/warehouse/archiver/v1 writes to, or narrow the window."
+        : ` and older than the archive's first day (${earliestArchived.toISOString()}).`),
+  );
 }
 
 /**

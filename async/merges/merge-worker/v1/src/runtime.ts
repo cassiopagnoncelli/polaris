@@ -61,11 +61,19 @@ const MERGE_EVENT = "identity.merged";
 export function createMergeHandler(input: MergeWorkerRuntimeInput) {
   const base = input.identity;
   return async function handle(payload: TransportMessagePayload): Promise<void> {
-    const decoded = decodeEvent(payload.message.value);
+    // `decodeEvent` THROWS on malformed JSON and returns null only for an
+    // empty body — so the null check alone let a poison payload propagate
+    // as an exception, which is not what the comment below promised.
+    // Counted, not thrown: rethrowing would park a message no retry can
+    // fix, and the transport's own DLQ path already owns poison handling.
+    let decoded: unknown;
+    try {
+      decoded = decodeEvent(payload.message.value);
+    } catch {
+      input.metrics.incrementFailed({ ...base, reason: "decode_failed" });
+      return;
+    }
     if (decoded === null) {
-      // Undecodable bytes on the family. Counted, not thrown: rethrowing
-      // would park a message no retry can fix, and the transport's own DLQ
-      // path already owns poison handling.
       input.metrics.incrementFailed({ ...base, reason: "decode_failed" });
       return;
     }

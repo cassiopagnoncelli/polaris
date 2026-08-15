@@ -44,7 +44,7 @@ ARG POLARIS_GIT_SHA="unknown"
 ARG POLARIS_BUILD_TIME="1970-01-01T00:00:00Z"
 
 LABEL org.opencontainers.image.title="polaris-processor-merge-worker-v1" \
-      org.opencontainers.image.description="Polaris merge-worker v1: session windows keyed on the person, not on whichever identifier an event carried" \
+      org.opencontainers.image.description="Polaris merge-worker v1: keeps polaris.profile_merge_map current so person-keyed reads resolve a merged profile to its survivor" \
       org.opencontainers.image.vendor="Polaris" \
       org.opencontainers.image.licenses="UNLICENSED" \
       org.opencontainers.image.version="${POLARIS_BUILD_VERSION}" \
@@ -67,9 +67,9 @@ ENV NODE_ENV=production \
     POLARIS_GIT_SHA="${POLARIS_GIT_SHA}" \
     POLARIS_BUILD_TIME="${POLARIS_BUILD_TIME}" \
     POLARIS_HTTP_HOST=0.0.0.0 \
-    POLARIS_HTTP_PORT=4017
+    POLARIS_HTTP_PORT=4021
 
-EXPOSE 4017
+EXPOSE 4021
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:${POLARIS_HTTP_PORT}/health" >/dev/null 2>&1 || exit 1

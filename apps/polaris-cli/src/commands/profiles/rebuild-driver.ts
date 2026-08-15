@@ -41,7 +41,7 @@ import {
   findActivationByKey,
   truncateProfilePlaneWithAudit,
 } from "../../db/index.js";
-import type { ProfilesRebuildDriver, RebuildJob } from "./rebuild.js";
+import type { ProfilesRebuildDriver, RebuildJob, ReplayDepth } from "./rebuild.js";
 
 /** The spine's identity stage. NOT `identity-resolver`, the legacy one. */
 export const RESOLVER_COMPONENT = "sync-identity" as const;
@@ -66,7 +66,7 @@ export interface RebuildDriverDeps {
   readonly runReplay: (input: {
     readonly projectId: string;
     readonly environment: string;
-  }) => Promise<void>;
+  }) => Promise<ReplayDepth>;
   /**
    * In-flight resolutions for the scope. Zero means drained.
    *
@@ -157,9 +157,13 @@ export function createRebuildDriver(deps: RebuildDriverDeps): ProfilesRebuildDri
       await truncateProfilePlaneWithAudit(deps.db, { projectId, environment }, audit());
     },
 
-    async replay({ projectId, environment }): Promise<{ retentionDays: number }> {
-      await deps.runReplay({ projectId, environment });
-      return { retentionDays: deps.retentionDays };
+    async replay({ projectId, environment }): Promise<{ retentionDays: number } & ReplayDepth> {
+      const depth = await deps.runReplay({ projectId, environment });
+      // The depth the replay ACTUALLY reached, not the retention constant.
+      // With an archive configured the rebuild reaches back to the
+      // bucket's first day, and reporting "bounded by retention" there
+      // would understate the repair by years.
+      return { retentionDays: deps.retentionDays, ...depth };
     },
 
     async resume({ projectId, environment }): Promise<void> {

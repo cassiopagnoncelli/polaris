@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris sessionizer processor v2. Consumes resolved.events and maintains an inactivity window per (project_id, environment, profile_id) in Redis, emitting session.started / session.ended on session.events. Keying on the PERSON rather than on whichever identifier an event happened to carry is the whole difference from v1: a login no longer ends one session and orphans another.",
+  "description": "Polaris merge-worker v1. Consumes profile.events, acts on identity.merged, and keeps polaris.profile_merge_map current so person-keyed ClickHouse reads resolve a tombstoned profile to its survivor. Transitive chains collapse at write time, because a dictionary lookup cannot iterate.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,7 +24,7 @@
     "format": "biome format --write src test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "POLARIS_SERVICE_NAME=sessionizer POLARIS_HTTP_PORT=4017 tsx watch src/main.ts",
+    "dev": "POLARIS_SERVICE_NAME=merge-worker POLARIS_HTTP_PORT=4021 tsx watch src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {

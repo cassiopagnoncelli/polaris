@@ -143,9 +143,9 @@ export {
   METRIC_PROCESSOR_LAG_MS_LAST,
   type MetricSample,
   type ProcessorFailureLabels,
-  type ProcessorOutcomeLabels,
   type ProcessorMetricLabels,
   ProcessorMetrics,
+  type ProcessorOutcomeLabels,
 } from "./metrics.js";
 export {
   DEFAULT_HEARTBEAT_MS,

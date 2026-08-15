@@ -107,6 +107,37 @@ describe("merge worker handler", () => {
     expect(writes).toHaveLength(0);
   });
 
+  it("counts an undecodable payload instead of letting it throw", async () => {
+    // `decodeEvent` throws on malformed JSON — it does not return null —
+    // so a null check alone let the exception propagate to the redelivery
+    // loop, which is exactly what this handler's comment promised it would
+    // not do.
+    const { store, writes } = fakeStore();
+    const handle = createMergeHandler({
+      store,
+      logger: noopLogger,
+      metrics: new ProcessorMetrics(),
+      identity: IDENTITY,
+    });
+
+    const poison: TransportMessagePayload = {
+      stream: "profile.events-0",
+      family: "profile.events",
+      partition: 0,
+      message: {
+        value: Buffer.from("{not json", "utf8"),
+        headers: {},
+        key: null,
+        offset: "1",
+        timestamp: "1755000000000",
+        redelivered: false,
+      },
+    };
+
+    await expect(handle(poison)).resolves.toBeUndefined();
+    expect(writes).toHaveLength(0);
+  });
+
   it("skips a malformed merge rather than retrying it forever", async () => {
     // No retry produces a different answer for a payload missing the fields
     // the map needs, and rethrowing would park it on the redelivery loop.

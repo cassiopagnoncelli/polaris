@@ -774,6 +774,82 @@ Honest future work, not v1 scope:
   in the doc; the physical purge cron is future work as noted in
   [Audit retention policy](#audit-retention-policy).
 
+## The raw.events archive
+
+`async/warehouse/archiver/v1` consumes `raw.events` and writes it to
+object storage as partitioned NDJSON. It is not a backup — nothing is
+restored from it — it is a **replay source** that outlives the stream's
+retention window.
+
+### Why it exists
+
+The stream keeps 90 days. Everything that replays was bounded by that,
+and the bound was not cosmetic: `polaris profiles rebuild` truncates a
+project's profile plane and rebuilds it from `raw.events`, so a customer
+of five years came out of an un-merge with a `first_seen_at` of last
+quarter. See
+[`runbook-profile-rebuild.md`](runbook-profile-rebuild.md).
+
+With the archive, `polaris replay create` accepts a `--from` older than
+retention when the bucket covers it, the planner marks the job
+`source_kind: archive` (or `mixed`, when the window crosses the
+boundary), and the executor reads objects instead of attaching to a
+stream. Everything downstream is unchanged — same plan, same replay
+headers, same destination guardrails.
+
+### Layout
+
+```
+<prefix>/v1/<project_id>/<environment>/<YYYY-MM-DD>/<stream>/<first>-<last>.ndjson
+<prefix>/v1/<project_id>/<environment>/<YYYY-MM-DD>/_manifest/<stream>.ndjson
+```
+
+- The date is the events' `occurred_at` in **UTC**, not the archiver's
+  wall clock. Replay windows are event-time, so a window of "March 3rd"
+  is answerable by listing one prefix.
+- Offsets are zero-padded to 20 digits so S3's lexicographic listing is
+  also offset order.
+- `project` precedes `environment` so a bucket policy can scope a role to
+  one project by prefix.
+- The manifest records each object's event-time range, so a one-hour
+  replay does not download a whole day. It is an optimisation: a missing
+  manifest costs a listing, never data.
+
+### Bucket lifecycle
+
+Polaris writes and never deletes. **Retention of the archive is an S3
+lifecycle policy, not a Polaris setting**, which is deliberate — the
+archive is the last copy of the raw event stream, and a service that
+could delete it is a service that can be made to delete it.
+
+Set the policy to the project's actual data-retention obligation from
+[`docs/deployment/data-classes.md`](../deployment/data-classes.md).
+Objects are immutable once written, so a transition to infrequent-access
+or glacier-class storage after 90 days is safe and is what most
+deployments want: the archive is read during incidents, not daily.
+
+Two constraints on any policy you set:
+
+- **Do not expire below the rebuild depth you intend to support.** The
+  archive's first day is the floor `polaris profiles rebuild` reaches;
+  expiring objects silently lowers it.
+- **Do not enable a lifecycle rule that rewrites or re-encodes objects.**
+  Replay republishes the bytes the producer serialised. That is why the
+  archive is NDJSON and not Parquet, and it is why nothing may re-encode
+  it in place.
+
+### What to watch
+
+- `polaris_processor_events_failed_total{processor_name="archiver",reason="put_failed"}`
+  — every one of these holds the consumer checkpoint back. That is the
+  design (the checkpoint never outruns object storage), but a checkpoint
+  that stops moving is only survivable for as long as the stream's own
+  retention window. Treat sustained put failures as an incident with a
+  90-day fuse.
+- `reason="unparseable_occurred_at"` — events with no usable timestamp
+  are skipped, not filed under today. Filing them under the archiver's
+  clock would hide them from a replay of the day they happened.
+
 ## See also
 
 - [`docs/deployment/data-classes.md`](../deployment/data-classes.md) —

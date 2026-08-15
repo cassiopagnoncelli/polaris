@@ -41,6 +41,7 @@ import {
   REPLAY_PLAN_ENVIRONMENTS,
   REPLAY_PLAN_MODES,
   REPLAY_PLAN_TARGETS,
+  REPLAY_RISK_CODES,
   type ReplayJobDeclaration,
   type ReplayPlan,
   type ReplayPlanChunk,
@@ -51,6 +52,7 @@ import {
   type ReplayPlanRisk,
   type ReplayPlanTarget,
   type ReplayRiskCode,
+  type ReplaySourceKind,
 } from "./types.js";
 
 /**
@@ -88,6 +90,21 @@ export const WIDE_WINDOW_DAYS_THRESHOLD = 7;
 const SOURCE_TOPIC_FAMILY = "raw.events" as const;
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * The archive's first day as an instant at its very start.
+ *
+ * Midnight UTC, not noon or the end of the day: the archive holds the
+ * WHOLE of its earliest day, so a window starting at 02:00 on that day is
+ * covered. Rounding the other way would reject a replay for events the
+ * bucket demonstrably contains.
+ */
+function parseArchiveEarliest(date: string | null | undefined): Date | null {
+  if (date === null || date === undefined) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return null;
+  const ms = Date.parse(`${date.trim()}T00:00:00.000Z`);
+  return Number.isFinite(ms) ? new Date(ms) : null;
+}
 
 /**
  * Plan a replay. Returns a deterministic {@link ReplayPlan}; throws
@@ -140,13 +157,36 @@ export function planReplay(
       `replay window_to (${windowTo.toISOString()}) is in the future (now=${now.toISOString()})`,
     );
   }
+  // ---- which substrate holds this window ------------------------------
+  // The stream keeps `retentionDays`. Anything older lives in the archive
+  // if one is configured and reaches back far enough. A window that no
+  // substrate covers is still rejected — the point of the archive is to
+  // move that boundary, not to remove it.
   const earliest = new Date(now.getTime() - retentionDays * MILLIS_PER_DAY);
-  if (windowFrom.getTime() < earliest.getTime()) {
-    throw new ReplayPlanError(
-      "outside_retention_window",
-      `replay window_from (${windowFrom.toISOString()}) is older than the ${retentionDays}-day operational retention window (earliest=${earliest.toISOString()})`,
-    );
+  const archiveEarliest = parseArchiveEarliest(options.archiveEarliestDate);
+  const startsBeforeRetention = windowFrom.getTime() < earliest.getTime();
+  const endsBeforeRetention = windowTo.getTime() < earliest.getTime();
+
+  if (startsBeforeRetention) {
+    if (archiveEarliest === null) {
+      throw new ReplayPlanError(
+        "outside_retention_window",
+        `replay window_from (${windowFrom.toISOString()}) is older than the ${retentionDays}-day operational retention window (earliest=${earliest.toISOString()}) and no archive is configured`,
+      );
+    }
+    if (windowFrom.getTime() < archiveEarliest.getTime()) {
+      throw new ReplayPlanError(
+        "outside_retention_window",
+        `replay window_from (${windowFrom.toISOString()}) is older than the ${retentionDays}-day operational retention window (earliest=${earliest.toISOString()}) and older than the archive's first day (${archiveEarliest.toISOString()})`,
+      );
+    }
   }
+
+  const sourceKind: ReplaySourceKind = !startsBeforeRetention
+    ? "stream"
+    : endsBeforeRetention
+      ? "archive"
+      : "mixed";
 
   // ---- destination opt-in -------------------------------------------
   // Reachability is a property of the topic the executor PUBLISHES to, not
@@ -196,6 +236,15 @@ export function planReplay(
   if (environment === "production") {
     riskCodes.add("production_scope");
   }
+  if (sourceKind === "archive") {
+    riskCodes.add("archive_backed_window");
+  }
+  if (sourceKind === "mixed") {
+    // Both flags: an operator scanning for "is this an archive read?"
+    // should find it whether the window is wholly or partly archived.
+    riskCodes.add("archive_backed_window");
+    riskCodes.add("mixed_source_window");
+  }
 
   // ---- consumer group -----------------------------------------------
   const consumerGroup = buildConsumerGroup({
@@ -214,6 +263,7 @@ export function planReplay(
     event_name: trimToNull(declaration.event_name),
     event_id: trimToNull(declaration.event_id),
     source_topic_family: SOURCE_TOPIC_FAMILY,
+    source_kind: sourceKind,
     target_topic_family: targetTopicFamily,
     reaches_destinations: reachesDestinations,
     partition_key_strategy: "project_environment_identity",
@@ -440,6 +490,10 @@ const RISK_MESSAGES: Readonly<Record<ReplayRiskCode, string>> = {
   single_event_replay: "replay is scoped to a single event_id (surgical retry)",
   production_scope:
     "environment is production; require operator approval before promoting from dry_run to live",
+  archive_backed_window:
+    "window reaches past stream retention and is served from the object-storage archive; slower and request-priced, but complete",
+  mixed_source_window:
+    "window crosses the retention boundary: some chunks come from the archive and some from the stream; check for a gap between the archive's last day and the stream's first retained day",
 };
 
 /**
@@ -449,14 +503,14 @@ const RISK_MESSAGES: Readonly<Record<ReplayRiskCode, string>> = {
  * across runs.
  */
 function formatRisks(codes: ReadonlySet<ReplayRiskCode>): readonly ReplayPlanRisk[] {
-  const order: ReplayRiskCode[] = [
-    "wide_time_window",
-    "destination_sends_enabled",
-    "processor_target_not_pinned",
-    "single_event_replay",
-    "production_scope",
-  ];
-  return order
-    .filter((code) => codes.has(code))
-    .map((code) => ({ code, message: RISK_MESSAGES[code] }));
+  // Ordered by REPLAY_RISK_CODES itself, not by a hand-copied list. The
+  // copy was the bug: two new codes were computed, added to the closed
+  // set, given narrative copy, and then dropped here because nobody
+  // updated the fourth place that enumerates them. `RISK_MESSAGES` is
+  // exhaustively typed and would have caught a missing narrative; an
+  // array literal of the same strings catches nothing.
+  return REPLAY_RISK_CODES.filter((code) => codes.has(code)).map((code) => ({
+    code,
+    message: RISK_MESSAGES[code],
+  }));
 }

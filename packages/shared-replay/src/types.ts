@@ -37,6 +37,12 @@ import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-e
  * `REPLAY_JOB_TARGETS`). Listed here so the planner stays standalone and
  * its tests do not depend on the CLI's typed surface.
  */
+/**
+ * Substrates a replay can read from. See `ReplayPlan.source_kind`.
+ */
+export const REPLAY_SOURCE_KINDS = ["stream", "archive", "mixed"] as const;
+export type ReplaySourceKind = (typeof REPLAY_SOURCE_KINDS)[number];
+
 export const REPLAY_PLAN_TARGETS = ["analytics_raw", "destinations", "processor"] as const;
 export type ReplayPlanTarget = (typeof REPLAY_PLAN_TARGETS)[number];
 
@@ -92,6 +98,21 @@ export const REPLAY_RISK_CODES = [
    * behind an approval gate in the executor.
    */
   "production_scope",
+  /**
+   * The window reaches past the stream's retention and is served from
+   * the object-storage archive instead. Not blocking — that is what the
+   * archive is for — but archive reads are listings and GETs rather than
+   * a stream attach, so the run is slower and costs requests.
+   */
+  "archive_backed_window",
+  /**
+   * The window spans BOTH the archive and the live stream. The executor
+   * reads each chunk from whichever source covers it, and an operator
+   * should know that a single job is crossing that seam: a gap between
+   * the archive's last day and the stream's first retained day would show
+   * up as missing events in the middle of the replay, not at either end.
+   */
+  "mixed_source_window",
 ] as const;
 export type ReplayRiskCode = (typeof REPLAY_RISK_CODES)[number];
 
@@ -114,7 +135,12 @@ export const REPLAY_PLAN_REJECTION_CODES = [
   "invalid_window_to",
   /** `window_to` precedes `window_from`. */
   "window_inverted",
-  /** `window_from` is older than the operational retention window. */
+  /**
+   * `window_from` is older than the operational retention window AND the
+   * archive does not reach back that far — so no substrate holds those
+   * events. When the archive DOES cover them the window is accepted with
+   * an `archive_backed_window` risk instead.
+   */
   "outside_retention_window",
   /** `window_to` is later than the planner's `now` clock. */
   "window_in_future",
@@ -208,6 +234,16 @@ export interface PlanReplayOptions {
    * Defaults to 90.
    */
   readonly retentionDays?: number;
+  /**
+   * The oldest UTC day the archive holds for this project/environment, as
+   * `YYYY-MM-DD`, or `null`/omitted when there is no archive.
+   *
+   * Supplied by the caller — the planner stays a pure function and does
+   * not reach for a bucket. When present, a `window_from` older than the
+   * stream's retention is ACCEPTED rather than rejected, provided the
+   * archive reaches back at least that far.
+   */
+  readonly archiveEarliestDate?: string | null;
 }
 
 /**
@@ -278,6 +314,19 @@ export interface ReplayPlan {
    * targets, which re-read raw.events anyway).
    */
   readonly source_topic_family: string;
+  /**
+   * Where the executor reads each chunk from.
+   *
+   *   `stream`  — everything is inside the retention window
+   *   `archive` — everything is older than it, and the archive covers it
+   *   `mixed`   — the window crosses the retention boundary
+   *
+   * Computed rather than configured: an operator picks a time window, and
+   * which substrate holds that window is a fact about the deployment's
+   * retention, not a choice. The CLI reads this to decide which source
+   * adapter to build.
+   */
+  readonly source_kind: ReplaySourceKind;
   /**
    * Partition-key strategy used by the executor. v1 always uses
    * `project_environment_identity` — the same strategy raw.events

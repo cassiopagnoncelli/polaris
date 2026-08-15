@@ -21,6 +21,7 @@
 import type { CommandContext } from "../../command.js";
 import { connectDb } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
+import { archiveEarliestDate, archiveFloorInstant } from "../replay/archive-io.js";
 import { buildReplayCreateRunner } from "../replay/create.js";
 import { buildReplayExecuteRunner } from "../replay/execute.js";
 import { generateReplayJobId } from "../replay/id.js";
@@ -41,6 +42,8 @@ const METRICS_URL_ENV = "POLARIS_RESOLVER_METRICS_URL";
  * REPORTED rather than assumed — see the runbook.
  */
 const RETENTION_ENV = "POLARIS_RABBITMQ_STREAM_RETENTION_DAYS";
+
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function buildRegisteredRebuildDriver(
   ctx: CommandContext,
@@ -67,6 +70,25 @@ export function buildRegisteredRebuildDriver(
     retentionDays: Number.isFinite(retentionDays) ? retentionDays : 90,
     inFlightResolutions: createMetricsDrainProbe({ metricsUrl }),
     runReplay: async ({ projectId, environment }) => {
+      // The window is computed here, not left to a mode word. An earlier
+      // version passed `mode: "full"` and no window at all, which `replay
+      // create` rejects on its first line — `--from is required` — so the
+      // rebuild could never have reached the executor.
+      const now = new Date();
+      const earliestArchived = archiveFloorInstant(
+        await archiveEarliestDate({ env: ctx.env, projectId, environment }),
+      );
+      const retentionFloor = new Date(
+        now.getTime() - (Number.isFinite(retentionDays) ? retentionDays : 90) * MILLIS_PER_DAY,
+      );
+      // As deep as anything can reach. Replaying a narrower window would
+      // leave the profile plane reflecting part of the history, which is
+      // worse than the over-merge the rebuild was called to fix.
+      const from =
+        earliestArchived !== null && earliestArchived.getTime() < retentionFloor.getTime()
+          ? earliestArchived
+          : retentionFloor;
+
       // `create` mints the id; capturing it through the hook is how the two
       // commands are chained without either learning about the other.
       let replayJobId = "";
@@ -79,15 +101,19 @@ export function buildRegisteredRebuildDriver(
         {
           project: projectId,
           env: environment,
-          // The whole retained range: a rebuild that replayed a window
-          // would leave the profile plane reflecting part of the history,
-          // which is worse than the over-merge it was called to fix.
-          mode: "full",
+          target: "processor",
+          from: from.toISOString(),
+          to: now.toISOString(),
+          mode: "live",
           reason: `profile rebuild: ${scope.reason}`,
         },
         ctx,
       );
       await buildReplayExecuteRunner()({ replayJobId }, ctx);
+      return {
+        depthBoundedBy: from === earliestArchived ? "archive" : "raw_events_retention",
+        earliestReplayed: from.toISOString(),
+      };
     },
     recordJob: async (job: RebuildJob) => {
       // Logged rather than tabled: there is no `rebuild_jobs` table, and

@@ -686,6 +686,7 @@ describe("plan shape (contract pin)", () => {
       event_name: null,
       event_id: null,
       source_topic_family: "raw.events",
+      source_kind: "stream",
       target_topic_family: "raw.events",
       reaches_destinations: true,
       partition_key_strategy: "project_environment_identity",

@@ -1,0 +1,35 @@
+{
+  "name": "@polaris/shared-archive",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The raw.events archive: object layout, batching with a durability watermark that keeps the consumer checkpoint from outrunning object storage, and the replay source that reads archived NDJSON back through the standard executor contract. Written by async/warehouse/archiver/v1, read by the CLI's replay wiring.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage .tsbuildinfo"
+  },
+  "dependencies": {
+    "@polaris/shared-transport": "workspace:*"
+  }
+}

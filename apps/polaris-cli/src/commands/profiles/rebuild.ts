@@ -70,6 +70,22 @@ export interface ProfilesRebuildArgs {
   readonly yes?: boolean;
 }
 
+/**
+ * What actually limited the replay's reach.
+ *
+ * `archive` means the object-storage archive was configured and covered
+ * more history than the stream, so the rebuild went as far back as the
+ * bucket's first day. `raw_events_retention` is the old bound, and is
+ * still the answer for a deployment with no archive.
+ */
+export type RebuildDepthBound = "raw_events_retention" | "archive";
+
+export interface ReplayDepth {
+  readonly depthBoundedBy: RebuildDepthBound;
+  /** Oldest instant the replay covered, ISO 8601. */
+  readonly earliestReplayed: string;
+}
+
 export interface RebuildJob {
   readonly job_id: string;
   readonly project_id: string;
@@ -77,8 +93,10 @@ export interface RebuildJob {
   readonly reason: string;
   readonly steps_completed: readonly RebuildStep[];
   /** What limited how far back the replay could reach. */
-  readonly depth_bounded_by: "raw_events_retention";
+  readonly depth_bounded_by: RebuildDepthBound;
   readonly retention_days: number;
+  /** Oldest instant the replay covered, or `null` if it never ran. */
+  readonly earliest_replayed: string | null;
 }
 
 export interface ProfilesRebuildDriver {
@@ -94,7 +112,7 @@ export interface ProfilesRebuildDriver {
   replay(input: {
     projectId: string;
     environment: string;
-  }): Promise<{ readonly retentionDays: number }>;
+  }): Promise<{ readonly retentionDays: number } & ReplayDepth>;
   resume(input: { projectId: string; environment: string }): Promise<void>;
   /** Persist the job so a crash mid-rebuild is diagnosable. */
   recordJob(job: RebuildJob): Promise<void>;
@@ -159,6 +177,8 @@ export function buildProfilesRebuildRunner(hooks: ProfilesRebuildHooks = {}) {
     const jobId = generateJobId();
     const completed: RebuildStep[] = [];
     let retentionDays = 0;
+    let depthBoundedBy: RebuildDepthBound = "raw_events_retention";
+    let earliestReplayed: string | null = null;
 
     // Ordered deliberately; see the module header. A failure part-way leaves
     // the job recorded with the steps that DID complete, which is what makes
@@ -171,6 +191,8 @@ export function buildProfilesRebuildRunner(hooks: ProfilesRebuildHooks = {}) {
       completed.push("truncate");
       const replayed = await driver.replay({ projectId, environment });
       retentionDays = replayed.retentionDays;
+      depthBoundedBy = replayed.depthBoundedBy;
+      earliestReplayed = replayed.earliestReplayed;
       completed.push("replay");
     } finally {
       // ALWAYS. A rebuild that failed after the pause must not leave the
@@ -189,30 +211,57 @@ export function buildProfilesRebuildRunner(hooks: ProfilesRebuildHooks = {}) {
         environment,
         reason,
         steps_completed: [...completed],
-        depth_bounded_by: "raw_events_retention",
+        depth_bounded_by: depthBoundedBy,
         retention_days: retentionDays,
+        earliest_replayed: earliestReplayed,
       });
     }
 
     ctx.output.writeOut(
       renderAccordingTo(ctx.config.output, {
-        human:
-          `rebuild ${jobId}: ${completed.join(" -> ")}\n` +
-          `depth: bounded by raw.events retention (${String(retentionDays)} days). A profile ` +
-          "whose first sighting is older than that is rebuilt from its visible history only — " +
-          "first_seen_at will move forward. R10 lifts this with an archive replay source.",
+        human: `rebuild ${jobId}: ${completed.join(" -> ")}\n${renderDepth({
+          depthBoundedBy,
+          retentionDays,
+          earliestReplayed,
+        })}`,
         json: {
           job_id: jobId,
           project_id: projectId,
           environment,
           steps_completed: completed,
-          depth_bounded_by: "raw_events_retention",
+          depth_bounded_by: depthBoundedBy,
           retention_days: retentionDays,
+          earliest_replayed: earliestReplayed,
         },
       }),
     );
     return undefined;
   };
+}
+
+/**
+ * The depth line.
+ *
+ * Still printed when the archive lifted the bound, because "how far back
+ * did this actually go?" is the question an operator has after a rebuild,
+ * and it has a different answer on every deployment.
+ */
+function renderDepth(input: {
+  readonly depthBoundedBy: RebuildDepthBound;
+  readonly retentionDays: number;
+  readonly earliestReplayed: string | null;
+}): string {
+  const reached =
+    input.earliestReplayed === null ? "" : ` Replayed from ${input.earliestReplayed}.`;
+  if (input.depthBoundedBy === "archive") {
+    return `depth: bounded by the object-storage archive, not by stream retention.${reached}`;
+  }
+  return (
+    `depth: bounded by raw.events retention (${String(input.retentionDays)} days).${reached} ` +
+    "A profile whose first sighting is older than that is rebuilt from its visible history " +
+    "only — first_seen_at will move forward. Configure POLARIS_ARCHIVE_BUCKET and run " +
+    "async/warehouse/archiver/v1 to lift this bound."
+  );
 }
 
 export const profilesRebuildCommand: CommandDefinition = {

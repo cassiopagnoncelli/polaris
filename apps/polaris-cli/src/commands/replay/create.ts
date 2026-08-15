@@ -46,6 +46,11 @@ import {
 } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
+import {
+  type ArchiveCoverageLookup,
+  archiveEarliestDate,
+  archiveFloorInstant,
+} from "./archive-io.js";
 import { generateReplayJobId } from "./id.js";
 import {
   assertWithinReplayWindow,
@@ -109,6 +114,12 @@ export interface ReplayCreateHooks {
   readonly now?: () => Date;
   readonly generateAuditId?: () => string;
   readonly actorLabel?: () => string;
+  /**
+   * How far back the archive reaches for this project, or `null`. Decides
+   * whether a `--from` older than the stream's retention is acceptable.
+   * Injected in tests; production asks the bucket.
+   */
+  readonly archiveCoverage?: ArchiveCoverageLookup;
 }
 
 export const replayCreateCommand: CommandDefinition = {
@@ -164,7 +175,19 @@ export function buildReplayCreateRunner(hooks: ReplayCreateHooks = {}) {
     const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
     rejectReplayPlanArguments(args as unknown as Record<string, unknown>);
     const now = nowFn();
-    const validated = validate(args, now);
+    // Asked BEFORE validating: the archive is what decides whether a
+    // window older than retention is acceptable, and a create that
+    // rejected it would mean the executor's archive source could never be
+    // reached by any job an operator could actually create.
+    const earliestArchived = archiveFloorInstant(
+      await archiveEarliestDate({
+        env: ctx.env,
+        projectId: args.project?.trim() ?? "",
+        environment: args.env?.trim() ?? "",
+        lookup: hooks.archiveCoverage,
+      }),
+    );
+    const validated = validate(args, now, earliestArchived);
     const replayJobId = issueId();
     const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
 
@@ -281,7 +304,7 @@ interface ValidatedArgs {
   readonly reason: string;
 }
 
-function validate(args: ReplayCreateArgs, now: Date): ValidatedArgs {
+function validate(args: ReplayCreateArgs, now: Date, earliestArchived: Date | null): ValidatedArgs {
   const project = requireTrim(args.project, "--project");
   const env = requireTrim(args.env, "--env");
   const target = requireTrim(args.target, "--target");
@@ -310,7 +333,7 @@ function validate(args: ReplayCreateArgs, now: Date): ValidatedArgs {
       `--to (${to.toISOString()}) must be at or after --from (${from.toISOString()})`,
     );
   }
-  assertWithinReplayWindow(from, now);
+  assertWithinReplayWindow(from, now, earliestArchived);
 
   const mode = parseMode(args.mode);
   const event = trim(args.event);

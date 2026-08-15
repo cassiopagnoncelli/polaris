@@ -30,13 +30,6 @@
 
 export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
 export {
-  type IdentityOverrideKind,
-  type ProjectEnrichmentOverride,
-  projectEnrichmentOverrideSchema,
-  type ProjectIdentityOverride,
-  projectIdentityOverrideSchema,
-} from "./project-overrides.js";
-export {
   formatPolicyInspection,
   inspectPolicy,
   type PolicyInspection,
@@ -60,6 +53,13 @@ export {
   LUHN_PAN_PATTERN,
 } from "./patterns.js";
 export { PLATFORM_DEFAULT_POLICY } from "./policy.js";
+export {
+  type IdentityOverrideKind,
+  type ProjectEnrichmentOverride,
+  type ProjectIdentityOverride,
+  projectEnrichmentOverrideSchema,
+  projectIdentityOverrideSchema,
+} from "./project-overrides.js";
 export {
   isPolicyReasonCode,
   POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,

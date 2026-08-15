@@ -27,7 +27,13 @@ function makeContext(source = "operator_token"): CommandContext {
   } as unknown as CommandContext;
 }
 
-function recordingDriver(failAt?: string) {
+function recordingDriver(
+  failAt?: string,
+  depth: { depthBoundedBy: "raw_events_retention" | "archive"; earliestReplayed: string } = {
+    depthBoundedBy: "raw_events_retention",
+    earliestReplayed: "2026-05-17T00:00:00.000Z",
+  },
+) {
   const calls: string[] = [];
   const jobs: RebuildJob[] = [];
   const driver: ProfilesRebuildDriver = {
@@ -42,7 +48,7 @@ function recordingDriver(failAt?: string) {
     replay: async () => {
       calls.push("replay");
       if (failAt === "replay") throw new Error("replay failed");
-      return { retentionDays: 90 };
+      return { retentionDays: 90, ...depth };
     },
     resume: async () => {
       calls.push("resume");
@@ -93,6 +99,33 @@ describe("profiles rebuild", () => {
     await runner(BASE, makeContext());
     expect(jobs[0]?.depth_bounded_by).toBe("raw_events_retention");
     expect(jobs[0]?.retention_days).toBe(90);
+    expect(jobs[0]?.earliest_replayed).toBe("2026-05-17T00:00:00.000Z");
+  });
+
+  it("reports the archive as the bound when the archive is what reached further", async () => {
+    // The bound moved; the report has to move with it. Printing
+    // "bounded by raw.events retention" after an archive-backed rebuild
+    // would understate the repair by years, and an operator would go
+    // looking for lineage they already have.
+    const { driver, jobs } = recordingDriver(undefined, {
+      depthBoundedBy: "archive",
+      earliestReplayed: "2024-01-01T00:00:00.000Z",
+    });
+    const runner = buildProfilesRebuildRunner({ driver: () => driver });
+    await runner(BASE, makeContext());
+    expect(jobs[0]?.depth_bounded_by).toBe("archive");
+    expect(jobs[0]?.earliest_replayed).toBe("2024-01-01T00:00:00.000Z");
+  });
+
+  it("records no depth when the replay never ran", async () => {
+    // A rebuild that died at the truncate has an empty profile plane and
+    // no replay depth to claim. Reporting a depth it did not reach would
+    // be the worst possible lie at the worst possible moment.
+    const { driver, jobs } = recordingDriver("replay");
+    const runner = buildProfilesRebuildRunner({ driver: () => driver });
+    await expect(runner(BASE, makeContext())).rejects.toThrow(/replay failed/);
+    expect(jobs[0]?.earliest_replayed).toBeNull();
+    expect(jobs[0]?.steps_completed).not.toContain("replay");
   });
 
   it("refuses production without an operator token", async () => {

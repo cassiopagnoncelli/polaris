@@ -1,0 +1,61 @@
+# Polaris processor manifest — archiver v1
+#
+# Semantic definition for the raw.events archiver. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are immutable;
+# any change to what this processor CONCLUDES is a new version directory.
+
+name: archiver
+version: v1
+owner: platform-data
+release_status: released
+description: |
+  Writes `raw.events` to object storage so the platform's memory outlives
+  the stream's retention window.
+
+  The stream holds ninety days. Everything downstream that replays —
+  `polaris replay`, `polaris profiles rebuild`, a ClickHouse rebuild — was
+  bounded by that, and the bound was not cosmetic: rebuilding a profile
+  plane to undo a bad merge silently truncated every customer older than
+  the window, so a five-year customer came out with a `first_seen_at` of
+  last quarter. The rebuild command printed that rather than hiding it.
+  With the archive, the bound moves to how far back the bucket goes.
+
+  Envelopes are stored VERBATIM as NDJSON, one per line — not Parquet, not
+  a re-serialisation. Replay republishes the bytes the producer wrote, and
+  a columnar round trip through a schema does not give those back. Parquet
+  exports are a separate concern (R10B) with a separate reader.
+
+  ## Durability
+
+  The consumer checkpoint is held back to the last offset that reached
+  object storage. A batching consumer whose handler returns before the put
+  has told the transport "handled" about events that exist only in RAM, and
+  a crash then loses them with no gap to notice — the objects that were
+  never written leave no trace. So the checkpoint store is wrapped: it
+  writes the smaller of what the consumer asked for and what is durable,
+  and un-flushed events are redelivered.
+
+  Batches close on size OR age. Size alone starves a low-traffic project,
+  whose checkpoint would then sit still for as long as it took to fill an
+  object; age alone makes objects unbounded under load.
+
+mode: streaming
+
+inputs:
+  - family: raw.events
+    # Everything on the family, unfiltered. An archive that applied the
+    # routing gate would be an archive of what was DELIVERED, and replay
+    # needs what was RECEIVED.
+    schema_versions: "*"
+
+outputs:
+  # Nothing is emitted back onto the platform. The output is a bucket.
+  []
+
+# No state store. The batch buffer is in memory by design and is not
+# state in the durable sense: everything in it is still on the stream,
+# behind a checkpoint that has not advanced past it.
+state_stores: []
+
+required_consent: {}

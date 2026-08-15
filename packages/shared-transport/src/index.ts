@@ -60,6 +60,12 @@
  * @see docs/architecture/09-engineering-standards.md "Transport Client Usage"
  */
 
+// Re-exported so provisioning tooling parses partition widths with the
+// exact function the running services use. Width is a wire contract:
+// publisher and broker disagreeing about it breaks per-identity ordering
+// silently. Owned by shared-config (which defines the env schema); surfaced
+// here because transport consumers are who care about it.
+export { parsePartitionOverrides } from "@polaris/shared-config";
 export {
   type Checkpoint,
   type CheckpointStore,
@@ -147,11 +153,11 @@ export {
 export {
   buildProfilePartitionKey,
   buildRawEventsPartitionKey,
-  resolveProfilePartitionKey,
   type PartitionKeyIdentity,
   type PartitionKeyIdentitySource,
   type PartitionKeyInput,
   partitionForKey,
+  resolveProfilePartitionKey,
   resolveRawEventsPartitionKey,
 } from "./partition-key.js";
 export {
@@ -220,18 +226,11 @@ export {
   STREAM_FAMILY_SESSION_EVENTS,
   streamExchangeName,
 } from "./streams.js";
-// Re-exported so provisioning tooling parses partition widths with the
-// exact function the running services use. Width is a wire contract:
-// publisher and broker disagreeing about it breaks per-identity ordering
-// silently. Owned by shared-config (which defines the env schema); surfaced
-// here because transport consumers are who care about it.
-export { parsePartitionOverrides } from "@polaris/shared-config";
 export {
   type ComponentQueueSpec,
   DEFAULT_STREAM_MAX_BYTES,
   type DeclareTopologyInput,
   DIAGNOSTICS_RETENTION_DAYS,
-  IDENTIFIED_EVENTS_RETENTION_DAYS,
   declareComponentQueues,
   declareSuperStream,
   declareTopology,
@@ -241,6 +240,7 @@ export {
   deleteComponentQueues,
   deleteSuperStream,
   diagnosticsSuperStream,
+  IDENTIFIED_EVENTS_RETENTION_DAYS,
   POLARIS_COMPONENTS,
   type SuperStreamSpec,
 } from "./topology.js";

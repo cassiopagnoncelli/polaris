@@ -841,3 +841,113 @@ describe("replay execute runner — invariants", () => {
     expect(store.armedAudit?.reachesDestinations).toBe(false);
   });
 });
+
+describe("replay execute runner — the archive", () => {
+  it("still rejects a stale row when the archive does not cover it", async () => {
+    // The archive moves the retention bound; it does not remove it.
+    const store = new InMemoryExecuteStore();
+    store.seed(
+      seedRow({
+        window_from: "2020-01-01T00:00:00.000Z",
+        window_to: "2020-01-02T00:00:00.000Z",
+      }),
+    );
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams);
+    const { producer } = makeRecordingProducer();
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => makeSource([]),
+      producer: () => producer,
+      archiveCoverage: async () => "2024-01-01",
+      now: () => NOW,
+    });
+
+    await expect(runner({ replayJobId: "polaris_rpj_exec" }, ctx)).rejects.toMatchObject({
+      message: expect.stringContaining("replay_plan_rejected:outside_retention_window"),
+    });
+  });
+
+  it("plans and runs a window older than retention once the archive covers it", async () => {
+    // Before this, the SAME row was an `outside_retention_window`
+    // rejection — see the stale-row test above. The archive's coverage
+    // answer is what turns it into a runnable job, which is the whole
+    // point of the subsystem.
+    const store = new InMemoryExecuteStore();
+    store.seed(
+      seedRow({
+        window_from: "2025-01-01T00:00:00.000Z",
+        window_to: "2025-01-02T00:00:00.000Z",
+      }),
+    );
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams, "json");
+    const { producer, records } = makeRecordingProducer();
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: () => makeSource([event({ occurred_at: "2025-01-01T06:00:00.000Z" })]),
+      producer: () => producer,
+      archiveCoverage: async () => "2024-01-01",
+      now: () => NOW,
+    });
+
+    await runner({ replayJobId: "polaris_rpj_exec" }, ctx);
+
+    expect(store.rows.get("polaris_rpj_exec")?.status).toBe("completed");
+    expect(records).toHaveLength(1);
+  });
+
+  it("hands the derived plan to the source factory, so source_kind can select an adapter", async () => {
+    // The wiring test. An adapter that is never given the plan is an
+    // adapter that is never chosen — the plan reaching this callback is
+    // the only thing that makes `source_kind` load-bearing.
+    const store = new InMemoryExecuteStore();
+    store.seed(
+      seedRow({
+        window_from: "2025-01-01T00:00:00.000Z",
+        window_to: "2025-01-02T00:00:00.000Z",
+      }),
+    );
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams, "json");
+    const { producer } = makeRecordingProducer();
+    const kinds: string[] = [];
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: (plan) => {
+        kinds.push(plan.source_kind);
+        return makeSource([]);
+      },
+      producer: () => producer,
+      archiveCoverage: async () => "2024-01-01",
+      now: () => NOW,
+    });
+
+    await runner({ replayJobId: "polaris_rpj_exec" }, ctx);
+
+    expect(kinds).toEqual(["archive"]);
+  });
+
+  it("reports source_kind=stream for a window inside retention", async () => {
+    const store = new InMemoryExecuteStore();
+    store.seed(seedRow());
+    const cap = captureOutput();
+    const ctx = makeContext(cap.streams, "json");
+    const { producer } = makeRecordingProducer();
+    const kinds: string[] = [];
+    const runner = buildReplayExecuteRunner({
+      openStore: () => store.asStore(),
+      source: (plan) => {
+        kinds.push(plan.source_kind);
+        return makeSource([]);
+      },
+      producer: () => producer,
+      archiveCoverage: async () => "2024-01-01",
+      now: () => NOW,
+    });
+
+    await runner({ replayJobId: "polaris_rpj_exec" }, ctx);
+
+    expect(kinds).toEqual(["stream"]);
+  });
+});

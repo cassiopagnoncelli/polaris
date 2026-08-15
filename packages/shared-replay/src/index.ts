@@ -84,6 +84,7 @@ export type {
   ReplayPlanRisk,
   ReplayPlanTarget,
   ReplayRiskCode,
+  ReplaySourceKind,
 } from "./types.js";
 export {
   REPLAY_PLAN_ENVIRONMENTS,

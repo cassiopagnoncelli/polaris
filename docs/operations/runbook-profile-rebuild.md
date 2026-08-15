@@ -27,9 +27,11 @@ Three of the four possible orderings are wrong and two of them are wrong quietly
 
 The replay reaches back only as far as `raw.events` is retained. **A profile whose first sighting is older than the retention window is rebuilt from its visible history only.** A customer of five years comes out with a `first_seen_at` of however many days you retain.
 
-The command prints this and records `depth_bounded_by: raw_events_retention` with the retention in days on the job. It is not a warning to click past: an operator who rebuilds to fix one over-merged profile and silently truncates the lineage of every profile in the project has been handed a worse problem than the one they started with.
+The command prints this and records `depth_bounded_by` (`raw_events_retention` or `archive`), the retention in days, and `earliest_replayed` — the oldest instant the replay actually covered — on the job. It is not a warning to click past: an operator who rebuilds to fix one over-merged profile and silently truncates the lineage of every profile in the project has been handed a worse problem than the one they started with.
 
-If the project's history matters more than the over-merge, do not rebuild. R10 adds an archive replay source that lifts the bound; until it lands, the honest options are to accept the lineage loss or to live with the bad merge.
+**The archive lifts this bound.** If `POLARIS_ARCHIVE_BUCKET` is set and `async/warehouse/archiver/v1` has been running, the rebuild replays from the archive's first day instead of the retention floor, and the command reports `depth_bounded_by: archive` with the instant it actually reached. See [The raw.events archive](backup-and-retention.md#the-rawevents-archive).
+
+Without an archive the bound stands, and the honest options are to accept the lineage loss or to live with the bad merge. Check which situation you are in BEFORE truncating — the command prints the depth on completion, which is after the profile plane is already empty.
 
 ## Required configuration
 
