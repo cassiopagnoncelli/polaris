@@ -28,7 +28,15 @@
  * loader so the two cannot drift.
  */
 
-export { applyRedactions, evaluate, redactionSentinel } from "./evaluator.js";
+export {
+  applyRedactions,
+  buildViolationSample,
+  evaluate,
+  redactionSentinel,
+  serialiseViolationSample,
+  type ViolationSample,
+  type ViolationSampleOptions,
+} from "./evaluator.js";
 export {
   formatPolicyInspection,
   inspectPolicy,

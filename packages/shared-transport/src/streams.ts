@@ -87,6 +87,25 @@ export const STREAM_FAMILY_PROFILE_EVENTS = "profile.events" as const;
 export const STREAM_DIAGNOSTICS_EVENTS = "polaris.diagnostics.events" as const;
 
 /**
+ * The schema-governance quarantine.
+ *
+ * Carries a VIOLATION RECORD, not an envelope — the events on it failed
+ * validation by definition, so they have no envelope to carry. Written by
+ * the ingester after it has already answered the producer, and read by
+ * the ClickHouse sink and nothing else.
+ *
+ * Deliberately NOT in {@link CANONICAL_STREAM_FAMILIES}: isolation exists
+ * so a noisy project cannot starve another's SPINE throughput, and this
+ * family has no spine consumer to starve. Adding it would also make every
+ * isolated project's quarantine a separate stream for the sink to
+ * discover, which is cost with no matching benefit for a diagnostics
+ * stream nothing replays. Short retention (7 days, see `topology.ts`) —
+ * a governance signal that is a week old is a dashboard entry, not an
+ * incident.
+ */
+export const STREAM_FAMILY_REJECTED_EVENTS = "rejected.events" as const;
+
+/**
  * The set of canonical stream families that support project isolation. The
  * resolver consults PostgreSQL to determine whether a given (family,
  * project_id) pair has an active dedicated stream.

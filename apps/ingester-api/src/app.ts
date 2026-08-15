@@ -42,6 +42,7 @@ import {
 } from "./dedupe/index.js";
 import { buildRedisOptions } from "./dedupe/redis.js";
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
+import { createQuarantinePublisher } from "./ingest/quarantine.js";
 import { IngestMetrics } from "./metrics/registry.js";
 import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
 import {
@@ -446,6 +447,29 @@ export async function buildIngesterApp(
     },
   });
 
+  // ---- schema-governance quarantine ------------------------------------
+  // Shares the ingester's producer. A second producer would be a second
+  // channel and a second confirm window for a fire-and-forget diagnostic,
+  // and the publish is fail-open either way.
+  const quarantine = createQuarantinePublisher({
+    producer,
+    now: () => new Date(),
+    onPublished: ({ projectId, environment, reason }) => {
+      metrics.incrementViolationPublished({
+        project_id: projectId,
+        environment,
+        reason,
+      });
+    },
+    onFailed: ({ reason, err }) => {
+      metrics.incrementViolationDropped({ reason });
+      // Debug, not warn. A broker outage would otherwise emit one line per
+      // rejected event, and the counter above is the signal an alert
+      // should read.
+      logger.debug({ err, reason, component: "ingest.quarantine" }, "violation publish failed");
+    },
+  });
+
   // ---- ingest handler + route -----------------------------------------
   const handler: IngestHandler = createIngestHandler({
     catalog,
@@ -456,6 +480,7 @@ export async function buildIngesterApp(
     logger,
     ingestConfig: config.ingest,
     projectConfig,
+    quarantine,
   });
 
   // ---- CORS allow-list wire-up ----------------------------------------

@@ -124,7 +124,13 @@ describe("declareComponentQueues", () => {
 });
 
 describe("defaultSuperStreams", () => {
-  it("covers every canonical family, and nothing else", () => {
+  it("covers every canonical family, plus the quarantine", () => {
+    // `rejected.events` is not canonical — it supports no isolation and
+    // has no spine consumer — but it IS provisioned by default, because
+    // its producer is the ingester and the ingester runs everywhere. A
+    // quarantine that has to be declared by hand silently drops its first
+    // violation on a fresh environment, and the publish is fail-open so
+    // nothing would report it.
     const specs = defaultSuperStreams(testRabbitmqConfig);
     expect(specs.map((s) => s.family)).toEqual([
       "raw.events",
@@ -136,7 +142,25 @@ describe("defaultSuperStreams", () => {
       "session.events",
       "attribution.events",
       "analytics.events",
+      "rejected.events",
     ]);
+  });
+
+  it("gives the quarantine a week, not the global window", () => {
+    const spec = defaultSuperStreams(testRabbitmqConfig).find(
+      (candidate) => candidate.family === "rejected.events",
+    );
+    expect(spec?.retentionDays).toBe(7);
+  });
+
+  it("does not raise the quarantine above a deliberately shortened global window", () => {
+    // Clamped, not fixed: an operator who shortens retention globally is
+    // not silently overridden upward, the same rule identified.events
+    // follows.
+    const spec = defaultSuperStreams({ ...testRabbitmqConfig, streamRetentionDays: 3 }).find(
+      (candidate) => candidate.family === "rejected.events",
+    );
+    expect(spec?.retentionDays).toBe(3);
   });
 
   it("caps identified.events retention short, since it is regenerable", () => {

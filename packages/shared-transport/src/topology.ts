@@ -33,11 +33,23 @@ import {
   retryQueueName,
   STREAM_DIAGNOSTICS_EVENTS,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
+  STREAM_FAMILY_REJECTED_EVENTS,
   streamExchangeName,
 } from "./streams.js";
 
 /** Retention for the SDK diagnostics stream. Short by design. */
 export const DIAGNOSTICS_RETENTION_DAYS = 7;
+
+/**
+ * Retention for the schema-governance quarantine.
+ *
+ * A week. The quarantine answers "is this producer still sending `cvv`?",
+ * which is a question about the last few days — and the answer for longer
+ * horizons lives in the ClickHouse violations table, whose own TTL is the
+ * durable bound. Keeping it short on the broker also caps how much
+ * known-bad payload sits in a stream nothing replays.
+ */
+const REJECTED_EVENTS_RETENTION_DAYS = 7;
 
 /**
  * Retention for `identified.events`, the intermediate family between the
@@ -97,12 +109,37 @@ export interface DeclareTopologyInput {
  *     spec for whoever ships the feature.
  */
 export function defaultSuperStreams(config: RabbitmqConfig): ReadonlyArray<SuperStreamSpec> {
-  return CANONICAL_STREAM_FAMILIES.map((family) => ({
-    family,
-    partitions: partitionsForFamily(config, family),
-    retentionDays: defaultRetentionDaysForFamily(config.streamRetentionDays, family),
+  return [
+    ...CANONICAL_STREAM_FAMILIES.map((family) => ({
+      family,
+      partitions: partitionsForFamily(config, family),
+      retentionDays: defaultRetentionDaysForFamily(config.streamRetentionDays, family),
+      maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
+    })),
+    // In the default topology, unlike the diagnostics stream, because its
+    // producer is the ingester — which runs in every deployment. A
+    // quarantine that has to be provisioned by hand is a quarantine that
+    // silently drops its first violation on a fresh environment, and the
+    // publish is fail-open so nothing would report it.
+    rejectedEventsSuperStream(config),
+  ];
+}
+
+/**
+ * The quarantine's super stream. Same shape as any other; the difference
+ * is the retention and that nothing on the spine consumes it.
+ *
+ * Private, unlike `diagnosticsSuperStream`: that one is exported because
+ * it is NOT in the default topology and a caller has to add it by hand.
+ * This one is in the default set, so nobody outside needs to name it.
+ */
+function rejectedEventsSuperStream(config: RabbitmqConfig): SuperStreamSpec {
+  return {
+    family: STREAM_FAMILY_REJECTED_EVENTS,
+    partitions: partitionsForFamily(config, STREAM_FAMILY_REJECTED_EVENTS),
+    retentionDays: Math.min(REJECTED_EVENTS_RETENTION_DAYS, config.streamRetentionDays),
     maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
-  }));
+  };
 }
 
 /**

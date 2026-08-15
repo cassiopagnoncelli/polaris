@@ -34,6 +34,7 @@ import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
 import type { IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
 import type { IngestProjectConfigLookup } from "../project-config-lookup.js";
+import type { QuarantineCandidate, QuarantinePublisher } from "./quarantine.js";
 import { batchRequestSchema, type IngestRequestContext } from "./types.js";
 
 /**
@@ -58,6 +59,13 @@ export interface IngestHandlerDeps {
    */
   readonly isolation?: SyncIsolationLookup;
   readonly ingestConfig: IngestConfig;
+  /**
+   * Schema-governance quarantine. Optional: a deployment without one
+   * rejects events exactly as before, it just cannot answer "which
+   * projects are still sending `cvv`?". Absent in tests that are not
+   * about the quarantine.
+   */
+  readonly quarantine?: QuarantinePublisher;
   /**
    * Per-project overrides, read from cache only. Synchronous by design — see
    * ../project-config-lookup.ts.
@@ -142,6 +150,10 @@ export function createIngestHandler(deps: IngestHandlerDeps): IngestHandler {
     // ---- per-event loop -------------------------------------------------
     const accepted: BatchAcceptedResult[] = [];
     const rejected: BatchRejectedResult[] = [];
+    // Collected during the loop, published AFTER the response is built.
+    const quarantined: QuarantineCandidate[] = [];
+    // Resolved once: every event in a batch shares the API key's project.
+    const projectPolicy = deps.policy.resolve(context.auth.projectId);
 
     // We process events sequentially. Producers send small batches and the
     // SET NX EX hot path is short-circuit cheap; the sequential loop keeps
@@ -159,10 +171,33 @@ export function createIngestHandler(deps: IngestHandlerDeps): IngestHandler {
         accepted.push(eventResult.accepted);
       } else {
         rejected.push(eventResult.rejected);
+        if (deps.quarantine !== undefined) {
+          quarantined.push({
+            raw: rawEvent,
+            rejected: eventResult.rejected,
+            projectId: context.auth.projectId,
+            environment: context.auth.environment,
+            projectPolicy,
+          });
+        }
       }
     }
 
-    return { status: 200, body: { accepted, rejected } };
+    const body = { accepted, rejected };
+
+    // Fire-and-forget, deliberately un-awaited. The producer's answer is
+    // already computed; awaiting a broker round trip here would put the
+    // quarantine's availability on the ingestion latency path, for a
+    // diagnostic about events that are being rejected anyway.
+    //
+    // `.catch` rather than nothing: the publisher already swallows its own
+    // failures, and this is the backstop that keeps a bug in it from
+    // becoming an unhandled rejection that takes the process down.
+    if (deps.quarantine !== undefined && quarantined.length > 0) {
+      void deps.quarantine.publish(quarantined).catch(() => {});
+    }
+
+    return { status: 200, body };
   }
 
   return { handle };

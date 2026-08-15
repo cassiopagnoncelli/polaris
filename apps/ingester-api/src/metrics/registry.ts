@@ -51,6 +51,19 @@ export const METRIC_INGEST_RATE_LIMIT_REJECTED_TOTAL = "polaris_ingest_rate_limi
 export const METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL = "polaris_ingest_rate_limit_skipped_total";
 export const METRIC_INGEST_PUBLISH_FAILED_TOTAL = "polaris_ingest_publish_failed_total";
 /**
+ * Violations published to the quarantine, by reason.
+ *
+ * Cardinality is project × env × reason, where reason is the closed batch
+ * reason set (~10) — the same shape as the rejection counter it shadows.
+ * It exists SEPARATELY from `polaris_ingest_batch_rejected_total` because
+ * the two answer different questions: that one is "was the event
+ * refused?", this one is "did the refusal reach the governance loop?".
+ * A gap between them is a broken quarantine, and with a fail-open
+ * publisher that gap is the ONLY thing that would report it.
+ */
+export const METRIC_INGEST_VIOLATION_PUBLISHED_TOTAL = "polaris_ingest_violation_published_total";
+export const METRIC_INGEST_VIOLATION_DROPPED_TOTAL = "polaris_ingest_violation_dropped_total";
+/**
  * A project whose stored `ingest` config slice failed to parse, so the batch
  * fell back to deployment defaults. Non-zero means an operator wrote a value
  * this build cannot read — alertable, because that fallback is deliberately
@@ -193,6 +206,18 @@ export class IngestMetrics {
 
   incrementPublishSuccess(labels: PublishSuccessLabels): void {
     this.incrementByLabels(METRIC_INGEST_PUBLISH_SUCCESS_TOTAL, toLabelRecord(labels));
+  }
+
+  incrementViolationPublished(labels: BatchOutcomeLabels): void {
+    this.incrementByLabels(METRIC_INGEST_VIOLATION_PUBLISHED_TOTAL, toLabelRecord(labels));
+  }
+
+  /**
+   * A violation the quarantine could not publish. Fail-open by design, so
+   * this counter is the only evidence the loop is broken.
+   */
+  incrementViolationDropped(labels: { reason: string }): void {
+    this.incrementByLabels(METRIC_INGEST_VIOLATION_DROPPED_TOTAL, toLabelRecord(labels));
   }
 
   incrementPublishFailed(labels: PublishFailedLabels): void {

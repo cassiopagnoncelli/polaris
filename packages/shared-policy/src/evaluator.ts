@@ -5,6 +5,7 @@ import type {
   NamedFieldRule,
   PatternRule,
   PolicyDecision,
+  ProjectPolicyOverride,
   RedactionAction,
 } from "./types.js";
 
@@ -155,6 +156,186 @@ export function redactionSentinel(reason: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// The quarantine's redacted sample
+// ---------------------------------------------------------------------------
+
+/**
+ * The second walk. `evaluate` above walks to DECIDE and short-circuits at
+ * the first reject; this one walks to REDACT a rejected payload for the
+ * schema-governance quarantine, and cannot short-circuit — the reject is
+ * why it is walking.
+ *
+ * They live in one file because they share the rules, and a brief life as
+ * two files proved the point: the sample builder grew its own matcher that
+ * read `rule.fields` as an array and `rule.pattern` as a regex, when the
+ * real shapes are a single `field` string with `*.`/`[*]` wildcards and a
+ * `test(value, path)` predicate. Nothing type-checked it, because the
+ * duplicate declared its own view of the types — and what it would have
+ * shipped is a sample that stores exactly what the rules exist to keep out.
+ */
+
+/** Longest string leaf kept in a sample before truncation. */
+const DEFAULT_SAMPLE_MAX_STRING = 128;
+
+/** Deepest nesting kept in a sample. Below it, a marker replaces the value. */
+const DEFAULT_SAMPLE_MAX_DEPTH = 8;
+
+/** Most array elements kept per array. */
+const DEFAULT_SAMPLE_MAX_ARRAY = 20;
+
+/** Most object keys kept per object. */
+const DEFAULT_SAMPLE_MAX_KEYS = 50;
+
+/** Marker written where a value was dropped for being too deep or too many. */
+/**
+ * Marker written where a value was dropped for being too deep or too many.
+ * Not exported: readers match the literal, and a constant nothing outside
+ * this package reads is a constant pretending to be an interface.
+ */
+const SAMPLE_ELIDED = "[ELIDED]" as const;
+
+export interface ViolationSampleOptions {
+  /** Project override, merged with the platform defaults as usual. */
+  readonly projectPolicy?: ProjectPolicyOverride;
+  readonly maxStringLength?: number;
+  readonly maxDepth?: number;
+  readonly maxArrayLength?: number;
+  readonly maxKeys?: number;
+}
+
+export interface ViolationSample {
+  /** The redacted structure, safe to persist. */
+  readonly sample: Record<string, unknown>;
+  /**
+   * Dotted paths of every value the sample replaced with a sentinel.
+   *
+   * Paths only, never values — this is the same discipline the batch
+   * response follows, and it is what makes the quarantine searchable
+   * ("which projects are still sending `card_number`?") without making it
+   * a second copy of the data it exists to keep out.
+   */
+  readonly redactedPaths: readonly string[];
+}
+
+/**
+ * Build the sample stored on a violation record.
+ *
+ * Deterministic and non-mutating. The returned object shares no structure
+ * with the input.
+ */
+export function buildViolationSample(
+  event: EventInput,
+  options: ViolationSampleOptions = {},
+): ViolationSample {
+  const policy = mergePolicy(options.projectPolicy).policy;
+  const maxStringLength = options.maxStringLength ?? DEFAULT_SAMPLE_MAX_STRING;
+  const maxDepth = options.maxDepth ?? DEFAULT_SAMPLE_MAX_DEPTH;
+  const maxArrayLength = options.maxArrayLength ?? DEFAULT_SAMPLE_MAX_ARRAY;
+  const maxKeys = options.maxKeys ?? DEFAULT_SAMPLE_MAX_KEYS;
+
+  const redactedPaths: string[] = [];
+
+  function walk(value: unknown, path: readonly string[], depth: number): unknown {
+    if (depth > maxDepth) return SAMPLE_ELIDED;
+
+    if (Array.isArray(value)) {
+      const kept = value.slice(0, maxArrayLength);
+      const out: unknown[] = kept.map((item, index) =>
+        walk(item, [...path, String(index)], depth + 1),
+      );
+      if (value.length > kept.length) out.push(SAMPLE_ELIDED);
+      return out;
+    }
+
+    if (isPlainRecord(value)) {
+      const out: Record<string, unknown> = {};
+      let seen = 0;
+      for (const [key, child] of Object.entries(value)) {
+        if (seen >= maxKeys) {
+          out[SAMPLE_ELIDED] = `${String(Object.keys(value).length - seen)} more key(s)`;
+          break;
+        }
+        seen += 1;
+        const childPath = [...path, key];
+
+        // A reject rule is the strongest signal there is: this field is
+        // why the event was refused. The KEY stays — that is the whole
+        // diagnostic — and the value never does.
+        const rejectHit = matchNamedRule(policy.reject, childPath);
+        if (rejectHit !== undefined) {
+          out[key] = redactionSentinel(rejectHit.reason);
+          redactedPaths.push(childPath.join("."));
+          continue;
+        }
+
+        const namedHit = matchNamedRule(policy.redactNamed, childPath);
+        if (namedHit !== undefined) {
+          // Replaces the whole subtree, as on the accept path. Descending
+          // would be wasted work and could surface false-positive pattern
+          // hits inside a value already known to be sensitive.
+          out[key] = redactionSentinel(namedHit.reason);
+          redactedPaths.push(childPath.join("."));
+          continue;
+        }
+
+        out[key] = walk(child, childPath, depth + 1);
+      }
+      return out;
+    }
+
+    if (typeof value === "string") {
+      const patternHit = matchPatternRule(policy.redactPatterns, value, path);
+      if (patternHit !== undefined) {
+        redactedPaths.push(path.join("."));
+        return redactionSentinel(patternHit.reason);
+      }
+      return truncate(value, maxStringLength);
+    }
+
+    // Numbers, booleans, null. Kept as-is: they are the shape information
+    // a producer needs ("total came through as a string") and carry no
+    // free text.
+    if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+
+    // Anything exotic a producer smuggled in — a Date, a class instance.
+    // Named by type rather than serialised, because `toJSON` on an unknown
+    // object is arbitrary code's idea of what to disclose.
+    return `[${typeof value}]`;
+  }
+
+  const walked = walk(event, [], 0);
+  const sample = isPlainRecord(walked) ? walked : {};
+  return { sample, redactedPaths };
+}
+
+/**
+ * Serialise a sample, capping the encoded size.
+ *
+ * The structural bounds above limit breadth and depth but not total size —
+ * fifty keys of a hundred-character string each is still 5KB, and a
+ * quarantine table is not a place to store payloads. Over the cap the
+ * sample is replaced wholesale rather than truncated mid-string, because a
+ * truncated JSON document is not JSON and every reader would have to
+ * special-case it.
+ */
+export function serialiseViolationSample(
+  sample: Record<string, unknown>,
+  maxBytes = 8_192,
+): string {
+  const encoded = JSON.stringify(sample);
+  if (Buffer.byteLength(encoded, "utf8") <= maxBytes) return encoded;
+  return JSON.stringify({
+    [SAMPLE_ELIDED]: `sample exceeded ${String(maxBytes)} bytes and was dropped`,
+    keys: Object.keys(sample).slice(0, DEFAULT_SAMPLE_MAX_KEYS),
+  });
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}…(+${String(value.length - max)})`;
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -167,6 +348,57 @@ export function redactionSentinel(reason: string): string {
  *
  * Matching is case-insensitive on each segment.
  */
+function cloneValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((v) => cloneValue(v));
+  if (isPlainRecord(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = cloneValue(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function setAtPath(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
+  if (path.length === 0) return;
+  let cursor: unknown = target;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segment = path[i];
+    if (segment === undefined) return;
+    if (Array.isArray(cursor)) {
+      const idx = Number(segment);
+      if (!Number.isInteger(idx)) return;
+      cursor = cursor[idx];
+    } else if (isPlainRecord(cursor)) {
+      cursor = cursor[segment];
+    } else {
+      return;
+    }
+    if (cursor === undefined || cursor === null) return;
+  }
+  const leaf = path[path.length - 1];
+  if (leaf === undefined) return;
+  if (Array.isArray(cursor)) {
+    const idx = Number(leaf);
+    if (!Number.isInteger(idx)) return;
+    cursor[idx] = value;
+  } else if (isPlainRecord(cursor)) {
+    cursor[leaf] = value;
+  }
+}
+
+function comparePaths(a: readonly string[], b: readonly string[]): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const av = a[i] ?? "";
+    const bv = b[i] ?? "";
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+  }
+  return a.length - b.length;
+}
+
 function matchNamedRule(
   rules: readonly NamedFieldRule[],
   path: readonly string[],
@@ -220,55 +452,4 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
-}
-
-function cloneValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((v) => cloneValue(v));
-  if (isPlainRecord(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      out[k] = cloneValue(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-function setAtPath(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
-  if (path.length === 0) return;
-  let cursor: unknown = target;
-  for (let i = 0; i < path.length - 1; i++) {
-    const segment = path[i];
-    if (segment === undefined) return;
-    if (Array.isArray(cursor)) {
-      const idx = Number(segment);
-      if (!Number.isInteger(idx)) return;
-      cursor = cursor[idx];
-    } else if (isPlainRecord(cursor)) {
-      cursor = cursor[segment];
-    } else {
-      return;
-    }
-    if (cursor === undefined || cursor === null) return;
-  }
-  const leaf = path[path.length - 1];
-  if (leaf === undefined) return;
-  if (Array.isArray(cursor)) {
-    const idx = Number(leaf);
-    if (!Number.isInteger(idx)) return;
-    cursor[idx] = value;
-  } else if (isPlainRecord(cursor)) {
-    cursor[leaf] = value;
-  }
-}
-
-function comparePaths(a: readonly string[], b: readonly string[]): number {
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    const av = a[i] ?? "";
-    const bv = b[i] ?? "";
-    if (av < bv) return -1;
-    if (av > bv) return 1;
-  }
-  return a.length - b.length;
 }

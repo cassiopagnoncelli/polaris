@@ -20,6 +20,7 @@ import type { AuthenticatedRequestContext } from "../../src/auth/index.js";
 import type { IngesterConfig } from "../../src/config.js";
 import { DisabledDedupeStore, InMemoryDedupeStore } from "../../src/dedupe/index.js";
 import { createIngestHandler } from "../../src/ingest/handler.js";
+import type { QuarantineCandidate, QuarantinePublisher } from "../../src/ingest/quarantine.js";
 import {
   IngestMetrics,
   METRIC_INGEST_BATCH_ACCEPTED_TOTAL,
@@ -63,6 +64,7 @@ function deps(
     projectDedupeWindows?: Record<string, number>;
     projectConfig?: IngestProjectConfigLookup;
     now?: () => Date;
+    quarantine?: QuarantinePublisher;
   } = {},
 ) {
   const catalog = buildTestCatalog();
@@ -94,6 +96,7 @@ function deps(
       ingestConfig,
       projectConfig,
       ...(overrides.now !== undefined ? { now: overrides.now } : {}),
+      ...(overrides.quarantine !== undefined ? { quarantine: overrides.quarantine } : {}),
     }),
     producer,
     dedupe,
@@ -732,5 +735,107 @@ describe("ingest handler — retryable flag", () => {
     );
     if (!("accepted" in bad.body)) throw new Error("expected batch body");
     expect(bad.body.rejected[0]?.retryable).toBe(false);
+  });
+});
+
+describe("the quarantine hook", () => {
+  /** A publisher that records what it was handed and when it settled. */
+  function recordingQuarantine() {
+    const seen: QuarantineCandidate[][] = [];
+    let release: (() => void) | undefined;
+    const settled = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const quarantine: QuarantinePublisher = {
+      publish: async (candidates) => {
+        seen.push([...candidates]);
+        release?.();
+      },
+    };
+    return { quarantine, seen, settled };
+  }
+
+  it("hands every rejection to the quarantine, with the payload that caused it", async () => {
+    // The wiring test. A publisher that is never called is a publisher
+    // that does not exist, and nothing else in this file would notice.
+    const { quarantine, seen, settled } = recordingQuarantine();
+    const { handler } = deps({ quarantine });
+
+    const response = await handler.handle(
+      { events: [{ ...buildEnvelopePayload(), properties: { cvv: "123" } }] },
+      context(),
+    );
+    await settled;
+
+    expect(response.body.rejected).toHaveLength(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toHaveLength(1);
+    expect(seen[0]?.[0]?.rejected.code).toBe("forbidden_field_rejected");
+    expect(seen[0]?.[0]?.projectId).toBe(AUTH.projectId);
+    // The RAW payload, so the sample builder can redact it — the handler
+    // must not hand over something already stripped of the evidence.
+    expect((seen[0]?.[0]?.raw as { properties: { cvv: string } }).properties.cvv).toBe("123");
+  });
+
+  it("does not call the quarantine when nothing was rejected", async () => {
+    const { quarantine, seen } = recordingQuarantine();
+    const { handler } = deps({ quarantine });
+
+    await handler.handle({ events: [buildEnvelopePayload()] }, context());
+    await Promise.resolve();
+
+    expect(seen).toEqual([]);
+  });
+
+  it("answers the producer without waiting for the publish", async () => {
+    // Fire-and-forget. The response is already computed; awaiting a broker
+    // round trip here would put the quarantine's availability on the
+    // ingestion latency path.
+    let resolvePublish: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      resolvePublish = resolve;
+    });
+    const { handler } = deps({
+      quarantine: { publish: () => blocked },
+    });
+
+    const response = await handler.handle(
+      { events: [{ ...buildEnvelopePayload(), properties: { cvv: "123" } }] },
+      context(),
+    );
+
+    // Returned while the publish is still hanging.
+    expect(response.status).toBe(200);
+    expect(response.body.rejected).toHaveLength(1);
+    resolvePublish?.();
+  });
+
+  it("answers normally when the quarantine throws", async () => {
+    // Fail-open through the handler as well as inside the publisher: a
+    // bug in the publisher must not become an unhandled rejection.
+    const { handler } = deps({
+      quarantine: {
+        publish: async () => {
+          throw new Error("quarantine exploded");
+        },
+      },
+    });
+
+    const response = await handler.handle(
+      { events: [{ ...buildEnvelopePayload(), properties: { cvv: "123" } }] },
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.rejected).toHaveLength(1);
+  });
+
+  it("rejects exactly as before when no quarantine is configured", async () => {
+    const { handler } = deps();
+    const response = await handler.handle(
+      { events: [{ ...buildEnvelopePayload(), properties: { cvv: "123" } }] },
+      context(),
+    );
+    expect(response.body.rejected).toHaveLength(1);
   });
 });

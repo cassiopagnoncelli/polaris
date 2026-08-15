@@ -61,3 +61,9 @@ export {
 
 // Schema-related machine-readable reason codes for batch responses.
 export * from "./reason-codes.js";
+export {
+  parseViolationRecord,
+  VIOLATION_RECORD_VERSION,
+  type ViolationRecord,
+  violationRecordSchema,
+} from "./violation.js";
