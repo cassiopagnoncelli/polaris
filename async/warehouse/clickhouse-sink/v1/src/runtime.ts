@@ -103,8 +103,11 @@ import {
   buildClickHouseVersion,
   type ClickHouseVersionStage,
   PROFILE_EVENTS_QUEUE_TABLE,
+  VIOLATIONS_QUEUE_TABLE,
+  type ViolationQueueRow,
 } from "@polaris/shared-clickhouse";
 import type { Logger } from "@polaris/shared-logger";
+import { parseViolationRecord } from "@polaris/shared-schemas";
 import {
   consumerFamiliesFor,
   type DeferredCheckpointStore,
@@ -116,6 +119,7 @@ import {
   STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
+  STREAM_FAMILY_REJECTED_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,
   type TransportMessageHandler,
@@ -170,6 +174,23 @@ const SOURCE_STREAM_FAMILIES = [
  * ReplacingMergeTree keyed per trait rather than another log.
  */
 const PROFILE_STREAM_FAMILIES = [STREAM_FAMILY_PROFILE_EVENTS] as const;
+
+/**
+ * The schema-governance quarantine.
+ *
+ * The one family here that does NOT carry an envelope. Its messages are
+ * violation records — the events they describe failed validation, which
+ * is why they are on this family at all — so they cannot go through
+ * `toQueueRow` and do not belong in any of the three envelope tables.
+ */
+const VIOLATION_STREAM_FAMILIES = [STREAM_FAMILY_REJECTED_EVENTS] as const;
+
+/** True when a delivery came from the quarantine. */
+function isViolationFamily(family: string): boolean {
+  return VIOLATION_STREAM_FAMILIES.some(
+    (known) => family === known || family.startsWith(`${known}.`),
+  );
+}
 
 /** True when a delivery came from the profile plane. */
 function isProfileEventFamily(family: string): boolean {
@@ -249,7 +270,25 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
   let sourceBatch: AnalyticsQueueRow[] = [];
   let processedBatch: AnalyticsQueueRow[] = [];
   let profileBatch: AnalyticsQueueRow[] = [];
+  let violationBatch: ViolationQueueRow[] = [];
   let batchOpenedAt = now();
+
+  /**
+   * Is the batch due?
+   *
+   * EVERY buffer counts toward the row bound. Omitting one would let its
+   * rows sit until the staleness timer regardless of volume — a plane
+   * under load would flush on a clock rather than on a batch, and the row
+   * bound would silently mean something different per table. This was a
+   * real defect once, with three buffers and two counted; it is a function
+   * now so a fifth destination cannot reintroduce it by editing one of two
+   * copies of the sum.
+   */
+  function shouldFlush(): boolean {
+    const rows =
+      sourceBatch.length + processedBatch.length + profileBatch.length + violationBatch.length;
+    return rows >= deps.batchMaxRows || now() - batchOpenedAt >= deps.batchMaxMs;
+  }
 
   /**
    * Flush both batches, then commit once.
@@ -267,12 +306,18 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
    * a crash mid-batch already produces.
    */
   async function flush(): Promise<void> {
-    if (sourceBatch.length === 0 && processedBatch.length === 0 && profileBatch.length === 0) {
+    if (
+      sourceBatch.length === 0 &&
+      processedBatch.length === 0 &&
+      profileBatch.length === 0 &&
+      violationBatch.length === 0
+    ) {
       return;
     }
     const sourceRows = sourceBatch;
     const processedRows = processedBatch;
     const profileRows = profileBatch;
+    const violationRows = violationBatch;
     // Swap the buffers before awaiting so a delivery that lands during the
     // INSERT accumulates into the next batch instead of being lost or
     // double-counted. The held checkpoints are taken in the same breath, so
@@ -281,6 +326,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     sourceBatch = [];
     processedBatch = [];
     profileBatch = [];
+    violationBatch = [];
     const held = deps.checkpoints.take();
     batchOpenedAt = now();
     const started = now();
@@ -296,6 +342,10 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
       // all three batches rather than stranding the profile rows.
       if (profileRows.length > 0) {
         await deps.writer.insertBatch(profileRows, PROFILE_EVENTS_QUEUE_TABLE);
+      }
+      // Fourth INSERT, same single-commit contract.
+      if (violationRows.length > 0) {
+        await deps.writer.insertViolations(violationRows);
       }
     } catch (err) {
       // Put these positions back so the transport re-reads these rows
@@ -315,12 +365,16 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (profileRows.length > 0) {
       deps.metrics.recordBatch(profileRows.length, duration, PROFILE_EVENTS_QUEUE_TABLE);
     }
+    if (violationRows.length > 0) {
+      deps.metrics.recordBatch(violationRows.length, duration, VIOLATIONS_QUEUE_TABLE);
+    }
     deps.logger.debug(
       {
         component: "clickhouse-sink.flush",
         rows: sourceRows.length,
         processed_rows: processedRows.length,
         profile_rows: profileRows.length,
+        violation_rows: violationRows.length,
         duration_ms: duration,
       },
       "flushed batch to clickhouse",
@@ -328,6 +382,28 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
   }
 
   const handler: TransportMessageHandler = async (payload) => {
+    // Checked FIRST, because a violation record is not an envelope and
+    // `toQueueRow` would refuse it — silently, as a skip, which reads on
+    // the dashboard as "the quarantine is empty".
+    if (isViolationFamily(payload.family)) {
+      const violation = toViolationRow(payload, deps.logger);
+      if (violation === undefined) {
+        deps.metrics.recordSkipped();
+        return;
+      }
+      violationBatch.push(violation);
+      deps.metrics.recordConsumed(
+        violation.project_id,
+        violation.environment,
+        VIOLATIONS_QUEUE_TABLE,
+      );
+      // No lag metric: a violation's `received_at` is the ingester's
+      // clock for an event that never entered the spine, so the number a
+      // lag gauge would show is not the pipeline delay it is read as.
+      if (shouldFlush()) await flush();
+      return;
+    }
+
     const row = toQueueRow(payload, deps.logger);
     if (row === undefined) {
       deps.metrics.recordSkipped();
@@ -352,14 +428,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     deps.metrics.recordConsumed(row.project_id, row.environment, table);
     deps.metrics.recordLag(row.ingested_at, now(), table);
 
-    // All THREE buffers count toward the bound. Omitting one would let its
-    // rows sit until the staleness timer regardless of volume — a profile
-    // plane under load would flush on a clock rather than on a batch, and
-    // the row bound would silently mean something different per table.
-    const full =
-      sourceBatch.length + processedBatch.length + profileBatch.length >= deps.batchMaxRows;
-    const stale = now() - batchOpenedAt >= deps.batchMaxMs;
-    if (full || stale) {
+    if (shouldFlush()) {
       // Awaiting here is what makes the checkpoint safe: the transport
       // advances the offset only after this handler resolves, so the rows
       // are durable in ClickHouse before the position moves past them.
@@ -375,17 +444,26 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     started = true;
     const isolated = deps.isolatedProjects ?? [];
     const families = [
-      ...SOURCE_STREAM_FAMILIES,
-      ...DERIVED_STREAM_FAMILIES,
-      ...PROFILE_STREAM_FAMILIES,
-    ].flatMap((family) => [...consumerFamiliesFor(family, isolated)]);
+      ...[
+        ...SOURCE_STREAM_FAMILIES,
+        ...DERIVED_STREAM_FAMILIES,
+        ...PROFILE_STREAM_FAMILIES,
+      ].flatMap((family) => [...consumerFamiliesFor(family, isolated)]),
+      // The quarantine, added BARE rather than through
+      // `consumerFamiliesFor` — which throws for a non-canonical family,
+      // and `rejected.events` is deliberately non-canonical because it
+      // supports no isolation. Subscribing to a routing branch is not
+      // optional: rows that never arrive look identical to no violations
+      // at all, which is also what a healthy platform looks like.
+      ...VIOLATION_STREAM_FAMILIES,
+    ];
     await deps.consumer.subscribe({
       families,
       queues: [redeliverQueueName(SINK_COMPONENT)],
     });
     deps.logger.info(
       { component: "clickhouse-sink.runtime", families, batch_max_rows: deps.batchMaxRows },
-      "clickhouse sink subscribed to source, derived and profile event streams",
+      "clickhouse sink subscribed to source, derived, profile and quarantine streams",
     );
     await deps.consumer.runEach(handler);
 
@@ -393,7 +471,19 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     // message arrives, which could be minutes. The ticker bounds that.
     ticker = setInterval(
       () => {
-        if (sourceBatch.length === 0 && processedBatch.length === 0) return;
+        // Every buffer, not two of four. The ticker exists so a
+        // low-traffic partition does not hold rows until the next message
+        // arrives, and a quarantine is by nature low-traffic — checking
+        // only the busy buffers would leave violations sitting longest in
+        // exactly the deployments where they matter most.
+        if (
+          sourceBatch.length === 0 &&
+          processedBatch.length === 0 &&
+          profileBatch.length === 0 &&
+          violationBatch.length === 0
+        ) {
+          return;
+        }
         if (now() - batchOpenedAt < deps.batchMaxMs) return;
         void flush().catch((err: unknown) => {
           const error = err as Error;
@@ -427,7 +517,11 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     handler,
     flush,
     get pending(): number {
-      return sourceBatch.length + processedBatch.length;
+      // All four. This counted two of three once, which made a full
+      // profile buffer read as an idle sink on the readiness probe.
+      return (
+        sourceBatch.length + processedBatch.length + profileBatch.length + violationBatch.length
+      );
     },
   };
 }
@@ -555,4 +649,72 @@ function json(value: unknown): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * Project a quarantined rejection onto its ingestion row.
+ *
+ * Deliberately NOT `toQueueRow`. A violation record is not an envelope —
+ * the event it describes failed validation, which is why it is on this
+ * family — so it has no `occurred_at`, may have no `event_id`, and shares
+ * no columns with the three envelope tables.
+ *
+ * `undefined` on anything unparseable, for the same reason `toQueueRow`
+ * skips: throwing would rewind the partition and redeliver forever,
+ * stalling the quarantine behind one bad record. The counter the skip
+ * feeds is the signal.
+ */
+export function toViolationRow(
+  payload: TransportMessagePayload,
+  logger: Logger,
+): ViolationQueueRow | undefined {
+  const value = payload.message.value;
+  if (value === null || value.length === 0) return undefined;
+
+  let decoded: unknown;
+  try {
+    decoded = decodeEvent(value);
+  } catch (err) {
+    logger.warn(
+      {
+        component: "clickhouse-sink.violation",
+        stream: payload.stream,
+        offset: payload.message.offset,
+        err: err as Error,
+      },
+      "rejected.events payload is not decodable JSON",
+    );
+    return undefined;
+  }
+
+  const record = parseViolationRecord(decoded);
+  if (record === null) {
+    logger.warn(
+      {
+        component: "clickhouse-sink.violation",
+        stream: payload.stream,
+        offset: payload.message.offset,
+      },
+      "rejected.events payload is not a violation record",
+    );
+    return undefined;
+  }
+
+  return {
+    violation_id: record.violation_id,
+    violation_version: record.violation_version,
+    project_id: record.project_id,
+    environment: record.environment,
+    // ClickHouse has no nullable here by choice: an absent hint is the
+    // empty string, which `LowCardinality(String)` stores for free and
+    // every dashboard filter already handles. A Nullable column would add
+    // a null map to a table whose whole point is cheap aggregation.
+    event: record.event ?? "",
+    event_id: record.event_id ?? "",
+    schema_version: record.schema_version ?? 0,
+    reason: record.reason,
+    paths: [...record.paths],
+    redacted_sample: record.redacted_sample,
+    received_at: record.received_at,
+  };
 }

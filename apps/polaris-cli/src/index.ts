@@ -466,6 +466,13 @@ export {
   type TopicsListHooks,
   type TopicsListStore,
 } from "./commands/topics/list.js";
+export { violationsCommand } from "./commands/violations/index.js";
+export {
+  buildViolationsListRunner,
+  type ViolationsListHooks,
+  type ViolationsStore,
+  violationsListCommand,
+} from "./commands/violations/list.js";
 export {
   type AuthenticatedCliConfig,
   CLI_LOG_LEVELS,

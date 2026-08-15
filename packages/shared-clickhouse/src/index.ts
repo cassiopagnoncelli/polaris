@@ -91,6 +91,8 @@ export {
   type CreateAnalyticsSinkWriterInput,
   createAnalyticsSinkWriter,
   PROFILE_EVENTS_QUEUE_TABLE,
+  VIOLATIONS_QUEUE_TABLE,
+  type ViolationQueueRow,
 } from "./sink.js";
 export {
   createTraitQueryReader,
@@ -120,3 +122,11 @@ export type {
   TimeRange,
 } from "./types.js";
 export { buildClickHouseVersion, type ClickHouseVersionStage } from "./version.js";
+export {
+  createViolationReader,
+  type ListViolationsFilter,
+  VIOLATIONS_MAX_LIMIT,
+  type ViolationReader,
+  type ViolationRow,
+  type ViolationSummaryRow,
+} from "./violations.js";

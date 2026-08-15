@@ -548,6 +548,9 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../../../../packages/shared-metrics
+      '@polaris/shared-schemas':
+        specifier: workspace:*
+        version: link:../../../../packages/shared-schemas
       '@polaris/shared-service-bootstrap':
         specifier: workspace:*
         version: link:../../../../packages/shared-service-bootstrap

@@ -5,6 +5,7 @@ import {
   type AnalyticsSinkWriter,
   buildClickHouseVersion,
   PROFILE_EVENTS_QUEUE_TABLE,
+  type ViolationQueueRow,
 } from "@polaris/shared-clickhouse";
 import {
   DeferredCheckpointStore,
@@ -77,16 +78,22 @@ function fakeWriter(): {
   writer: AnalyticsSinkWriter;
   batches: AnalyticsQueueRow[][];
   writes: RecordedBatch[];
+  violations: ViolationQueueRow[][];
 } {
   const batches: AnalyticsQueueRow[][] = [];
   const writes: RecordedBatch[] = [];
+  const violations: ViolationQueueRow[][] = [];
   return {
     batches,
     writes,
+    violations,
     writer: {
       async insertBatch(rows, table = ANALYTICS_QUEUE_TABLE) {
         batches.push([...rows]);
         writes.push({ table, rows: [...rows] });
+      },
+      async insertViolations(rows) {
+        violations.push([...rows]);
       },
       async close() {},
     },
@@ -272,6 +279,7 @@ describe("clickhouse sink runtime batching", () => {
           };
         });
       },
+      async insertViolations() {},
       async close() {},
     };
     const runtime = runtimeWith(writer, { batchMaxRows: 1 });
@@ -295,6 +303,7 @@ describe("clickhouse sink runtime batching", () => {
           });
         }
       },
+      async insertViolations() {},
       async close() {},
     };
     const runtime = runtimeWith(writer, { batchMaxRows: 1 });
@@ -471,6 +480,7 @@ describe("derived-event routing", () => {
           expect(await underlying.read("sink", "session.events-1")).toBeUndefined();
         }
       },
+      async insertViolations() {},
       async close() {},
     };
     const runtime = runtimeWith(writer, { batchMaxRows: 2, checkpoints: deferred });
@@ -496,6 +506,7 @@ describe("derived-event routing", () => {
         async insertBatch(_rows, table = ANALYTICS_QUEUE_TABLE) {
           if (table === ANALYTICS_PROCESSED_QUEUE_TABLE) throw new Error("clickhouse 503");
         },
+        async insertViolations() {},
         async close() {},
       },
       { batchMaxRows: 2, checkpoints: deferred },
@@ -543,6 +554,9 @@ describe("derived-event routing", () => {
       // branch landed, which meant the sink would have routed
       // `profile.events` correctly and never received any.
       "profile.events",
+      // The quarantine, last and bare: it supports no isolation, so it
+      // has no per-project variants to expand into.
+      "rejected.events",
     ]);
   });
 
@@ -577,8 +591,11 @@ describe("derived-event routing", () => {
     // project's `profile.events.<id>` is still the profile plane, which is
     // what the prefix check in `isProfileEventFamily` relies on.
     expect(subscriptions[0]).toContain("profile.events.project-alpha");
-    // Six families, each shared + one isolated project.
-    expect(subscriptions[0]).toHaveLength(14);
+    // Seven families. Six isolate — shared + one dedicated each — and the
+    // quarantine does not, so it contributes exactly one entry.
+    expect(subscriptions[0]).toHaveLength(15);
+    expect(subscriptions[0]).toContain("rejected.events");
+    expect(subscriptions[0]).not.toContain("rejected.events.project-alpha");
   });
 });
 
@@ -641,6 +658,7 @@ describe("checkpoint safety", () => {
         async insertBatch() {
           throw new Error("clickhouse 503");
         },
+        async insertViolations() {},
         async close() {},
       },
       logger: silentLogger,
@@ -849,5 +867,98 @@ describe("clickhouse sink — profile-plane routing", () => {
       {},
     );
     expect(writes.map((w) => w.table)).toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+  });
+});
+
+describe("the quarantine", () => {
+  /** A delivery from `rejected.events`, carrying a violation record. */
+  function violationDelivery(overrides: Record<string, unknown> = {}): TransportMessagePayload {
+    return {
+      stream: "rejected.events-0",
+      family: "rejected.events",
+      partition: 0,
+      message: {
+        value: Buffer.from(
+          JSON.stringify({
+            violation_version: 1,
+            violation_id: "polaris_vio_1",
+            project_id: "storefront",
+            environment: "production",
+            event: "purchase",
+            event_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+            schema_version: 1,
+            reason: "forbidden_field_rejected",
+            paths: ["properties.cvv"],
+            redacted_sample: '{"properties":{"cvv":"[REDACTED:pii_card]"}}',
+            received_at: "2026-08-15T12:00:00.000Z",
+            ...overrides,
+          }),
+          "utf8",
+        ),
+        headers: {},
+        key: null,
+        offset: "1",
+        timestamp: "1755000000000",
+        redelivered: false,
+      },
+    };
+  }
+
+  it("routes a violation to violations_queue, not to any envelope table", async () => {
+    const fake = fakeWriter();
+    const runtime = runtimeWith(fake.writer, { batchMaxRows: 1 });
+
+    await runtime.handler(violationDelivery(), {});
+
+    expect(fake.violations).toHaveLength(1);
+    expect(fake.violations[0]?.[0]).toMatchObject({
+      violation_id: "polaris_vio_1",
+      reason: "forbidden_field_rejected",
+      paths: ["properties.cvv"],
+    });
+    // Not in any of the three envelope tables — a violation is not an
+    // envelope, and `toQueueRow` would have skipped it silently.
+    expect(fake.writes).toHaveLength(0);
+  });
+
+  it("writes empty strings for hints the rejected payload never carried", async () => {
+    const fake = fakeWriter();
+    const runtime = runtimeWith(fake.writer, { batchMaxRows: 1 });
+
+    await runtime.handler(
+      violationDelivery({ event: null, event_id: null, schema_version: null }),
+      {},
+    );
+
+    expect(fake.violations[0]?.[0]).toMatchObject({
+      event: "",
+      event_id: "",
+      schema_version: 0,
+    });
+  });
+
+  it("skips a payload that is not a violation record rather than stalling", async () => {
+    // Throwing would rewind the partition and redeliver forever, stalling
+    // the quarantine behind one bad record.
+    const fake = fakeWriter();
+    const runtime = runtimeWith(fake.writer, { batchMaxRows: 1 });
+
+    await expect(
+      runtime.handler(violationDelivery({ violation_id: 42, project_id: null }), {}),
+    ).resolves.toBeUndefined();
+    expect(fake.violations).toHaveLength(0);
+  });
+
+  it("counts violations toward the shared batch bound", async () => {
+    // Every buffer counts. A quarantine excluded from the sum would sit
+    // until the staleness timer regardless of volume.
+    const fake = fakeWriter();
+    const runtime = runtimeWith(fake.writer, { batchMaxRows: 2, batchMaxMs: 600_000 });
+
+    await runtime.handler(violationDelivery(), {});
+    expect(fake.violations).toHaveLength(0);
+    await runtime.handler(violationDelivery({ violation_id: "polaris_vio_2" }), {});
+    expect(fake.violations).toHaveLength(1);
+    expect(fake.violations[0]).toHaveLength(2);
   });
 });

@@ -456,3 +456,58 @@ groups:
             duration panel misses: a vendor answering quickly while the consumer
             runs far behind. Check consumer lag and the retry tiers before
             suspecting the vendor.
+
+      # ---- schema governance (7VO2HFNT) ------------------------------
+      #
+      # The quarantine's own alerts. Both read per-event-type volume,
+      # because "this project's rejections doubled" is invisible in a
+      # global rate and is exactly the shape a bad SDK release makes.
+      - alert: PolarisIngestRejectionSpike
+        # Fires when a (project, environment, reason) rejects more than
+        # five times its own trailing hour. Relative, not absolute: a
+        # project sending a million events a day and one sending a
+        # thousand have nothing useful in common on an absolute
+        # threshold, and one of the two would be permanently lit.
+        expr: >-
+          sum by (project_id, environment, reason) (rate(polaris_ingest_batch_rejected_total[10m]))
+          >
+          5 * sum by (project_id, environment, reason) (rate(polaris_ingest_batch_rejected_total[1h] offset 1h))
+          and
+          sum by (project_id, environment, reason) (rate(polaris_ingest_batch_rejected_total[10m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: ingester-api
+          team: platform-data
+        annotations:
+          summary: "Rejections for {{ $labels.project_id }} spiked ({{ $labels.reason }})"
+          description: >-
+            This project's rejection rate for one reason code is more than five
+            times its own trailing hour, sustained for 15 minutes. The usual
+            cause is a producer release that changed a payload shape. Run
+            `polaris violations list --project {{ $labels.project_id }} --reason
+            {{ $labels.reason }} --since <deploy-time>` to see exactly what
+            changed — the quarantine keeps a redacted sample of each one.
+            The second clause suppresses the ratio on projects rejecting a
+            handful of events an hour, where five-times is noise.
+      - alert: PolarisQuarantineDropping
+        # The fail-open backstop. The publish is deliberately
+        # fire-and-forget so a broker outage cannot become an ingestion
+        # outage — which means this counter is the ONLY evidence that the
+        # governance loop has stopped recording anything.
+        expr: sum(rate(polaris_ingest_violation_dropped_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: ingester-api
+          team: platform-data
+        annotations:
+          summary: "The schema-governance quarantine is dropping violations"
+          description: >-
+            The ingester cannot publish to `rejected.events`. Ingestion is
+            unaffected by design — the publish is fail-open — but rejections
+            are no longer reaching the quarantine, so `polaris violations
+            list` and the rejection dashboards are now blind for as long as
+            this lasts. Check the broker and the `rejected.events` super
+            stream's declaration.
+

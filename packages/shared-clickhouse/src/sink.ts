@@ -62,6 +62,16 @@ export const ANALYTICS_PROCESSED_QUEUE_TABLE = "analytics_processed_queue";
 export const PROFILE_EVENTS_QUEUE_TABLE = "profile_events_queue";
 
 /**
+ * The schema-governance quarantine's interface table.
+ *
+ * A fourth destination with a DIFFERENT row shape, which is why it needs
+ * its own insert path rather than a fourth `table` argument: a violation
+ * is not an envelope. The event failed validation by definition, so it has
+ * no `occurred_at`, may have no `event_id`, and may not be an object.
+ */
+export const VIOLATIONS_QUEUE_TABLE = "violations_queue";
+
+/**
  * One row as INSERTed into the ingestion interface table. Field names and
  * types mirror the table's columns exactly; the sink builds these from the
  * canonical envelope plus the transport's lineage.
@@ -116,6 +126,27 @@ export interface CreateAnalyticsSinkWriterInput {
   readonly logger?: Logger;
 }
 
+/**
+ * One quarantined rejection, as the interface table receives it.
+ *
+ * `received_at` travels as the ISO-8601 literal the ingester stamped and
+ * is parsed by the materialized view, matching how the envelope queues
+ * handle their timestamps.
+ */
+export interface ViolationQueueRow {
+  readonly violation_id: string;
+  readonly violation_version: number;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly event: string;
+  readonly event_id: string;
+  readonly schema_version: number;
+  readonly reason: string;
+  readonly paths: readonly string[];
+  readonly redacted_sample: string;
+  readonly received_at: string;
+}
+
 export interface AnalyticsSinkWriter {
   /**
    * INSERT a batch into one of the two ingestion interface tables.
@@ -128,6 +159,15 @@ export interface AnalyticsSinkWriter {
    * serve both paths.
    */
   insertBatch(rows: ReadonlyArray<AnalyticsQueueRow>, table?: string): Promise<void>;
+  /**
+   * INSERT a batch of violation records into `violations_queue`.
+   *
+   * Separate from `insertBatch` because the row shape is different, not
+   * because the mechanics are: same client, same settings, same error
+   * wrapping. Typing it separately is what stops an envelope row and a
+   * violation row from being interchangeable at a call site.
+   */
+  insertViolations(rows: ReadonlyArray<ViolationQueueRow>): Promise<void>;
   /** Close the underlying connection pool. Idempotent. */
   close(): Promise<void>;
 }
@@ -189,6 +229,29 @@ export function createAnalyticsSinkWriter(
       input.logger?.debug(
         { component: "clickhouse.sink", table, rows: rows.length },
         "inserted analytics batch",
+      );
+    },
+    async insertViolations(rows): Promise<void> {
+      if (rows.length === 0) return;
+      try {
+        await underlying.insert({
+          table: VIOLATIONS_QUEUE_TABLE,
+          values: rows,
+          format: "JSONEachRow",
+          clickhouse_settings: { date_time_input_format: "best_effort" },
+        });
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "non-Error cause";
+        throw new ClickHouseQueryError(
+          `ClickHouse insert into ${database}.${VIOLATIONS_QUEUE_TABLE} failed (${String(
+            rows.length,
+          )} rows): ${message}`,
+          { cause },
+        );
+      }
+      input.logger?.debug(
+        { component: "clickhouse.sink", table: VIOLATIONS_QUEUE_TABLE, rows: rows.length },
+        "inserted violation batch",
       );
     },
     async close(): Promise<void> {

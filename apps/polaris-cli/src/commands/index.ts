@@ -35,6 +35,7 @@ import { sourcesCommand } from "./sources/index.js";
 import { topicsCommand } from "./topics/index.js";
 import { traitsCommand } from "./traits/index.js";
 import { versionCommand } from "./version.js";
+import { violationsCommand } from "./violations/index.js";
 
 export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   versionCommand,
@@ -45,6 +46,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   processorsCommand,
   profilesCommand,
   traitsCommand,
+  violationsCommand,
   configCommand,
   operatorsCommand,
   auditCommand,
@@ -74,4 +76,5 @@ export {
   topicsCommand,
   traitsCommand,
   versionCommand,
+  violationsCommand,
 };

@@ -29,6 +29,7 @@ import { createOperatorRaw, type OperatorRaw } from "./raw.js";
 import { createReplayReader, type ReplayReader } from "./replay.js";
 import { createTraitQueryReader, type TraitQueryReader } from "./traits.js";
 import type { Logger, MetricsRecorder } from "./types.js";
+import { createViolationReader, type ViolationReader } from "./violations.js";
 
 /**
  * Methods exposed on every profile. The service profile is exactly this; the
@@ -41,6 +42,8 @@ export interface ClickHouseServiceClient {
   readonly mergeMap: MergeMapStore;
   /** Runs a computed-trait definition's SQL. See `traits.ts`. */
   readonly traitQuery: TraitQueryReader;
+  /** Reads the schema-governance quarantine. See `violations.ts`. */
+  readonly violations: ViolationReader;
   readonly ingestLog: IngestLogReader;
   readonly health: HealthChecker;
   /** Close the underlying connection pool. Idempotent. */
@@ -56,6 +59,7 @@ export interface ClickHouseOperatorClient {
   readonly projections: ProjectionReaders;
   readonly mergeMap: MergeMapStore;
   readonly traitQuery: TraitQueryReader;
+  readonly violations: ViolationReader;
   readonly ingestLog: IngestLogReader;
   readonly health: HealthChecker;
   readonly replay: ReplayReader;
@@ -195,6 +199,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
   // raw SQL stays inside this package and callers get a typed surface.
   const mergeMap = createMergeMapStore({ underlying });
   const traitQuery = createTraitQueryReader({ underlying });
+  const violations = createViolationReader({ underlying });
   const ingestLog = createIngestLogReader({ underlying });
   const health = createHealthChecker({ underlying });
 
@@ -214,6 +219,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
       projections,
       mergeMap,
       traitQuery,
+      violations,
       ingestLog,
       health,
       close,
@@ -238,6 +244,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
     projections,
     mergeMap,
     traitQuery,
+    violations,
     ingestLog,
     health,
     replay,
