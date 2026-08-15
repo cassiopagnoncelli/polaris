@@ -10,15 +10,16 @@ import { identityMergeSuspendedV1PropertiesSchema } from "../events/identity/mer
 import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.js";
 import { identityMergedV2PropertiesSchema } from "../events/identity/merged.v2.js";
 import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
-import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
-import { profileUpdatedV1PropertiesSchema } from "../events/profile/updated.v1.js";
-import { signupCompletedV1PropertiesSchema } from "../events/signup/completed.v1.js";
-import { subscriptionRenewedV1PropertiesSchema } from "../events/subscription/renewed.v1.js";
-import { userIdentifiedV1PropertiesSchema } from "../events/user/identified.v1.js";
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
+import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
+import { profileUpdatedV1PropertiesSchema } from "../events/profile/updated.v1.js";
 import { sessionEndedV1PropertiesSchema } from "../events/session/ended.v1.js";
 import { sessionStartedV1PropertiesSchema } from "../events/session/started.v1.js";
+import { signupCompletedV1PropertiesSchema } from "../events/signup/completed.v1.js";
+import { subscriptionRenewedV1PropertiesSchema } from "../events/subscription/renewed.v1.js";
+import { traitComputedV1PropertiesSchema } from "../events/trait/computed.v1.js";
+import { userIdentifiedV1PropertiesSchema } from "../events/user/identified.v1.js";
 import type { SchemaBinding } from "./types.js";
 
 /**
@@ -119,6 +120,11 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "profile.updated",
     schema_version: 1,
     propertiesSchema: profileUpdatedV1PropertiesSchema,
+  },
+  {
+    event: "trait.computed",
+    schema_version: 1,
+    propertiesSchema: traitComputedV1PropertiesSchema,
   },
   {
     event: "payment.approved",

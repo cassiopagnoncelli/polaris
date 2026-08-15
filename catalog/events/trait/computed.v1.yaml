@@ -1,0 +1,23 @@
+# Catalog entry: trait.computed v1 (ACTIVE)
+#
+# One record per trait definition per RUN — not per profile.
+#
+# A trait touching a hundred thousand profiles emits one of these, and the
+# per-profile detail rides `profile.updated`. Emitting a `trait.computed`
+# per profile would put the same information on the spine twice and make a
+# nightly run a hundred thousand events wide for no reader.
+#
+# The number worth watching is `changed_count`. A trait whose changed count
+# jumps to the full population overnight has usually had its definition
+# edited, not its customers.
+name: trait.computed
+schema_version: 1
+domain: trait
+owner: platform-data
+description: >-
+  Records that one computed-trait definition finished a run, with how many
+  profiles it computed, how many changed, and how long the query took.
+lifecycle: active
+since: "2026-08-15"
+schema_module: "@polaris/shared-schemas/events/trait/computed.v1"
+schema_export: traitComputedV1PropertiesSchema

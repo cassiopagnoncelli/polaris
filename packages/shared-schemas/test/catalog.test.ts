@@ -92,6 +92,7 @@ describe("EventCatalog (built from YAML + bindings)", () => {
       "session.started",
       "signup.completed",
       "subscription.renewed",
+      "trait.computed",
       "user.identified",
     ]);
   });
