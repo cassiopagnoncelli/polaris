@@ -26,6 +26,9 @@ importers:
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:packages/shared-transport
+      '@polaris/trait-catalog':
+        specifier: workspace:*
+        version: link:catalog/traits
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19
