@@ -1458,3 +1458,24 @@ describe("destination runtime — circuit breaker", () => {
     ).toBe("closed");
   });
 });
+
+describe("destination runtime — build version on every row", () => {
+  it("stamps consumer_build_version on a DROP, not only on delivered rows", () => {
+    // It was absent from `RecordDropInput` entirely, so every drop wrote
+    // NULL while every accepted, failed and skipped row carried the build —
+    // making "which build dropped these?" the one question the column could
+    // not answer, on exactly the rows an operator asks it about.
+    const env = makeEnv({ requiredConsent: { marketing: true } });
+    const consumer = buildConsumer(env, { consumerBuildVersion: "build-42" });
+    return consumer
+      .handleEvent({
+        envelope: makeEnvelope({ consent: { marketing: false } }),
+        destination_id: SEED_INSTANCE.destination_id,
+      })
+      .then(() => {
+        const rec = lastRecord(env);
+        expect(rec?.status).toBe("dropped_consent");
+        expect(rec?.consumer_build_version).toBe("build-42");
+      });
+  });
+});

@@ -894,6 +894,7 @@ async function processOne<Payload>(
   if (normalizeOutcome.kind === "drop") {
     await releaseClaim();
     return recordDrop({
+      ...outcomeBuildVersion,
       records,
       metrics,
       logger,
@@ -1498,6 +1499,8 @@ async function recordOutcome(input: RecordOutcomeInput): Promise<DeliveryRecord>
 }
 
 interface RecordDropInput {
+  /** Operational build version, same as every other outcome carries. */
+  readonly consumerBuildVersion?: string;
   readonly records: DeliveryRecordRepository;
   readonly metrics: DestinationMetrics;
   readonly logger: Logger;
@@ -1520,9 +1523,17 @@ interface RecordDropInput {
 }
 
 async function recordDrop(input: RecordDropInput): Promise<DeliveryRecord> {
+  // `consumerBuildVersion` is forwarded like every other outcome. It was
+  // absent from `RecordDropInput` entirely, so every drop row wrote NULL
+  // while every accepted, failed and skipped row carried the build — which
+  // made "which build dropped these?" the one question the column could not
+  // answer, on exactly the rows an operator asks it about.
   const status: DeliveryRecordStatus = mapDropReasonToStatus(input.reason);
   const error_class: DeliveryRecordErrorClass = mapDropReasonToErrorClass(input.reason);
   return recordOutcome({
+    ...(input.consumerBuildVersion !== undefined
+      ? { consumerBuildVersion: input.consumerBuildVersion }
+      : {}),
     records: input.records,
     metrics: input.metrics,
     logger: input.logger,
