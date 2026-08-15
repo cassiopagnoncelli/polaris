@@ -102,3 +102,26 @@ MAILTO=""
 # Audit retention (2 years) has no purge job yet — see
 # docs/operations/backup-and-retention.md "Audit retention policy". When one
 # lands it belongs here.
+
+# ---------------------------------------------------------------------------
+# Computed traits (6PRTZ9QY)
+# ---------------------------------------------------------------------------
+#
+# One pass per (project, environment). Staggered five minutes apart and
+# placed AFTER the attribution prunes at :17/:22/:27, because a trait reads
+# projections the prune does not touch but shares the cluster with it — two
+# heavy jobs at the same minute is how a nightly window becomes a nightly
+# incident.
+#
+# Idempotent by construction: the runner diffs against stored values and
+# writes only changes, so a re-run over an unchanged population bumps no
+# `traits_version` and emits no `profile.updated`. A manual invocation
+# overlapping the cron is therefore safe, which is why there is no lock.
+#
+# Production is deliberately LAST and reads its own env file, matching the
+# prune jobs: the extra file is where the production credential lives, and
+# keeping it out of the shared one means a development-only host cannot
+# accidentally hold it.
+35 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env development >> /var/log/polaris/traits-compute.log 2>&1
+40 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env staging     >> /var/log/polaris/traits-compute.log 2>&1
+45 3 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env production >> /var/log/polaris/traits-compute.log 2>&1

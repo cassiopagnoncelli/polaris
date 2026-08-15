@@ -39,6 +39,7 @@
     "@polaris/shared-control-plane": "workspace:*",
     "@polaris/shared-control-plane-db": "workspace:*",
     "@polaris/shared-db": "workspace:*",
+    "@polaris/trait-catalog": "workspace:*",
     "@polaris/shared-destinations": "workspace:*",
     "@polaris/shared-environments": "workspace:*",
     "@polaris/shared-logger": "workspace:*",

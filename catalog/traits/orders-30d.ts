@@ -12,7 +12,7 @@
  * "how many orders" is a fact the producer reported.
  */
 
-import { traitDefinitionSchema, type TraitDefinition } from "./types.js";
+import { type TraitDefinition, traitDefinitionSchema } from "./types.js";
 
 export const ordersThirtyDays: TraitDefinition = traitDefinitionSchema.parse({
   key: "orders_30d",

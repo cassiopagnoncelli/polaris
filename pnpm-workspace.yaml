@@ -3,6 +3,9 @@ packages:
   - "packages/*"
   - "sync/*/*/*"
   - "async/*/*/*"
+  # Trait definitions are a package so the CLI and the runner import the
+  # same registry rather than each re-reading the directory.
+  - "catalog/traits"
   - "tests"
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only

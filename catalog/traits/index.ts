@@ -11,8 +11,8 @@ export {
   READABLE_PROJECTIONS,
   TRAIT_TYPES,
   type TraitDefinition,
-  traitDefinitionSchema,
   type TraitType,
+  traitDefinitionSchema,
 } from "./types.js";
 
 import { ordersThirtyDays } from "./orders-30d.js";

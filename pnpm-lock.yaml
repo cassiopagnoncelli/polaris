@@ -197,6 +197,9 @@ importers:
       '@polaris/shared-transport':
         specifier: workspace:*
         version: link:../../packages/shared-transport
+      '@polaris/trait-catalog':
+        specifier: workspace:*
+        version: link:../../catalog/traits
       commander:
         specifier: ^14.0.2
         version: 14.0.3
@@ -506,6 +509,12 @@ importers:
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  catalog/traits:
+    dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
