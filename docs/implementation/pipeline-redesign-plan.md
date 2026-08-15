@@ -288,7 +288,19 @@ Two structural decisions inside the tree:
   (a geo bug cannot stall identity), and a tree that reads as the
   topology. The price — one extra broker hop through a short-retention,
   regenerable family — is accepted. Ownership line: **the identity stage
-  is the profile store's only writer; the enrichment stage only reads.**
+  is the profile store's only SYNC writer; the enrichment stage only
+  reads.** Amended by R6 (6PRTZ9QY): async trait computation writes
+  `traits` and `traits_version` and nothing else. The rule exists so that
+  one writer decides WHO someone is — identifiers, merges, canonical
+  customer id — because two deciders there produce split or wrongly-merged
+  profiles, which is the race the resolver's advisory locks close. Traits
+  are WHAT we know about a person: a disjoint column set, no contention
+  with resolution, and a batch writer touching them cannot cause an
+  identity split. The alternative considered and rejected was emitting
+  identify-family events through the ingester, which would loop traits
+  computed FROM projections back through the whole spine to be written —
+  a round trip with the latency of the entire pipeline, and it would make
+  trait computation fail whenever ingestion was unhealthy.
 - **The enrichment stage composes enrichers in-process** rather than one
   hop per enricher. `sync/enrichment/runtime` pins enricher versions the
   way a destination consumer's descriptor pins its normalize/mapper/
