@@ -27,6 +27,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@polaris/policy-catalog": "workspace:*",
     "@polaris/shared-config": "workspace:*",
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-transport": "workspace:*",

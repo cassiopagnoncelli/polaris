@@ -110,6 +110,9 @@ importers:
 
   apps/ingester-api:
     dependencies:
+      '@polaris/policy-catalog':
+        specifier: workspace:*
+        version: link:../../catalog/policy
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config
@@ -564,6 +567,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  catalog/policy:
+    dependencies:
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../../packages/shared-policy
+
   catalog/traits:
     dependencies:
       zod:
@@ -572,6 +581,9 @@ importers:
 
   packages/destination-host:
     dependencies:
+      '@polaris/policy-catalog':
+        specifier: workspace:*
+        version: link:../../catalog/policy
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../shared-db
@@ -584,6 +596,9 @@ importers:
       '@polaris/shared-metrics':
         specifier: workspace:*
         version: link:../shared-metrics
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../shared-policy
       '@polaris/shared-project-config':
         specifier: workspace:*
         version: link:../shared-project-config
@@ -730,6 +745,9 @@ importers:
       '@polaris/shared-logger':
         specifier: workspace:*
         version: link:../shared-logger
+      '@polaris/shared-policy':
+        specifier: workspace:*
+        version: link:../shared-policy
       '@polaris/shared-processor':
         specifier: workspace:*
         version: link:../shared-processor

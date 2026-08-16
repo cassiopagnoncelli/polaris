@@ -1,3 +1,4 @@
+import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import type { PolarisEnvironment } from "@polaris/shared-environments";
 import { createLogger, type Logger } from "@polaris/shared-logger";
@@ -136,9 +137,13 @@ export interface BuildIngesterAppOptions {
   readonly catalog?: EventCatalog;
   /**
    * Map of project_id -> policy override. Populates the policy resolver.
-   * Production builds populate this from `catalog/policy/forbidden-fields.*.ts`
-   * at deploy time (a future task; v1 ships the resolver with the empty
-   * map, which means every project uses platform defaults).
+   *
+   * Defaults to `PROJECT_POLICY_OVERRIDES` from `@polaris/policy-catalog`,
+   * the deploy-time registry backed by `catalog/policy/forbidden-fields.*.ts`.
+   * A project absent from that registry runs platform defaults.
+   *
+   * Tests inject a narrower map; passing an empty one restores the
+   * platform-defaults-everywhere behaviour explicitly.
    */
   readonly projectPolicies?: ReadonlyMap<string, ProjectPolicyOverride>;
   /** Pre-built ingest metrics registry — useful for sharing with `/metrics`. */
@@ -288,7 +293,7 @@ export async function buildIngesterApp(
   // ---- catalog + policy ------------------------------------------------
   const catalog = options.catalog ?? loadRuntimeCatalog();
   const policy: PolicyResolver = createPolicyResolver({
-    ...(options.projectPolicies !== undefined ? { projectPolicies: options.projectPolicies } : {}),
+    projectPolicies: options.projectPolicies ?? PROJECT_POLICY_OVERRIDES,
   });
 
   // ---- metrics ---------------------------------------------------------

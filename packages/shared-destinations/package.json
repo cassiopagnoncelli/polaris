@@ -74,6 +74,7 @@
     "@polaris/shared-destination-normalize": "workspace:*",
     "@polaris/shared-transport": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
+    "@polaris/shared-policy": "workspace:*",
     "@polaris/shared-processor": "workspace:*",
     "@polaris/shared-secrets": "workspace:*",
     "kysely": "^0.29.0",

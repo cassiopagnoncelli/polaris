@@ -65,6 +65,7 @@ import {
   normalizeForDestination,
 } from "@polaris/shared-destination-normalize";
 import type { Logger } from "@polaris/shared-logger";
+import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 
 /**
  * The runtime's view of project configuration.
@@ -214,6 +215,22 @@ export interface DestinationConsumerOptions<Payload> {
    * default and schedules a refresh through the store's own machinery.
    */
   readonly projectConfig?: ProjectConfigLookup | undefined;
+  /**
+   * `project_id` -> forbidden-field override, for the second-pass
+   * redaction inside `normalizeForDestination`.
+   *
+   * The ingester applied the same override at intake. This is the
+   * delivery-side half of the identical policy: a project override that
+   * tightened between intake and now (or that was added to the registry
+   * while events were already in the retention window) is enforced here
+   * before anything reaches a vendor.
+   *
+   * The runtime does not read `catalog/policy` itself — a package that
+   * loaded the registry could not be tested against a fixture override.
+   * The host injects it, which is where the deploy-time default lives.
+   * Absent means platform defaults for every project.
+   */
+  readonly projectPolicies?: ReadonlyMap<string, ProjectPolicyOverride> | undefined;
   /** Structured logger. */
   readonly logger: Logger;
   /**
@@ -406,6 +423,7 @@ export function createDestinationConsumer<Payload>(
       records: options.records,
       ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
       projectConfig: options.projectConfig,
+      projectPolicies: options.projectPolicies,
       producer: options.producer,
       logger: options.logger,
       now,
@@ -540,6 +558,7 @@ export function createDestinationConsumer<Payload>(
           records: options.records,
           ...(options.dlqRecords !== undefined ? { dlqRecords: options.dlqRecords } : {}),
           projectConfig: options.projectConfig,
+          projectPolicies: options.projectPolicies,
           producer: options.producer,
           logger: options.logger,
           now,
@@ -632,6 +651,7 @@ interface ProcessOneInput<Payload> {
   readonly records: DeliveryRecordRepository;
   readonly dlqRecords?: DlqRecordRepository;
   readonly projectConfig: ProjectConfigLookup | undefined;
+  readonly projectPolicies: ReadonlyMap<string, ProjectPolicyOverride> | undefined;
   readonly producer: PolarisProducer;
   readonly logger: Logger;
   readonly now: () => Date;
@@ -658,6 +678,7 @@ async function processOne<Payload>(
     records,
     dlqRecords,
     projectConfig,
+    projectPolicies,
     producer,
     logger,
     now,
@@ -913,6 +934,12 @@ async function processOne<Payload>(
   const releaseClaim = (): Promise<void> => dedupe.release(instance.destination_id, delivery_key);
 
   // 5. Normalize.
+  //
+  // The project override is keyed off the ENVELOPE's project_id, not the
+  // instance's: the policy belongs to the data, and a destination
+  // instance can receive events from a project other than the one that
+  // configured it.
+  const projectPolicyOverride = projectPolicies?.get(envelope.project_id);
   const normalizeOutcome = normalizeForDestination(envelope, {
     destinationId: instance.destination_id,
     requiredConsent: descriptor.requiredConsent,
@@ -922,6 +949,7 @@ async function processOne<Payload>(
     ...(descriptor.identityFromProperties !== undefined
       ? { identityFromProperties: descriptor.identityFromProperties }
       : {}),
+    ...(projectPolicyOverride !== undefined ? { projectPolicyOverride } : {}),
   });
   if (normalizeOutcome.kind === "drop") {
     await releaseClaim();

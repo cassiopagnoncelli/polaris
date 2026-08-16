@@ -6,6 +6,10 @@ packages:
   # Trait definitions are a package so the CLI and the runner import the
   # same registry rather than each re-reading the directory.
   - "catalog/traits"
+  # Same reason for the forbidden-field policy: the ingester's first pass
+  # and the destination's second pass must enforce the identical override
+  # set, so they import one registry instead of each discovering files.
+  - "catalog/policy"
   - "tests"
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only

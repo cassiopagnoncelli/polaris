@@ -37,6 +37,7 @@
  * down something the caller is still using.
  */
 
+import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
 import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
 import {
   createDestinationConsumer,
@@ -59,6 +60,7 @@ import {
 } from "@polaris/shared-destinations";
 import type { Logger } from "@polaris/shared-logger";
 import { createLogger } from "@polaris/shared-logger";
+import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 import { toPrometheusText } from "@polaris/shared-metrics";
 import {
   createDestinationProjectConfigLookup,
@@ -114,6 +116,13 @@ export interface DestinationHostOverrides<Payload> {
   readonly dedupe?: DestinationDedupe;
   readonly rateLimiter?: DestinationRateLimiterLike;
   readonly projectConfig?: ProjectConfigLookup;
+  /**
+   * Forbidden-field overrides for the delivery-side second pass.
+   * Defaults to the deploy-time `@polaris/policy-catalog` registry — the
+   * same map the ingester loads at intake. Tests inject a fixture map;
+   * an empty map means platform defaults for every project.
+   */
+  readonly projectPolicies?: ReadonlyMap<string, ProjectPolicyOverride>;
   readonly now?: () => Date;
   readonly readinessProbes?: readonly ReadinessProbe[];
   readonly shutdownTasks?: readonly ShutdownTask[];
@@ -284,6 +293,7 @@ export async function buildDestinationHost<Payload, Config extends DestinationHo
         store: projectConfigStore,
         namespace: input.projectConfigNamespace,
       }),
+    projectPolicies: overrides.projectPolicies ?? PROJECT_POLICY_OVERRIDES,
     metrics,
     ...(overrides.now !== undefined ? { now: overrides.now } : {}),
   });
