@@ -219,6 +219,16 @@ export {
   toProcessorSnapshot,
 } from "./mutations/processor-activations.js";
 export {
+  type AudienceMembershipRow,
+  type AudienceScope,
+  countOpenAudienceMemberships,
+  enterAudience,
+  exitAudience,
+  listAudienceMemberships,
+  listOpenAudienceMemberships,
+  restampAudienceMemberships,
+} from "./mutations/audience-memberships.js";
+export {
   type ProfilePlaneTruncateCounts,
   type TruncateProfilePlaneInput,
   truncateProfilePlaneWithAudit,

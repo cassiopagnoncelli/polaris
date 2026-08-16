@@ -13,6 +13,8 @@ import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
 import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
+import { audienceEnteredV1PropertiesSchema } from "../events/audience/entered.v1.js";
+import { audienceExitedV1PropertiesSchema } from "../events/audience/exited.v1.js";
 import { profileUpdatedV1PropertiesSchema } from "../events/profile/updated.v1.js";
 import { sessionEndedV1PropertiesSchema } from "../events/session/ended.v1.js";
 import { sessionStartedV1PropertiesSchema } from "../events/session/started.v1.js";
@@ -125,6 +127,16 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "trait.computed",
     schema_version: 1,
     propertiesSchema: traitComputedV1PropertiesSchema,
+  },
+  {
+    event: "audience.entered",
+    schema_version: 1,
+    propertiesSchema: audienceEnteredV1PropertiesSchema,
+  },
+  {
+    event: "audience.exited",
+    schema_version: 1,
+    propertiesSchema: audienceExitedV1PropertiesSchema,
   },
   {
     event: "payment.approved",

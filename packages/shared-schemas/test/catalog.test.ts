@@ -78,6 +78,8 @@ describe("EventCatalog (built from YAML + bindings)", () => {
       "attribution.first_touch_assigned",
       "attribution.last_touch_assigned",
       "attribution.touchpoint_captured",
+      "audience.entered",
+      "audience.exited",
       "checkout.started",
       "enriched.geoip",
       "identity.link_rejected",

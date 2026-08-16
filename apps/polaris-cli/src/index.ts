@@ -87,6 +87,24 @@ export type {
   CommandRegistrarDeps,
   CommandResult,
 } from "./command.js";
+export { audiencesCommand } from "./commands/audiences/index.js";
+export {
+  type AudiencesComputeArgs,
+  type AudiencesComputeHooks,
+  type AudiencesComputeRunner,
+  audiencesComputeCommand,
+  buildAudiencesComputeRunner,
+} from "./commands/audiences/compute.js";
+export {
+  AUDIENCE_SHOW_DEFAULT_LIMIT,
+  AUDIENCE_SHOW_MAX_LIMIT,
+  type AudiencesShowArgs,
+  type AudiencesShowHooks,
+  type AudiencesShowMember,
+  type AudiencesShowStore,
+  audiencesShowCommand,
+  buildAudiencesShowRunner,
+} from "./commands/audiences/show.js";
 export { auditListCommand, auditShowCommand } from "./commands/audit/index.js";
 export {
   type AuditListHooks,

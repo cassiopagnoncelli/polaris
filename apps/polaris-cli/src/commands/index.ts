@@ -18,6 +18,7 @@
  * shell's only built-ins for P6-001.
  */
 import type { CommandDefinition } from "../command.js";
+import { audiencesCommand } from "./audiences/index.js";
 import { auditCommand } from "./audit/index.js";
 import { clickhouseRebuildCommand } from "./clickhouse-rebuild/index.js";
 import { configCommand } from "./config/index.js";
@@ -40,6 +41,7 @@ import { violationsCommand } from "./violations/index.js";
 
 export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   versionCommand,
+  audiencesCommand,
   projectsCommand,
   sourcesCommand,
   keysCommand,
@@ -61,6 +63,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
 ];
 
 export {
+  audiencesCommand,
   auditCommand,
   clickhouseRebuildCommand,
   configCommand,

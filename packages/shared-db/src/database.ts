@@ -881,9 +881,44 @@ export interface ProfileMergesTable {
   merged_at: Generated<Date>;
 }
 
+/**
+ * `audience_memberships` — derived audience membership.
+ *
+ * Current state only. Transition history lives on `profile.events` as
+ * `audience.entered` / `audience.exited`, the same division `profiles.traits`
+ * and `profile.updated` already use: Postgres holds what a scheduled run
+ * needs to read, ClickHouse holds the unbounded record of what changed.
+ *
+ * Definitions never appear here — what an audience MEANS is code in
+ * `catalog/audiences/`. A predicate column would make an audience's meaning
+ * editable without a deploy, which is what the file-heavy rule forbids.
+ */
+export interface AudienceMembershipsTable {
+  /** Project scope. References `projects(project_id)`. */
+  project_id: string;
+  /** Environment scope. Closed set: development | staging | production. */
+  environment: string;
+  /** Catalog key from `catalog/audiences/`. Stable by contract. */
+  audience: string;
+  /**
+   * Definition version that last EVALUATED this row — not the version the
+   * profile joined under. A bump re-derives membership; a profile that
+   * qualifies under both versions keeps its row and gets a new stamp.
+   */
+  audience_version: number;
+  /** References `profiles(profile_id)`. */
+  profile_id: string;
+  /** Start of the current or most recent membership. */
+  entered_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  /** NULL while the profile is a member. */
+  exited_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 export interface Database {
   api_keys: ApiKeyTable;
   attribution_touchpoint_chains: AttributionTouchpointChainsTable;
+  audience_memberships: AudienceMembershipsTable;
   destinations: DestinationsTable;
   identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;

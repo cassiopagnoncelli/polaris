@@ -14,7 +14,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { findTraitSqlProblems, stripComments, tablesReferenced, walk } from "../lint-trait-sql.mjs";
+import {
+  findTraitSqlProblems,
+  SCANNED_CATALOG_DIRS,
+  stripComments,
+  tablesReferenced,
+  walk,
+} from "../lint-trait-sql.mjs";
 
 describe("findTraitSqlProblems", () => {
   it("accepts a definition reading an allowed projection", () => {
@@ -67,6 +73,17 @@ describe("findTraitSqlProblems", () => {
   it("is case-insensitive and prefix-agnostic", () => {
     const src = "const t = { sql: `select x FROM POLARIS.ANALYTICS_RAW` };";
     expect(findTraitSqlProblems(src, "t.ts")).toHaveLength(1);
+  });
+});
+
+describe("SCANNED_CATALOG_DIRS", () => {
+  it("covers audiences as well as traits", () => {
+    // Audiences arrived after this check did. A projection-sourced
+    // audience is cron-driven SQL against the same shared cluster, so a
+    // definition source outside the scan would be a hole in exactly the
+    // shape this check exists to close.
+    expect(SCANNED_CATALOG_DIRS).toContain("traits");
+    expect(SCANNED_CATALOG_DIRS).toContain("audiences");
   });
 });
 

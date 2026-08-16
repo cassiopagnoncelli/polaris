@@ -51,6 +51,14 @@ export {
 // for ingester and processor consumption. Per `10-sdk-standards.md`, the
 // Web SDK explicitly avoids bundling the event catalog.
 export {
+  type AudienceEnteredV1Properties,
+  audienceEnteredV1PropertiesSchema,
+} from "./events/audience/entered.v1.js";
+export {
+  type AudienceExitedV1Properties,
+  audienceExitedV1PropertiesSchema,
+} from "./events/audience/exited.v1.js";
+export {
   type PageViewedV1Properties,
   pageViewedV1PropertiesSchema,
 } from "./events/page/viewed.v1.js";

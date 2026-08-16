@@ -164,9 +164,15 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1110.0
+      '@polaris/audience-catalog':
+        specifier: workspace:*
+        version: link:../../catalog/audiences
       '@polaris/policy-catalog':
         specifier: workspace:*
         version: link:../../catalog/policy
+      '@polaris/processor-audiences-v1':
+        specifier: workspace:*
+        version: link:../../async/computation/audiences/v1
       '@polaris/processor-traits-v1':
         specifier: workspace:*
         version: link:../../async/computation/traits/v1
@@ -344,6 +350,12 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  async/computation/audiences/v1:
+    dependencies:
+      '@polaris/audience-catalog':
+        specifier: workspace:*
+        version: link:../../../../catalog/audiences
 
   async/computation/sessionizer/v1:
     dependencies:
@@ -566,6 +578,12 @@ importers:
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  catalog/audiences:
+    dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3

@@ -1,8 +1,14 @@
 #!/usr/bin/env node
-// Polaris trait-SQL check.
+// Polaris computed-SQL check.
 //
-// A computed trait's SQL may read PROJECTIONS. It may not read
-// `analytics_raw` or `analytics_processed`.
+// SQL in a computed-trait or audience definition may read PROJECTIONS. It
+// may not read `analytics_raw` or `analytics_processed`.
+//
+// Both directories are scanned because both are cron-driven SQL against
+// the shared cluster with identical blast radius. Audiences arrived after
+// this check did, and a definition source outside its scope would be a
+// hole in exactly the shape the check exists to close — the same way
+// `catalog/policy` sat outside the dead-export check.
 //
 // This is a lint rather than a runtime guard because the failure it
 // prevents happens at 03:00 on a cron, on a shared cluster, with nobody
@@ -29,7 +35,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
-/** Tables a trait may read. Mirrors READABLE_PROJECTIONS in the catalog. */
+/** Directories whose `.ts` definitions carry cron-driven SQL. */
+export const SCANNED_CATALOG_DIRS = ["traits", "audiences"];
+
+/** Tables a definition may read. Mirrors READABLE_PROJECTIONS in the catalog. */
 export const ALLOWED_TABLES = ["event_daily_counts", "session_daily_metrics"];
 
 /**
@@ -121,16 +130,18 @@ export function walk(dir, out = []) {
 
 function main() {
   const root = process.env["POLARIS_TRAIT_ROOT"] ?? DEFAULT_ROOT;
-  const dir = join(root, "catalog", "traits");
-  const files = walk(dir);
+  const files = [];
+  for (const catalogDir of SCANNED_CATALOG_DIRS) {
+    files.push(...walk(join(root, "catalog", catalogDir)));
+  }
   const problems = [];
   for (const file of files) {
     problems.push(...findTraitSqlProblems(readFileSync(file, "utf8"), relative(root, file)));
   }
 
   if (problems.length > 0) {
-    console.error(`trait-sql check: ${String(problems.length)} definition(s) read a table traits`);
-    console.error("must not read. Traits are computed on a cron against a shared cluster.\n");
+    console.error(`trait-sql check: ${String(problems.length)} definition(s) read a table they`);
+    console.error("must not. These run on a cron against a shared cluster.\n");
     for (const problem of problems) {
       console.error(`  ${problem.file}  ${problem.reason}`);
     }

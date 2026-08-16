@@ -1,0 +1,27 @@
+# Catalog entry: audience.entered v1 (ACTIVE)
+#
+# One record per profile per TRANSITION. A run that finds nothing changed
+# emits nothing at all.
+#
+# That is the contract a destination relies on: every event on this stream
+# is a change, so an attribute write per event is correct. Re-emitting
+# membership for an unchanged population would turn a nightly run into one
+# vendor write per member per day, and the consumer would have to rebuild
+# the transition set downstream — without the stored state that makes it
+# possible to do correctly.
+#
+# `re_entry` distinguishes a profile rejoining from one arriving for the
+# first time. The runner can tell because an exited membership row
+# survives its exit; a destination running a welcome campaign needs the
+# difference and cannot derive it.
+name: audience.entered
+schema_version: 1
+domain: audience
+owner: platform-data
+description: >-
+  Records that a profile entered an audience, naming the definition
+  version that evaluated the transition and whether it is a re-entry.
+lifecycle: active
+since: "2026-08-16"
+schema_module: "@polaris/shared-schemas/events/audience/entered.v1"
+schema_export: audienceEnteredV1PropertiesSchema

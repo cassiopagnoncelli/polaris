@@ -10,6 +10,9 @@ packages:
   # and the destination's second pass must enforce the identical override
   # set, so they import one registry instead of each discovering files.
   - "catalog/policy"
+  # And for audiences: the CLI lists definitions, the runner evaluates
+  # them, and both must agree on what is registered.
+  - "catalog/audiences"
   - "tests"
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only

@@ -125,3 +125,14 @@ MAILTO=""
 35 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env development >> /var/log/polaris/traits-compute.log 2>&1
 40 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env staging     >> /var/log/polaris/traits-compute.log 2>&1
 45 3 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} traits compute --project storefront --env production >> /var/log/polaris/traits-compute.log 2>&1
+
+# Audiences — AFTER traits, deliberately.
+#
+# An audience is a predicate over computed traits, so running it before the
+# traits pass evaluates yesterday's numbers. Not an error, just stale by one
+# cycle; the 15-minute gap is slack for a slow trait run rather than a
+# guarantee, and a run that overlaps the previous one is safe because the
+# runner is idempotent (it diffs and acts only on transitions).
+50 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env development >> /var/log/polaris/audiences-compute.log 2>&1
+55 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env staging     >> /var/log/polaris/audiences-compute.log 2>&1
+0  4 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env production >> /var/log/polaris/audiences-compute.log 2>&1
