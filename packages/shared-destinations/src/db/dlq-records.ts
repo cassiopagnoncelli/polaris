@@ -223,6 +223,16 @@ export interface DlqRecordRepository {
   recordDlq(input: RecordDlqInput): Promise<DlqRecord>;
   /** Read one record by id. Returns `null` when not found. */
   findRecord(dlq_id: string): Promise<DlqRecord | null>;
+  /**
+   * List records for an `event_id`, newest first.
+   *
+   * The triage commands read by destination or vendor because that is how
+   * an operator asks "what is failing". `polaris events trace` asks the
+   * other question — "what happened to this one event" — and one event
+   * can be dead-lettered by several destinations independently, so this
+   * returns a list, not a row.
+   */
+  findByEventId(event_id: string): Promise<readonly DlqRecord[]>;
   /** List records for a destination_id, newest first, with filter knobs. */
   findByDestinationId(
     destination_id: string,
@@ -299,6 +309,15 @@ export class InMemoryDlqRecordRepository implements DlqRecordRepository {
 
   async findRecord(dlq_id: string): Promise<DlqRecord | null> {
     return this.records.get(dlq_id) ?? null;
+  }
+
+  async findByEventId(event_id: string): Promise<readonly DlqRecord[]> {
+    // Resolved records included — see the Kysely adapter for why.
+    return filterAndSlice(
+      Array.from(this.records.values()),
+      { includeResolved: true },
+      (r) => r.event_id === event_id,
+    );
   }
 
   async findByDestinationId(
@@ -414,6 +433,20 @@ export function createKyselyDlqRecordRepository(
     return row === undefined ? null : toRecord(row);
   }
 
+  async function findByEventId(event_id: string): Promise<readonly DlqRecord[]> {
+    // `includeResolved: true` — a trace reports history, not a work
+    // queue. "This event was dead-lettered and someone fixed it" is the
+    // answer an operator is looking for; hiding the row because it was
+    // resolved would report the event as having sailed through.
+    const rows = await applyFilter(
+      db.selectFrom("dlq_records").selectAll().where("event_id", "=", event_id),
+      { includeResolved: true },
+    )
+      .orderBy("published_at", "desc")
+      .execute();
+    return rows.map(toRecord);
+  }
+
   async function findByDestinationId(
     destination_id: string,
     filter: ListDlqRecordsFilter = {},
@@ -484,7 +517,14 @@ export function createKyselyDlqRecordRepository(
     return { applied: true, record: toRecord(updated) };
   }
 
-  return { recordDlq, findRecord, findByDestinationId, findByVendor, markResolved };
+  return {
+    recordDlq,
+    findRecord,
+    findByEventId,
+    findByDestinationId,
+    findByVendor,
+    markResolved,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildIngestLogInspectSql } from "../src/ingest-log.js";
+import { buildIngestLogInspectSql, createIngestLogReader } from "../src/ingest-log.js";
 import { buildEventDailyCountsSql } from "../src/projections/event-daily-counts.js";
 import { buildSessionDailyMetricsSql } from "../src/projections/session-daily-metrics.js";
 
@@ -118,5 +118,86 @@ describe("buildIngestLogInspectSql", () => {
     });
     expect(sql).toMatch(/ingested_at >= parseDateTime64BestEffort/);
     expect(sql).toMatch(/ingested_at < parseDateTime64BestEffort/);
+  });
+});
+
+/**
+ * The trace SQL is asserted through the reader rather than through a
+ * test-only builder: the fake client captures the query that would
+ * actually be issued, so the test cannot drift from the real path the way
+ * a parallel `build*Sql` helper can.
+ */
+function captureTraceSql(filter: Parameters<ReturnType<typeof createIngestLogReader>["trace"]>[0]) {
+  let captured = "";
+  const underlying = {
+    query: async (input: { query: string }) => {
+      captured = input.query;
+      return { json: async () => [] };
+    },
+  } as unknown as Parameters<typeof createIngestLogReader>[0]["underlying"];
+  const reader = createIngestLogReader({ underlying });
+  return reader.trace(filter).then(() => captured);
+}
+
+describe("ingestLog.trace SQL", () => {
+  const baseFilter = {
+    eventId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+    projectId: "storefront",
+  };
+
+  it("does NOT contain the FINAL keyword", async () => {
+    // The ingest log is the append-only transport record. FINAL would
+    // collapse the duplicate rows that are the whole diagnostic point.
+    expect(await captureTraceSql(baseFilter)).not.toMatch(/\bFINAL\b/i);
+  });
+
+  it("reads from polaris.analytics_ingest_log (NOT analytics_raw)", async () => {
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).toMatch(/FROM\s+polaris\.analytics_ingest_log/);
+    expect(sql).not.toMatch(/analytics_raw/);
+  });
+
+  it("binds both event_id and project_id", async () => {
+    // project_id is not optional: it leads the table's ORDER BY, so
+    // dropping it turns a key lookup into a scan of the whole window.
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).toMatch(/event_id = \{event_id:String\}/);
+    expect(sql).toMatch(/project_id = \{project_id:String\}/);
+  });
+
+  it("selects the processor stamp columns", async () => {
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).toMatch(/processor_name/);
+    expect(sql).toMatch(/processor_version/);
+  });
+
+  it("selects the transport lineage columns", async () => {
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).toMatch(/_topic/);
+    expect(sql).toMatch(/_partition/);
+    expect(sql).toMatch(/toString\(_offset\)/);
+  });
+
+  it("orders oldest first so the output reads as a timeline", async () => {
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).toMatch(/ORDER BY ingested_at ASC, _offset ASC/);
+  });
+
+  it("never selects the event payload", async () => {
+    // A trace reports lineage, not content. `properties` is where the
+    // event's data lives and it must not appear in the projection.
+    const sql = await captureTraceSql(baseFilter);
+    expect(sql).not.toMatch(/\bproperties\b/);
+    expect(sql).not.toMatch(/\bidentity\b/);
+    expect(sql).not.toMatch(/\bcontext\b/);
+  });
+
+  it("narrows by environment when one is given", async () => {
+    const sql = await captureTraceSql({ ...baseFilter, environment: "production" });
+    expect(sql).toMatch(/environment = \{environment:String\}/);
+  });
+
+  it("refuses a limit past the hard cap", async () => {
+    await expect(captureTraceSql({ ...baseFilter, limit: 10_000 })).rejects.toThrow(/limit/);
   });
 });

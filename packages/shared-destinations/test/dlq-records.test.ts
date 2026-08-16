@@ -101,6 +101,42 @@ describe("InMemoryDlqRecordRepository.findRecord", () => {
   });
 });
 
+describe("InMemoryDlqRecordRepository.findByEventId", () => {
+  it("returns an empty list for an event nobody dead-lettered", async () => {
+    const repo = new InMemoryDlqRecordRepository();
+    expect(await repo.findByEventId("evt_never_failed")).toEqual([]);
+  });
+
+  it("returns every destination that dead-lettered the same event", async () => {
+    // One event can be dead-lettered independently by several
+    // destinations, which is why this returns a list rather than a row.
+    const repo = new InMemoryDlqRecordRepository();
+    await repo.recordDlq(baseInput({ destination_id: "polaris_dst_meta" }));
+    await repo.recordDlq(baseInput({ destination_id: "polaris_dst_ga4" }));
+    await repo.recordDlq(baseInput({ event_id: "evt_other" }));
+
+    const rows = await repo.findByEventId("evt_dlq_001");
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.destination_id).sort()).toEqual([
+      "polaris_dst_ga4",
+      "polaris_dst_meta",
+    ]);
+  });
+
+  it("includes resolved records", async () => {
+    // `polaris events trace` reports history, not a work queue. Hiding a
+    // resolved row would report the event as having sailed through.
+    const repo = new InMemoryDlqRecordRepository();
+    const inserted = await repo.recordDlq(baseInput());
+    await repo.markResolved(inserted.dlq_id, "cassio", "vendor config fixed");
+
+    const rows = await repo.findByEventId("evt_dlq_001");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.resolved_at).not.toBeNull();
+    expect(rows[0]?.resolved_by).toBe("cassio");
+  });
+});
+
 describe("InMemoryDlqRecordRepository.findByDestinationId", () => {
   it("returns only the rows matching destination_id, newest first", async () => {
     const repo = new InMemoryDlqRecordRepository();

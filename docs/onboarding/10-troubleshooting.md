@@ -70,6 +70,31 @@ behind.
 
 **Diagnostic move.**
 
+Start with the trace. It asks all four stores at once and is almost
+always faster than working through them by hand:
+
+```bash
+polaris events trace <event_id> --project storefront
+```
+
+It prints, in order: whether the event was rejected at ingest, which
+families / partitions / offsets it passed through and which processor
+stamped each row, every destination attempt with its status, and any DLQ
+entry. A stage that is absent says so, and says why — "rejected at
+ingest, so it never reached the spine" is a different answer from "no
+transport lineage in the retention window", and the command distinguishes
+them.
+
+Two things to know about the output:
+
+- `--project` is required. It is the ingest-log sort key; without it the
+  query is a full scan of the 30-day retention window.
+- The transport half is bounded by that same 30-day TTL. For an older
+  event, absent lineage means aged out, not never arrived — the command
+  prints this reminder every time rather than trusting you to remember.
+
+If the trace does not settle it, the individual stores:
+
 1. Check processor lag on the dashboards listed in
    [Observability](../development/observability.md).
 2. Check the DLQ:
@@ -83,6 +108,19 @@ behind.
    dropped at the consumer's normalize stage (consent / no-identity /
    invalid). Check `delivery_records` for the destination, or page the
    on-call operator with the `event_id`.
+
+**Watching it happen live.** When the question is "is anything arriving
+at all", attach a tail:
+
+```bash
+polaris events tail --family resolved.events --project storefront --env production
+```
+
+This is safe to run against production. It is not a consumer: it joins no
+group and writes no checkpoint, so it cannot move a real consumer's
+position. Payloads are run through the same policy evaluator the ingester
+uses (with the project's override applied) and then truncated to 2 KiB.
+Ctrl-C detaches.
 
 ## 4. Destination not delivering
 

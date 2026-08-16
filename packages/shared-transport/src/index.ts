@@ -189,6 +189,9 @@ export {
   createAmqpStreamRangeDriver,
   DEFAULT_IDLE_TIMEOUT_MS,
   DEFAULT_SLACK_MS,
+  type FollowStreamInput,
+  type FollowStreamResult,
+  followStream,
   type ReadStreamRangeInput,
   type ReadStreamRangeResult,
   rangeOffsetSpec,
@@ -198,7 +201,8 @@ export {
   type StreamRangeDriver,
   type StreamRangeEvent,
   type StreamRangeTerminationReason,
-} from "./stream-range-reader.js";
+  type StreamTailTerminationReason,
+} from "./partition-stream-readers.js";
 export {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,

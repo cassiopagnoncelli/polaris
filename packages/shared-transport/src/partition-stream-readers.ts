@@ -1,5 +1,21 @@
 /**
- * Stream range reader.
+ * Partition stream readers.
+ *
+ * Two ways to read one RabbitMQ partition stream directly, over one
+ * shared substrate: `readStreamRange` (bounded by a time window, returns
+ * an array) and `followStream` (unbounded, streams to a callback until
+ * aborted). They live together because they are two entry points over the
+ * same machinery — one driver seam, one delivery shape, one projection,
+ * one ingestion-time rule — and splitting them would have meant exporting
+ * that machinery purely so the other half could reach it.
+ *
+ * Neither writes a checkpoint or joins a group. That is the property this
+ * module exists to guarantee: an inspection read must be invisible to the
+ * pipeline. `followStream` carries the sharper version of the rule —
+ * pointing a real `PolarisConsumer` at a live family to "have a look"
+ * would move that group's position and make the pipeline skip or
+ * re-deliver events. There is no checkpoint dependency here through which
+ * that could happen, which is stronger than remembering not to do it.
  *
  * Polaris replay turns a deterministic plan into a sequence of stream
  * reads + republished events. The plan owns the time window; the
@@ -348,6 +364,162 @@ export function createAmqpStreamRangeDriver(
 }
 
 // ---------------------------------------------------------------------------
+// Tail reader
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a tail stopped.
+ *
+ * Module-private: only the derived type is anyone's business outside this
+ * file, and an exported const nothing reads is the shape the dead-export
+ * check exists to catch.
+ */
+const STREAM_TAIL_TERMINATION_REASONS = [
+  /** The caller's abort signal fired — the normal Ctrl-C path. */
+  "aborted",
+  /** `maxEvents` was reached. */
+  "max_events",
+  /** The driver reported the channel closed. */
+  "channel_closed",
+] as const;
+
+export type StreamTailTerminationReason = (typeof STREAM_TAIL_TERMINATION_REASONS)[number];
+
+export interface FollowStreamInput {
+  /** Concrete partition stream, e.g. `raw.events-2`. */
+  readonly stream: string;
+  /**
+   * Where to attach, epoch milliseconds. Callers wanting "only new
+   * traffic" pass `Date.now()`; the chunk-granularity filter below makes
+   * that mean what it says.
+   */
+  readonly fromTimestampMs: number;
+  /** Called once per projected event, in stream order. */
+  readonly onEvent: (event: StreamRangeEvent) => void;
+  /**
+   * Stops the tail. The caller owns it — the CLI wires it to SIGINT.
+   * Without one the tail runs until the channel closes or `maxEvents`.
+   */
+  readonly signal?: AbortSignal;
+  /** Stop after this many events. Default: unbounded. */
+  readonly maxEvents?: number;
+  /**
+   * Called for a message that carried no Polaris platform headers, so it
+   * could not be projected. Foreign publishes are a real thing on a
+   * shared broker and silently swallowing them makes a tail look broken
+   * when it is working.
+   */
+  readonly onUnprojectable?: (delivery: StreamRangeDelivery) => void;
+}
+
+export interface FollowStreamResult {
+  readonly terminationReason: StreamTailTerminationReason;
+  /** How many events were handed to `onEvent`. */
+  readonly delivered: number;
+  /** Offset of the last event delivered, or `undefined` when none were. */
+  readonly lastOffset: string | undefined;
+}
+
+/**
+ * Follow one partition stream from a timestamp until aborted.
+ *
+ * Resolves after the driver has been released, so a caller that awaits
+ * this has a closed channel by the time it returns.
+ *
+ * The attach is chunk-granular — RabbitMQ positions at the start of the
+ * stream chunk containing the timestamp — so this drops anything whose
+ * ingestion time precedes `fromTimestampMs`. Unlike a range read, nothing
+ * downstream filters for the caller, and an operator who asked for "from
+ * now" should not watch yesterday's chunk remainder scroll past first.
+ */
+export async function followStream(
+  driver: StreamRangeDriver,
+  input: FollowStreamInput,
+): Promise<FollowStreamResult> {
+  const parsed = parsePartitionStreamName(input.stream);
+  const partition = parsed?.partition ?? 0;
+
+  let termination: StreamTailTerminationReason | undefined;
+  let delivered = 0;
+  let lastOffset: string | undefined;
+
+  let resolveDone: (() => void) | undefined;
+  const done = new Promise<void>((resolve) => {
+    resolveDone = resolve;
+  });
+
+  const finish = (reason: StreamTailTerminationReason): void => {
+    if (termination !== undefined) return;
+    termination = reason;
+    resolveDone?.();
+  };
+
+  const onAbort = (): void => {
+    finish("aborted");
+  };
+
+  const onMessage = (delivery: StreamRangeDelivery): void => {
+    if (termination !== undefined) return;
+
+    if (ingestionTimeMs(delivery) < input.fromTimestampMs) return;
+
+    const projected = toStreamRangeEvent(input.stream, partition, delivery);
+    if (projected === undefined) {
+      input.onUnprojectable?.(delivery);
+      return;
+    }
+
+    delivered += 1;
+    lastOffset = projected.offset;
+    input.onEvent(projected);
+
+    if (input.maxEvents !== undefined && delivered >= input.maxEvents) {
+      finish("max_events");
+    }
+  };
+
+  // Check before attaching: an already-aborted signal should not open a
+  // channel just to close it.
+  if (input.signal?.aborted === true) {
+    return { terminationReason: "aborted", delivered: 0, lastOffset: undefined };
+  }
+  input.signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await driver.start({
+      stream: input.stream,
+      offsetSpec: tailOffsetSpec(input.fromTimestampMs),
+      onMessage,
+      onClosed: () => {
+        finish("channel_closed");
+      },
+    });
+    await done;
+  } finally {
+    input.signal?.removeEventListener("abort", onAbort);
+    await driver.release();
+  }
+
+  return {
+    terminationReason: termination ?? "aborted",
+    delivered,
+    lastOffset,
+  };
+}
+
+/**
+ * Attach point for a tail.
+ *
+ * RabbitMQ reads an AMQP timestamp `x-stream-offset` as **seconds** since
+ * the epoch, so the millisecond bound is floored — the same conversion
+ * `rangeOffsetSpec` makes, restated because a tail has no resume offset
+ * to branch on.
+ */
+function tailOffsetSpec(fromTimestampMs: number): unknown {
+  return { "!": "timestamp", value: Math.floor(fromTimestampMs / 1000) };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -365,6 +537,13 @@ function ingestionTimeMs(delivery: StreamRangeDelivery): number {
   return delivery.timestampMs;
 }
 
+/**
+ * Project one raw delivery onto the typed event shape, or `undefined`
+ * when the message lacks the platform headers that scope it.
+ *
+ * Shared by both readers deliberately: a tail that disagreed with a range
+ * read about what a message *is* would make their output incomparable.
+ */
 function toStreamRangeEvent(
   stream: string,
   partition: number,

@@ -33,7 +33,7 @@ export {
   ClickHouseRoleDeniedError,
 } from "./errors.js";
 export type { HealthChecker } from "./health.js";
-export type { IngestLogReader } from "./ingest-log.js";
+export { INGEST_LOG_TRACE_MAX_LIMIT, type IngestLogReader } from "./ingest-log.js";
 export {
   createMergeMapStore,
   MERGE_MAP_TABLE,
@@ -113,6 +113,8 @@ export type {
   EventKey,
   HealthCheckResult,
   IngestLogFilter,
+  IngestLogTraceFilter,
+  IngestLogTraceRow,
   Logger,
   MetricsRecorder,
   RawQueryContext,

@@ -13,11 +13,28 @@
 import type { ClickHouseClient as UnderlyingClickHouseClient } from "@clickhouse/client";
 import { runQuery } from "./internal/exec.js";
 import { assertNoFinal, bindScalar } from "./internal/sql.js";
-import type { AnalyticsIngestLogRow, IngestLogFilter } from "./types.js";
+import type {
+  AnalyticsIngestLogRow,
+  IngestLogFilter,
+  IngestLogTraceFilter,
+  IngestLogTraceRow,
+} from "./types.js";
 
 export interface IngestLogReader {
   inspect(filter: IngestLogFilter): Promise<AnalyticsIngestLogRow[]>;
+  /**
+   * Every ingest-log row for one `event_id`, oldest first.
+   *
+   * Ordered ASC, unlike `inspect`: a trace is read as a timeline, and a
+   * timeline that runs backwards has to be re-read to be understood.
+   * Multiple rows are normal and diagnostic — the table is append-only
+   * and does not dedupe, so a duplicate delivery shows up as what it is.
+   */
+  trace(filter: IngestLogTraceFilter): Promise<IngestLogTraceRow[]>;
 }
+
+/** Hard cap on rows one trace returns. */
+export const INGEST_LOG_TRACE_MAX_LIMIT = 500;
 
 export function createIngestLogReader(input: {
   underlying: UnderlyingClickHouseClient;
@@ -89,6 +106,60 @@ export function createIngestLogReader(input: {
       assertNoFinal(sql, "ingestLog.inspect");
 
       return runQuery<AnalyticsIngestLogRow>({
+        underlying,
+        query: sql,
+        parameters: params,
+      });
+    },
+
+    async trace(filter) {
+      const limit = filter.limit ?? INGEST_LOG_TRACE_MAX_LIMIT;
+      if (!Number.isInteger(limit) || limit <= 0 || limit > INGEST_LOG_TRACE_MAX_LIMIT) {
+        throw new Error(
+          `ingestLog.trace: limit must be an integer in [1, ${INGEST_LOG_TRACE_MAX_LIMIT}].`,
+        );
+      }
+
+      const params: Record<string, unknown> = {
+        event_id: filter.eventId,
+        project_id: filter.projectId,
+        limit,
+      };
+      const where: string[] = [
+        "event_id = " + bindScalar("event_id", "String"),
+        "project_id = " + bindScalar("project_id", "String"),
+      ];
+      if (filter.environment !== undefined) {
+        params["environment"] = filter.environment;
+        where.push("environment = " + bindScalar("environment", "String"));
+      }
+
+      const sql = `
+        SELECT
+          event_id,
+          event,
+          schema_version,
+          project_id,
+          environment,
+          formatDateTime(occurred_at, '%Y-%m-%dT%H:%i:%S.%fZ') AS occurred_at,
+          formatDateTime(ingested_at, '%Y-%m-%dT%H:%i:%S.%fZ') AS ingested_at,
+          formatDateTime(_consumed_at, '%Y-%m-%dT%H:%i:%S.%fZ') AS _consumed_at,
+          processor_name,
+          processor_version,
+          _topic,
+          _partition,
+          toString(_offset) AS _offset
+        FROM polaris.analytics_ingest_log
+        WHERE ${where.join("\n          AND ")}
+        ORDER BY ingested_at ASC, _offset ASC
+        LIMIT ${bindScalar("limit", "UInt32")}
+      `.trim();
+
+      // Defense in depth: the ingest-log reader must never use FINAL.
+      // The table is append-only and its duplicates are the diagnostic.
+      assertNoFinal(sql, "ingestLog.trace");
+
+      return runQuery<IngestLogTraceRow>({
         underlying,
         query: sql,
         parameters: params,

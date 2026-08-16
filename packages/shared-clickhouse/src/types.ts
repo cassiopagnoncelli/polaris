@@ -192,6 +192,34 @@ export interface AnalyticsIngestLogRow {
 }
 
 /**
+ * One `analytics_ingest_log` row as `ingestLog.trace` returns it.
+ *
+ * Widens `AnalyticsIngestLogRow` with the processor stamp columns.
+ * `inspect` deliberately does not select them — it answers "what is
+ * arriving", where the stamps are noise — while a trace answers "what
+ * happened to THIS event", where they are the point: they name which
+ * processor wrote the row, so a duplicate event_id from two feeds is
+ * legible instead of confusing.
+ */
+export interface IngestLogTraceRow extends AnalyticsIngestLogRow {
+  processor_name: string;
+  processor_version: string;
+}
+
+/**
+ * Filter for `ingestLog.trace`. `eventId` is required — a trace is
+ * always about one event — and `projectId` is required because the
+ * table's ORDER BY leads with it, so omitting it turns a key lookup into
+ * a full scan of the retention window.
+ */
+export interface IngestLogTraceFilter {
+  eventId: string;
+  projectId: string;
+  environment?: string;
+  limit?: number;
+}
+
+/**
  * Filter for `ingestLog.inspect`. Defaults to recent rows for a single
  * project; callers can widen by passing `event` or extending the range.
  */

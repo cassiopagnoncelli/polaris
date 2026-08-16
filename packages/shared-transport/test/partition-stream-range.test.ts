@@ -5,7 +5,7 @@ import {
   readStreamRange,
   type StreamRangeDelivery,
   type StreamRangeDriver,
-} from "../src/stream-range-reader.js";
+} from "../src/partition-stream-readers.js";
 
 const WINDOW_FROM = Date.parse("2026-08-01T00:00:00.000Z");
 const WINDOW_TO = Date.parse("2026-08-01T01:00:00.000Z");

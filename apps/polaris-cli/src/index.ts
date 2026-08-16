@@ -466,6 +466,32 @@ export {
   type TopicsListHooks,
   type TopicsListStore,
 } from "./commands/topics/list.js";
+export { eventsCommand } from "./commands/events/index.js";
+export {
+  buildEventsTailRunner,
+  DEFAULT_MAX_PAYLOAD_BYTES,
+  type EventsTailArgs,
+  type EventsTailHooks,
+  eventsTailCommand,
+  MAX_PAYLOAD_BYTES_CEILING,
+  type TailedEvent,
+  toTailedEvent,
+} from "./commands/events/tail.js";
+export {
+  assemble as assembleEventTrace,
+  buildEventsTraceRunner,
+  type EventsTraceArgs,
+  type EventsTraceHooks,
+  type EventsTraceStore,
+  type EventTrace,
+  eventsTraceCommand,
+  INGEST_LOG_RETENTION_DAYS,
+  type TracedDlqRecord,
+  type TracedViolation,
+  toTracedDlqRecord,
+  toTracedViolation,
+  type TraceStage,
+} from "./commands/events/trace.js";
 export { violationsCommand } from "./commands/violations/index.js";
 export {
   buildViolationsListRunner,

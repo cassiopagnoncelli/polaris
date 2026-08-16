@@ -23,6 +23,7 @@ import { clickhouseRebuildCommand } from "./clickhouse-rebuild/index.js";
 import { configCommand } from "./config/index.js";
 import { deliveriesCommand } from "./deliveries/index.js";
 import { destinationsCommand } from "./destinations/index.js";
+import { eventsCommand } from "./events/index.js";
 import { dlqCommand } from "./dlq/index.js";
 import { exportCommand } from "./export/index.js";
 import { keysCommand } from "./keys/index.js";
@@ -54,6 +55,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   replayCommand,
   deliveriesCommand,
   dlqCommand,
+  eventsCommand,
   topicsCommand,
   clickhouseRebuildCommand,
 ];
@@ -65,6 +67,7 @@ export {
   deliveriesCommand,
   destinationsCommand,
   dlqCommand,
+  eventsCommand,
   exportCommand,
   keysCommand,
   operatorsCommand,

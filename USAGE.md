@@ -267,6 +267,33 @@ POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=
 ./polaris audit list --limit 10
 ```
 
+## 9. Follow One Event
+
+The test event you just sent has an `event_id`. To see everywhere it went:
+
+```bash
+./polaris events trace <event_id> --project storefront
+```
+
+The trace joins the quarantine, the ingest log's transport lineage and
+processor stamps, `delivery_records`, and the DLQ ledger into one
+timeline. `--project` is required — it is the ingest-log sort key.
+
+Stages that have not happened print as absent with a reason rather than
+as an error, so this works against a partial local stack: with no
+destinations configured, the DELIVERIES section says "no destination has
+attempted this event" instead of failing.
+
+To watch events arrive instead:
+
+```bash
+./polaris events tail --family raw.events --project storefront
+```
+
+Ctrl-C detaches. The tail joins no consumer group and writes no
+checkpoint, so it is safe against a shared or production broker; payloads
+are policy-redacted and truncated before display.
+
 ## ClickHouse Note
 
 `make setup` runs the ClickHouse schema bootstrap as one of its steps. To

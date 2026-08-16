@@ -27,7 +27,7 @@
  *     chunk's inclusive bounds is dropped — which is also what makes the
  *     reader's chunk-granular attach harmless.
  *
- * @see packages/shared-transport/src/stream-range-reader.ts
+ * @see packages/shared-transport/src/partition-stream-readers.ts
  * @see packages/shared-replay/src/executor.ts
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  */
