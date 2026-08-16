@@ -22,17 +22,22 @@ import {
 } from "@polaris/shared-policy";
 import { describe, expect, it } from "vitest";
 
-import {
-  checkoutOverride,
-  mergedPolicyFor,
-  policyOverrideFor,
-  PROJECT_POLICY_OVERRIDES,
-} from "../index.js";
+import { checkoutOverride, PROJECT_POLICY_OVERRIDES } from "../index.js";
+
+/**
+ * The effective policy for a project, computed the way the enforcement
+ * points compute it: look the override up in the registry, hand it to
+ * `mergePolicy`. Deliberately a test helper rather than an exported
+ * accessor — an accessor nothing but this file called is the shape the
+ * dead-export check exists to surface.
+ */
+function effectivePolicyFor(projectId: string) {
+  return mergePolicy(PROJECT_POLICY_OVERRIDES.get(projectId)).policy;
+}
 
 describe("policy registry", () => {
   it("registers the checkout override under its project_id", () => {
     expect(PROJECT_POLICY_OVERRIDES.get("checkout")).toBe(checkoutOverride);
-    expect(policyOverrideFor("checkout")).toBe(checkoutOverride);
   });
 
   it("keys every entry by the project_id declared inside the override", () => {
@@ -44,17 +49,17 @@ describe("policy registry", () => {
   });
 
   it("resolves an unregistered project to no override", () => {
-    expect(policyOverrideFor("no-such-project")).toBeUndefined();
+    expect(PROJECT_POLICY_OVERRIDES.get("no-such-project")).toBeUndefined();
   });
 
   it("gives an unregistered project the platform defaults verbatim", () => {
     // The no-behaviour-change guarantee: wiring the registry must not
     // change policy for any project that did not write an override.
-    expect(mergedPolicyFor("no-such-project")).toEqual(PLATFORM_DEFAULT_POLICY);
+    expect(effectivePolicyFor("no-such-project")).toEqual(PLATFORM_DEFAULT_POLICY);
   });
 
   it("gives a registered project a policy strictly wider than the defaults", () => {
-    const merged = mergedPolicyFor("checkout");
+    const merged = effectivePolicyFor("checkout");
     expect(merged).not.toEqual(PLATFORM_DEFAULT_POLICY);
     // Additive only — every platform reject survives the merge.
     for (const platformRule of PLATFORM_DEFAULT_POLICY.reject) {

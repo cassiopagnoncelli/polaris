@@ -79,7 +79,7 @@ const CLICKHOUSE_USER_ENV = "POLARIS_CLICKHOUSE_SERVICE_USER";
 const CLICKHOUSE_PASSWORD_ENV = "POLARIS_CLICKHOUSE_SERVICE_PASSWORD";
 
 /** Retention of `analytics_ingest_log`, per `sql/clickhouse/20_*.sql`. */
-export const INGEST_LOG_RETENTION_DAYS = 30;
+const INGEST_LOG_RETENTION_DAYS = 30;
 
 export interface EventsTraceArgs {
   readonly eventId: string;
@@ -102,7 +102,6 @@ export interface EventsTraceStore {
 
 export interface EventsTraceHooks {
   readonly openStore?: (ctx: CommandContext) => EventsTraceStore;
-  readonly now?: () => Date;
 }
 
 export const eventsTraceCommand: CommandDefinition = {
@@ -172,7 +171,6 @@ export function buildEventsTraceRunner(hooks: EventsTraceHooks = {}) {
       ...(args.limit !== undefined ? { limit: args.limit } : {}),
     };
 
-    const now = hooks.now ?? (() => new Date());
     const openStore = hooks.openStore ?? defaultStore;
     const store = openStore(ctx);
 
@@ -187,7 +185,7 @@ export function buildEventsTraceRunner(hooks: EventsTraceHooks = {}) {
       const ingestLog = await store.ingestLog(normalized);
       const deliveries = await store.deliveries(eventId);
       const dlq = await store.dlq(eventId);
-      trace = assemble(normalized, { violations, ingestLog, deliveries, dlq }, now());
+      trace = assemble(normalized, { violations, ingestLog, deliveries, dlq });
     } finally {
       await store.close();
     }
@@ -250,7 +248,7 @@ export interface TracedDlqRecord {
   readonly resolved_by: string | null;
 }
 
-export function toTracedDlqRecord(row: DlqRecord): TracedDlqRecord {
+function toTracedDlqRecord(row: DlqRecord): TracedDlqRecord {
   return {
     dlq_id: row.dlq_id,
     destination_id: row.destination_id,
@@ -284,7 +282,7 @@ export interface TracedViolation {
   readonly received_at: string;
 }
 
-export function toTracedViolation(row: ViolationRow): TracedViolation {
+function toTracedViolation(row: ViolationRow): TracedViolation {
   return {
     violation_id: row.violation_id,
     event: row.event,
@@ -315,7 +313,15 @@ interface RawReads {
   readonly dlq: readonly DlqRecord[];
 }
 
-export function assemble(args: EventsTraceArgs, reads: RawReads, _now: Date): EventTrace {
+/**
+ * Fold the four reads into the reported trace.
+ *
+ * Pure, and takes no clock: every timestamp in the output came from a
+ * store. A `now` was threaded through here at first and never read —
+ * the retention note is a fixed statement about the table's TTL, not a
+ * computed age, so there was nothing for it to do.
+ */
+function assemble(args: EventsTraceArgs, reads: RawReads): EventTrace {
   const found =
     reads.violations.length > 0 ||
     reads.ingestLog.length > 0 ||

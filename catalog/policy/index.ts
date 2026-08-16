@@ -20,11 +20,7 @@
  * taken under the previous policy.
  */
 
-import {
-  mergePolicy,
-  type ForbiddenFieldPolicy,
-  type ProjectPolicyOverride,
-} from "@polaris/shared-policy";
+import { mergePolicy, type ProjectPolicyOverride } from "@polaris/shared-policy";
 
 import checkoutOverride from "./forbidden-fields.checkout.js";
 
@@ -43,7 +39,7 @@ const PROJECT_POLICY_OVERRIDE_LIST: readonly ProjectPolicyOverride[] = Object.fr
 ]);
 
 /**
- * Validate every registered override at module load.
+ * Build the registry, validating every override at module load.
  *
  * `mergePolicy` throws `PolicyMergeError` on an override that removes a
  * platform reject, or downgrades one to a redact without a
@@ -52,15 +48,14 @@ const PROJECT_POLICY_OVERRIDE_LIST: readonly ProjectPolicyOverride[] = Object.fr
  * the first event from that project, where it would be one poisoned
  * partition and a policy quietly weaker than the file claims.
  *
- * The merged result is kept: `mergedPolicyFor` hands it back, and the
- * per-event path re-runs the merge inside `evaluate()` anyway.
+ * The merged policy is DISCARDED. Only the validation matters at this
+ * point: the per-event path hands the override to `evaluate()`, which
+ * re-runs the merge itself. Keeping the merged copy would mean a second
+ * representation of the effective policy that nothing reads and that
+ * could drift from the one actually enforced.
  */
-function buildRegistry(): {
-  readonly overrides: ReadonlyMap<string, ProjectPolicyOverride>;
-  readonly merged: ReadonlyMap<string, ForbiddenFieldPolicy>;
-} {
+function buildRegistry(): ReadonlyMap<string, ProjectPolicyOverride> {
   const overrides = new Map<string, ProjectPolicyOverride>();
-  const merged = new Map<string, ForbiddenFieldPolicy>();
   for (const override of PROJECT_POLICY_OVERRIDE_LIST) {
     const existing = overrides.get(override.project_id);
     if (existing !== undefined) {
@@ -70,34 +65,20 @@ function buildRegistry(): {
     }
     // Throws PolicyMergeError on an illegal override. Deliberately not
     // caught: boot must fail.
-    merged.set(override.project_id, mergePolicy(override).policy);
+    mergePolicy(override);
     overrides.set(override.project_id, override);
   }
-  return { overrides, merged };
+  return overrides;
 }
-
-const REGISTRY = buildRegistry();
 
 /**
  * `project_id` -> override. This is the map both enforcement points load
  * at boot: the ingester passes it to `createPolicyResolver`, the
  * destination host passes it to `createDestinationConsumer`.
+ *
+ * A plain map is the whole surface on purpose. `policyOverrideFor(id)` and
+ * `mergedPolicyFor(id)` accessors lived here briefly and nothing outside
+ * their own unit test ever called either — `.get()` is what both
+ * enforcement points actually use.
  */
-export const PROJECT_POLICY_OVERRIDES: ReadonlyMap<string, ProjectPolicyOverride> =
-  REGISTRY.overrides;
-
-/** The override for a project, or `undefined` when it runs platform defaults. */
-export function policyOverrideFor(projectId: string): ProjectPolicyOverride | undefined {
-  return REGISTRY.overrides.get(projectId);
-}
-
-/**
- * The merged platform + project policy for a project. Used by
- * `polaris policy inspect` and by tests that assert the effective rules;
- * the per-event paths read the override and let the evaluator merge.
- */
-export function mergedPolicyFor(projectId: string): ForbiddenFieldPolicy {
-  const cached = REGISTRY.merged.get(projectId);
-  if (cached !== undefined) return cached;
-  return mergePolicy(undefined).policy;
-}
+export const PROJECT_POLICY_OVERRIDES: ReadonlyMap<string, ProjectPolicyOverride> = buildRegistry();

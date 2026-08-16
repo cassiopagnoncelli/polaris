@@ -97,7 +97,6 @@ export interface EventsTailHooks {
     readonly signal: AbortSignal;
     readonly onEvent: (event: StreamRangeEvent) => void;
   }) => Promise<void>;
-  readonly now?: () => Date;
   /** Installs the Ctrl-C handler. Tests pass a pre-made signal instead. */
   readonly signal?: AbortSignal;
 }
@@ -254,7 +253,7 @@ const runEventsTail = buildEventsTailRunner();
  * first could cut a payload mid-field and leave a partial secret that the
  * evaluator no longer recognises as one.
  */
-export function toTailedEvent(
+function toTailedEvent(
   event: StreamRangeEvent,
   override: ProjectPolicyOverride | undefined,
   maxBytes: number,

@@ -475,22 +475,14 @@ export {
   eventsTailCommand,
   MAX_PAYLOAD_BYTES_CEILING,
   type TailedEvent,
-  toTailedEvent,
 } from "./commands/events/tail.js";
 export {
-  assemble as assembleEventTrace,
   buildEventsTraceRunner,
   type EventsTraceArgs,
   type EventsTraceHooks,
   type EventsTraceStore,
   type EventTrace,
   eventsTraceCommand,
-  INGEST_LOG_RETENTION_DAYS,
-  type TracedDlqRecord,
-  type TracedViolation,
-  toTracedDlqRecord,
-  toTracedViolation,
-  type TraceStage,
 } from "./commands/events/trace.js";
 export { violationsCommand } from "./commands/violations/index.js";
 export {
