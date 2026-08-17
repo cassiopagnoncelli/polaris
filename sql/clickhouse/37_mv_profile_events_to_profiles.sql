@@ -58,4 +58,8 @@ ARRAY JOIN
         )
     ) AS changed
 WHERE event = 'profile.updated'
-  AND profile_id != '';
+  -- Table-qualified. A bare `profile_id` here resolves to the SELECT
+  -- list's `toUUID(profile_id) AS profile_id`, so ClickHouse tries to
+  -- parse '' as a UUID and refuses to create the view at all
+  -- (CANNOT_PARSE_UUID). The guard is on the QUEUE's String column.
+  AND profile_events_queue.profile_id != '';

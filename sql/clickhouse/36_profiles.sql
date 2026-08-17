@@ -1,7 +1,29 @@
 -- Polaris ClickHouse: current profile state
 --
--- One row per person, holding the traits Polaris currently believes.
--- Fed from `profile_events_queue` by 37_mv_profile_events_to_profiles.sql.
+-- One row per (person, trait). Fed from `profile_events_queue` by
+-- 37_mv_profile_events_to_profiles.sql.
+--
+-- ## Why per trait, and not one row holding the whole map
+--
+-- `profile.updated` carries CHANGED KEYS ONLY — a full snapshot per update
+-- would multiply storage by the trait count, which is a decision the
+-- event's catalog entry already records.
+--
+-- A table keyed on `(project, environment, profile_id)` holding a
+-- `Map(String, String)` cannot absorb that stream. ReplacingMergeTree
+-- replaces the WHOLE row on collapse, so an update carrying one changed
+-- key would replace a profile's entire map with that single key and
+-- silently delete every trait the update did not mention. It would look
+-- correct in every test that writes a profile once.
+--
+-- Keying on the trait makes each key its own row, so an update touches
+-- exactly the keys it names and leaves the rest alone. That is what a
+-- sparse stream needs, and it is why `trait_key` is in the sort key.
+--
+-- (This file carried the Map shape until it was applied against a real
+-- server. The MV had already moved to per-trait rows, so the two could
+-- not both be right: the table's columns and the view's SELECT list did
+-- not even match. Nothing caught it because no test applies the DDL.)
 --
 -- ## Version is traits_version, not a timestamp
 --
@@ -15,21 +37,18 @@
 -- It also means a redelivered `profile.updated` collapses against its own
 -- earlier copy instead of accumulating: same version, same row.
 --
--- ## Traits are the FULL map here, not the changed keys
+-- ## Removal is a tombstone, not a delete
 --
--- The stream carries changed keys only — a full snapshot per update would
--- multiply storage by the trait count. This table carries the whole map,
--- because it answers "what is true of this person now" and a reader should
--- not have to fold a stream to find out.
---
--- The MV does that fold. See its file for why that is a `SimpleAggregateFunction`
--- rather than an application-side merge.
+-- A trait going away is an update carrying it in `removed_keys`, which
+-- lands here as `removed = 1`. Readers filter `removed = 0`. A DELETE
+-- would be a mutation over an arbitrarily large slice, and it would race
+-- the collapse: a tombstone with a higher `traits_version` is exactly how
+-- ReplacingMergeTree is supposed to express "this is gone now".
 --
 -- ## Retention
 --
--- No TTL. This is current state, not history: a row is one person, it is
--- replaced rather than appended, and the table's size is bounded by the
--- number of people rather than by time. History lives in
+-- No TTL. This is current state, not history: the table's size is bounded
+-- by people times traits rather than by time. History lives in
 -- `analytics_processed` via the event stream and carries its own TTL.
 
 CREATE TABLE IF NOT EXISTS polaris.profiles ON CLUSTER '{cluster}'
@@ -37,12 +56,19 @@ CREATE TABLE IF NOT EXISTS polaris.profiles ON CLUSTER '{cluster}'
     `project_id`     LowCardinality(String),
     `environment`    LowCardinality(String),
     `profile_id`     UUID,
-    -- The whole current map, folded from the changed-key stream by the MV.
-    `traits`         Map(String, String),
+    -- One trait. The sort key includes it, so a changed-keys update
+    -- touches only the keys it names.
+    `trait_key`      LowCardinality(String),
+    -- Raw JSON of the trait's value, as it arrived. Not typed: a trait is
+    -- whatever its definition computed, and a column per shape would make
+    -- the catalog a migration.
+    `value`          String,
+    -- Tombstone. See above; readers filter `removed = 0`.
+    `removed`        UInt8,
     -- Monotonic per profile, minted by the profile store. See above.
     `traits_version` UInt64,
     `updated_at`     DateTime64(3, 'UTC')
 )
 ENGINE = {replicated}ReplacingMergeTree(traits_version)
-ORDER BY (project_id, environment, profile_id)
+ORDER BY (project_id, environment, profile_id, trait_key)
 SETTINGS index_granularity = 8192;

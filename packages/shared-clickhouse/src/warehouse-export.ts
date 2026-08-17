@@ -186,35 +186,37 @@ function selectFor(request: WarehouseExportRequest): string {
       `;
 
     case "profiles":
-      // One row per profile, carrying the whole folded trait map — which
-      // is the shape `polaris.profiles` holds, not one row per trait. The
-      // per-trait stream is `profile_events_queue`; the MV folds it, and
-      // exporting the folded table is what gives an offline reader the
-      // same current state an online reader sees.
+      // One row per (profile, trait) -- the shape `polaris.profiles`
+      // actually holds. `profile.updated` carries changed keys only, so
+      // the table keys on `trait_key` and an update touches exactly the
+      // keys it names.
       //
-      // `argMax(traits, traits_version)`, not FINAL: between merges the
-      // ReplacingMergeTree holds every version of a profile's map, and an
-      // extract that took them all would multiply the population by
-      // however many times each person's traits changed.
+      // This read the Map shape briefly, because 36_profiles.sql still
+      // described one: the table's DDL and its own materialized view had
+      // disagreed since they shipped, and the file was the thing I
+      // checked. Applying the schema is what settled it.
+      //
+      // `removed = 0` filters the tombstones: a trait going away is an
+      // update with a higher `traits_version`, not a delete, and an
+      // extract carrying tombstones would report absent traits as present
+      // with an empty value.
       return `
         SELECT
           project_id,
           environment,
           profile_id,
-          argMax(traits, traits_version) AS traits,
-          -- Aliased AWAY from the column name. Naming the output the same
-          -- as its own argument makes ClickHouse resolve the alias back
-          -- into the aggregate and reject the query as an aggregate
-          -- inside an aggregate -- which shows up only when the query
-          -- runs against a real server, never when it is written.
-          -- (No backticks in this comment: it is inside a JavaScript
-          -- template literal, and one would end the string.)
+          trait_key,
+          argMax(value, traits_version) AS value,
+          -- Aliased away from the column name; naming an aggregate's
+          -- output after its own argument makes ClickHouse resolve the
+          -- alias back into it and reject the query.
           max(traits_version) AS max_traits_version,
           argMax(updated_at, traits_version) AS updated_at
         FROM polaris.profiles
         WHERE project_id = {project:String}
           AND environment = {environment:String}
-        GROUP BY project_id, environment, profile_id
+        GROUP BY project_id, environment, profile_id, trait_key
+        HAVING argMax(removed, traits_version) = 0
       `;
 
     case "merge_map":
