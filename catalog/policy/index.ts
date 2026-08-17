@@ -24,8 +24,8 @@ import { mergePolicy, type ProjectPolicyOverride } from "@polaris/shared-policy"
 
 import checkoutOverride from "./forbidden-fields.checkout.js";
 
-export { platformPolicy } from "./forbidden-fields.js";
 export { default as checkoutOverride } from "./forbidden-fields.checkout.js";
+export { platformPolicy } from "./forbidden-fields.js";
 
 /**
  * Every project override, in a stable order.

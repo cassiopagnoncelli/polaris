@@ -14,10 +14,10 @@
 
 import {
   evaluate,
-  PLATFORM_DEFAULT_POLICY,
-  PolicyMergeError,
-  POLICY_REASON_POLICY,
   mergePolicy,
+  PLATFORM_DEFAULT_POLICY,
+  POLICY_REASON_POLICY,
+  PolicyMergeError,
   type ProjectPolicyOverride,
 } from "@polaris/shared-policy";
 import { describe, expect, it } from "vitest";

@@ -57,7 +57,8 @@
     "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit",
     "lint:project-config-keys": "node scripts/lint-project-config-keys.mjs",
     "lint:trait-sql": "node scripts/lint-trait-sql.mjs",
-    "lint:metric-names": "node scripts/lint-metric-names.mjs"
+    "lint:metric-names": "node scripts/lint-metric-names.mjs",
+    "check:catalog-sql": "node scripts/check-catalog-sql.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

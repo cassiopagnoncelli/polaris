@@ -594,6 +594,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared-policy
 
+  catalog/reverse-etl:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   catalog/traits:
     dependencies:
       zod:

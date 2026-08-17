@@ -36,7 +36,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
 /** Directories whose `.ts` definitions carry cron-driven SQL. */
-export const SCANNED_CATALOG_DIRS = ["traits", "audiences"];
+export const SCANNED_CATALOG_DIRS = ["traits", "audiences", "reverse-etl"];
 
 /** Tables a definition may read. Mirrors READABLE_PROJECTIONS in the catalog. */
 export const ALLOWED_TABLES = ["event_daily_counts", "session_daily_metrics"];
