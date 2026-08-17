@@ -87,7 +87,6 @@ export type {
   CommandRegistrarDeps,
   CommandResult,
 } from "./command.js";
-export { audiencesCommand } from "./commands/audiences/index.js";
 export {
   type AudiencesComputeArgs,
   type AudiencesComputeHooks,
@@ -95,6 +94,7 @@ export {
   audiencesComputeCommand,
   buildAudiencesComputeRunner,
 } from "./commands/audiences/compute.js";
+export { audiencesCommand } from "./commands/audiences/index.js";
 export {
   AUDIENCE_SHOW_DEFAULT_LIMIT,
   AUDIENCE_SHOW_MAX_LIMIT,
@@ -224,6 +224,24 @@ export {
   rejectMappingArguments,
   validateSecretValue,
 } from "./commands/destinations/validation.js";
+export { eventsCommand } from "./commands/events/index.js";
+export {
+  buildEventsTailRunner,
+  DEFAULT_MAX_PAYLOAD_BYTES,
+  type EventsTailArgs,
+  type EventsTailHooks,
+  eventsTailCommand,
+  MAX_PAYLOAD_BYTES_CEILING,
+  type TailedEvent,
+} from "./commands/events/tail.js";
+export {
+  buildEventsTraceRunner,
+  type EventsTraceArgs,
+  type EventsTraceHooks,
+  type EventsTraceStore,
+  type EventTrace,
+  eventsTraceCommand,
+} from "./commands/events/trace.js";
 export {
   buildExportApiKeysRunner,
   type ExportApiKeysHooks,
@@ -484,24 +502,6 @@ export {
   type TopicsListHooks,
   type TopicsListStore,
 } from "./commands/topics/list.js";
-export { eventsCommand } from "./commands/events/index.js";
-export {
-  buildEventsTailRunner,
-  DEFAULT_MAX_PAYLOAD_BYTES,
-  type EventsTailArgs,
-  type EventsTailHooks,
-  eventsTailCommand,
-  MAX_PAYLOAD_BYTES_CEILING,
-  type TailedEvent,
-} from "./commands/events/tail.js";
-export {
-  buildEventsTraceRunner,
-  type EventsTraceArgs,
-  type EventsTraceHooks,
-  type EventsTraceStore,
-  type EventTrace,
-  eventsTraceCommand,
-} from "./commands/events/trace.js";
 export { violationsCommand } from "./commands/violations/index.js";
 export {
   buildViolationsListRunner,

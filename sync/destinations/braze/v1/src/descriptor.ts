@@ -29,7 +29,13 @@ import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinati
 
 import { type BuildDelivererOptions, buildBrazeDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
-import { checkoutStartedMapper, paymentApprovedMapper, userIdentifiedMapper } from "./mapper.js";
+import {
+  audienceEnteredMapper,
+  audienceExitedMapper,
+  checkoutStartedMapper,
+  paymentApprovedMapper,
+  userIdentifiedMapper,
+} from "./mapper.js";
 import type { BrazePayload } from "./types.js";
 
 /**
@@ -58,6 +64,11 @@ const MAPPERS: MapperMap<BrazePayload> = Object.freeze({
   "checkout.started": checkoutStartedMapper,
   "payment.approved": paymentApprovedMapper,
   "user.identified": userIdentifiedMapper,
+  // Profile-plane events. Reachable because the consumer subscribes to
+  // `profile.events` as well as the spine (see app.ts); whether a given
+  // instance actually receives them is the routing gate's decision.
+  "audience.entered": audienceEnteredMapper,
+  "audience.exited": audienceExitedMapper,
 });
 
 /**

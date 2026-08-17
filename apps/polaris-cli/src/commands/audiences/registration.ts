@@ -41,6 +41,7 @@ import {
   connectDb,
   enterAudience,
   exitAudience,
+  findProfileById,
   findProfilesWithTraits,
   listAudienceMemberships,
   restampAudienceMemberships,
@@ -97,6 +98,13 @@ export function buildRegisteredAudiencesRunner(ctx: CommandContext): AudiencesCo
             // shared family is worse than the hop the cache saves.
             isolation: sharedOnlyIsolationLookup,
             now: () => new Date(),
+            // Without this the transition carries `profile_id` only, and
+            // every destination skips it — a vendor keys on the brand's
+            // customer id, not on Polaris's internal surrogate.
+            identities: async ({ profileId }) => {
+              const profile = await findProfileById(handle.db, profileId);
+              return profile?.canonical_customer_id ?? null;
+            },
           }),
           ...(clickhouse !== undefined
             ? {

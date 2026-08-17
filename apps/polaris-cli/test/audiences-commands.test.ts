@@ -9,6 +9,8 @@
 import { AUDIENCE_DEFINITIONS } from "@polaris/audience-catalog";
 import { describe, expect, it } from "vitest";
 
+import { createAudienceEventEmitter } from "../src/commands/audiences/emitter.js";
+
 import {
   type AudiencesComputeRunner,
   type AudiencesShowMember,
@@ -254,5 +256,165 @@ describe("audiences show", () => {
     const body = JSON.parse(stdout.join("")) as { members: number; shown: unknown[] };
     expect(body.members).toBe(900);
     expect(body.shown).toHaveLength(2);
+  });
+});
+
+describe("the audience event emitter", () => {
+  function recordingProducer() {
+    const published: Array<Record<string, unknown>> = [];
+    return {
+      published,
+      producer: {
+        publishEvent: async (input: { event: Record<string, unknown> }) => {
+          published.push(input.event);
+          return { stream: "profile.events-0", partition: 0 };
+        },
+      } as never,
+    };
+  }
+
+  it("stamps the profile block, which is what makes a transition deliverable", async () => {
+    // The emitter leaves `identity` empty on purpose — a computed fact
+    // belongs to a profile, not to an identifier the run never saw. The
+    // PROFILE block is the envelope's slot for exactly this, and without
+    // it `normalizeForDestination` drops every transition at
+    // `no_usable_identity` before any mapper runs.
+    const { producer, published } = recordingProducer();
+    const emitter = createAudienceEventEmitter({
+      producer,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-17T03:00:00.000Z"),
+      identities: async () => "cus_9142",
+    });
+
+    await emitter.entered({
+      projectId: "storefront",
+      environment: "production",
+      audience: "high_value",
+      audienceVersion: 3,
+      profileId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      reEntry: false,
+      runId: "polaris_arun_1",
+    });
+
+    expect(published[0]?.["identity"]).toEqual({});
+    expect(published[0]?.["profile"]).toEqual({
+      profile_id: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      canonical_customer_id: "cus_9142",
+    });
+  });
+
+  it("carries a null customer id rather than omitting the block", async () => {
+    // The block still names the profile, so the warehouse and the
+    // profile-plane readers get their row; the DESTINATION is what
+    // declines to key on an internal id.
+    const { producer, published } = recordingProducer();
+    const emitter = createAudienceEventEmitter({
+      producer,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-17T03:00:00.000Z"),
+      identities: async () => null,
+    });
+
+    await emitter.exited({
+      projectId: "storefront",
+      environment: "production",
+      audience: "high_value",
+      audienceVersion: 3,
+      profileId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      enteredAt: new Date("2026-07-01T00:00:00.000Z"),
+      runId: "polaris_arun_1",
+    });
+
+    expect(published[0]?.["profile"]).toMatchObject({ canonical_customer_id: null });
+  });
+
+  it("looks a profile up once per run, however many audiences move it", async () => {
+    // A run over five audiences moves the same profile up to five times.
+    // One query per distinct profile, not per transition.
+    const { producer } = recordingProducer();
+    let lookups = 0;
+    const emitter = createAudienceEventEmitter({
+      producer,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-17T03:00:00.000Z"),
+      identities: async () => {
+        lookups += 1;
+        return "cus_9142";
+      },
+    });
+
+    const base = {
+      projectId: "storefront",
+      environment: "production",
+      audienceVersion: 3,
+      profileId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      reEntry: false,
+      runId: "polaris_arun_1",
+    };
+    await emitter.entered({ ...base, audience: "high_value" });
+    await emitter.entered({ ...base, audience: "churn_risk" });
+    await emitter.entered({ ...base, audience: "vip" });
+
+    expect(lookups).toBe(1);
+  });
+
+  it("shares one in-flight lookup between concurrent transitions", async () => {
+    // Memoized BEFORE the await, so two transitions for one profile do
+    // not race two queries.
+    const { producer } = recordingProducer();
+    let lookups = 0;
+    const emitter = createAudienceEventEmitter({
+      producer,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-17T03:00:00.000Z"),
+      identities: async () => {
+        lookups += 1;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return "cus_9142";
+      },
+    });
+
+    const base = {
+      projectId: "storefront",
+      environment: "production",
+      audienceVersion: 3,
+      profileId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      reEntry: false,
+      runId: "polaris_arun_1",
+    };
+    await Promise.all([
+      emitter.entered({ ...base, audience: "a" }),
+      emitter.entered({ ...base, audience: "b" }),
+    ]);
+
+    expect(lookups).toBe(1);
+  });
+
+  it("emits with a null customer id when the lookup throws", async () => {
+    // A failed identity read must not fail the run: membership is already
+    // durable, and a transition that reaches the warehouse without a
+    // customer id is better than a run that dies half-emitted.
+    const { producer, published } = recordingProducer();
+    const emitter = createAudienceEventEmitter({
+      producer,
+      isolation: { isIsolated: () => false },
+      now: () => new Date("2026-08-17T03:00:00.000Z"),
+      identities: async () => {
+        throw new Error("postgres unavailable");
+      },
+    });
+
+    await emitter.entered({
+      projectId: "storefront",
+      environment: "production",
+      audience: "high_value",
+      audienceVersion: 3,
+      profileId: "018f1b9e-7b50-7b12-9a2e-0e2f88d8f551",
+      reEntry: false,
+      runId: "polaris_arun_1",
+    });
+
+    expect(published[0]?.["profile"]).toMatchObject({ canonical_customer_id: null });
   });
 });

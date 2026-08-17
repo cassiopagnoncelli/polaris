@@ -17,7 +17,10 @@ import {
   buildDestinationHost,
   type DestinationHostOverrides,
 } from "@polaris/destination-host";
-import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/shared-transport";
+import {
+  STREAM_FAMILY_PROFILE_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+} from "@polaris/shared-transport";
 
 import type { BrazeRuntimeConfig } from "./config.js";
 import { createBrazeDescriptor } from "./descriptor.js";
@@ -44,7 +47,12 @@ export async function buildBrazeApp(options: BuildAppOptions): Promise<BuiltBraz
     projectConfigNamespace: PROJECT_CONFIG_NAMESPACE,
     // MVKUP64R: reads the spine's output, so the profile and enrichment
     // blocks the identity and enrichment stages wrote reach this mapper.
-    inputFamily: STREAM_FAMILY_RESOLVED_EVENTS,
+    // Two families. The spine carries what customers DID; the profile
+    // plane carries what is now TRUE of them, and audience membership is
+    // the second kind. Before this, `audience.entered` was published,
+    // stored, and read by no vendor — the profile plane was a warehouse
+    // feature wearing an activation feature's name.
+    inputFamily: [STREAM_FAMILY_RESOLVED_EVENTS, STREAM_FAMILY_PROFILE_EVENTS],
     allowReplay: config.braze.allowReplay,
     consumerGroup: config.braze.consumerGroup,
     description:

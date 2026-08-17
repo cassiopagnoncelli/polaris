@@ -35,8 +35,8 @@
 import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
 import {
   applyRedactions,
-  evaluate,
   type EventInput,
+  evaluate,
   type ProjectPolicyOverride,
 } from "@polaris/shared-policy";
 import {

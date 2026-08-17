@@ -77,7 +77,28 @@ export const CANONICAL_TO_BRAZE_FAMILY = Object.freeze({
   "checkout.started": "events",
   "payment.approved": "purchases",
   "user.identified": "attributes",
+  // Audience membership is a STATE of the user, not something that
+  // happened to them, so it is an attribute rather than a custom event.
+  // Braze segments on attributes directly; a custom event would make
+  // "is a member" a question about event history with a recency window,
+  // which is not what membership means.
+  "audience.entered": "attributes",
+  "audience.exited": "attributes",
 }) as Readonly<Record<string, "events" | "purchases" | "attributes">>;
+
+/**
+ * Prefix for the per-audience custom attribute Braze receives.
+ *
+ * Namespaced so an audience key can never collide with a trait
+ * attribute or one of Braze's own reserved slots — `tier` is a plausible
+ * audience key and also a trait this mapper already writes.
+ */
+export const BRAZE_AUDIENCE_ATTRIBUTE_PREFIX = "polaris_audience_" as const;
+
+/** The attribute name a given audience writes. */
+export function brazeAudienceAttribute(audience: string): string {
+  return `${BRAZE_AUDIENCE_ATTRIBUTE_PREFIX}${audience}`;
+}
 
 // ---------------------------------------------------------------------------
 // Per-event mappers
@@ -316,6 +337,58 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
   return { kind: "mapped", payload, dedupe_key: ctx.normalized.event_id };
 };
 
+/**
+ * `audience.entered` / `audience.exited` → `attributes[]` entry.
+ *
+ * One boolean custom attribute per audience, `true` on entry and `false`
+ * on exit. Not a deletion on exit: Braze segments on
+ * `polaris_audience_x = false` perfectly well, while an absent attribute
+ * is indistinguishable from "this user predates the audience" — and a
+ * campaign targeting non-members would silently include everyone the
+ * platform has never evaluated.
+ *
+ * `_update_existing_only: true`, unlike `user.identified`. A transition
+ * is not a first-touch identification: if Braze has never heard of this
+ * customer, creating a bare profile carrying nothing but an audience
+ * flag adds a user the brand cannot message and inflates their MAU
+ * billing. The membership is already durable in Polaris and the next
+ * `user.identified` creates the profile properly.
+ *
+ * Skips when no identifier resolves — the ordinary case for a profile
+ * with no canonical customer id, which is a profile no vendor can act on.
+ */
+function buildAudienceAttributeMapper(member: boolean): Mapper<BrazePayload> {
+  return (ctx: MapperContext): MapperResult<BrazePayload> => {
+    const audience = ctx.normalized.properties["audience"];
+    if (typeof audience !== "string" || audience.trim().length === 0) {
+      // The property schema guarantees this upstream; a mapper that
+      // trusted it and wrote `polaris_audience_undefined` would put a
+      // permanent junk attribute on every user it touched.
+      return { kind: "skip", reason: "audience_missing_from_properties" };
+    }
+    const identifier = resolveBrazeIdentifier(ctx.normalized);
+    if (identifier === null) {
+      return { kind: "skip", reason: "no_identifier_for_braze_attribute" };
+    }
+
+    const attribute: Record<string, unknown> = {
+      // Never create a user from a membership change. See above.
+      _update_existing_only: true,
+      [brazeAudienceAttribute(audience.trim())]: member,
+    };
+    applyBrazeIdentifier(attribute, identifier);
+    const frozen = Object.freeze(attribute) as BrazeAttributeObject;
+    return {
+      kind: "mapped",
+      payload: { attributes: Object.freeze([frozen]) },
+      dedupe_key: ctx.normalized.event_id,
+    };
+  };
+}
+
+export const audienceEnteredMapper: Mapper<BrazePayload> = buildAudienceAttributeMapper(true);
+export const audienceExitedMapper: Mapper<BrazePayload> = buildAudienceAttributeMapper(false);
+
 // ---------------------------------------------------------------------------
 // External ID resolution
 // ---------------------------------------------------------------------------
@@ -323,20 +396,41 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
 /**
  * Resolve the Braze `external_id` from the normalized identity. Order:
  *
- *   1. `identity.user_id`  — canonical `customer_id`
- *   2. `identity.anonymous_id`  — surfaces unauthenticated events under
+ *   1. `identity.canonical_customer_id` — the spine's resolved customer
+ *   2. `identity.user_id`  — the envelope's own `customer_id`
+ *   3. `identity.anonymous_id`  — surfaces unauthenticated events under
  *      a stable anonymous identifier (Braze accepts non-prefixed strings)
  *
- * Returns `null` when neither slot is populated. The normalize layer
- * drops events that have no usable identity at all
- * (`no_usable_identity`), so this branch only fires for events where
- * the only usable identity was email/phone — Braze does not key on
- * email/phone in v1 (a future minor may add a `user_alias` mapping).
+ * Returns `null` when no slot is populated. The normalize layer drops
+ * events that have no usable identity at all (`no_usable_identity`), so
+ * this branch only fires for events whose only usable identity was
+ * email/phone or a bare `profile_id` — Braze keys on neither in v1.
+ *
+ * ## `canonical_customer_id` comes first
+ *
+ * It is the platform's own best identity — `pickBestIdentity` ranks it
+ * first — and it is the slot the spine populates on `resolved.events`
+ * from the profile block. Reading only `user_id` meant an event whose
+ * identity block was empty but whose PROFILE block carried a resolved
+ * customer id fell through to `user_alias`, then `device_id`, then a
+ * skip. That is the ordinary shape of a spine event for a known
+ * customer, and of every profile-plane event, so Braze was skipping
+ * deliveries it had a perfectly good identifier for.
+ *
+ * `profile_id` is deliberately NOT a fallback. It is Polaris's internal
+ * surrogate: keying a Braze user on it would create a profile under an
+ * id the brand's own systems have never seen, and Braze has no way to
+ * reconcile it later.
  *
  * Lowercased + trimmed for Braze's case-insensitive identifier
  * comparison (matches Braze's documented behavior).
  */
 export function resolveExternalId(normalized: NormalizedEvent): string | null {
+  const canonical = normalized.identity.canonical_customer_id;
+  if (canonical !== null) {
+    const trimmed = canonical.trim().toLowerCase();
+    if (trimmed.length > 0) return trimmed;
+  }
   const userId = normalized.identity.user_id;
   if (userId !== null) {
     const trimmed = userId.trim().toLowerCase();

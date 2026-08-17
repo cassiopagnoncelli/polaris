@@ -60,8 +60,8 @@ import {
 } from "@polaris/shared-destinations";
 import type { Logger } from "@polaris/shared-logger";
 import { createLogger } from "@polaris/shared-logger";
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 import { toPrometheusText } from "@polaris/shared-metrics";
+import type { ProjectPolicyOverride } from "@polaris/shared-policy";
 import {
   createDestinationProjectConfigLookup,
   createPgListenerTransport,
@@ -139,8 +139,15 @@ export interface DestinationHostInput<Payload, Config extends DestinationHostCon
   readonly descriptor: DestinationDescriptor<Payload>;
   /** Project-config namespace this consumer reads. */
   readonly projectConfigNamespace: string;
-  /** Family to consume. */
-  readonly inputFamily: CanonicalStreamFamily;
+  /**
+   * Families to consume. A single family or a list.
+   *
+   * A list is how a vendor reads the profile plane alongside the event
+   * spine — `audience.entered` and `profile.updated` live on
+   * `profile.events`, and nothing downstream of the subscription differs
+   * between the two planes (see `DestinationConsumerOptions.inputFamily`).
+   */
+  readonly inputFamily: CanonicalStreamFamily | readonly CanonicalStreamFamily[];
   /** Per-instance replay opt-in still gates each delivery; this is the host half. */
   readonly allowReplay: boolean;
   /** Consumer group name, from the vendor's own config section. */

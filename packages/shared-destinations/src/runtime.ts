@@ -168,7 +168,7 @@ export interface DestinationConsumerOptions<Payload> {
   /** Connected PolarisConsumer for the input family. */
   readonly consumer: PolarisConsumer;
   /**
-   * Stream family this consumer reads. Defaults to `analytics.events`.
+   * Stream families this consumer reads. Defaults to `analytics.events`.
    *
    * The flip to `resolved.events` is per-vendor and staged, so this is an
    * option rather than a constant: a consumer that has moved reads the
@@ -176,8 +176,33 @@ export interface DestinationConsumerOptions<Payload> {
    * one that has not reads exactly what it read yesterday. Defaulting
    * rather than requiring it is what keeps the four unflipped vendors from
    * needing a change in the same commit as the first flipped one.
+   *
+   * ## Why a LIST is allowed
+   *
+   * A destination that receives audience membership — or any other
+   * profile-plane fact — reads `profile.events` as well as the event
+   * spine. Before this, `inputFamily` was a single family and no
+   * destination could see the profile plane at all: `audience.entered`
+   * and `profile.updated` were published, landed in ClickHouse, and
+   * reached no vendor, which made the profile plane a warehouse feature
+   * wearing an activation feature's name.
+   *
+   * A list rather than a second consumer because the two planes need
+   * nothing different downstream. `normalizeForDestination` already reads
+   * identity from the PROFILE block (`canonical_customer_id`, then
+   * `profile_id`) as well as from `identity`; the gate, consent, dedupe,
+   * delivery records and breaker are all keyed on the destination, not on
+   * the family. A separate profile-plane consumer would have duplicated
+   * every one of those to change which streams it subscribes to.
+   *
+   * Which EVENTS a vendor actually receives stays the routing gate's
+   * decision, not this option's: subscribing to `profile.events` makes
+   * `audience.entered` reachable, and the gate's `subscriptions` block is
+   * what decides whether a given instance wants it.
+   *
+   * A single value stays accepted, so no unflipped consumer changes.
    */
-  readonly inputFamily?: CanonicalStreamFamily | undefined;
+  readonly inputFamily?: CanonicalStreamFamily | readonly CanonicalStreamFamily[] | undefined;
   /**
    * Connected PolarisProducer used to republish DLQ messages. The runtime
    * does not own its lifecycle.
@@ -596,7 +621,10 @@ export function createDestinationConsumer<Payload>(
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const families = consumerFamiliesFor(options.inputFamily ?? STREAM_FAMILY_ANALYTICS_EVENTS, []);
+    const configured = options.inputFamily ?? STREAM_FAMILY_ANALYTICS_EVENTS;
+    const families = (Array.isArray(configured) ? configured : [configured]).flatMap((family) => [
+      ...consumerFamiliesFor(family, []),
+    ]);
     // The redelivery queue carries messages the broker parked in a retry
     // tier and released when the tier's TTL expired. Consuming it here is
     // what makes the retry path close: under Kafka the consumer had to
