@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createPolicyResolver,
   IdentityPolicyError,
   MANIFEST_DEFAULTS,
-  createPolicyResolver,
   resolveIdentityPolicy,
 } from "../src/policy.js";
 

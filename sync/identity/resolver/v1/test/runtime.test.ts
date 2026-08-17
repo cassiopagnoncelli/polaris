@@ -7,6 +7,7 @@
  * loudly, and that an unidentifiable event still reaches the spine.
  */
 
+import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";
@@ -32,9 +33,11 @@ function makeDeps(policy: Partial<IdentityPolicy> = {}, nowFn?: () => Date) {
   return {
     repository,
     producer,
+    isolation: sharedOnlyIsolationLookup,
     deps: {
       repository,
       producer,
+      isolation: sharedOnlyIsolationLookup,
       logger: silentLogger,
       policyFor: () => ({ ...BASE_POLICY, ...policy }),
       runId: () => "run_1",
@@ -377,6 +380,7 @@ describe("identity stage: commit-before-publish", () => {
     const deps = {
       repository: failing,
       producer,
+      isolation: sharedOnlyIsolationLookup,
       logger: silentLogger,
       policyFor: () => BASE_POLICY,
       runId: () => "run_1",

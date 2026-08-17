@@ -15,6 +15,7 @@
  * incident.
  */
 
+import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent, type StageMetricScope } from "../src/runtime.js";
@@ -50,6 +51,7 @@ function deps(metrics: ReturnType<typeof recordingMetrics>["metrics"]) {
   return {
     repository: new InMemoryProfileRepository(),
     producer: new RecordingProducer(),
+    isolation: sharedOnlyIsolationLookup,
     logger: silentLogger,
     metrics,
     policyFor: () => POLICY,

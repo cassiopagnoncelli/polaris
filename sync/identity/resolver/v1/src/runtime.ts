@@ -29,6 +29,7 @@ import {
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
+  type SyncIsolationLookup,
 } from "@polaris/shared-transport";
 
 import {
@@ -47,11 +48,27 @@ import {
   type IdentityStageEvent,
 } from "./transform.js";
 
+/**
+ * The producer surface this stage uses.
+ *
+ * Structurally typed rather than importing `PolarisProducer` so tests can
+ * pass a recorder — but it must stay a SUBSET of the real contract, and
+ * it did not. It omitted `isolation`, which `publishEvent` requires and
+ * dereferences on every call; the local type made the omission invisible
+ * to the compiler, and the resolver threw
+ * `Cannot read properties of undefined (reading 'isIsolated')` on the
+ * first event it ever saw in a real deployment. Every event failed and
+ * rewound, forever, with the stage reporting itself healthy.
+ *
+ * `isolation` is required here for that reason: a caller that forgets it
+ * now fails to typecheck rather than at runtime.
+ */
 export interface PublishTarget {
   publishEvent(input: {
     family: string;
     event: Record<string, unknown>;
     partitionKey?: string;
+    isolation: SyncIsolationLookup;
   }): Promise<unknown>;
 }
 
@@ -122,6 +139,13 @@ export interface IdentityStageMetrics {
 export interface IdentityStageDeps {
   readonly repository: ProfileRepository;
   readonly producer: PublishTarget;
+  /**
+   * Which projects read a dedicated stream rather than the shared family.
+   * Required, not optional: `publishEvent` dereferences it on every call,
+   * and a default here would hide a missing wiring the same way the
+   * narrowed `PublishTarget` did.
+   */
+  readonly isolation: SyncIsolationLookup;
   readonly logger: Logger;
   readonly metrics?: IdentityStageMetrics;
   readonly policyFor: (projectId: string, environment: string) => IdentityPolicy;
@@ -207,6 +231,7 @@ export async function handleEvent(
     family: STREAM_FAMILY_IDENTIFIED_EVENTS,
     event: spine,
     partitionKey,
+    isolation: deps.isolation,
   });
   deps.metrics?.onEmitted?.(labels);
   // The decision, recorded after the spine publish so a failed publish
@@ -340,6 +365,7 @@ async function publishDerived(
       family: STREAM_FAMILY_IDENTITY_EVENTS,
       event,
       partitionKey,
+      isolation: deps.isolation,
     });
     deps.metrics?.onEmitted?.(labels);
   }
@@ -348,6 +374,7 @@ async function publishDerived(
       family: STREAM_FAMILY_PROFILE_EVENTS,
       event,
       partitionKey,
+      isolation: deps.isolation,
     });
     deps.metrics?.onEmitted?.(labels);
   }

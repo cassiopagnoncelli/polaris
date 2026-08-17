@@ -53,6 +53,11 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_IDENTIFIED_EVENTS,
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  STREAM_FAMILY_PROFILE_EVENTS,
+  sharedOnlyIsolationLookup,
+  staticIsolationLookup,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -246,9 +251,34 @@ export async function buildSyncIdentityApp(
   // project that has not declared identity bounds.
   const policyFor = createPolicyResolver(options.projectPolicies ?? new Map());
 
+  // The publish side of isolation. `isolatedProjects` already told the
+  // CONSUMER which dedicated families to subscribe to; the producer needs
+  // the same answer to decide which family to publish onto, and it never
+  // got one — `publishEvent` dereferenced `undefined.isIsolated` on the
+  // first event the stage ever handled, so every event failed and the
+  // reader rewound forever while the service reported itself healthy.
+  //
+  // The stage publishes onto identified/identity/profile events, and a
+  // project isolated for one is isolated for all three, so one lookup
+  // built from the same list the consumer uses keeps the two sides from
+  // disagreeing about who is isolated.
+  const isolation =
+    options.isolatedProjects === undefined || options.isolatedProjects.length === 0
+      ? sharedOnlyIsolationLookup
+      : staticIsolationLookup(
+          options.isolatedProjects.flatMap((project_id) =>
+            [
+              STREAM_FAMILY_IDENTIFIED_EVENTS,
+              STREAM_FAMILY_IDENTITY_EVENTS,
+              STREAM_FAMILY_PROFILE_EVENTS,
+            ].map((family) => ({ family, project_id })),
+          ),
+        );
+
   const runtime = createRuntime({
     consumer,
     producer,
+    isolation,
     repository,
     logger: processorLogger,
     policyFor,

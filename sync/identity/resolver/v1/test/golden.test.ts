@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";
@@ -64,6 +65,7 @@ describe("golden fixtures", () => {
       const deps = {
         repository: new InMemoryProfileRepository(fixtureIdFactory()),
         producer,
+        isolation: sharedOnlyIsolationLookup,
         logger: silentLogger,
         policyFor: () => POLICY,
         runId: () => "run_fixture",

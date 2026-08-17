@@ -47,11 +47,10 @@
 //   POLARIS_RABBITMQ_STREAM_RETENTION_DAYS default 90
 
 import {
-  CANONICAL_STREAM_FAMILIES,
   DEFAULT_STREAM_MAX_BYTES,
   declareComponentQueues,
   declareSuperStream,
-  defaultRetentionDaysForFamily,
+  defaultSuperStreams,
   deleteComponentQueues,
   deleteSuperStream,
   POLARIS_COMPONENTS,
@@ -101,18 +100,30 @@ export function buildPlan(options = {}) {
   // produces to it yet. See defaultSuperStreams() in
   // packages/shared-transport/src/topology.ts.
   //
-  // Retention is delegated to defaultRetentionDaysForFamily() rather than
-  // applied flat, because it is no longer uniform: `identified.events`
-  // sits between the two spine stages and is fully regenerable from
-  // `raw.events`, so it is capped short. This script used to compute the
-  // spec itself, which meant a retention rule added in the package
-  // silently did not reach the broker — declarations are idempotent but
-  // NON-reconciling, so the wrong value would then persist until someone
-  // migrated the stream by hand.
-  const superStreams = CANONICAL_STREAM_FAMILIES.map((family) => ({
-    family,
-    partitions: widthFor(family),
-    retentionDays: defaultRetentionDaysForFamily(retentionDays, family),
+  // WHICH families exist comes from defaultSuperStreams(), not from a
+  // list here. The previous version mapped over CANONICAL_STREAM_FAMILIES
+  // and warned, two comments up, that computing the spec locally had
+  // already let a retention rule miss the broker once — and then did
+  // exactly that again with a family: `rejected.events` was added to the
+  // default topology, the package's own test asserted it, and the
+  // provisioner never declared it. The quarantine's publish is fail-open,
+  // so the missing stream would have been invisible.
+  //
+  // `rejected.events` is not in CANONICAL_STREAM_FAMILIES on purpose (it
+  // supports no isolation), which is precisely why enumerating that
+  // constant was the wrong source.
+  //
+  // Only the WIDTH is overridden here, because partition count is an
+  // operator's capacity decision and retention is the platform's
+  // durability decision. Declarations are idempotent but NON-reconciling,
+  // so a wrong value persists until someone migrates the stream by hand.
+  const superStreams = defaultSuperStreams({
+    partitions,
+    partitionOverrides: overrides,
+    streamRetentionDays: retentionDays,
+  }).map((spec) => ({
+    ...spec,
+    partitions: widthFor(spec.family),
     maxLengthBytes: DEFAULT_STREAM_MAX_BYTES,
   }));
 
