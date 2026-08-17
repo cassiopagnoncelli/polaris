@@ -38,6 +38,7 @@ import { topicsCommand } from "./topics/index.js";
 import { traitsCommand } from "./traits/index.js";
 import { versionCommand } from "./version.js";
 import { violationsCommand } from "./violations/index.js";
+import { warehouseCommand } from "./warehouse/index.js";
 
 export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   versionCommand,
@@ -50,6 +51,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   profilesCommand,
   traitsCommand,
   violationsCommand,
+  warehouseCommand,
   configCommand,
   operatorsCommand,
   auditCommand,
@@ -83,4 +85,5 @@ export {
   traitsCommand,
   versionCommand,
   violationsCommand,
+  warehouseCommand,
 };

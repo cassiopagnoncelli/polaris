@@ -132,3 +132,13 @@ export {
   type ViolationRow,
   type ViolationSummaryRow,
 } from "./violations.js";
+export {
+  createWarehouseExporter,
+  isWarehouseDataset,
+  WAREHOUSE_DATASETS,
+  type WarehouseDataset,
+  type WarehouseExporter,
+  type WarehouseExportRequest,
+  type WarehouseExportResult,
+  type WarehouseExportTarget,
+} from "./warehouse-export.js";

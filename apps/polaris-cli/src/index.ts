@@ -510,6 +510,14 @@ export {
   violationsListCommand,
 } from "./commands/violations/list.js";
 export {
+  buildWarehouseExportRunner,
+  type WarehouseExportHooks,
+  type WarehouseExportJob,
+  type WarehouseExportStore,
+  warehouseExportCommand,
+} from "./commands/warehouse/export.js";
+export { warehouseCommand } from "./commands/warehouse/index.js";
+export {
   type AuthenticatedCliConfig,
   CLI_LOG_LEVELS,
   type CliConfig,

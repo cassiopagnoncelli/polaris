@@ -136,3 +136,30 @@ MAILTO=""
 50 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env development >> /var/log/polaris/audiences-compute.log 2>&1
 55 3 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env staging     >> /var/log/polaris/audiences-compute.log 2>&1
 0  4 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} audiences compute --project storefront --env production >> /var/log/polaris/audiences-compute.log 2>&1
+
+# ---------------------------------------------------------------------------
+# Warehouse export (FZF4D8NY)
+# ---------------------------------------------------------------------------
+#
+# Day-partitioned Parquet out of ClickHouse. The server writes the object
+# itself; the CLI names the slice and checks the answer.
+#
+# `--day` is YESTERDAY, computed here rather than defaulted in the command:
+# a default reads correctly in a crontab and wrongly in every manual
+# invocation made to fix something, and the manual invocations are the ones
+# that matter. `date -u` because the export partitions on UTC.
+#
+# NO `|| true`. A nightly export that swallows its failure is a warehouse
+# that silently stops receiving data, and the first person to notice is an
+# analyst asking why last week is missing. The command exits non-zero on any
+# dataset failing, and cron mails the output.
+#
+# Runs after audiences compute (04:00) so a day's export includes the
+# membership that day produced.
+#
+# Needs POLARIS_WAREHOUSE_BUCKET_URL, and the operator ClickHouse
+# credentials — the events dataset reads the raw tier, which the service
+# role has no grant on.
+30 4 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env development --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1
+35 4 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env staging     --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1
+40 4 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env production  --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1

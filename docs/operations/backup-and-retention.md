@@ -850,6 +850,80 @@ Two constraints on any policy you set:
   are skipped, not filed under today. Filing them under the archiver's
   clock would hide them from a replay of the day they happened.
 
+## Warehouse exports
+
+`polaris warehouse export` writes day-partitioned Parquet out of
+ClickHouse for external analysis. Distinct from the `raw.events` archive
+above in both direction and purpose: the archive is a REPLAY source that
+keeps envelopes verbatim, and this is an EXTRACT that keeps deduped rows
+in a columnar format nothing replays.
+
+```bash
+polaris warehouse export --project storefront --env production --day 2026-08-15
+```
+
+Three datasets, all written unless `--dataset` narrows it:
+
+| dataset | contents |
+|---|---|
+| `events` | `analytics_raw` for the day, deduped with `argMax(col, _version)` |
+| `profiles` | current trait map per profile |
+| `merge_map` | the whole merge map, so canonical resolution works offline |
+
+### Layout
+
+```
+<bucket>/<dataset>/<project_id>/<environment>/<YYYY-MM-DD>.parquet
+```
+
+Dataset first because lifecycle rules and external loaders are configured
+per dataset. Reruns overwrite the day's object rather than appending, so
+a cron retry after a partial failure is safe.
+
+### The merge map is not optional
+
+A profiles snapshot alone is one whose keys silently stop resolving: a
+merged profile's events live under the loser's id, and an offline reader
+has no dictionary to redirect them. That is why `merge_map` is exported
+by default, and why an analysis should resolve through it the same way
+`dictGetOrDefault('polaris.profile_canonical', ...)` does online:
+
+```sql
+-- DuckDB. Resolve every event to its surviving profile before counting.
+INSTALL httpfs; LOAD httpfs;
+
+WITH merges AS (
+  SELECT loser_profile_id, winner_profile_id
+  FROM read_parquet('s3://polaris-warehouse/merge_map/storefront/production/*.parquet')
+),
+events AS (
+  SELECT *
+  FROM read_parquet('s3://polaris-warehouse/events/storefront/production/2026-08-*.parquet')
+)
+SELECT
+  -- A profile absent from the map resolves to itself, which is exactly
+  -- what the online dictionary's default does.
+  COALESCE(m.winner_profile_id, e.customer_id) AS person,
+  count(*) AS events
+FROM events e
+LEFT JOIN merges m ON m.loser_profile_id = e.customer_id
+GROUP BY person
+ORDER BY events DESC;
+```
+
+Counting on `customer_id` without the join double-counts every merged
+person — once under each id they were seen as — and the error grows with
+how well identity resolution is working, which is the opposite of the
+signal anyone wants.
+
+### Why exports fail loudly
+
+Every run writes a job record (`audit_action: warehouse.export`) naming
+each dataset's outcome, including on failure, and the command exits
+non-zero if any dataset failed. The crontab example carries no
+`|| true`: a nightly export that swallows its failure is a warehouse that
+silently stops receiving data.
+
 ## See also
 
 - [`docs/deployment/data-classes.md`](../deployment/data-classes.md) —

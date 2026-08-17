@@ -30,6 +30,7 @@ import { createReplayReader, type ReplayReader } from "./replay.js";
 import { createTraitQueryReader, type TraitQueryReader } from "./traits.js";
 import type { Logger, MetricsRecorder } from "./types.js";
 import { createViolationReader, type ViolationReader } from "./violations.js";
+import { createWarehouseExporter, type WarehouseExporter } from "./warehouse-export.js";
 
 /**
  * Methods exposed on every profile. The service profile is exactly this; the
@@ -72,6 +73,13 @@ export interface ClickHouseOperatorClient {
    * proxy-via-canonical-consumer pattern (`docs/operations/dashboards.md`).
    */
   readonly probes: ClickHouseHealthProbes;
+  /**
+   * Day-partitioned Parquet extracts. See `warehouse-export.ts`.
+   *
+   * Operator-scoped because it reads the raw tier, which the service
+   * role has no SELECT grant on — the same reason `replay` lives here.
+   */
+  readonly warehouse: WarehouseExporter;
   close(): Promise<void>;
 }
 
@@ -238,6 +246,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
     ...(options.metrics ? { metrics: options.metrics } : {}),
   });
   const probes = createClickHouseHealthProbes({ underlying });
+  const warehouse = createWarehouseExporter({ underlying });
 
   const operator: ClickHouseOperatorClient = {
     role: "operator",
@@ -250,6 +259,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
     replay,
     raw,
     probes,
+    warehouse,
     close,
   };
   return operator;
