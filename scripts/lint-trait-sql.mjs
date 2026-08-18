@@ -39,7 +39,13 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 export const SCANNED_CATALOG_DIRS = ["traits", "audiences", "reverse-etl"];
 
 /** Tables a definition may read. Mirrors READABLE_PROJECTIONS in the catalog. */
-export const ALLOWED_TABLES = ["event_daily_counts", "session_daily_metrics"];
+export const ALLOWED_TABLES = [
+  "event_daily_counts",
+  "session_daily_metrics",
+  // The person-dimensioned projection. Without it no per-profile trait is
+  // computable at all — the other two group by day and event only.
+  "profile_event_daily_counts",
+];
 
 /**
  * Tables a trait may never read, by name.

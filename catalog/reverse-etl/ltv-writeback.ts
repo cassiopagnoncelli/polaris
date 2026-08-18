@@ -43,7 +43,7 @@ export const ltvWriteback: ReverseEtlJob = {
       SELECT
           customer_id,
           toFloat64(sum(event_count)) AS lifetime_orders
-      FROM polaris.event_daily_counts
+      FROM polaris.profile_event_daily_counts
       WHERE project_id = {project:String}
         AND environment = {environment:String}
         AND event = 'order.completed'
