@@ -192,6 +192,15 @@ export const POLARIS_COMPONENTS = [
   "sync-enrichment",
   // Retroactive-merge worker (R4).
   "merge-worker",
+  // raw.events archiver (R7). Absent from this list until 2026-08-18
+  // while `async/warehouse/archiver/v1` declared `component: "archiver"`
+  // and wired the poison/DLQ path -- so `rabbitmq:provision` never created
+  // `archiver.retry.*` / `.redeliver` / `.dlq`, and a poisoned archive
+  // message would have been published to a queue that does not exist.
+  // Publishing to a missing queue through the default exchange is silently
+  // dropped, so the symptom is an empty DLQ, which reads as "nothing has
+  // ever failed".
+  "archiver",
   "sessionizer",
   "attribution-engine",
   "clickhouse-sink",

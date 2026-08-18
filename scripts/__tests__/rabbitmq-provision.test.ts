@@ -17,8 +17,13 @@
  * that, so the missing stream would have shown up as an empty dashboard.
  */
 
-import { defaultSuperStreams } from "@polaris/shared-transport";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { defaultSuperStreams, POLARIS_COMPONENTS } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 import { buildPlan } from "../rabbitmq-provision.mjs";
 
@@ -85,5 +90,47 @@ describe("buildPlan", () => {
     // streams.
     const planned = buildPlan().superStreams.map((spec: { family: string }) => spec.family);
     expect(planned).not.toContain("polaris.diagnostics.events");
+  });
+});
+
+/**
+ * A service that dead-letters must have its queues declared.
+ *
+ * `POLARIS_COMPONENTS` is what `rabbitmq:provision` walks to create
+ * `<component>.retry.*`, `.redeliver` and `.dlq`. `archiver` declared
+ * `component: "archiver"` and wired the poison path while sitting outside
+ * that list, so its DLQ was never created -- and publishing to a missing
+ * queue through the default exchange is silently dropped. An empty DLQ
+ * reads as "nothing has ever failed", which is the most expensive possible
+ * way to be wrong about a dead-letter path.
+ *
+ * Scanned from source rather than imported: these constants live in service
+ * packages, and a test that had to build them all to check a list would be
+ * a test people delete.
+ */
+describe("every service that dead-letters is a declared component", () => {
+  it("has a component entry for each `*_COMPONENT` a service declares", () => {
+    const declared = new Set<string>();
+    const roots = [join(REPO_ROOT, "sync"), join(REPO_ROOT, "async")];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (["node_modules", "dist", "test", "__tests__"].includes(entry.name)) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts")) {
+          for (const m of readFileSync(full, "utf8").matchAll(
+            /(?:^|\s)(?:export\s+)?const\s+\w*COMPONENT\s*=\s*"([a-z0-9-]+)"/g,
+          )) {
+            if (m[1] !== undefined) declared.add(m[1]);
+          }
+        }
+      }
+    };
+    for (const r of roots) walk(r);
+
+    const missing = [...declared].filter((c) => !POLARIS_COMPONENTS.includes(c as never));
+    expect(missing).toEqual([]);
+    // Not vacuous: several services declare one.
+    expect(declared.size).toBeGreaterThan(3);
   });
 });
