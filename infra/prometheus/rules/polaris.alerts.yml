@@ -349,23 +349,32 @@ groups:
             stream and offset.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
-      # `polaris_clickhouse_mv_state{view, state}` is also emitted by
-      # the analytics-projector's probe poller (PI2CRFZC). The probe
-      # loop emits a sample of value 1 per observed (view, state) tuple;
-      # the alert fires when any view's `failed` series is present.
-      - alert: PolarisClickHouseMVFailure
-        expr: max by (view) (polaris_clickhouse_mv_state{state="failed"}) > 0
+      # Replaces PolarisClickHouseMVFailure, which read
+      # `polaris_clickhouse_mv_state{state="failed"}` and could never fire.
+      # That gauge was polled from `system.view_refreshes`, which tracks
+      # REFRESHABLE materialized views; all nine of Polaris's are plain
+      # insert-triggered views and never appear there. The alert was live
+      # for months over the MV layer and had never been capable of firing.
+      #
+      # With `materialized_views_ignore_errors` at 0, an MV whose SELECT
+      # throws fails the INSERT into its source table, and the exception
+      # reaches the sink. So the failure is countable exactly where it
+      # lands, and the `table` label says which MV chain broke.
+      - alert: PolarisClickHouseInsertFailures
+        expr: increase(polaris_clickhouse_sink_insert_failures_total[5m]) > 0
         for: 1m
         labels:
           severity: page
           service: clickhouse
           team: platform-data
         annotations:
-          summary: "ClickHouse materialized view in failed state"
+          summary: "ClickHouse INSERT failing from the sink"
           description: |
-            Materialized view {{ $labels.view }} is reporting state
-            `failed`. Inspect `system.materialized_views.last_exception`
-            in the runbook.
+            INSERTs into {{ $labels.table }} are being rejected. The sink
+            restores its checkpoint and re-reads, so this stalls ingestion
+            rather than dropping it — expect sink lag to climb alongside.
+            A materialized view reading that table throwing is one cause;
+            check the sink log for the ClickHouse exception text.
           runbook_url: docs/operations/runbook-clickhouse-ingestion-lag.md
 
   # ---------------------------------------------------------------

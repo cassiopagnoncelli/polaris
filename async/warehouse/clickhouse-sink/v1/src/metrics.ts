@@ -26,6 +26,7 @@ import {
   ANALYTICS_PROCESSED_QUEUE_TABLE,
   ANALYTICS_QUEUE_TABLE,
   PROFILE_EVENTS_QUEUE_TABLE,
+  VIOLATIONS_QUEUE_TABLE,
 } from "@polaris/shared-clickhouse";
 import type { MetricSample } from "@polaris/shared-metrics";
 
@@ -35,14 +36,40 @@ export const METRIC_SINK_BATCHES_TOTAL = "polaris_clickhouse_sink_batches_total"
 export const METRIC_SINK_BATCH_ROWS_LAST = "polaris_clickhouse_sink_batch_rows_last";
 export const METRIC_SINK_INSERT_DURATION_MS_LAST =
   "polaris_clickhouse_sink_insert_duration_ms_last";
+/**
+ * Batches whose INSERT was rejected by ClickHouse, by table.
+ *
+ * This is the materialized-view failure signal. Polaris's nine MVs are
+ * plain insert-triggered views and `materialized_views_ignore_errors` is
+ * 0, so an MV whose SELECT throws fails the WHOLE INSERT -- the exception
+ * comes back to this process. There is no separate "MV in a failed state"
+ * to poll; that concept belongs to refreshable MVs, which Polaris has
+ * none of.
+ *
+ * A probe polling `system.view_refreshes` for that non-existent state is
+ * what `PolarisClickHouseMVFailure` used to read, and it never once
+ * produced a value. Counting the failures where they actually surface is
+ * the honest replacement.
+ */
+export const METRIC_SINK_INSERT_FAILURES_TOTAL =
+  "polaris_clickhouse_sink_insert_failures_total";
 /** Ingestion lag in seconds: now − the envelope's `ingested_at`. */
 export const METRIC_SINK_LAG_SECONDS = "polaris_clickhouse_sink_lag_seconds";
 
-/** The two ingestion interface tables the sink routes between. */
+/**
+ * The ingestion interface tables the sink routes between.
+ *
+ * Four, not three. `violations_queue` was missing while `recordBatch` was
+ * already being called with it, so the quarantine's lag gauge was never
+ * seeded -- and an unseeded lag series is exactly what the comment on
+ * `#lagSeconds` says must not happen, since its absence and healthy
+ * silence look identical.
+ */
 const SINK_TABLES = [
   ANALYTICS_QUEUE_TABLE,
   ANALYTICS_PROCESSED_QUEUE_TABLE,
   PROFILE_EVENTS_QUEUE_TABLE,
+  VIOLATIONS_QUEUE_TABLE,
 ] as const;
 
 export class SinkMetrics {
@@ -51,6 +78,12 @@ export class SinkMetrics {
   #batches = new Map<string, number>();
   #batchRowsLast = new Map<string, number>();
   #insertDurationMsLast = new Map<string, number>();
+  /**
+   * Seeded at zero for the same reason as the lag gauge below: an alert on
+   * `increase(...) > 0` needs the series to exist before the first
+   * failure, or the first failure and a scrape gap look alike.
+   */
+  #insertFailures = new Map<string, number>(SINK_TABLES.map((table) => [table, 0]));
   /**
    * Seeded with both tables at zero rather than filled on first use. A
    * series that only appears once a row arrives is a series whose absence
@@ -66,6 +99,10 @@ export class SinkMetrics {
 
   recordSkipped(): void {
     this.#skipped += 1;
+  }
+
+  recordInsertFailure(table: string): void {
+    this.#insertFailures.set(table, (this.#insertFailures.get(table) ?? 0) + 1);
   }
 
   recordBatch(rows: number, durationMs: number, table: string): void {
@@ -111,6 +148,11 @@ export class SinkMetrics {
         name: METRIC_SINK_INSERT_DURATION_MS_LAST,
         labels: { table },
         value: this.#insertDurationMsLast.get(table) ?? 0,
+      });
+      samples.push({
+        name: METRIC_SINK_INSERT_FAILURES_TOTAL,
+        labels: { table },
+        value: this.#insertFailures.get(table) ?? 0,
       });
       samples.push({
         name: METRIC_SINK_LAG_SECONDS,

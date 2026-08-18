@@ -27,8 +27,8 @@
 import {
   type CanonicalStreamFamily,
   dedicatedStreamFamily,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
 } from "@polaris/shared-transport";
 import { describe, expect, it } from "vitest";
 
@@ -622,8 +622,8 @@ describe("topics analytics-events family", () => {
     // The naming rule (`<family>.<project>`) is still worth pinning: it is
     // what a future wiring change has to reproduce, and `topics list` renders
     // it for rows written before the refusal landed.
-    expect(dedicatedStreamFamily(STREAM_FAMILY_ANALYTICS_EVENTS, "storefront")).toBe(
-      "analytics.events.storefront",
+    expect(dedicatedStreamFamily(STREAM_FAMILY_RESOLVED_EVENTS, "storefront")).toBe(
+      "resolved.events.storefront",
     );
   });
 });

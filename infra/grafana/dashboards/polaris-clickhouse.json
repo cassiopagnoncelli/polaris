@@ -36,7 +36,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The dashboard's signals come from two places: **clickhouse-sink**, the only process that writes to ClickHouse, and the **analytics-projector**'s probe poller (PI2CRFZC), which periodically queries ClickHouse `system.*` views and re-publishes the rows as Polaris gauges.\n\n**Two ingestion paths.** The sink routes by stream family into two interface tables, and every sink series carries a `table` label so they are read separately:\n\n- `analytics_events_queue` \u2014 source events from `analytics.events`, landing in `analytics_ingest_log` + `analytics_raw`.\n- `analytics_processed_queue` \u2014 derived events from `enriched` / `session` / `identity` / `attribution`.events, landing in `analytics_processed`.\n\n**Available metrics**:\n\n- `polaris_clickhouse_sink_lag_seconds{table}` \u2014 ingestion lag: now \u2212 the envelope's `ingested_at` for the last row written. Powers the warn and page alerts.\n- `polaris_clickhouse_sink_rows_consumed_total{project_id, environment, table}` \u2014 rows inserted.\n- `polaris_clickhouse_sink_rows_skipped_total` \u2014 messages the sink could not project onto a row. The only path where an event leaves the pipeline without reaching ClickHouse, a DLQ, or an ingester rejection; alerted above 1/min.\n- `polaris_clickhouse_sink_batches_total{table}` and `polaris_clickhouse_sink_insert_duration_ms_last{table}` \u2014 batch shape and INSERT latency.\n- `polaris_clickhouse_mv_state{view, state}` \u2014 materialized-view state, from `system.materialized_views` (PI2CRFZC). `state=\"failed\"` powers the page alert.\n- `polaris_processor_events_failed_total{processor_name=\"analytics-projector\", reason=...}` \u2014 projector-side failure class.\n- `polaris_processor_events_dlq_total{processor_name=\"analytics-projector\"}` \u2014 events DLQ'd after retry exhaustion.\n- `polaris_clickhouse_operator_raw_query_total{caller}` \u2014 operator escape-hatch raw queries (audit signal).\n\n`polaris_clickhouse_kafka_ingestion_lag_seconds` is **gone**: ClickHouse stopped consuming for itself at the RabbitMQ migration, so `system.kafka_consumers` is empty. Panels that used it now read the sink's own lag.\n",
+        "content": "# Polaris ClickHouse\n\n**v1 posture.** Polaris does **not** scrape ClickHouse natively in v1 (the `clickhouse` service in `docker-compose.yml` does not expose `/metrics`). The dashboard's signals come from two places: **clickhouse-sink**, the only process that writes to ClickHouse, which is the only process that writes to ClickHouse.\n\n**Two ingestion paths.** The sink routes by stream family into two interface tables, and every sink series carries a `table` label so they are read separately:\n\n- `analytics_events_queue` \u2014 source events from `resolved.events`, landing in `analytics_ingest_log` + `analytics_raw`.\n- `analytics_processed_queue` \u2014 derived events from `session` / `identity` / `attribution`.events, landing in `analytics_processed`.\n\n**Available metrics**:\n\n- `polaris_clickhouse_sink_lag_seconds{table}` \u2014 ingestion lag: now \u2212 the envelope's `ingested_at` for the last row written. Powers the warn and page alerts.\n- `polaris_clickhouse_sink_rows_consumed_total{project_id, environment, table}` \u2014 rows inserted.\n- `polaris_clickhouse_sink_rows_skipped_total` \u2014 messages the sink could not project onto a row. The only path where an event leaves the pipeline without reaching ClickHouse, a DLQ, or an ingester rejection; alerted above 1/min.\n- `polaris_clickhouse_sink_batches_total{table}` and `polaris_clickhouse_sink_insert_duration_ms_last{table}` \u2014 batch shape and INSERT latency.\n- `polaris_clickhouse_sink_insert_failures_total{table}` \u2014 rejected INSERTs. With `materialized_views_ignore_errors` at 0, a materialized view that throws fails its source table's INSERT, so this is the MV-failure signal. The old `polaris_clickhouse_mv_state` polled `system.view_refreshes`, which covers refreshable MVs only and never had a value here.\n- `polaris_clickhouse_operator_raw_query_total{caller}` \u2014 operator escape-hatch raw queries (audit signal).\n\n`polaris_clickhouse_kafka_ingestion_lag_seconds` is **gone**: ClickHouse stopped consuming for itself at the RabbitMQ migration, so `system.kafka_consumers` is empty. Panels that used it now read the sink's own lag.\n\n**Not on this dashboard yet:** the sink's own retry/DLQ depth. Two panels read `polaris_processor_events_*{processor_name=\"analytics-projector\"}` until 126EPNIQ retired that processor; the sink keeps its own `SinkMetrics` and emits no processor-tier counters, so those panels were removed rather than repointed at a metric that does not exist.\n",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -87,7 +87,9 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["max"],
+          "calcs": [
+            "max"
+          ],
           "fields": "",
           "values": false
         },
@@ -139,7 +141,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -174,61 +179,6 @@
           "custom": {
             "drawStyle": "line",
             "lineWidth": 1,
-            "fillOpacity": 10,
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": ["mean", "max"]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum by (reason) (rate(polaris_processor_events_failed_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[5m]))",
-          "legendFormat": "{{reason}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Materialized-view / insert failures (5m, ops; proxy via analytics-projector)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
             "fillOpacity": 5
           },
           "unit": "ops"
@@ -246,7 +196,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -267,72 +220,6 @@
       ],
       "title": "Operator escape-hatch raw query rate (audit, 5m, ops)",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(polaris_processor_events_dlq_total{processor_name=\"analytics-projector\", environment=\"$environment\"}[15m]))",
-          "legendFormat": "analytics-projector DLQ rate",
-          "refId": "A"
-        }
-      ],
-      "title": "Inserter DLQ rate (15m)",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -364,7 +251,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -445,7 +335,9 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -459,13 +351,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (view) (polaris_clickhouse_mv_state{state=\"failed\"})",
-          "legendFormat": "{{view}}",
+          "expr": "increase(polaris_clickhouse_sink_insert_failures_total[5m])",
+          "legendFormat": "{{table}}",
           "refId": "A"
         }
       ],
-      "title": "Materialized views in failed state",
-      "type": "stat"
+      "title": "ClickHouse INSERT failures by table",
+      "type": "stat",
+      "description": "Failed INSERTs from the sink, by interface table. Replaces a panel reading polaris_clickhouse_mv_state, a gauge polled from system.view_refreshes -- which covers refreshable materialized views only, so it never had a value for Polaris's nine plain insert-triggered MVs."
     },
     {
       "datasource": {
@@ -497,7 +390,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -549,7 +445,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -574,7 +473,10 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["polaris", "clickhouse"],
+  "tags": [
+    "polaris",
+    "clickhouse"
+  ],
   "templating": {
     "list": [
       {

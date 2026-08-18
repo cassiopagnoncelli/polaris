@@ -330,24 +330,35 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     const held = deps.checkpoints.take();
     batchOpenedAt = now();
     const started = now();
+    // Which INSERT is in flight, so a failure is attributable to a table.
+    // An MV that throws fails the INSERT into ITS source table
+    // (`materialized_views_ignore_errors` is 0), so this label is how a
+    // materialized-view failure becomes visible -- there is no MV "state"
+    // to poll for plain insert-triggered views.
+    let inFlight: string = ANALYTICS_QUEUE_TABLE;
     try {
       if (sourceRows.length > 0) {
+        inFlight = ANALYTICS_QUEUE_TABLE;
         await deps.writer.insertBatch(sourceRows, ANALYTICS_QUEUE_TABLE);
       }
       if (processedRows.length > 0) {
+        inFlight = ANALYTICS_PROCESSED_QUEUE_TABLE;
         await deps.writer.insertBatch(processedRows, ANALYTICS_PROCESSED_QUEUE_TABLE);
       }
       // Third INSERT, same single-commit contract: the checkpoint advances
       // only after every write is acknowledged, so a failure here re-reads
       // all three batches rather than stranding the profile rows.
       if (profileRows.length > 0) {
+        inFlight = PROFILE_EVENTS_QUEUE_TABLE;
         await deps.writer.insertProfileEvents(profileRows);
       }
       // Fourth INSERT, same single-commit contract.
       if (violationRows.length > 0) {
+        inFlight = VIOLATIONS_QUEUE_TABLE;
         await deps.writer.insertViolations(violationRows);
       }
     } catch (err) {
+      deps.metrics.recordInsertFailure(inFlight);
       // Put these positions back so the transport re-reads these rows
       // rather than resuming past them.
       deps.checkpoints.restore(held);

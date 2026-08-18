@@ -15,7 +15,6 @@ import {
   retryQueueNames,
   retryTierForAttempt,
   STREAM_DIAGNOSTICS_EVENTS,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
 } from "../src/streams.js";
 
@@ -24,7 +23,6 @@ describe("canonical stream constants", () => {
     // These string values are part of the architecture contract — changes
     // require coordinated updates in `03-rabbitmq-streams.md`.
     expect(STREAM_FAMILY_RAW_EVENTS).toBe("raw.events");
-    expect(STREAM_FAMILY_ANALYTICS_EVENTS).toBe("analytics.events");
   });
 
   it("exposes the SDK diagnostics stream", () => {

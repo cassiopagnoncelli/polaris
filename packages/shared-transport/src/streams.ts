@@ -42,18 +42,6 @@ export const STREAM_FAMILY_RAW_EVENTS = "raw.events" as const;
 export const STREAM_FAMILY_IDENTITY_EVENTS = "identity.events" as const;
 export const STREAM_FAMILY_SESSION_EVENTS = "session.events" as const;
 export const STREAM_FAMILY_ATTRIBUTION_EVENTS = "attribution.events" as const;
-/**
- * RETIRED (126EPNIQ, 2026-08-18). The `analytics-projector` fan-out
- * produced this; `resolved.events` replaces it.
- *
- * Do not confuse with the `analytics_events_queue` TABLE, which is very
- * much alive and receives the spine's source events. Same word, different
- * thing, and the sink writes to the table while no longer reading the
- * family.
- *
- * Kept for the same reason as `enriched.events` above.
- */
-export const STREAM_FAMILY_ANALYTICS_EVENTS = "analytics.events" as const;
 
 /**
  * Intermediate family between the two spine stages: the identity stage

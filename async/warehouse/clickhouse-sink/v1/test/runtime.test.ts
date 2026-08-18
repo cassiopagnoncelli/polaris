@@ -178,13 +178,14 @@ function runtimeWith(
     now?: () => number;
     checkpoints?: DeferredCheckpointStore;
     logger?: Parameters<typeof createRuntime>[0]["logger"];
+    metrics?: SinkMetrics;
   } = {},
 ) {
   return createRuntime({
     consumer: noopConsumer,
     writer,
     logger: overrides.logger ?? silentLogger,
-    metrics: new SinkMetrics(),
+    metrics: overrides.metrics ?? new SinkMetrics(),
     batchMaxRows: overrides.batchMaxRows ?? 3,
     batchMaxMs: overrides.batchMaxMs ?? 60_000,
     checkpoints:
@@ -789,6 +790,52 @@ describe("the _version storage format", () => {
     );
 
     expect(writes[0]?.table).toBe(ANALYTICS_QUEUE_TABLE);
+  });
+
+  it("counts a failed INSERT against the table it was writing", async () => {
+    // The materialized-view failure signal. Polaris's MVs are plain
+    // insert-triggered views and `materialized_views_ignore_errors` is 0,
+    // so an MV whose SELECT throws fails the INSERT into its source table
+    // and the exception arrives here. There is no MV "state" to poll --
+    // `PolarisClickHouseMVFailure` polled `system.view_refreshes` for one
+    // anyway and never produced a value in its entire life.
+    const writes: string[] = [];
+    const failing = {
+      insertBatch: async (_rows: readonly AnalyticsQueueRow[], table?: string) => {
+        writes.push(table ?? ANALYTICS_QUEUE_TABLE);
+        throw new Error("Code: 341. DB::Exception: materialized view failed");
+      },
+      insertProfileEvents: async () => {},
+      insertViolations: async () => {},
+      close: async () => {},
+    } as unknown as AnalyticsSinkWriter;
+
+    const metrics = new SinkMetrics();
+    const runtime = runtimeWith(failing, { batchMaxRows: 1, metrics });
+    await expect(runtime.handler(payload(envelope()), {})).rejects.toThrow(/materialized view/);
+
+    const sample = metrics
+      .getSamples()
+      .find(
+        (s) =>
+          s.name === "polaris_clickhouse_sink_insert_failures_total" &&
+          s.labels["table"] === ANALYTICS_QUEUE_TABLE,
+      );
+    expect(sample?.value).toBe(1);
+  });
+
+  it("seeds every table's failure series at zero", () => {
+    // Including `violations_queue`, which was absent from SINK_TABLES
+    // while `recordBatch` was already being called with it -- so the
+    // quarantine's lag gauge was never seeded either. An alert on
+    // `increase(...) > 0` needs the series to exist before the first
+    // failure, or a first failure and a scrape gap look the same.
+    const names = new SinkMetrics()
+      .getSamples()
+      .filter((s) => s.name === "polaris_clickhouse_sink_insert_failures_total")
+      .map((s) => s.labels["table"]);
+    expect(names).toContain("violations_queue");
+    expect(names).toHaveLength(4);
   });
 
   it("keeps the stage-rank ordering, though nothing produces rank 0 now", async () => {

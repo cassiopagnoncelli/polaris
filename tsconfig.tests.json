@@ -70,7 +70,6 @@
     "packages/shared-policy/test",
     "packages/shared-service-bootstrap/test",
     "packages/web-sdk/test",
-    "async/computation/attribution-engine/v1/test",
     "async/computation/sessionizer/v1/test",
     "scripts/__tests__"
   ]
