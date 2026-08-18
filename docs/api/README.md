@@ -68,7 +68,7 @@ Either command opens an interactive renderer with the request/response examples,
 A running ingester also serves the same document at runtime so operators can curl it in any environment:
 
 ```bash
-curl -s http://localhost:8080/openapi.json | jq '.info'
+curl -s http://localhost:4000/openapi.json | jq '.info'
 ```
 
 The runtime document picks up the binary's version and (where overridden) environment-specific server URLs. CI compares the committed file against a freshly regenerated copy from the source tree — not against a live binary — so the published doc stays deterministic.

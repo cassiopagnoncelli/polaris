@@ -244,7 +244,7 @@ The fastest sanity check is a hand-crafted POST. The full envelope shape
 lives in [Event Contract](../architecture/01-event-contract.md):
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/events \
+curl -s -X POST http://localhost:4000/v1/events \
   -H "Content-Type: application/json" \
   -H "X-Polaris-Api-Key: $POLARIS_API_KEY" \
   -d '{
@@ -589,7 +589,7 @@ checks but is NOT a substitute for `shared-clickhouse` in application code.
 | `pnpm lint` fails with `disallowed import "@clickhouse/client"`             | A file outside `packages/shared-clickhouse/` imported the official client.                                                | Route the access through `@polaris/shared-clickhouse` instead. See [CI / ClickHouse import-restriction check](./ci.md#clickhouse-import-restriction-check). |
 | `pnpm typecheck` succeeds but `pnpm test` fails with "Cannot find module"  | Stale `dist/` from a partial build, or a workspace package referenced before its `build` ran.                            | `pnpm build && pnpm test`. The CI `test` job also runs `pnpm build` first for this reason.                                  |
 | `pnpm openapi:check` fails after a Zod schema edit                          | The committed OpenAPI document drifted from the Zod sources.                                                              | `pnpm openapi` and commit the regenerated `docs/api/openapi.{yaml,json}`. See [API docs](../api/README.md).                |
-| `pnpm smoke:vertical-slice` reports `ECONNREFUSED` on `http://localhost:8080/v1/events` | The ingester is not running, or it bound to port `3000` (the platform default).                                          | Restart with `POLARIS_HTTP_PORT=8080 pnpm --filter @polaris/ingester-api run start`, or export `POLARIS_INGESTER_URL`.       |
+| `pnpm smoke:vertical-slice` reports `ECONNREFUSED` on `http://localhost:4000/v1/events` | The ingester is not running, or it bound to `3000` (the shared-config default) because it was started without its `dev` script. | `pnpm --filter @polaris/ingester-api run dev`, which sets `POLARIS_HTTP_PORT=4000` per `infra/service-ports.json`, or export `POLARIS_INGESTER_URL`. |
 | `psql: command not found` during the smoke seed step                       | The smoke shells out to `psql` to mint an API key.                                                                        | `brew install postgresql` / `apt-get install postgresql-client`, or export `POLARIS_SMOKE_API_KEY` directly to skip the seed. |
 
 The vertical-slice smoke runbook has its own failure-mode matrix scoped to

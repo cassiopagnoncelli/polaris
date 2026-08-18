@@ -60,7 +60,7 @@
 //
 // Env vars (see runbook for full table):
 //
-//   POLARIS_INGESTER_URL          default http://localhost:8080
+//   POLARIS_INGESTER_URL          default http://localhost:4000
 //   POLARIS_SMOKE_API_KEY         override the api key string. Unset, the
 //                                 backend token in blueprints/api-key is used
 //                                 when `bin/setup` has issued one; failing
@@ -134,7 +134,7 @@ export async function runVerticalSliceSmoke({
   smoke = {},
   logger = log,
 } = {}) {
-  const ingesterUrl = ingester.url ?? envOr("POLARIS_INGESTER_URL", "http://localhost:8080");
+  const ingesterUrl = ingester.url ?? envOr("POLARIS_INGESTER_URL", "http://localhost:4000");
   const clickhouseClient = {
     url: (clickhouse.url ?? envOr("CLICKHOUSE_URL", "http://localhost:8123")).replace(/\/+$/, ""),
     user: clickhouse.user ?? envOr("CLICKHOUSE_USER", "polaris"),
