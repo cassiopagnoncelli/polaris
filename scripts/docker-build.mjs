@@ -39,7 +39,17 @@ const repoRoot = path.resolve(__dirname, "..");
  *   image: string,
  * }>}
  */
-const services = [
+/**
+ * Every buildable image.
+ *
+ * Exported so a test can hold it against POLARIS_COMPONENTS and against
+ * the filesystem. `merge-worker` was in the components list with a
+ * Dockerfile on disk and no entry here, so the standard build silently
+ * produced no image for a deployable service; the retired fan-out left
+ * three entries pointing at Dockerfiles that no longer exist, which would
+ * have failed the build outright.
+ */
+export const services = [
   {
     name: "ingester-api",
     dockerfile: "apps/ingester-api/Dockerfile",
@@ -54,11 +64,6 @@ const services = [
     name: "polaris-cli",
     dockerfile: "apps/polaris-cli/Dockerfile",
     image: "polaris/polaris-cli",
-  },
-  {
-    name: "analytics-projector",
-    dockerfile: "sync/legacy/analytics-projector/v1/Dockerfile",
-    image: "polaris/processor-analytics-projector-v1",
   },
   {
     name: "sync-identity",
@@ -76,9 +81,12 @@ const services = [
     image: "polaris/consumer-clickhouse-sink-v1",
   },
   {
-    name: "identity-resolver",
-    dockerfile: "sync/legacy/identity-resolver/v1/Dockerfile",
-    image: "polaris/processor-identity-resolver-v1",
+    // In POLARIS_COMPONENTS with a Dockerfile on disk, and absent from this
+    // list until 2026-08-18 -- a deployable component the build tooling did
+    // not know existed, so `pnpm docker:build` never produced its image.
+    name: "merge-worker",
+    dockerfile: "async/merges/merge-worker/v1/Dockerfile",
+    image: "polaris/processor-merge-worker-v1",
   },
   {
     name: "sessionizer",
@@ -89,21 +97,6 @@ const services = [
     name: "sessionizer-v2",
     dockerfile: "async/computation/sessionizer/v2/Dockerfile",
     image: "polaris/processor-sessionizer-v2",
-  },
-  {
-    name: "geoip-enricher",
-    dockerfile: "sync/legacy/geoip-enricher/v1/Dockerfile",
-    image: "polaris/processor-geoip-enricher-v1",
-  },
-  {
-    name: "attribution-engine",
-    dockerfile: "async/computation/attribution-engine/v1/Dockerfile",
-    image: "polaris/processor-attribution-engine-v1",
-  },
-  {
-    name: "attribution-engine-v2",
-    dockerfile: "async/computation/attribution-engine/v2/Dockerfile",
-    image: "polaris/processor-attribution-engine-v2",
   },
   {
     name: "attribution-engine-v3",
@@ -310,9 +303,15 @@ async function main() {
   return 0;
 }
 
-main()
-  .then((code) => process.exit(code))
-  .catch((error) => {
-    process.stderr.write(`unexpected failure: ${error?.message ?? error}\n`);
-    process.exit(1);
-  });
+// Only when RUN as a script, never on import. Without this guard, importing
+// the module to read `services` starts building images -- which is exactly
+// what happened the first time a test imported it. Same shape as the guard
+// in `lint-trait-sql.mjs`.
+if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      process.stderr.write(`unexpected failure: ${error?.message ?? error}\n`);
+      process.exit(1);
+    });
+}

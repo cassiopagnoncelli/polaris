@@ -103,7 +103,7 @@ jobs:
       - name: Install Polaris (bin/setup)
         run: ./bin/setup
 
-      # The ingester + analytics-projector are workspace services. We run
+      # The ingester and both spine stages are workspace services. We run
       # them in the background and capture pid + logs so a smoke failure
       # has the upstream logs immediately available.
       - name: Start ingester
@@ -128,17 +128,17 @@ jobs:
           POLARIS_REDIS_HOST: localhost
           POLARIS_REDIS_PORT: "6379"
 
-      - name: Start analytics-projector
+      - name: Start sync-identity
         run: |
-          pnpm --filter @polaris/processor-analytics-projector-v1 run start \
-            > /tmp/polaris-logs/analytics-projector.log 2>&1 &
-          echo $! > /tmp/polaris-logs/analytics-projector.pid
+          pnpm --filter @polaris/sync-identity-resolver-v1 run start \
+            > /tmp/polaris-logs/sync-identity.log 2>&1 &
+          echo $! > /tmp/polaris-logs/sync-identity.pid
         env:
-          POLARIS_SERVICE_NAME: polaris-analytics-projector
+          POLARIS_SERVICE_NAME: polaris-sync-identity
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8081"
+          POLARIS_HTTP_PORT: "4018"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           # Stream consumers own their resume point in PostgreSQL: AMQP
@@ -148,9 +148,32 @@ jobs:
           POLARIS_POSTGRES_DATABASE: polaris
           POLARIS_POSTGRES_USER: polaris
           POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_SYNC_IDENTITY_CATALOG_ROOT: ${{ github.workspace }}
+
+      - name: Start sync-enrichment
+        run: |
+          pnpm --filter @polaris/sync-enrichment-runtime-v1 run start \
+            > /tmp/polaris-logs/sync-enrichment.log 2>&1 &
+          echo $! > /tmp/polaris-logs/sync-enrichment.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-sync-enrichment
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "4015"
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          # Stream consumers own their resume point in PostgreSQL: AMQP
+          # has no server-side offset store.
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_SYNC_ENRICHMENT_CATALOG_ROOT: ${{ github.workspace }}
 
 
-      # The ClickHouse sink is what carries analytics.events into
+      # The ClickHouse sink is what carries resolved.events into
       # ClickHouse. It replaced the Kafka Engine table, which used to make
       # this hop invisible in CI — without this service the smoke's
       # analytics_raw poll never sees a row.
@@ -226,8 +249,10 @@ jobs:
           docker compose ps || true
           echo "=== ingester ==="
           tail -n 200 /tmp/polaris-logs/ingester.log || true
-          echo "=== analytics-projector ==="
-          tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== sync-identity ==="
+          tail -n 200 /tmp/polaris-logs/sync-identity.log || true
+          echo "=== sync-enrichment ==="
+          tail -n 200 /tmp/polaris-logs/sync-enrichment.log || true
           echo "=== clickhouse-sink ==="
           tail -n 200 /tmp/polaris-logs/clickhouse-sink.log || true
           echo "=== docker compose logs (last 200 lines) ==="
@@ -239,8 +264,11 @@ jobs:
           if [ -f /tmp/polaris-logs/ingester.pid ]; then
             kill "$(cat /tmp/polaris-logs/ingester.pid)" 2>/dev/null || true
           fi
-          if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
-            kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          if [ -f /tmp/polaris-logs/sync-identity.pid ]; then
+            kill "$(cat /tmp/polaris-logs/sync-identity.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/sync-enrichment.pid ]; then
+            kill "$(cat /tmp/polaris-logs/sync-enrichment.pid)" 2>/dev/null || true
           fi
           if [ -f /tmp/polaris-logs/clickhouse-sink.pid ]; then
             kill "$(cat /tmp/polaris-logs/clickhouse-sink.pid)" 2>/dev/null || true
@@ -325,17 +353,17 @@ jobs:
           POLARIS_REDIS_HOST: localhost
           POLARIS_REDIS_PORT: "6379"
 
-      - name: Start analytics-projector
+      - name: Start sync-identity
         run: |
-          pnpm --filter @polaris/processor-analytics-projector-v1 run start \
-            > /tmp/polaris-logs/analytics-projector.log 2>&1 &
-          echo $! > /tmp/polaris-logs/analytics-projector.pid
+          pnpm --filter @polaris/sync-identity-resolver-v1 run start \
+            > /tmp/polaris-logs/sync-identity.log 2>&1 &
+          echo $! > /tmp/polaris-logs/sync-identity.pid
         env:
-          POLARIS_SERVICE_NAME: polaris-analytics-projector
+          POLARIS_SERVICE_NAME: polaris-sync-identity
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8081"
+          POLARIS_HTTP_PORT: "4018"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           # Stream consumers own their resume point in PostgreSQL: AMQP
@@ -345,6 +373,29 @@ jobs:
           POLARIS_POSTGRES_DATABASE: polaris
           POLARIS_POSTGRES_USER: polaris
           POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_SYNC_IDENTITY_CATALOG_ROOT: ${{ github.workspace }}
+
+      - name: Start sync-enrichment
+        run: |
+          pnpm --filter @polaris/sync-enrichment-runtime-v1 run start \
+            > /tmp/polaris-logs/sync-enrichment.log 2>&1 &
+          echo $! > /tmp/polaris-logs/sync-enrichment.pid
+        env:
+          POLARIS_SERVICE_NAME: polaris-sync-enrichment
+          POLARIS_SERVICE_VERSION: "0.0.0-ci"
+          POLARIS_ENVIRONMENT: development
+          POLARIS_HTTP_HOST: 0.0.0.0
+          POLARIS_HTTP_PORT: "4015"
+          POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
+          POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
+          # Stream consumers own their resume point in PostgreSQL: AMQP
+          # has no server-side offset store.
+          POLARIS_POSTGRES_HOST: localhost
+          POLARIS_POSTGRES_PORT: "5432"
+          POLARIS_POSTGRES_DATABASE: polaris
+          POLARIS_POSTGRES_USER: polaris
+          POLARIS_POSTGRES_PASSWORD: polaris
+          POLARIS_SYNC_ENRICHMENT_CATALOG_ROOT: ${{ github.workspace }}
 
 
       # The ClickHouse sink carries analytics.events into ClickHouse.
@@ -396,8 +447,10 @@ jobs:
           docker compose ps || true
           echo "=== ingester ==="
           tail -n 200 /tmp/polaris-logs/ingester.log || true
-          echo "=== analytics-projector ==="
-          tail -n 200 /tmp/polaris-logs/analytics-projector.log || true
+          echo "=== sync-identity ==="
+          tail -n 200 /tmp/polaris-logs/sync-identity.log || true
+          echo "=== sync-enrichment ==="
+          tail -n 200 /tmp/polaris-logs/sync-enrichment.log || true
           echo "=== clickhouse-sink ==="
           tail -n 200 /tmp/polaris-logs/clickhouse-sink.log || true
           echo "=== docker compose logs (last 200 lines) ==="
@@ -409,8 +462,11 @@ jobs:
           if [ -f /tmp/polaris-logs/ingester.pid ]; then
             kill "$(cat /tmp/polaris-logs/ingester.pid)" 2>/dev/null || true
           fi
-          if [ -f /tmp/polaris-logs/analytics-projector.pid ]; then
-            kill "$(cat /tmp/polaris-logs/analytics-projector.pid)" 2>/dev/null || true
+          if [ -f /tmp/polaris-logs/sync-identity.pid ]; then
+            kill "$(cat /tmp/polaris-logs/sync-identity.pid)" 2>/dev/null || true
+          fi
+          if [ -f /tmp/polaris-logs/sync-enrichment.pid ]; then
+            kill "$(cat /tmp/polaris-logs/sync-enrichment.pid)" 2>/dev/null || true
           fi
           if [ -f /tmp/polaris-logs/clickhouse-sink.pid ]; then
             kill "$(cat /tmp/polaris-logs/clickhouse-sink.pid)" 2>/dev/null || true
