@@ -124,9 +124,11 @@ Panels and the metric each uses:
 **UID:** `polaris-processors`
 **Default range:** last 6 hours
 
-The `$processor_name` template variable picks one of the five v1 processors:
-`analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`,
-`attribution-engine`. `All` shows the fleet aggregate.
+The `$processor_name` template variable picks one of the live processors:
+`sync-identity-resolver`, `sync-enrichment-runtime`, `sessionizer`,
+`attribution-engine`, `merge-worker`. `All` shows the fleet aggregate.
+(`analytics-projector`, `geoip-enricher` and the v1 `identity-resolver`
+were retired in 126EPNIQ.)
 
 Panels and the metric each uses:
 
@@ -207,10 +209,8 @@ Panels and the metric each uses:
 | Panel | Metric expression |
 |---|---|
 | ClickHouse ingestion lag (s) | `max by (table) (polaris_clickhouse_sink_lag_seconds)` |
-| Analytics insert rate (5m, ops; proxy) | `sum(rate(polaris_processor_events_emitted_total{processor_name="analytics-projector"}[5m]))` |
-| Materialized-view / insert failures (5m, proxy) | `sum by (reason) (rate(polaris_processor_events_failed_total{processor_name="analytics-projector"}[5m]))` |
+| ClickHouse INSERT failures by table | `increase(polaris_clickhouse_sink_insert_failures_total[5m])` |
 | Operator escape-hatch raw query rate (5m, audit) | `sum by (caller) (rate(polaris_clickhouse_operator_raw_query_total[5m]))` |
-| Inserter DLQ rate (15m) | `sum(rate(polaris_processor_events_dlq_total{processor_name="analytics-projector"}[15m]))` |
 | Query rate by table / query p99 / projection freshness | placeholder — see gap below |
 
 **Known gaps (largest in v1):**
@@ -222,12 +222,22 @@ Panels and the metric each uses:
   no scrape stanza for ClickHouse exists in
   [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml).
   Until that lands, **every native ClickHouse signal** is proxied through
-  the **analytics-projector** processor (which is Polaris's writer into
-  `analytics.events`).
-- **No materialized-view `failed_state` count.** The proxy is
-  `polaris_processor_events_failed_total{processor_name="analytics-projector"}`,
-  which is the Polaris-side view of insert failures, not ClickHouse's
-  internal MV failure ledger.
+  **clickhouse-sink**, the only process that writes to ClickHouse.
+- **Materialized-view failures are observed indirectly, and that is
+  correct here.** Polaris's nine MVs are plain insert-triggered views and
+  `materialized_views_ignore_errors` is 0, so an MV whose SELECT throws
+  fails the INSERT into its source table and the exception reaches the
+  sink: `polaris_clickhouse_sink_insert_failures_total{table}` is the
+  signal. There is no "MV failed state" to read — that belongs to
+  refreshable MVs, which Polaris has none of. A
+  `polaris_clickhouse_mv_state` gauge polled `system.view_refreshes` for
+  exactly that non-existent state until 126EPNIQ and never once carried a
+  value.
+- **No sink retry/DLQ depth panel.** Two panels read
+  `polaris_processor_events_*{processor_name="analytics-projector"}`; that
+  processor is gone and the sink emits no processor-tier counters, so the
+  panels were removed rather than repointed at a metric that does not
+  exist.
 - **No query-rate-by-table panel.** Needs ClickHouse's built-in
   `ClickHouseProfileEvents_Query` and a database/table label split, which
   requires the native exporter.

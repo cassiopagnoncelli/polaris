@@ -50,10 +50,10 @@ processors/
 The five v1 processors released against this contract are:
 
 ```text
-sync/legacy/analytics-projector/v1/
+sync/identity/resolver/v1/
 sync/legacy/identity-resolver/v1/
 async/computation/sessionizer/v1/
-sync/legacy/geoip-enricher/v1/
+sync/enrichment/runtime/v1/
 async/computation/attribution-engine/v1/
 ```
 
@@ -142,7 +142,7 @@ The `replay_notes` block is the prose for the runbook:
 
 ```yaml
 replay_notes: |
-  Replays of analytics.events produce identical touchpoint_captured
+  Replays of resolved.events produce identical touchpoint_captured
   events byte-for-byte because the touchpoint_id derivation is a pure
   function of (source_event_id, canonical_campaign_tuple). The
   first_touch_assigned and last_touch_assigned events carry replay
@@ -278,7 +278,7 @@ input/output examples" is a required test style. The P8-006 convention:
   - tests injecting a deterministic `now()` clock so the processor
     stamp's `ran_at` is pinned to a known instant.
 
-The `geoip-enricher`'s pre-existing `test/fixtures/geoip-sample.json` is
+The enrichment stage's `test/fixtures/geoip-sample.json` is
 NOT a golden input/output pair — it's the `InMemoryIPLookup`'s database.
 It stays where it is. The golden pair lives separately under
 `test/golden/`.

@@ -12,7 +12,7 @@ Binding architecture references:
 
 The processor runtime emitting the lag metric lives at
 [`packages/shared-processor/`](../../packages/shared-processor/). The
-identity-resolver and analytics-projector processors that consume the
+identity and enrichment spine stages that consume the
 shared topics live at
 [`processors/`](../../processors/). The Prometheus rules that trigger
 this runbook live at

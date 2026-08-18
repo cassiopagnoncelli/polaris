@@ -17,7 +17,6 @@ Processor and consumer versions live in the directory name:
 
 ```text
 processors/
-  geoip-enricher/v1/
   identity-resolver/v1/v2/
   ...
 consumers/

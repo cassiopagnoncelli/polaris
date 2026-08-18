@@ -163,7 +163,7 @@ selected, or via curl against
 Add a service filter to narrow further:
 
 ```logql
-{project_id="0193e7a8-3b8c-7c4f-b3ef-projectid123", service="analytics-projector"}
+{project_id="0193e7a8-3b8c-7c4f-b3ef-projectid123", service="sync-enrichment-runjector"}
 ```
 
 ### A specific `event_id` (line-content grep, not a label)
@@ -172,7 +172,7 @@ Add a service filter to narrow further:
 or `| json` for structured extraction:
 
 ```logql
-{service=~"ingester-api|analytics-projector|.*-consumer"}
+{service=~"ingester-api|sync-identity|sync-enrichment|.*-consumer"}
   |= "018f1b9e-7b50-7b12-9a2e-eventid01234"
 ```
 
@@ -194,13 +194,13 @@ Or extract structurally and filter:
 ### Publish failures from one processor
 
 ```logql
-{service="analytics-projector", level=~"warn|error"}
+{service="sync-enrichment-runjector", level=~"warn|error"}
   | json
   | __error__=""
   | message =~ "publish.*fail|transport.*error"
 ```
 
-Replace `analytics-projector` with the specific processor name
+Replace `sync-enrichment` with the specific processor name
 when triaging a known offender. The `processor_name` field is also
 in the line body if you want to broaden across processor variants:
 

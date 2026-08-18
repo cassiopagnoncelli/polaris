@@ -3,14 +3,14 @@
 Polaris feeds ClickHouse through `async/warehouse/clickhouse-sink`. The flow is:
 
 ```text
-RabbitMQ analytics.events
+RabbitMQ resolved.events
   -> ClickHouse ingestion interface table (analytics_events_queue)
   -> Materialized view
   -> analytics_raw (immutable, append-only, deduped on read)
   -> projection tables (e.g. event_daily_counts) read directly
 ```
 
-`analytics.events` is the topic that ClickHouse subscribes to. The full
+`resolved.events` is the topic the ClickHouse sink subscribes to. The full
 schema and dedupe rules are in
 [Architecture / ClickHouse](../architecture/07-clickhouse.md). Two rules
 matter here:

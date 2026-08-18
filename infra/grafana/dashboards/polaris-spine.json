@@ -37,7 +37,7 @@
       "id": 1,
       "options": {
         "mode": "markdown",
-        "content": "# Polaris \u2014 Spine\n\nThe two stages of the main pipeline that resolve and enrich every event:\n\n```\nraw.events -> sync-identity-resolver -> identified.events -> sync-enrichment-runtime -> resolved.events\n```\n\n**Read the outcome panels first.** Both stages FAIL OPEN by design \u2014 a missing profile row, an over-size trait snapshot, an absent geo database and an event with no IP all produce a well-formed event with null-ish blocks. None of them raises the failure counter, so a silent degradation is invisible in throughput and error panels and visible only here.\n\n`merge_suspended` on the safeguards panel is the merge-rate breaker tripping: a profile absorbing more merges than policy allows inside its window. It is the signature of a promiscuous identifier (a kiosk device, `customer_id: \"guest\"`, a bot) chain-merging strangers into one person. Alert: `PolarisIdentityMergeBreakerTripped`.\n\nRunbooks: `docs/operations/runbook-processor-lag.md`, `docs/operations/runbook-spine-dual-run-parity.md`."
+        "content": "# Polaris \u2014 Spine\n\nThe two stages of the main pipeline that resolve and enrich every event:\n\n```\nraw.events -> sync-identity-resolver -> identified.events -> sync-enrichment-runtime -> resolved.events\n```\n\n**Read the outcome panels first.** Both stages FAIL OPEN by design \u2014 a missing profile row, an over-size trait snapshot, an absent geo database and an event with no IP all produce a well-formed event with null-ish blocks. None of them raises the failure counter, so a silent degradation is invisible in throughput and error panels and visible only here.\n\n`merge_suspended` on the safeguards panel is the merge-rate breaker tripping: a profile absorbing more merges than policy allows inside its window. It is the signature of a promiscuous identifier (a kiosk device, `customer_id: \"guest\"`, a bot) chain-merging strangers into one person. Alert: `PolarisIdentityMergeBreakerTripped`.\n\nRunbooks: `docs/operations/runbook-processor-lag.md`, `docs/operations/runbook-spine-delivery-verification.md`."
       },
       "pluginVersion": "11.4.0",
       "title": "About this dashboard",
@@ -73,7 +73,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -137,7 +140,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -189,7 +195,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -241,7 +250,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -296,7 +308,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -348,7 +363,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -403,7 +421,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -469,7 +490,9 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -494,7 +517,12 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["polaris", "spine", "identity", "enrichment"],
+  "tags": [
+    "polaris",
+    "spine",
+    "identity",
+    "enrichment"
+  ],
   "templating": {
     "list": [
       {

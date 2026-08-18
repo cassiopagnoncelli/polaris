@@ -6,8 +6,10 @@ The vertical-slice smoke proves the canonical Polaris event path end-to-end:
 curl POST /v1/events
   -> apps/ingester-api
   -> RabbitMQ raw.events
-  -> sync/legacy/analytics-projector/v1
-  -> RabbitMQ analytics.events
+  -> sync/identity/resolver/v1        (mints the profile)
+  -> RabbitMQ identified.events
+  -> sync/enrichment/runtime/v1       (traits + geo)
+  -> RabbitMQ resolved.events
   -> clickhouse-sink (analytics_events_queue)
   -> analytics_raw
 ```
@@ -20,8 +22,8 @@ wire.
 ## When to run it
 
 - Locally, before merging changes that touch any of: ingester, SDK
-  envelope shape, the analytics-projector v1, ClickHouse DDL, or the
-  RabbitMQ topic resolver.
+  envelope shape, either spine stage, ClickHouse DDL, or the RabbitMQ
+  topic resolver.
 - In CI, automatically on label `integration`, scheduled at 06:00 UTC,
   or on demand via the Actions UI (Workflow: **Integration**).
 
@@ -43,13 +45,14 @@ docker compose up -d --wait
 pnpm db:migrate
 pnpm clickhouse:bootstrap-local
 
-# 3. start the ingester and the analytics-projector in two terminals,
-#    or background them. The smoke runner expects:
-#      - the ingester on http://localhost:4000
-#      - the analytics-projector connected to rabbitmq:9092 (compose
-#        internal hostname) — already the default.
+# 3. start the ingester and BOTH spine stages, plus the sink. The smoke
+#    runner expects the ingester on http://localhost:4000. Every stage
+#    must be running: the assertion is a resolved profile_id, which only
+#    the identity stage can mint and only the enrichment stage forwards.
 pnpm --filter @polaris/ingester-api run start &
-pnpm --filter @polaris/processor-analytics-projector-v1 run start &
+pnpm --filter @polaris/sync-identity-resolver-v1 run start &
+pnpm --filter @polaris/sync-enrichment-runtime-v1 run start &
+pnpm --filter @polaris/processor-clickhouse-sink-v1 run start &
 
 # 4. run the smoke
 pnpm smoke:vertical-slice
@@ -75,11 +78,19 @@ A pass means:
 
 1. The ingester accepted the event and per-event response carried `status: "accepted"`.
 2. RabbitMQ durably accepted the message on `raw.events`.
-3. The analytics-projector v1 consumed it and emitted to `analytics.events`.
+3. The identity stage resolved a profile and emitted to `identified.events`;
+   the enrichment stage composed its enrichers and emitted to `resolved.events`.
 4. ClickHouse's ingestion interface table read the message into `analytics_ingest_log`
    and the MV propagated it into `analytics_raw`.
-5. The row carries the expected envelope fields plus
-   `processor_name='analytics-projector'`, `processor_version='v1'`.
+5. The row carries the expected envelope fields, a NON-EMPTY `profile_id`,
+   and `processor_name='sync-enrichment-runtime'`.
+
+   The profile_id is the assertion that matters. This used to assert
+   `processor_name='analytics-projector'` — the path 126EPNIQ retired — so
+   the repo's only end-to-end test spent three days confirming the thing
+   being deleted still worked while both spine stages threw on every event.
+   Minting a profile is the identity stage's whole job and nothing on the
+   old path could do it.
 
 ## Vitest wrapper
 
@@ -145,7 +156,8 @@ pnpm smoke:vertical-slice
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `failed to POST http://localhost:4000/v1/events: ... ECONNREFUSED`   | The ingester is not running.                                                            | `pnpm --filter @polaris/ingester-api run start` and retry.                                                            |
 | `ingester did not accept the event: ... http_error 401`              | The API key is invalid or the seed step did not run.                                    | Check `pg_hba.conf` / DATABASE_URL, or export `POLARIS_SMOKE_API_KEY` directly.                                       |
-| `timed out after 60000ms waiting for analytics_raw`                  | The analytics-projector is not running, ClickHouse is not consuming, or the MV is down. | `docker compose logs analytics-projector clickhouse`. Bump `POLARIS_SMOKE_POLL_TIMEOUT_MS` for slow CI runners.       |
+| `timed out after 60000ms waiting for analytics_raw`                  | A spine stage or the sink is not running, or the MV is down.                             | `docker compose logs sync-identity sync-enrichment clickhouse-sink clickhouse`. Bump `POLARIS_SMOKE_POLL_TIMEOUT_MS` for slow CI runners. |
+| `profile_id is empty — the event did not cross the identity stage`   | The identity stage is not consuming. NOT an activation problem: the gate is open unless an explicit `disabled` row exists. | Check that sync-identity is running and reading `raw.events`.                                                        |
 | `psql: command not found`                                            | The seed step shells out to `psql`.                                                     | Install postgresql-client (`brew install postgresql` / `apt-get install postgresql-client`), or pass `POLARIS_SMOKE_API_KEY`. |
 | `@polaris/shared-secrets is not available`                           | The smoke runner ran from a tree without `pnpm install`.                                | Run `pnpm install` from the repo root, or pass `POLARIS_SMOKE_API_KEY`.                                               |
 | `ClickHouse 500 ... Cannot resolve host: rabbitmq`                   | ClickHouse is running outside the compose network and cannot reach RabbitMQ.            | Use `docker compose up -d` (which the smoke expects), not standalone `docker run` for ClickHouse.                     |
@@ -158,7 +170,7 @@ The smoke runs in `.github/workflows/integration.yml` under the
 1. Brings up the local stack with `docker compose up -d --wait`.
 2. Applies PostgreSQL migrations and the ClickHouse schema (including the
    local user bootstrap).
-3. Starts the ingester and analytics-projector as background processes.
+3. Starts the ingester, both spine stages and the sink as background processes.
 4. Runs `pnpm smoke:vertical-slice` and `pnpm test:smoke`.
 5. Dumps service logs on failure and tears the stack down.
 

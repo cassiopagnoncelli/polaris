@@ -65,7 +65,7 @@ The ingester returned `accepted` and you can see the counter tick on
 
 **Meaning.** The event reached `raw.events` but failed somewhere in the
 processing chain (processor crash, mapping error in a destination
-consumer) and landed in a DLQ — *or* the analytics-projector is simply
+consumer) and landed in a DLQ — *or* a spine stage is simply
 behind.
 
 **Diagnostic move.**
@@ -99,7 +99,7 @@ If the trace does not settle it, the individual stores:
    [Observability](../development/observability.md).
 2. Check the DLQ:
    ```bash
-   polaris dlq list --vendor analytics-projector --since 2026-05-15T00:00:00Z
+   polaris dlq list --vendor sync-enrichment-runtime --since 2026-05-15T00:00:00Z
    ```
 3. If the event is in the DLQ, `polaris dlq show <dlq_id>` returns the
    full row including the failure reason. The operator decides whether

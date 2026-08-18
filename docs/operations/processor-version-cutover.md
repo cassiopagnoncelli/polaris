@@ -207,7 +207,7 @@ runbook errors surfaced that way: `processors show` did not print
 activation row is running rather than stopped.
 
 Steps 3 and 5 were then run as a real dual-run: both versions consuming
-`analytics.events` from the same broker, each on its own consumer group,
+`resolved.events` from the same broker, each on its own consumer group,
 against one PostgreSQL. Two touchpoints for one identifier 120 days
 apart produced exactly the divergence step 5 predicts — v1 continued the
 chain (`touchpoint_count` 2, first touch still January), v2 reset it
@@ -263,12 +263,12 @@ means either a long-idle population (legitimate) or a `last_observed_at`
 that is not what you think (check for a replay that rewrote chains).
 
 **A dual-run doubled downstream destination deliveries.** Destinations
-consume `analytics.events`, and both versions' output reaches them.
+consume `resolved.events`, and both versions' output reaches them.
 Keep dual-runs short, and prefer a low-volume project for the first one.
 
 ## Cross-references
 
-- [`async/computation/attribution-engine/v2/CHANGELOG.md`](../../async/computation/attribution-engine/v2/CHANGELOG.md)
+- [`async/computation/attribution-engine/v3/CHANGELOG.md`](../../async/computation/attribution-engine/v3/CHANGELOG.md)
   — what changed and what to expect
 - [Backup and Retention / Attribution chain retention](./backup-and-retention.md)
   — pruning v2's chains on an ongoing basis

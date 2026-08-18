@@ -420,9 +420,10 @@ Per
 | --- | --- | --- |
 | `raw.events` | 90 days | Canonical immutable raw event log |
 | `identity.events` | 30 days | Identity resolver output |
-| `enriched.events` | 30 days | GeoIP-enriched events |
 | `attribution.events` | 30 days | Attribution engine output |
-| `analytics.events` | 30 days | ClickHouse ingestion source |
+| `resolved.events` | 30 days | ClickHouse ingestion source (traits + geo in the envelope) |
+| `identified.events` | 7 days | regenerable by replaying the identity stage |
+| `profile.events` | 30 days | profile plane: trait + audience transitions |
 | retry topics | 7 days | Per-consumer retry queues |
 | DLQ topics | retain unresolved + 30 days after resolution | Dead-letter records |
 

@@ -43,8 +43,8 @@ rows; the stream is the durable byte-identical buffer.
 
 ### 1b. Processor DLQs
 
-When a processor (geoip-enricher, identity-resolver, sessionizer,
-analytics-projector, attribution-engine) fails permanently on a message,
+When a processor (sync-identity-resolver, sync-enrichment-runtime, sessionizer,
+attribution-engine, merge-worker) fails permanently on a message,
 the shared runtime calls
 [`publishToDlq`](../../packages/shared-processor/src/dlq.ts) which
 delegates to
@@ -142,8 +142,8 @@ As of 3L2HKMND, processor DLQs are queryable from PostgreSQL via
 `polaris processors dlq`:
 
 ```bash
-polaris processors dlq list --processor geoip-enricher --limit 50
-polaris processors dlq list --processor analytics-projector --since 2026-05-14T00:00:00Z
+polaris processors dlq list --processor sync-enrichment-runtime --limit 50
+polaris processors dlq list --processor sync-identity-resolver --since 2026-05-14T00:00:00Z
 ```
 
 The `--include-resolved` flag widens to the full history. The broker
@@ -152,8 +152,8 @@ backward compatibility with RabbitMQ-console workflows and existing
 streaming consumers:
 
 ```bash
-rpk topic describe geoip-enricher.dlq
-rpk topic consume geoip-enricher.dlq --num 50 --format '%h\t%v\n'
+rpk topic describe sync-enrichment.dlq
+rpk topic consume sync-enrichment.dlq --num 50 --format '%h\t%v\n'
 ```
 
 The processor DLQ metric `polaris_processor_events_dlq_total` (labeled
@@ -191,7 +191,7 @@ Renders the full row including:
 No CLI surface in v1. Use RabbitMQ console or `rpk`:
 
 ```bash
-rpk topic consume geoip-enricher.dlq --offset oldest --num 1 --format '%h\n%v\n'
+rpk topic consume sync-enrichment.dlq --offset oldest --num 1 --format '%h\n%v\n'
 ```
 
 The headers carry the same failure metadata vocabulary as destination
@@ -335,7 +335,7 @@ polaris audit show <audit_id>
 
 Destination retries from this runbook republish to the **source topic**
 of the DLQ row. That topic is the destination's normal consumer input
-(e.g. `analytics.events`). The destination runtime treats the
+(e.g. `resolved.events`). The destination runtime treats the
 republished bytes as a fresh delivery and runs the standard pipeline
 (normalize → map → deliver) against them.
 

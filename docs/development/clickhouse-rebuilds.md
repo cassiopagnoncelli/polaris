@@ -44,7 +44,7 @@ polaris.analytics_raw …` directly through `clickhouse-client`. This
    future incident review has no context.
 2. **The live sink races the rebuild.** The same partition that the
    operator just dropped is in the live ingest path —
-   `analytics.events` → `clickhouse-sink` → `analytics_events_queue` →
+   `resolved.events` → `clickhouse-sink` → `analytics_events_queue` →
    `analytics_raw` is always running. A drop+reinsert without
    coordinating with the runtime can re-introduce duplicates the
    ReplacingMergeTree won't notice until a merge happens. The rebuild

@@ -211,7 +211,7 @@ issues are:
 - **DLQ:** an event accepted by the ingester later failed in a processor
   or consumer. Check `polaris dlq list --vendor <vendor>` (operator) and
   the [DLQ runbook](../operations/destination-dlq-triage.md).
-- **Processor lag:** the analytics-projector is behind. Operators monitor
+- **Processor lag:** a spine stage is behind. Operators monitor
   this via dashboards described in [Observability](../development/observability.md).
 
 See [Phase 10 — Troubleshooting](./10-troubleshooting.md).

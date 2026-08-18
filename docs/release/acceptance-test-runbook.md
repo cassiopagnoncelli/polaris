@@ -27,7 +27,7 @@ Each numbered step is a separate assertion block in the Vitest report.
 | 4. `control_plane_destination` | `polaris destinations create` + `polaris destinations enable` register and activate a webhook-sink instance. |
 | 5. `sdk_track` | The published `@polaris/node-sdk` enqueues a `checkout.started` v1 event, flushes it, and the ingester returns per-event `accepted`. |
 | 6. `ingestion_accepted` | The acceptance signal observed by step 5 is preserved end-to-end. |
-| 7. `analytics_persisted` | `analytics-projector` v1 consumed the event and ClickHouse `analytics_raw` exposes the row with `processor_name='analytics-projector'`, `processor_version='v1'`. |
+| 7. `analytics_persisted` | the spine consumed the event and ClickHouse `analytics_raw` exposes the row with `processor_name='sync-enrichment-runtime'`, `processor_version='v1'`, and a non-empty `profile_id`. |
 | 8. `delivery_observed` | A `delivery_records` row exists for the event on the webhook-sink destination (visible via `polaris deliveries list`). |
 | 9. `replay_dry_run` | `polaris replay create --mode dry_run` records the operator intent and `polaris replay plan` renders the deterministic plan with no DB writes. |
 | 10. `release_documentation` | The acceptance runbook itself plus the four cross-referenced operations runbooks exist and are non-empty. |
@@ -47,7 +47,7 @@ the per-step table the runner prints.
 | `pnpm db:migrate` | PostgreSQL migrations at HEAD — control-plane tables (`projects`, `sources`, `api_keys`, `destinations`, `delivery_records`, `replay_jobs`, `audit_records`) must exist. |
 | `pnpm clickhouse:bootstrap-local` + `pnpm clickhouse:migrate` | ClickHouse schema at HEAD — `polaris.analytics_raw` must exist with the v1 columns. |
 | Ingester running | `pnpm --filter @polaris/ingester-api run start` in a background terminal (or via your usual local dev orchestration). |
-| `analytics-projector` running | `pnpm --filter @polaris/processor-analytics-projector-v1 run start` in a background terminal. |
+| spine stages running | `pnpm --filter @polaris/sync-identity-resolver-v1 run start` in a background terminal. |
 | Optional: webhook-sink running | Only required for step 4 + step 8. When omitted, set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` and those steps are skipped (overall verdict still PASS). |
 | Optional: `psql` on `$PATH` | Some downstream investigation tooling shells out to `psql`. The scenario itself does not require it. |
 
@@ -144,7 +144,7 @@ Abridged — the actual run prints the full Vitest reporter as well.
 | `control_plane_api_key` | API key INSERT collides with a stale row from a previous failed run | `psql -c "DELETE FROM api_keys WHERE source_id='payments-api' AND environment='development'"` (the test does not auto-clean to preserve a forensic trail) |
 | `control_plane_destination` | Webhook URL empty, vendor mismatch, secret-ref validation failed | Either set `POLARIS_ACCEPTANCE_WEBHOOK_URL` or set `POLARIS_ACCEPTANCE_SKIP_DESTINATION=1` to skip the destination steps |
 | `sdk_track` | Ingester not running, API key never propagated, SDK queue/transport regression | `docker compose logs ingester-api`, `curl http://localhost:4000/health`, check the SDK's `onDrop` diagnostic in the scenario output |
-| `analytics_persisted` | `analytics-projector` not running, ClickHouse not consuming, ReplacingMergeTree merge race | [docs/implementation/runbooks/vertical-slice-smoke.md](../implementation/runbooks/vertical-slice-smoke.md) "Common failure modes" — same triage as the smoke |
+| `analytics_persisted` | a spine stage not running, ClickHouse not consuming, ReplacingMergeTree merge race | [docs/implementation/runbooks/vertical-slice-smoke.md](../implementation/runbooks/vertical-slice-smoke.md) "Common failure modes" — same triage as the smoke |
 | `delivery_observed` | webhook-sink consumer not running, destination disabled, destination filter dropping the event | [docs/operations/destination-dlq-triage.md](../operations/destination-dlq-triage.md) walks the DLQ triage flow |
 | `replay_dry_run` | `replay_jobs` migration missing, replay planner regression | `pnpm db:status`, [docs/architecture/05-processors-and-replay.md](../architecture/05-processors-and-replay.md) "Replay Control Plane" |
 | `release_documentation` | A referenced runbook was deleted or truncated | The error names the missing file; restore it or update the scenario's expected doc list |

@@ -22,7 +22,7 @@ SDKs / producers
 The full path is documented in
 [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md). The
 non-negotiable rules (immutable raw events, file-heavy semantic truth, ingress
-stays thin, clickhouse-sink feeds `analytics.events`, ...) are listed
+stays thin, clickhouse-sink feeds from `resolved.events`, ...) are listed
 in [`docs/README.md`](docs/README.md).
 
 ## Getting started
@@ -61,7 +61,7 @@ pnpm smoke:vertical-slice
 | [API Docs](docs/api/README.md)                                                         | You need the ingester's OpenAPI document, request/response shapes, or error codes. |
 | [Audit and Export](docs/development/audit-and-export.md)                               | You need to inspect or bulk-export operational state via the `polaris` CLI.       |
 | [CI](docs/development/ci.md)                                                           | You want to know what gates run on every PR and how to opt into integration runs. |
-| [Vertical-Slice Smoke](docs/implementation/runbooks/vertical-slice-smoke.md)           | You're touching the ingester, the analytics-projector, or ClickHouse DDL.        |
+| [Vertical-Slice Smoke](docs/implementation/runbooks/vertical-slice-smoke.md)           | You're touching the ingester, either spine stage, or ClickHouse DDL.             |
 | [Implementation Kanban](docs/implementation/kanban.md)                                 | You're picking up or coordinating work.                                          |
 | [Claude Instructions](docs/instructions/claude.md)                                     | You're a contributor (human or agent). Read this before changing code.            |
 

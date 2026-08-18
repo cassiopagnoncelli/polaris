@@ -55,7 +55,7 @@ RabbitMQ discards without an error, and the failure would vanish instead
 of reaching this table. Each row carries:
 
 - the original message bytes (`payload`) so a retry can republish the
-  byte-identical envelope back onto `analytics.events`;
+  byte-identical envelope back onto `resolved.events`;
 - the original message headers (`headers`) so a retry preserves the
   `polaris-delivery-key` + retry-attempt counter the runtime needs to
   short-circuit duplicate delivery;
@@ -233,7 +233,7 @@ Both tables are designed to never carry secrets:
 - **Cold replays.** If the DLQ topic still has the original bytes but
   the `dlq_records` row aged out (the table has no auto-pruning in v1
   — operators run their own scheduled cleanup), use `polaris replay
-  create` to re-process the original analytics.events window. The
+  create` to re-process the original resolved.events window. The
   replay-suppression logic on the destination runtime requires the
   matching `allowReplay=true` opt-in on the consumer host config.
 

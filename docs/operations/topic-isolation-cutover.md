@@ -31,8 +31,9 @@ The migration that owns the persistent state is
 ## What "topic isolation" means
 
 Polaris references logical **topic families** in code (`raw.events`,
-`identity.events`, `enriched.events`, `attribution.events`,
-`analytics.events`). The resolver in `@polaris/shared-transport` returns:
+`identified.events`, `resolved.events`, `profile.events`,
+`identity.events`, `session.events`, `attribution.events`). The resolver
+in `@polaris/shared-transport` returns:
 
 - the shared family topic (e.g. `raw.events`) for projects on the
   shared default;

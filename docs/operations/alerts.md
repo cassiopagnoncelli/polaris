@@ -75,7 +75,7 @@ All 15 alert rules now reference real metrics; none use a
   `analytics_processed_queue` — are alerted independently by the same
   `max by (table)` rules.
 - **ClickHouse MVs** (`PolarisClickHouseMVFailure`): emitted by the
-  analytics-projector via the ClickHouse probe poller (PI2CRFZC). The
+  clickhouse-sink, the only process that writes to ClickHouse. The
   poller queries `system.materialized_views` on a 30s cadence.
 - **Operator gate** (`PolarisOperatorGateDenialRate`): emitted by
   `enforceProductionMutationGate` via the `OperatorGateMetricsSink`

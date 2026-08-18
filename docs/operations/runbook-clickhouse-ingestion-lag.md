@@ -32,8 +32,9 @@ tables and every one of its series is labelled by which:
 
 | `table` | Source | Lands in |
 |---|---|---|
-| `analytics_events_queue` | `analytics.events` | `analytics_ingest_log` + `analytics_raw` |
-| `analytics_processed_queue` | `enriched` / `session` / `identity` / `attribution` `.events` | `analytics_processed` |
+| `analytics_events_queue` | `resolved.events` | `analytics_ingest_log` + `analytics_raw` |
+| `analytics_processed_queue` | `session` / `identity` / `attribution` `.events` | `analytics_processed` |
+| `profile_events_queue` | `profile.events` | `profiles` |
 
 Lag on one and not the other narrows the cause immediately: a shared
 process, connection and batch timer means an isolated lag is upstream —
@@ -43,15 +44,21 @@ connection, or ClickHouse itself.
 **Where the lag signal comes from.** `async/warehouse/clickhouse-sink`
 emits `polaris_clickhouse_sink_lag_seconds{table}` — now minus the
 envelope's `ingested_at` for the last row it wrote. This replaced
-`polaris_clickhouse_kafka_ingestion_lag_seconds`, which the
+`polaris_clickhouse_kafka_ingestion_lag_seconds`, which the retired
 analytics-projector derived from `system.kafka_consumers`. That system
 table is permanently empty since the RabbitMQ migration (ClickHouse
 consumes nothing), so the old gauge would have reported a confident
 zero forever — a lag alert that silently stops firing is worse than
 one that fails loudly.
 
-MV state still comes from the analytics-projector's probe poller:
-`system.materialized_views` → `polaris_clickhouse_mv_state{view,state}`.
+Materialized-view failures surface as INSERT failures, not as a state:
+`polaris_clickhouse_sink_insert_failures_total{table}`. Polaris's MVs are
+plain insert-triggered views and `materialized_views_ignore_errors` is 0,
+so an MV whose SELECT throws fails the INSERT into its source table and
+the exception reaches the sink. The `polaris_clickhouse_mv_state` gauge
+this runbook used to name polled `system.view_refreshes`, which tracks
+refreshable MVs only — it never carried a value, and the alert on it could
+never fire. Both were removed in 126EPNIQ.
 
 ## Symptoms
 
@@ -60,7 +67,7 @@ MV state still comes from the analytics-projector's probe poller:
   `polaris ingest` write the operator can confirm via ingester logs.
 - `polaris_clickhouse_sink_lag_seconds` is climbing, or the sink's
   `polaris_clickhouse_sink_batches_total` has stopped advancing while
-  `analytics.events` is still receiving traffic.
+  `resolved.events` is still receiving traffic.
 - A materialized view is missing rows that should exist by now (the
   projection-table-freshness signal).
 
@@ -86,7 +93,7 @@ MV state still comes from the analytics-projector's probe poller:
    partition assignment nothing rebalances: a sink replica that is
    down, or a partition no replica is assigned, backs up silently.
    Check `rabbitmqctl list_queues name consumers` for
-   `analytics.events-*` with `consumers = 0`.
+   `resolved.events-*` with `consumers = 0`.
 
 ## Investigation
 
@@ -103,7 +110,7 @@ WHERE group_name = 'polaris-clickhouse-sink-v1'
 ORDER BY stream;
 ```
 
-A stale `updated_at` while `analytics.events` is receiving traffic
+A stale `updated_at` while `resolved.events` is receiving traffic
 means the sink is stuck rather than idle. Its logs carry the reason:
 
 ```logql
@@ -113,11 +120,11 @@ means the sink is stuck rather than idle. Its logs carry the reason:
 A repeating ClickHouse error with a flat checkpoint is the smoking gun
 for cause #2 / #4 — an MV failure or a schema mismatch.
 
-The checkpoint query returns one row per partition stream across all
-five families, so it also shows which side is stuck. Streams named
-`analytics.events-*` are the source path; `enriched.events-*`,
-`session.events-*`, `identity.events-*` and `attribution.events-*` are
-the derived path.
+The checkpoint query returns one row per partition stream across every
+subscribed family, so it also shows which side is stuck. Streams named
+`resolved.events-*` are the source path; `session.events-*`,
+`identity.events-*` and `attribution.events-*` are the derived path; and
+`profile.events-*` is the profile plane.
 
 ### 1b. Triage `PolarisClickHouseSinkRowsSkipped`
 

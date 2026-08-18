@@ -130,18 +130,19 @@ and CI workflow both expect the ingester on `8080`; the platform default
 of `3000` is fine for ad-hoc usage but you'll override it when you want to
 follow the smoke runbook step-by-step.
 
-The analytics projector, for example (P4-001):
+The identity stage, for example:
 
 ```bash
 POLARIS_HTTP_PORT=8081 \
-  pnpm --filter @polaris/processor-analytics-projector-v1 run start
+  pnpm --filter @polaris/sync-identity-resolver-v1 run start
 ```
 
-The projector consumes `raw.events`, stamps `processor_name=analytics-projector`
-+ `processor_version=v1` onto each envelope, and republishes to
-`analytics.events`. From there, the ClickHouse ingestion interface table picks it up
-into `analytics_ingest_log` and the materialized view propagates it into
-`analytics_raw`.
+It consumes `raw.events`, resolves each event to a profile against the
+profile store, stamps the envelope's `profile` block, and republishes to
+`identified.events`. `sync/enrichment/runtime` then composes its pinned
+enrichers and emits `resolved.events`, which is what the ClickHouse
+ingestion interface table picks up into `analytics_ingest_log` before the
+materialized view propagates it into `analytics_raw`.
 
 For the full processor model, read
 [Architecture: Processors and Replay](../architecture/05-processors-and-replay.md).
@@ -192,7 +193,7 @@ full gate list and how to opt a PR into integration runs.
 The integration-tier suite (the full vertical-slice smoke under real Docker)
 is covered by the [Vertical-Slice Smoke runbook](../implementation/runbooks/vertical-slice-smoke.md).
 Run that runbook end-to-end whenever you touch the ingester, the SDK envelope
-shape, the analytics-projector, ClickHouse DDL, or the RabbitMQ topic
+shape, either spine stage, ClickHouse DDL, or the RabbitMQ topic
 resolver.
 
 ## Common tasks
@@ -297,17 +298,19 @@ as the mutation. The full taxonomy of actions, snapshot shape, and the
 `polaris export` commands that bulk-dump operational state are documented
 in the [Audit and Export runbook](./audit-and-export.md).
 
-### Activate the analytics projector for a project
+### Activate a processor for a project
 
 ```bash
-./polaris processors enable analytics-projector \
+./polaris processors enable sync-identity-resolver \
   --version v1 \
   --project storefront \
   --env development
 ```
 
-The CLI verifies the manifest exists on disk
-(`sync/legacy/analytics-projector/v1/processor.manifest.yaml`) before it
+The name is the one the MANIFEST declares, not the directory or the
+service name — `sync-identity-resolver`, not `sync-identity`. The CLI
+verifies the manifest exists on disk
+(`sync/identity/resolver/v1/processor.manifest.yaml`) before it
 upserts the activation row. Enables are idempotent. See "Versioned-processor
 workflow" below for how to introduce a new version.
 
@@ -316,7 +319,7 @@ default, so `enable` on a fresh install is a no-op that records intent. The
 row that changes behaviour is the opposite one:
 
 ```bash
-./polaris processors disable analytics-projector \
+./polaris processors disable sync-identity-resolver \
   --version v1 --project storefront --env development
 ```
 

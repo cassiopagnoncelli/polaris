@@ -92,7 +92,7 @@ These compose into every service.
 | `POLARIS_RABBITMQ_HEARTBEAT_SECONDS` | optional | Defaults to `30`. |
 | `POLARIS_RABBITMQ_CONNECTION_TIMEOUT_MS` | optional | Defaults to `10000`. |
 | `POLARIS_RABBITMQ_PARTITIONS` | optional | Default super-stream width. Defaults to `3`. **Changing it is a migration, not a restart** — the publisher hashes the partition key modulo this value, so two instances disagreeing breaks per-identity ordering. See [runbook-rabbitmq-topology.md](../operations/runbook-rabbitmq-topology.md). |
-| `POLARIS_RABBITMQ_PARTITION_OVERRIDES` | optional | Per-family widths, `raw.events=6,analytics.events=3`. Same migration rule as above. |
+| `POLARIS_RABBITMQ_PARTITION_OVERRIDES` | optional | Per-family widths, `raw.events=6,resolved.events=3`. Same migration rule as above. |
 | `POLARIS_RABBITMQ_ASSIGNED_PARTITIONS` | optional | Static partition assignment for THIS instance, e.g. `0,1`. Empty means "own every partition". RabbitMQ has no consumer-group rebalancing, so scaling out means giving each replica a disjoint slice — a partition nobody is assigned is a silent backlog. |
 | `POLARIS_RABBITMQ_PREFETCH` | optional | Per-partition QoS window. Defaults to `100`. Controls how far the broker runs ahead, NOT handler concurrency — handlers stay serial per partition so per-identity ordering holds. |
 | `POLARIS_RABBITMQ_CHECKPOINT_EVERY` | optional | Messages between checkpoint writes. Defaults to `500`. |
@@ -181,25 +181,19 @@ Composes: **service + http + postgres**. No RabbitMQ or Redis in v1.
 ### processors
 
 All processors compose **service + http + rabbitmq** plus their own block.
-The `identity-resolver` is the only one that also composes **postgres** today.
+The spine stages are the ones that also compose **postgres** today.
 
-#### analytics-projector v1
+#### sync-identity-resolver v1
 
-Source: [`sync/legacy/analytics-projector/v1/src/config.ts`](../../sync/legacy/analytics-projector/v1/src/config.ts).
+Source: [`sync/identity/resolver/v1/src/config.ts`](../../sync/identity/resolver/v1/src/config.ts).
 
-| Variable | Status | Default |
-| --- | --- | --- |
-| `POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY` | optional | `1` |
+Also composes **postgres**: it is the profile store's only writer.
 
-#### identity-resolver v1
+#### sync-enrichment-runtime v1
 
-Source: [`sync/legacy/identity-resolver/v1/src/config.ts`](../../sync/legacy/identity-resolver/v1/src/config.ts).
+Source: [`sync/enrichment/runtime/v1/src/config.ts`](../../sync/enrichment/runtime/v1/src/config.ts).
 
-Also composes **postgres** (writes `identity_links`).
-
-| Variable | Status | Default |
-| --- | --- | --- |
-| `POLARIS_IDENTITY_RESOLVER_CONCURRENCY` | optional | `1` |
+Reads the profile store; never writes it.
 
 #### sessionizer v1
 
@@ -215,18 +209,7 @@ Source: [`async/computation/sessionizer/v1/src/config.ts`](../../async/computati
 only to mirror the manifest default; changing the value requires a v2
 processor directory + manifest, not a deployment override.
 
-#### geoip-enricher v1
-
-Source: [`sync/legacy/geoip-enricher/v1/src/config.ts`](../../sync/legacy/geoip-enricher/v1/src/config.ts).
-
-| Variable | Status | Default |
-| --- | --- | --- |
-| `POLARIS_GEOIP_ENRICHER_CONCURRENCY` | optional | `1` |
-
-`POLARIS_GEOIP_DB_PATH` is reserved in `.env.example` but the v1
-processor does not read it; the follow-up MaxMind adapter task will.
-
-#### attribution-engine v1 / v2
+#### attribution-engine v3
 
 Source: [`async/computation/attribution-engine/v1/src/config.ts`](../../async/computation/attribution-engine/v1/src/config.ts),
 [`async/computation/attribution-engine/v2/src/config.ts`](../../async/computation/attribution-engine/v2/src/config.ts).
@@ -340,10 +323,9 @@ are operator data, set with `polaris destinations create
                     service  http  postgres  redis  rabbitmq  ingester  proc   consumer  + local
 ingester-api          x       x       x        x       x         x                       authCache, ingest, rateLimit
 control-plane-api     x       x       x                                                  (none)
-analytics-projector   x       x                        x                  x              projector
-identity-resolver     x       x       x                x                  x              resolver
+sync-identity         x       x       x                x                  x              resolver
+sync-enrichment       x       x       x                x                  x              enrichment
 sessionizer           x       x                        x                  x              sessionizer
-geoip-enricher        x       x                        x                  x              enricher
 attribution-engine    x       x                        x                  x              attributionEngine
 webhook-sink          x       x       x                x                          x      sink
 meta-capi             x       x       x                x                          x      meta

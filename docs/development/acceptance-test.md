@@ -22,7 +22,7 @@ surfaces only.
 | Webhook-sink destinations can be created + enabled | Replay live execution — `dry_run` only. |
 | The Node SDK delivers a `checkout.started` v1 event | Chaos / failover / partial outages — not a chaos test. |
 | The ingester returns per-event `accepted` | Load characteristics — sends exactly one event. |
-| `analytics-projector` v1 writes the row into `analytics_raw` | Web SDK — Node SDK is canonical for deterministic test runs. |
+| the spine writes the row into `analytics_raw` | Web SDK — Node SDK is canonical for deterministic test runs. |
 | A delivery_records row appears for the event | |
 | `polaris replay create` + `polaris replay plan` work | |
 | The acceptance + ops runbooks exist and are non-empty | |
@@ -151,7 +151,7 @@ Concretely:
 | --- | --- |
 | Ingester request validation, per-event reject codes | `apps/ingester-api/test/**` (unit + behavioural). |
 | Node SDK retry policy, queue overflow, drop reasons | `packages/node-sdk/test/**` (unit). |
-| `analytics-projector` v1 emit shape | `sync/legacy/analytics-projector/v1/test/**`. |
+| spine emit shape | `sync/identity/resolver/v1/test/**`, `sync/enrichment/runtime/v1/test/**`. |
 | Replay planner deterministic output | `packages/shared-replay/test/**`. |
 | CLI argument parsing per command | `apps/polaris-cli/test/**`. |
 | Single-event ingester-to-ClickHouse path | `tests/smoke/vertical-slice.test.ts`. |
