@@ -61,7 +61,7 @@ export class AcceptanceStepError extends Error {
 }
 
 const DEFAULT_ENV = {
-  POLARIS_INGESTER_URL: "http://localhost:8080",
+  POLARIS_INGESTER_URL: "http://localhost:4000",
   POLARIS_ACCEPTANCE_PROJECT_ID: "storefront",
   POLARIS_ACCEPTANCE_ENVIRONMENT: "development",
   POLARIS_ACCEPTANCE_SOURCE_ID: "payments-api",

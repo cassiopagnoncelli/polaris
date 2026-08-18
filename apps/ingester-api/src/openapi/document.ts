@@ -130,7 +130,7 @@ export const PUBLISHED_OPENAPI_SERVERS: ReadonlyArray<{
     description: "Canonical internal ingest endpoint (replace with deployment URL)",
   },
   {
-    url: "http://localhost:8080",
+    url: "http://localhost:4000",
     description: "Local docker-compose stack",
   },
 ];

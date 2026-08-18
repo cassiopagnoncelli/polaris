@@ -58,8 +58,8 @@
 #   OTLP HTTP        http://localhost:4318
 #
 # All four services join the existing `polaris` bridge network created
-# by docker-compose.yml so Prometheus can resolve `ingester-api:8080`
-# or `localhost:8080` when services run on the host. The shared network
+# by docker-compose.yml so Prometheus can resolve `ingester-api:4000`
+# or `localhost:4000` when services run on the host. The shared network
 # also lets the OTel collector be reached at `otel-collector:4317`
 # from inside the compose network and `localhost:4317` from host
 # processes.
@@ -72,8 +72,9 @@ name: polaris
 services:
   prometheus:
     # Pull-based metrics store. Scrapes the ingester `/metrics` endpoint
-    # (port 8080 by default), the analytics-projector `/metrics`
-    # endpoint (port 8081), the RabbitMQ metrics endpoint, and itself. Short
+    # (port 4000 by default), every Polaris service's
+    # `/metrics` endpoint per infra/service-ports.json, the RabbitMQ metrics
+    # endpoint, and itself. Short
     # local retention (15d) keeps the on-disk footprint small for dev.
     #
     # The image is pinned to a recent stable to keep `up -d` deterministic

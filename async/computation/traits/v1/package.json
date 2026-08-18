@@ -24,7 +24,6 @@
     "format": "biome format --write src test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "POLARIS_SERVICE_NAME=sessionizer POLARIS_HTTP_PORT=4017 tsx watch src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {

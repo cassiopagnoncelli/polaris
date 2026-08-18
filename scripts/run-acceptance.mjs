@@ -108,7 +108,7 @@ function checkPreflight() {
 
 async function main() {
   const version = readRepoVersion();
-  const ingesterUrl = process.env["POLARIS_INGESTER_URL"] ?? "http://localhost:8080";
+  const ingesterUrl = process.env["POLARIS_INGESTER_URL"] ?? "http://localhost:4000";
   const projectId = process.env["POLARIS_ACCEPTANCE_PROJECT_ID"] ?? "storefront";
   const environment = process.env["POLARIS_ACCEPTANCE_ENVIRONMENT"] ?? "development";
   const scenarioPath = "tests/acceptance/scenarios/full-pipeline.test.ts";

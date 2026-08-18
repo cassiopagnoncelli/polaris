@@ -182,8 +182,8 @@ pnpm --filter @polaris/ingester-api run start
 In another terminal, check the service:
 
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
+curl http://localhost:4000/health
+curl http://localhost:4000/ready
 ```
 
 ## 7. Send a Test Event
@@ -192,7 +192,7 @@ Use the active `page.viewed` v2 schema. The envelope requires all `identity`
 and `context` keys; use `null` for unknown values.
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/events \
+curl -s -X POST http://localhost:4000/v1/events \
   -H "Content-Type: application/json" \
   -H "X-Polaris-Api-Key: $POLARIS_API_KEY" \
   -d '{
@@ -249,7 +249,7 @@ reused event id as a duplicate.
 Prometheus metrics:
 
 ```bash
-curl http://localhost:8080/metrics
+curl http://localhost:4000/metrics
 ```
 
 Recent audit records:
@@ -261,7 +261,7 @@ Recent audit records:
 If you did not export the CLI env vars, run:
 
 ```bash
-POLARIS_API_URL=http://localhost:8080 \
+POLARIS_API_URL=http://localhost:4000 \
 POLARIS_TOKEN=local-dev \
 POLARIS_DATABASE_URL='postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable' \
 ./polaris audit list --limit 10

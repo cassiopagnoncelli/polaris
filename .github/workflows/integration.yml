@@ -60,7 +60,7 @@ jobs:
       CLICKHOUSE_URL: http://localhost:8123
       CLICKHOUSE_USER: polaris
       CLICKHOUSE_PASSWORD: polaris
-      POLARIS_INGESTER_URL: http://localhost:8080
+      POLARIS_INGESTER_URL: http://localhost:4000
       POLARIS_SMOKE_PROJECT_ID: storefront
       POLARIS_SMOKE_ENVIRONMENT: development
       POLARIS_SMOKE_SOURCE_ID: payments-api
@@ -117,7 +117,7 @@ jobs:
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8080"
+          POLARIS_HTTP_PORT: "4000"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
@@ -187,7 +187,7 @@ jobs:
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8082"
+          POLARIS_HTTP_PORT: "5010"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
@@ -210,7 +210,7 @@ jobs:
       - name: Wait for ingester readiness
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/ready >/dev/null; then
+            if curl -sf http://localhost:4000/ready >/dev/null; then
               echo "ingester ready"; exit 0
             fi
             sleep 2
@@ -293,7 +293,7 @@ jobs:
       CLICKHOUSE_URL: http://localhost:8123
       CLICKHOUSE_USER: polaris
       CLICKHOUSE_PASSWORD: polaris
-      POLARIS_INGESTER_URL: http://localhost:8080
+      POLARIS_INGESTER_URL: http://localhost:4000
       POLARIS_ACCEPTANCE_PROJECT_ID: storefront
       POLARIS_ACCEPTANCE_ENVIRONMENT: development
       POLARIS_ACCEPTANCE_SOURCE_ID: payments-api
@@ -342,7 +342,7 @@ jobs:
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8080"
+          POLARIS_HTTP_PORT: "4000"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
@@ -409,7 +409,7 @@ jobs:
           POLARIS_SERVICE_VERSION: "0.0.0-ci"
           POLARIS_ENVIRONMENT: development
           POLARIS_HTTP_HOST: 0.0.0.0
-          POLARIS_HTTP_PORT: "8082"
+          POLARIS_HTTP_PORT: "5010"
           POLARIS_RABBITMQ_URL: amqp://polaris:polaris@localhost:5672
           POLARIS_RABBITMQ_CLIENT_ID: polaris-ci
           POLARIS_POSTGRES_HOST: localhost
@@ -429,7 +429,7 @@ jobs:
       - name: Wait for ingester readiness
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/ready >/dev/null; then
+            if curl -sf http://localhost:4000/ready >/dev/null; then
               echo "ingester ready"; exit 0
             fi
             sleep 2

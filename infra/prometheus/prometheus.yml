@@ -62,7 +62,7 @@ scrape_configs:
   - job_name: polaris-ingester
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["host.docker.internal:4000"]
         labels:
           polaris_service: ingester-api
           polaris_component: ingester
@@ -186,10 +186,18 @@ scrape_configs:
   # they are written down. `docs/development/observability.md` carries the
   # same table.
   # ---------------------------------------------------------------
+  - job_name: polaris-archiver
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4022"]
+        labels:
+          polaris_service: archiver
+          polaris_component: processor
+
   - job_name: polaris-clickhouse-sink
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4016"]
+      - targets: ["host.docker.internal:5010"]
         labels:
           polaris_service: clickhouse-sink
           polaris_component: consumer
@@ -205,7 +213,7 @@ scrape_configs:
   - job_name: polaris-webhook-sink
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4030"]
+      - targets: ["host.docker.internal:5000"]
         labels:
           polaris_service: webhook-sink
           polaris_vendor: webhook-sink
@@ -214,7 +222,7 @@ scrape_configs:
   - job_name: polaris-meta-capi
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4031"]
+      - targets: ["host.docker.internal:5001"]
         labels:
           polaris_service: meta-capi
           polaris_vendor: meta-capi
@@ -223,7 +231,7 @@ scrape_configs:
   - job_name: polaris-tiktok
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4032"]
+      - targets: ["host.docker.internal:5003"]
         labels:
           polaris_service: tiktok
           polaris_vendor: tiktok
@@ -232,7 +240,7 @@ scrape_configs:
   - job_name: polaris-ga4
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4033"]
+      - targets: ["host.docker.internal:5002"]
         labels:
           polaris_service: ga4
           polaris_vendor: ga4
@@ -241,7 +249,7 @@ scrape_configs:
   - job_name: polaris-braze
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:4034"]
+      - targets: ["host.docker.internal:5004"]
         labels:
           polaris_service: braze
           polaris_vendor: braze
