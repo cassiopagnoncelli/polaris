@@ -19,8 +19,9 @@
 --        and only the projections are exposed to services)
 --
 --   polaris_sink
---     +  INSERT on polaris.analytics_events_queue
---     +  INSERT on polaris.analytics_processed_queue
+--     +  INSERT on every ingestion interface table it writes:
+--        analytics_events_queue, analytics_processed_queue,
+--        profile_events_queue, violations_queue
 --     -  NO SELECT on anything, anywhere
 --
 --   polaris_operator
@@ -57,6 +58,22 @@ GRANT ON CLUSTER '{cluster}'
 
 GRANT ON CLUSTER '{cluster}'
     SELECT ON polaris.session_daily_metrics
+    TO polaris_service;
+
+-- Added 2026-08-18, after the projection had shipped without it. The
+-- traits runner connects as polaris_service and reads this projection --
+-- that is the sanctioned surface for a trait, and the trait lint's
+-- allowlist names it -- so `polaris traits compute` failed with
+-- ACCESS_DENIED against a grant nobody had written. Every layer was
+-- individually correct: the table existed, the MV filled it, the lint
+-- allowed it, and the role could not see it.
+--
+-- `scripts/__tests__/clickhouse-projection-claims.test.ts` now asserts a
+-- grant per projection file, because the instruction above ("add another
+-- GRANT when a new projection lands") is exactly the kind of
+-- hand-maintained invariant that drifts.
+GRANT ON CLUSTER '{cluster}'
+    SELECT ON polaris.profile_event_daily_counts
     TO polaris_service;
 
 -- Defensive REVOKEs. ClickHouse role grants are additive across
@@ -175,6 +192,24 @@ GRANT ON CLUSTER '{cluster}'
 
 GRANT ON CLUSTER '{cluster}'
     INSERT ON polaris.analytics_processed_queue
+    TO polaris_sink;
+
+-- Added 2026-08-18, after both had shipped without one. The sink
+-- subscribes to `profile.events` and `rejected.events`, and its INSERT
+-- into either Null table was refused -- so it threw, rewound to its
+-- checkpoint, and retried the same message forever while reporting itself
+-- healthy. Exactly the failure mode the identity and enrichment stages had
+-- for the same three days, arrived at from a different direction.
+--
+-- The profile one was found by running `polaris traits compute` end to
+-- end. The quarantine one was found by asking what ELSE the sink inserts
+-- into, which is the question the test below now asks on every run.
+GRANT ON CLUSTER '{cluster}'
+    INSERT ON polaris.profile_events_queue
+    TO polaris_sink;
+
+GRANT ON CLUSTER '{cluster}'
+    INSERT ON polaris.violations_queue
     TO polaris_sink;
 
 -- Defensive REVOKE, mirroring the polaris_service pattern: even if a
