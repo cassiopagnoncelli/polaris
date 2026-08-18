@@ -8,6 +8,7 @@
  * — that this stage cannot write to the profile store.
  */
 
+import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
 import { InMemoryIPLookup, NoOpIPLookup } from "@polaris/sync-enrichment-geoip-v1";
 import { describe, expect, it } from "vitest";
 
@@ -37,9 +38,11 @@ function makeDeps(options: { maxTraitsBytes?: number; lookup?: NoOpIPLookup } = 
   return {
     reader,
     producer,
+    isolation: sharedOnlyIsolationLookup,
     deps: {
       reader,
       producer,
+      isolation: sharedOnlyIsolationLookup,
       lookup: options.lookup ?? GEO_DB,
       logger: silentLogger,
       policyFor: () => ({ maxTraitsBytes: options.maxTraitsBytes ?? 32_768 }),

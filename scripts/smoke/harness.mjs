@@ -255,15 +255,17 @@ export async function pollClickHouseForEvent({
         const fullRow = await runClickHouseQuery(
           client,
           `SELECT
-             event_id, event, schema_version,
-             project_id, environment,
-             processor_name, processor_version
+             event_id, event, project_id, environment,
+             argMax(schema_version, _version) AS schema_version,
+             argMax(processor_name, _version) AS processor_name,
+             argMax(processor_version, _version) AS processor_version,
+             argMax(profile_id, _version) AS profile_id
            FROM polaris.analytics_raw
            WHERE event_id = '${escapeClickhouseLiteral(eventId)}'
              AND project_id = '${escapeClickhouseLiteral(projectId)}'
              AND environment = '${escapeClickhouseLiteral(environment)}'
+           GROUP BY project_id, environment, event, event_id
            LIMIT 1
-           SETTINGS final = 1
            FORMAT JSON`,
         );
         const row = readJsonFirstRow(fullRow);

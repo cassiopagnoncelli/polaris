@@ -5,10 +5,24 @@
 // Proves the wired path end-to-end against a running local stack:
 //
 //   curl POST /v1/events  ->  ingester  ->  RabbitMQ raw.events
-//                          ->  analytics-projector v1
-//                          ->  RabbitMQ analytics.events
+//                          ->  sync/identity/resolver  (the SPINE)
+//                          ->  RabbitMQ identified.events
+//                          ->  sync/enrichment
+//                          ->  RabbitMQ resolved.events
 //                          ->  clickhouse-sink
-//                          ->  analytics_raw
+//                          ->  analytics_raw  (carrying a profile_id)
+//
+// It proved the LEGACY path until 2026-08-17, asserting
+// `processor_name === "analytics-projector"` — the feed 126EPNIQ exists
+// to retire. That is why nobody noticed the identity stage threw on
+// every event it ever saw, for the three days between shipping and being
+// fixed: the only end-to-end test in the repo was busy confirming the
+// thing we are removing still works.
+//
+// The assertion that matters now is `profile_id`. Resolving one is the
+// identity stage's entire job and the projector cannot produce one, so a
+// populated value is proof the event crossed the spine — a stronger claim
+// than any processor-name string, which a passthrough could fake.
 //
 // The script is intentionally a black-box exercise: it talks to the
 // ingester over HTTPS/HTTP, then queries ClickHouse to confirm the row
@@ -29,8 +43,8 @@
 //      `count(DISTINCT event_id) WHERE event_id = '<id>'` shape from
 //      07-clickhouse.md "Query Patterns / Pattern 4".
 //   4. Verify: the matching row carries the expected
-//      project/environment/event/schema_version plus the
-//      `analytics-projector` v1 processor metadata.
+//      project/environment/event/schema_version AND a non-empty
+//      `profile_id`, which only the spine can supply.
 //
 // Why a plain .mjs and not the polaris CLI:
 //   The CLI is the operator surface and is its own dependency graph.
@@ -246,11 +260,23 @@ export async function runVerticalSliceSmoke({
   if (row.schema_version !== envelope.schema_version) {
     failures.push(`schema_version ${row.schema_version} !== ${envelope.schema_version}`);
   }
-  if (row.processor_name !== "analytics-projector") {
-    failures.push(`processor_name ${row.processor_name} !== analytics-projector`);
+  // The spine assertion. An empty profile_id means the event reached
+  // ClickHouse by the legacy fan-out, or that the identity stage is down
+  // and something else wrote the row — both of which look like a healthy
+  // pipeline from every other angle.
+  if (typeof row.profile_id !== "string" || row.profile_id.length === 0) {
+    failures.push(
+      "profile_id is empty — the event did not cross the identity stage. " +
+        "Check that sync-identity is running AND that it has an enabled " +
+        "processor_activations row for this project/environment; the stage " +
+        "gates on that and skips silently without one.",
+    );
   }
-  if (row.processor_version !== "v1") {
-    failures.push(`processor_version ${row.processor_version} !== v1`);
+  if (row.processor_name === "analytics-projector") {
+    failures.push(
+      "processor_name is analytics-projector — the row came from the legacy " +
+        "fan-out this smoke test used to assert. The spine did not produce it.",
+    );
   }
   if (failures.length > 0) {
     throw new SmokeError(
@@ -258,7 +284,7 @@ export async function runVerticalSliceSmoke({
     );
   }
 
-  logger.info(`[polaris-smoke] result=pass`);
+  logger.info(`[polaris-smoke] result=pass profile_id=${row.profile_id}`);
   return {
     eventId,
     projectId,
@@ -266,6 +292,7 @@ export async function runVerticalSliceSmoke({
     event: envelope.event,
     schemaVersion: envelope.schema_version,
     processor: { name: row.processor_name, version: row.processor_version },
+    profileId: row.profile_id,
     seeded: seededInfo,
   };
 }

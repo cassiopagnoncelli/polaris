@@ -50,6 +50,9 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+  sharedOnlyIsolationLookup,
+  staticIsolationLookup,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -203,9 +206,24 @@ export async function buildSyncEnrichmentApp(
   // ---- streaming runtime ----------------------------------------------
   const policyFor = createPolicyResolver(options.projectPolicies ?? new Map());
 
+  // Same list the CONSUMER uses. The two sides were answering different
+  // questions about the same projects: one knew which dedicated families
+  // to read, the other had no idea which to write — so every publish
+  // dereferenced `undefined.isIsolated` and the stage rewound forever.
+  const isolation =
+    options.isolatedProjects === undefined || options.isolatedProjects.length === 0
+      ? sharedOnlyIsolationLookup
+      : staticIsolationLookup(
+          options.isolatedProjects.map((project_id) => ({
+            family: STREAM_FAMILY_RESOLVED_EVENTS,
+            project_id,
+          })),
+        );
+
   const runtime = createRuntime({
     consumer,
     producer,
+    isolation,
     reader,
     lookup,
     logger: processorLogger,

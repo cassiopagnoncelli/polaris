@@ -44,11 +44,26 @@ import { enrichTraits, type ProfileReader } from "@polaris/sync-enrichment-trait
 import { buildResolvedEvent } from "./emit.js";
 import type { EnrichmentPolicy } from "./policy.js";
 
+/**
+ * The producer surface this stage uses.
+ *
+ * Structurally typed so tests can pass a recorder — but it must stay a
+ * SUBSET of the real contract, and it did not. It omitted `isolation`,
+ * which `publishEvent` requires and dereferences on every call, so this
+ * stage threw `Cannot read properties of undefined (reading 'isIsolated')`
+ * on the first event it ever saw and rewound forever while reporting
+ * itself healthy.
+ *
+ * The identity stage had the identical defect, fixed one commit earlier.
+ * Both declared their own narrower view of someone else's contract, which
+ * is not a subset but a second opinion — and the runtime holds the first.
+ */
 export interface PublishTarget {
   publishEvent(input: {
     family: string;
     event: Record<string, unknown>;
     partitionKey?: string;
+    isolation: SyncIsolationLookup;
   }): Promise<unknown>;
 }
 
@@ -92,6 +107,13 @@ export interface EnrichmentStageDeps {
   readonly reader: ProfileReader;
   readonly lookup: IPLookup;
   readonly producer: PublishTarget;
+  /**
+   * Which projects read a dedicated stream. Required, not optional:
+   * `publishEvent` dereferences it on every call, and a default here
+   * would hide a missing wiring exactly as the narrowed `PublishTarget`
+   * did.
+   */
+  readonly isolation: SyncIsolationLookup;
   readonly logger: Logger;
   readonly metrics?: EnrichmentStageMetrics;
   readonly policyFor: (projectId: string, environment: string) => EnrichmentPolicy;
@@ -186,6 +208,7 @@ export async function handleEvent(
     family: STREAM_FAMILY_RESOLVED_EVENTS,
     event: resolved,
     partitionKey,
+    isolation: deps.isolation,
   });
   deps.metrics?.onEmitted?.(labels);
   deps.metrics?.onOutcome?.(labels, `traits:${traits.kind}`);
@@ -208,6 +231,7 @@ import {
   decodeEvent,
   type PolarisConsumer,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
+  type SyncIsolationLookup,
   type TransportMessageHandler,
 } from "@polaris/shared-transport";
 
