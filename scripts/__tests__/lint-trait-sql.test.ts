@@ -9,12 +9,16 @@
  * it gets switched off.
  */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 import {
+  ALLOWED_TABLES,
   findTraitSqlProblems,
   SCANNED_CATALOG_DIRS,
   stripComments,
@@ -108,5 +112,26 @@ describe("walk", () => {
     writeFileSync(join(root, "dist", "orders-30d.ts"), "from analytics_raw");
 
     expect(walk(root)).toEqual([]);
+  });
+});
+
+describe("the allowlist mirrors the catalog", () => {
+  it("permits exactly the projections the catalog declares readable", () => {
+    // Two copies of one list, and the lint's own comment says it mirrors
+    // the catalog's. Adding `profile_event_daily_counts` updated the lint
+    // and not the catalog, which would have let a trait pass the lint and
+    // then be refused by the type it is parsed against.
+    //
+    // Read from the source rather than imported, because the catalog is a
+    // workspace package and a lint that needed it built would be a lint
+    // that fails on a fresh checkout.
+    const source = readFileSync(
+      resolve(__dirname, "..", "..", "catalog", "traits", "types.ts"),
+      "utf8",
+    );
+    const block = /READABLE_PROJECTIONS = \[(.*?)\] as const;/s.exec(source)?.[1] ?? "";
+    const declared = [...block.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+
+    expect([...ALLOWED_TABLES].sort()).toEqual([...declared].sort());
   });
 });

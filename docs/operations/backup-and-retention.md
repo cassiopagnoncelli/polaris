@@ -867,7 +867,7 @@ Three datasets, all written unless `--dataset` narrows it:
 | dataset | contents |
 |---|---|
 | `events` | `analytics_raw` for the day, deduped with `argMax(col, _version)` |
-| `profiles` | current trait map per profile |
+| `profiles` | current traits, ONE ROW PER (profile, trait) — tombstones excluded |
 | `merge_map` | the whole merge map, so canonical resolution works offline |
 
 ### Layout

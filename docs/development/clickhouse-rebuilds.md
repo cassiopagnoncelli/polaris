@@ -73,6 +73,7 @@ MV under `sql/clickhouse/materialized-views/`. As of P7-005:
 | `--projection`         | DDL file                                            | Engine             |
 | ---------------------- | --------------------------------------------------- | ------------------ |
 | `event_daily_counts`   | `sql/clickhouse/projections/40_event_daily_counts.sql` | SummingMergeTree   |
+| `profile_event_daily_counts` | `sql/clickhouse/projections/44_profile_event_daily_counts.sql` | SummingMergeTree |
 
 The canonical list of closed-set names lives in
 [`packages/shared-clickhouse/src/rebuild/projections.ts`](../../packages/shared-clickhouse/src/rebuild/projections.ts).

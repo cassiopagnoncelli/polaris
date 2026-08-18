@@ -52,7 +52,15 @@ export type TraitType = (typeof TRAIT_TYPES)[number];
  * is a deliberate addition, and an allowlist makes adding one a decision
  * somebody makes rather than a table somebody happens to name.
  */
-export const READABLE_PROJECTIONS = ["event_daily_counts", "session_daily_metrics"] as const;
+export const READABLE_PROJECTIONS = [
+  "event_daily_counts",
+  "session_daily_metrics",
+  // The person-dimensioned projection. Without it no per-profile trait is
+  // computable at all, which is not hypothetical: `orders_30d` selected
+  // `profile_id` from `event_daily_counts`, which has no such column, and
+  // had never produced a row.
+  "profile_event_daily_counts",
+] as const;
 
 export const traitDefinitionSchema = z
   .object({
