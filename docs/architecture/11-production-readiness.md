@@ -8,11 +8,11 @@ Polaris services are containerized.
 
 Environment targets:
 
-```text
+``text
 production       Docker images on Kubernetes
 staging/test     Docker-based environments
 development      Docker or bare metal
-```
+``
 
 Rules:
 
@@ -76,11 +76,11 @@ Initial functional model:
 
 Initial output policy:
 
-```text
+``text
 dry_run            no output events
 shadow_topic       write to replay/shadow topic for inspection
 canonical_topic    write to canonical output topic only with explicit approval
-```
+``
 
 The default executable mode should be `shadow_topic`. `canonical_topic` is a higher-risk mode and must be explicit.
 
@@ -90,11 +90,11 @@ Archive-backed replay is a future extension once object-storage raw archive exis
 
 The Web SDK ships as:
 
-```text
+``text
 ESM npm package
 script-tag browser bundle
 async loader snippet
-```
+``
 
 Sensible defaults:
 
@@ -110,10 +110,10 @@ Sensible defaults:
 
 Example path shape:
 
-```text
+``text
 /web-sdk/v1.2.3/polaris.min.js
 /web-sdk/v1.2.3/polaris-loader.min.js
-```
+``
 
 ## Data Lifecycle Defaults
 
@@ -121,7 +121,7 @@ All lifecycle values are configurable. These defaults are a starting point for v
 
 RabbitMQ:
 
-```text
+``text
 raw.events              90 days
 identified.events        7 days   (regenerable by replaying identity)
 resolved.events         30 days
@@ -132,42 +132,42 @@ attribution.events      30 days
 rejected.events          7 days   (a week-old governance signal is a dashboard entry)
 retry topics             7 days
 dlq topics              retain unresolved; 30 days after resolution
-```
+``
 
 ClickHouse:
 
-```text
+``text
 analytics_ingest_log    30 days
 analytics_raw          400 days
 projection tables        per table, default 400 days
 operational metrics     180 days unless exported elsewhere
-```
+``
 
 PostgreSQL:
 
-```text
+``text
 api key metadata         active lifetime + 2 years after revoke
 audit records            2 years
 replay jobs              2 years
 processor runs           1 year
 delivery records         180 days
 resolved DLQ metadata    180 days
-```
+``
 
 Redis:
 
-```text
+``text
 ingress dedupe           15 minutes default; up to 24 hours per project on opt-in
 rate-limit counters      short TTL by window
 processor ephemeral state processor-specific TTL
-```
+``
 
 SDK local queues:
 
-```text
+``text
 web queued events        bounded by count/bytes; max age configurable
 node memory queue        process lifetime only unless durable adapter is configured
-```
+``
 
 Object-storage raw archive is a future extension. Until it exists, RabbitMQ `raw.events` retention defines the practical raw replay window. The replayability principle is bounded by this window — Polaris does not promise replay beyond the operational retention window in v1.
 
@@ -177,7 +177,7 @@ RabbitMQ sizing is configurable per environment. Start with boring high-availabi
 
 Production:
 
-```text
+``text
 brokers                         3
 replication_factor              3
 min_in_sync_replicas            2
@@ -190,23 +190,23 @@ session.events partitions       12
 attribution.events partitions   12
 retry topic partitions           6
 dlq topic partitions             6
-```
+``
 
 Local/development:
 
-```text
+``text
 brokers                         1
 replication_factor              1
 topic partitions                 1-3
-```
+``
 
 Staging/test:
 
-```text
+``text
 brokers                         1 for cheap test environments
 brokers                         3 for production-like pre-prod
 replication_factor              1 or 3 depending on environment purpose
-```
+``
 
 Rules:
 
@@ -221,30 +221,30 @@ Rules:
 
 ClickHouse starts with a simple, SQL-native physical model:
 
-```text
+``text
 ingestion interface table     transient ingestion interface
 analytics_ingest_log   MergeTree / ReplicatedMergeTree append-only log
 analytics_raw          ReplacingMergeTree / ReplicatedReplacingMergeTree deduped analytical facts
 projection tables      MergeTree / SummingMergeTree / AggregatingMergeTree depending on purpose
-```
+``
 
 Defaults:
 
-```text
+``text
 analytics_ingest_log partitioning    toYYYYMM(ingested_at)
 analytics_ingest_log ordering        project_id, environment, ingested_at, event_id
 analytics_ingest_log TTL             30 days
 analytics_raw partitioning           toYYYYMM(occurred_at)
 analytics_raw ordering               project_id, environment, event, event_id
 analytics_raw TTL                    400 days
-```
+``
 
 ### Engine families per environment
 
-```text
+``text
 local/dev      plain MergeTree, ReplacingMergeTree     no Keeper
 production     Replicated* engines from day one        Keeper required
-```
+``
 
 DDL is parameterized through a `{replicated}` macro so the same SQL file works in both. Production runs ClickHouse Keeper alongside ClickHouse from day one; embedded Keeper is acceptable for the first single-replica production deployment, external Keeper becomes necessary when multiple replicas land.
 
@@ -283,7 +283,7 @@ Rules:
 - The backup strategy lives in code and infrastructure templates, not runbook prose.
 - Restore validation is exercised in staging at least quarterly.
 - Audit records and operator tokens are the most operationally sensitive Postgres rows; losing them creates compliance gaps. The 5-minute RPO targets this.
-- ClickHouse projection rebuilds run through the standard replay/rebuild workflow ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)), not as ad-hoc SQL.
+- ClickHouse projection rebuilds run through the standard replay/rebuild workflow (`P7-005`), not as ad-hoc SQL.
 - Secret provider backups are the provider's responsibility; Polaris stores only references.
 
 ## Open Production Decisions
@@ -293,7 +293,7 @@ These are wait-for-data items. Each has a structural decision locked and a numer
 - **RabbitMQ retention byte caps and tiered storage.** Time-based retention is locked (90 days for `raw.events`). Byte caps as a backstop and tiered storage offload are evaluated when first-project disk usage data exists.
 - **Per-project ingress dedupe window overrides.** Default 15 min is locked. Per-project opt-ins up to 24h are evaluated when a project demonstrates a producer-side reliability need.
 - **Topic isolation activation thresholds.** Triggers are locked structurally (volume share, retention divergence, lag isolation, schema risk, operational quarantine — see [RabbitMQ Streams](./03-rabbitmq-streams.md)). The `>25%` threshold and similar numbers are revisited after observed traffic.
-- **Alert thresholds and SLOs.** Initial defaults are locked in [P10-005](../../agents/pm/kanban/done/P10-005-alerts-and-incident-runbooks.md); tightened after observed traffic.
+- **Alert thresholds and SLOs.** Initial defaults are locked in `P10-005`; tightened after observed traffic.
 
 ## Methodology Decisions (No Single Lock)
 
@@ -307,7 +307,7 @@ These are not single decisions — they are processes that produce decisions per
 
 - Production secret manager: **none.** Vault was implemented (P11-004) and then removed: per-project secrets moved into the control-plane database as plaintext, which were its only callers. See [Control Plane — Secrets](02-control-plane.md) for what that trades away.
 - ClickHouse cluster shape: single-shard single-replica with `Replicated*` engines + Keeper from day one. Multi-shard is honest future work.
-- Identity graph schema: file-flexible (see [P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)).
+- Identity graph schema: file-flexible (see `P8-002`).
 - Regional posture: single-region in v1; PII residency not a v1 constraint.
 - OIDC IdP for a dedicated CLI actor source: Keycloak when implemented (P11+ stretch).
 - GeoIP backend: MaxMind GeoLite2 with operator-provided files.

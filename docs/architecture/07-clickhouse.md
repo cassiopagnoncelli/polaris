@@ -8,7 +8,7 @@ It is part of the stream graph, not just an afterthought database.
 
 The mature ingestion path is:
 
-```text
+``text
 RabbitMQ resolved.events           RabbitMQ session /
     |                               identity / attribution .events
     v                                          |
@@ -23,7 +23,7 @@ ingestion interface table                      v
              |
              v
       projection tables
-```
+``
 
 The ingestion interface tables are transient. They are not queried directly.
 
@@ -67,15 +67,15 @@ what says how many times it arrived.
 
 Start with:
 
-```text
+``text
 JSONEachRow
-```
+``
 
 Later evolution may use:
 
-```text
+``text
 Avro or Protobuf + Schema Registry
-```
+``
 
 ## Two-Layer Raw Storage
 
@@ -104,13 +104,13 @@ Purpose:
 
 Expected stable keys include:
 
-```text
+``text
 project_id
 environment
 event_id
 event
 schema_version
-```
+``
 
 ## V1 Physical Defaults
 
@@ -122,10 +122,10 @@ The ingestion interface table is transient and must not be queried
 directly. It is a `Null` engine: rows are dropped on write and reach
 only the materialized views.
 
-```text
+``text
 analytics_events_queue
 ENGINE = Null
-```
+``
 
 `async/warehouse/clickhouse-sink` INSERTs batches into it as `JSONEachRow`,
 stamping the transport lineage columns (`_topic`, `_partition`,
@@ -152,13 +152,13 @@ Purpose:
 
 Suggested physical shape:
 
-```text
+``text
 analytics_ingest_log
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ingested_at)
 ORDER BY (project_id, environment, ingested_at, event_id)
 TTL ingested_at + INTERVAL 30 DAY
-```
+``
 
 ### Deduped Analytical Raw Table
 
@@ -172,17 +172,17 @@ Purpose:
 
 Suggested physical shape:
 
-```text
+``text
 analytics_raw
 ENGINE = ReplacingMergeTree(_version)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (project_id, environment, event, event_id)
 TTL occurred_at + INTERVAL 400 DAY
-```
+``
 
 Expected columns include:
 
-```text
+``text
 event_id
 event
 schema_version
@@ -199,7 +199,7 @@ properties_json
 context_json
 processor metadata
 _version
-```
+``
 
 ### Deduped Derived-Fact Table
 
@@ -207,13 +207,13 @@ One table for all four derived families, not four tables: they share the
 canonical envelope, they are queried together far more often than
 separately, and `event` is already in the sort key.
 
-```text
+``text
 analytics_processed
 ENGINE = ReplacingMergeTree(_version)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (project_id, environment, event, event_id)
 TTL occurred_at + INTERVAL 400 DAY
-```
+``
 
 Same sort key and TTL as `analytics_raw`, so the query patterns below
 apply verbatim and joins between the two never outlive one side. It
@@ -250,7 +250,7 @@ carry a random UUIDv7 per attempt and never collapse; normalising them is
 
 Materialized views are the primary readers of `analytics_raw`. They use `argMax(col, _version)` to mimic ReplacingMergeTree's per-key collapse, then write deduped rows into projection tables.
 
-```sql
+``sql
 SELECT
   project_id, environment, event, event_id,
   argMax(properties_json, _version) AS properties_json,
@@ -259,7 +259,7 @@ SELECT
   ...
 FROM analytics_raw
 GROUP BY project_id, environment, event, event_id
-```
+``
 
 `argMax(col, _version)` returns the value of `col` from the row with the highest `_version` within the group. This is functionally equivalent to what ReplacingMergeTree's merge would have produced.
 
@@ -269,11 +269,11 @@ Projection tables store already-deduped rows. They are the query surface for das
 
 Projection table engines are chosen per query shape:
 
-```text
+``text
 MergeTree              fact-shaped projections, append-only after dedupe
 SummingMergeTree       pre-summed counters by group key
 AggregatingMergeTree   pre-aggregated state functions for complex aggregates
-```
+``
 
 The MV's `argMax` aggregation handles the dedupe so the projection table never sees duplicates from the same `event_id`.
 
@@ -281,11 +281,11 @@ The MV's `argMax` aggregation handles the dedupe so the projection table never s
 
 One-off operator queries on `analytics_raw` use `SETTINGS final = 1` rather than the `FINAL` keyword:
 
-```sql
+``sql
 SELECT count() FROM analytics_raw
 WHERE project_id = 'storefront' AND occurred_at >= now() - INTERVAL 1 DAY
 SETTINGS final = 1;
-```
+``
 
 `SETTINGS final = 1` is per-query, easy to switch off, and cluster-friendlier than the `FINAL` keyword. It is still expensive on hot partitions — use it for inspection, not for hot-path queries.
 
@@ -293,10 +293,10 @@ SETTINGS final = 1;
 
 For event counts, prefer `count(DISTINCT event_id)` over `count()` plus dedupe. This sidesteps the merge-state question entirely:
 
-```sql
+``sql
 SELECT count(DISTINCT event_id) FROM analytics_raw
 WHERE project_id = 'storefront' AND occurred_at >= now() - INTERVAL 1 DAY;
-```
+``
 
 ### What is banned
 
@@ -312,11 +312,11 @@ The query patterns above are policy. The actual enforcement is at the database l
 
 Three roles ship in v1:
 
-```text
+``text
 polaris_service     SELECT on projection tables and analytics_ingest_log only
 polaris_operator    broader access including the raw-tier tables and DDL
 polaris_sink        INSERT on the two ingestion interface tables, SELECT on nothing
-```
+``
 
 Role definitions and grants live in `sql/clickhouse/roles/` and are applied as part of P1-003.
 
@@ -335,7 +335,7 @@ The `packages/shared-clickhouse/` workspace package is the only sanctioned in-pr
 - operator-profile methods including `argMax`-based reads against both raw-tier tables — `replay.argMaxByEventKey` / `replay.countDistinctEvents` for `analytics_raw`, and `replay.argMaxProcessedByEventKey` / `replay.countDistinctProcessedEvents` for `analytics_processed`. One set of builders serves both, parameterised by table and column list, so the dedupe pattern cannot drift between them.
 - an operator-only `raw.query` escape hatch that emits a metric and structured log line on every call, so escape-hatch usage is observable
 
-A workspace-level import rule prevents code outside `shared-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See [P0-010](../../agents/pm/kanban/done/P0-010-shared-clickhouse-client-package.md).
+A workspace-level import rule prevents code outside `shared-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See `P0-010`.
 
 ### Ad-hoc operator SQL
 
@@ -356,20 +356,20 @@ The goal is a single migration path from dev to production scale. Engine familie
 
 Production uses `Replicated*` engine families from day one, even on a single replica. Local/dev uses plain non-replicated engines because there is no ClickHouse Keeper to register with.
 
-```text
+``text
 local/dev      MergeTree, ReplacingMergeTree
 production     ReplicatedMergeTree, ReplicatedReplacingMergeTree
-```
+``
 
 DDL is parameterized through cluster macros so the same SQL file produces the right engine per environment:
 
-```sql
+``sql
 CREATE TABLE analytics_raw ON CLUSTER '{cluster}' (
   ...
 ) ENGINE = {replicated}ReplacingMergeTree('/clickhouse/tables/{shard}/analytics_raw', '{replica}', _version)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (project_id, environment, event, event_id);
-```
+``
 
 The `{replicated}` macro expands to empty in local/dev and to `Replicated` in production.
 
@@ -397,13 +397,13 @@ Projection tables are denormalized OLAP tables for dashboards and APIs.
 
 Examples:
 
-```text
+``text
 merchant_daily_metrics
 funnel_metrics
 attribution_metrics
 psp_routing_metrics
 consumer_delivery_metrics
-```
+``
 
 Materialized views transform inserts from raw analytical tables into projection tables. They are continuous incremental transformations, not ad hoc query views.
 
@@ -413,12 +413,12 @@ Projection tables pick the right ClickHouse engine for their query shape. There 
 
 Default guidance:
 
-```text
+``text
 MergeTree              fact-shaped projections (denormalized rows, append-after-dedupe)
 SummingMergeTree       pre-summed counters keyed by a group key
 AggregatingMergeTree   complex aggregate states (uniq, quantile, custom states)
 ReplacingMergeTree     projections that need their own dedupe layer (rare; analytics_raw upstream usually handles it)
-```
+``
 
 In production these become `ReplicatedMergeTree`, `ReplicatedSummingMergeTree`, etc., via the `{replicated}` macro.
 
@@ -436,7 +436,7 @@ Rules:
 
 **Current traits for one person:**
 
-```sql
+``sql
 SELECT
     profile_id,
     mapFromArrays(groupArray(trait_key), groupArray(value)) AS traits,
@@ -446,7 +446,7 @@ WHERE project_id = {project:String}
   AND environment = {environment:String}
   AND removed = 0
 GROUP BY profile_id;
-```
+``
 
 `FINAL` collapses each `(profile, trait)` to its highest `traits_version`. `removed = 0` filters the tombstones — a trait computed to nothing is stored as a removal at the new version rather than deleted, so the collapse handles it like any other change and no mutation is needed.
 
@@ -456,7 +456,7 @@ GROUP BY profile_id;
 
 The two compose because both key on `profile_id`, which is what `profiles` is sorted by:
 
-```sql
+``sql
 SELECT
     dictGetOrDefault(
         'polaris.profile_canonical', 'winner_profile_id',
@@ -469,7 +469,7 @@ WHERE project_id = {project:String}
   AND environment = {environment:String}
   AND removed = 0
 GROUP BY canonical_profile_id, trait_key;
-```
+``
 
 `argMax` inside the group is doing real work here, not decoration: after a merge, two formerly-separate profiles resolve to one canonical id and both may carry the same trait. Without `argMax(value, traits_version)` the group would pick arbitrarily between the survivor's value and the tombstoned profile's. With it, the higher version wins — which is the merge's own ordering, since the survivor kept writing after the loser stopped.
 
@@ -479,7 +479,7 @@ The stream only carries changes from the moment the sink started reading it. Pro
 
 Initial load is a one-off export from the profile plane:
 
-```sql
+``sql
 -- From PostgreSQL, one row per (profile, trait):
 COPY (
   SELECT project_id, environment, profile_id,
@@ -488,7 +488,7 @@ COPY (
   FROM profiles, jsonb_each(traits)
   WHERE traits IS NOT NULL AND traits != '{}'::jsonb
 ) TO STDOUT WITH (FORMAT csv);
-```
+``
 
 Load it into `polaris.profiles` directly, not through the queue: the queue's MV expects the `profile.updated` envelope shape, and a backfill has no events to wrap. Because the engine collapses on `traits_version`, a backfilled row and a later streamed change for the same trait resolve correctly whichever arrives first — so the backfill can run while the sink is already consuming, and does not need a maintenance window.
 
@@ -500,7 +500,7 @@ Reads resolve instead. `async/merges/merge-worker/v1` consumes `identity.merged`
 
 **Every person-keyed query groups by the canonical id:**
 
-```sql
+``sql
 SELECT
     dictGetOrDefault(
         'polaris.profile_canonical',
@@ -514,7 +514,7 @@ FROM polaris.resolved_events
 WHERE project_id = {project:String}
   AND environment = {environment:String}
 GROUP BY canonical_profile_id;
-```
+``
 
 `OrDefault` is the load-bearing half: a profile that has never been merged is absent from the dictionary and resolves to itself, so the same expression is correct for every row and no query needs to know whether a merge happened. `merged_from` above is the number of historical ids that folded into one person — a column that only exists because the history was left intact.
 

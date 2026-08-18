@@ -58,7 +58,7 @@ The v1 operator interface is a `polaris` CLI.
 
 Examples:
 
-```text
+``text
 polaris projects list
 polaris sources sync
 polaris keys create --project storefront --env production --source storefront-web
@@ -67,23 +67,23 @@ polaris schemas validate
 polaris replays create ...
 polaris replays approve ...
 polaris destinations disable ...
-```
+``
 
 ### Access model
 
 The CLI is bash-invocable. There is no interactive login. Authentication is via env vars in the AWS-CLI / GitHub-CLI tradition:
 
-```bash
+``bash
 export POLARIS_API_URL="https://polaris.example.internal"
 export POLARIS_TOKEN="polaris_ot_..."
 polaris keys create --project storefront --env production --source storefront-web
-```
+``
 
 - `POLARIS_TOKEN` is issued by `polaris operators create` and shown once at creation.
 - Token rotation (`polaris operators rotate`) issues a new token and revokes the old one immediately; the operator updates their env var.
 - Per-environment profiles live in `~/.polaris/config.toml`. The config file never stores tokens — it points at env var names:
 
-```toml
+``toml
 [profiles.production]
 url = "https://polaris.example.internal"
 token_env = "POLARIS_PROD_TOKEN"
@@ -91,7 +91,7 @@ token_env = "POLARIS_PROD_TOKEN"
 [profiles.staging]
 url = "https://polaris-staging.example.internal"
 token_env = "POLARIS_STAGING_TOKEN"
-```
+``
 
 - Profile is selected via `--profile <name>` or `POLARIS_PROFILE` env var.
 
@@ -103,7 +103,7 @@ The CLI is a thin client that talks to a small Polaris control-plane API service
 - Operators don't need direct PostgreSQL network reach; only the control-plane API service does.
 - A future admin UI reuses the same API.
 
-The control-plane API service lives in `apps/control-plane-api/` and exposes the same operations the CLI invokes. The implementation choice is reconfirmed in [P6-001](../../agents/pm/kanban/done/P6-001-control-plane-cli-shell.md).
+The control-plane API service lives in `apps/control-plane-api/` and exposes the same operations the CLI invokes. The implementation choice is reconfirmed in `P6-001`.
 
 The CLI should use libraries/services that a future admin API or UI can reuse. No admin UI is required in v1.
 
@@ -113,14 +113,14 @@ Polaris's operator gate is intentionally minimal: one property per command, one 
 
 ### Actor sources
 
-```text
+``text
 operator_token  CLI verified an operator token against its argon2id hash
 declared        control-plane API authenticated a bearer token or an IdP-backed admin session
 cli             no credential — the CLI's fallback when a token is absent, malformed,
                 revoked, or fails verification
 migration       written by a schema migration
 system          written by the platform rather than a person
-```
+``
 
 The names carry history worth knowing. An earlier draft of this design
 used `cli_token` / `cli_oidc` / `declared`, where `declared` meant a
@@ -135,13 +135,13 @@ admin-panel one.
 
 Each CLI command declares `mutates: boolean` as part of its definition. The dispatcher applies one rule before executing:
 
-```text
+``text
 if command.mutates && environment === 'production'
    && actorSource not in { 'operator_token', 'declared' }:
     reject with "production mutation requires an authenticated operator"
 else:
     allow
-```
+``
 
 The gate lists what it ALLOWS rather than excluding `cli`, so a future
 actor source has to be admitted deliberately instead of clearing a
@@ -163,7 +163,7 @@ Read-only commands (list, inspect, plan, dry-run) carry `mutates: false` and byp
 
 Every mutating command writes one audit record:
 
-```text
+``text
 audit_id
 occurred_at
 command
@@ -177,7 +177,7 @@ environment
 result            allowed | denied
 denied_reason     null | "production_requires_authenticated_actor" | ...
 correlation_id
-```
+``
 
 Denied gate decisions land on the same record (`result = denied`, `denied_reason` set). A separate gate-decision record was considered and rejected — it doubled audit volume without adding information.
 
@@ -189,11 +189,11 @@ Polaris supports multiple internal projects.
 
 Core environments are fixed:
 
-```text
+``text
 development
 staging
 production
-```
+``
 
 Rules:
 
@@ -208,18 +208,18 @@ Sources are explicit platform objects.
 
 Examples:
 
-```text
+``text
 storefront-web
 payments-api
 billing-worker
 shopify-webhook-relay
-```
+``
 
 Source declarations are file-backed and materialized into PostgreSQL for runtime use.
 
 A source includes:
 
-```text
+``text
 project_id
 source_id
 source_type
@@ -228,7 +228,7 @@ description
 runtime
 allowed environments
 status
-```
+``
 
 The ingester reads source/key runtime state from PostgreSQL, usually through an in-memory or Redis cache.
 
@@ -266,10 +266,10 @@ Secrets split in two, and the split is the whole design.
 
 **Per-project secrets** — a destination's vendor credential, and a project's own sensitive configuration values — are stored in the control-plane database as plaintext:
 
-```text
+``text
 destinations.secret_value    the vendor credential itself
 project_config.value         with is_secret = true
-```
+``
 
 This reverses the platform's earlier rule. PostgreSQL used to store `(secret_provider, secret_ref)` pairs that an adapter resolved at the point of use, and "PostgreSQL never stores plaintext secrets" was load-bearing. The reversal buys one storage mechanism for everything a project declares, editable from the admin UI, with no external dependency in the read path — and it costs exactly what it sounds like: **access to the control-plane database is access to every project's vendor accounts.** Its backups and replicas are credential material. Restrict them accordingly.
 

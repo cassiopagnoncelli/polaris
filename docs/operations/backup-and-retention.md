@@ -28,7 +28,7 @@ This is the canonical table. It mirrors and binds to
 | --- | --- | --- | --- | --- |
 | PostgreSQL | audit, replay jobs, processor runs, destination instances, operator tokens, API key hashes, schema/source registry, topic isolations, identity links | 5 min | 1 h | daily `pg_dump --format=custom` + continuous WAL streaming; 7-day point-in-time recovery |
 | ClickHouse `analytics_raw` | deduped analytical facts | 24 h | 4 h (recent partitions) | daily `BACKUP TABLE` to object storage |
-| ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time | no backup; rebuild via [P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md) |
+| ClickHouse projection tables | derived from `analytics_raw` via MVs | N/A | per-projection rebuild time | no backup; rebuild via `P7-005` |
 | ClickHouse `analytics_ingest_log` | append-only landing log, 30-day TTL | 7 d | 4 h | weekly `BACKUP TABLE`, monthly cold archive |
 | RabbitMQ | canonical event topics | 0 (RF=3, min-ISR=2) | <1 h broker replacement | in-cluster replication factor; tiered storage future work |
 | Redis | dedupe windows, rate limits, processor caches | N/A | N/A | no backup; loss is acceptable transient duplicate increase, downstream idempotency handles |
@@ -45,7 +45,7 @@ Rules baked into the runbook:
   PostgreSQL rows. The 5-minute RPO targets exactly those rows.
 - ClickHouse projection tables are deliberately not backed up. The
   rebuild path runs through the standard replay/rebuild workflow
-  ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)).
+  (`P7-005`).
 - **PostgreSQL backups contain live credentials.** This inverts what
   this runbook used to say. Per-project secrets — destination vendor
   tokens and sensitive `project_config` values — are stored as
@@ -77,7 +77,7 @@ schema covers:
 | `processor_runs` | per-run record (timestamps, metrics, status) | 1 year | operational |
 | `audit_records` | one row per state-changing CLI command | 2 years | regulatory |
 | `operator_tokens` | argon2id hashes of CLI credentials | active lifetime + 2 years after revoke | sensitive (hash-only, no plaintext) |
-| `identity_links` | append-only identity edges from the identity resolver | identity retention policy ([P8-002](../../agents/pm/kanban/done/P8-002-identity-resolver-v1.md)) | pseudonymized PII |
+| `identity_links` | append-only identity edges from the identity resolver | identity retention policy (`P8-002`) | pseudonymized PII |
 
 `replay_jobs` and `delivery_records` land with P7-* and P9-007 and
 follow the same backup model. They are listed in
@@ -88,10 +88,10 @@ follow the same backup model. They are listed in
 Use [`infra/backups/pg-dump.sh`](../../infra/backups/pg-dump.sh) on a
 cron schedule:
 
-```bash
+``bash
 # /etc/cron.d/polaris-pg-backup
 0 2 * * * polaris /opt/polaris/infra/backups/pg-dump.sh >>/var/log/polaris/pg-backup.log 2>&1
-```
+``
 
 The script:
 
@@ -119,13 +119,13 @@ write-ahead-log streaming.
 
 Production runs PostgreSQL with WAL archiving enabled:
 
-```ini
+``ini
 # postgresql.conf — production
 wal_level = replica
 archive_mode = on
 archive_command = '/opt/polaris/infra/backups/wal-archive.sh %f %p'
 archive_timeout = 300                  # at most 5 min between flushes
-```
+``
 
 The chosen tool for managed snapshots + WAL archiving in v1 is
 **pgBackRest** when self-hosted, or the equivalent in a managed
@@ -145,7 +145,7 @@ is the correct backpressure when archive storage is unhealthy.
 [`infra/backups/pg-restore.sh`](../../infra/backups/pg-restore.sh) wraps
 `pg_restore` for a clean restore into a target database:
 
-```bash
+``bash
 # 1. Provision an empty target database.
 createdb polaris_restore
 
@@ -158,7 +158,7 @@ POLARIS_RESTORE_DATABASE=polaris_restore \
 psql polaris_restore -c "SELECT count(*) FROM audit_records;"
 psql polaris_restore -c "SELECT count(*) FROM api_keys WHERE status = 'active';"
 psql polaris_restore -c "SELECT count(*) FROM operator_tokens WHERE status = 'active';"
-```
+``
 
 The restore script:
 
@@ -211,12 +211,12 @@ its TTL window will be dropped in a future merge — there is no
 guaranteed instant deletion. To force TTL evaluation (for example after
 shortening a window):
 
-```sql
+``sql
 ALTER TABLE polaris.analytics_raw
   MODIFY TTL toDateTime(occurred_at) + INTERVAL 400 DAY;
 
 ALTER TABLE polaris.analytics_raw MATERIALIZE TTL;
-```
+``
 
 `MATERIALIZE TTL` rewrites parts so the new policy is applied
 immediately. It is expensive on hot partitions — schedule it during a
@@ -248,19 +248,19 @@ running an `argMax`- or `count(DISTINCT event_id)`-shaped query. The
 Use [`infra/backups/clickhouse-backup.sh`](../../infra/backups/clickhouse-backup.sh)
 on a cron schedule:
 
-```bash
+``bash
 # /etc/cron.d/polaris-clickhouse-backup
 0 3 * * * polaris /opt/polaris/infra/backups/clickhouse-backup.sh analytics_raw >>/var/log/polaris/clickhouse-backup.log 2>&1
 0 4 * * 0 polaris /opt/polaris/infra/backups/clickhouse-backup.sh analytics_ingest_log >>/var/log/polaris/clickhouse-backup.log 2>&1
-```
+``
 
 The script wraps `clickhouse-client --query`:
 
-```sql
+``sql
 BACKUP TABLE polaris.<table>
   TO Disk('backup_disk', '<table>-<utc-timestamp>.zip')
   SETTINGS compression_method = 'zstd', compression_level = 3;
-```
+``
 
 This is the canonical ClickHouse BACKUP syntax (since 22.x). It writes
 to a configured **backup disk**, not a filesystem path — disk routing
@@ -274,7 +274,7 @@ the ClickHouse server config. Two reference configurations:
 
 **Local filesystem (dev / staging)**
 
-```xml
+``xml
 <!-- /etc/clickhouse-server/config.d/backup_disk.xml -->
 <clickhouse>
   <storage_configuration>
@@ -289,11 +289,11 @@ the ClickHouse server config. Two reference configurations:
     <allowed_disk>backup_disk</allowed_disk>
   </backups>
 </clickhouse>
-```
+``
 
 **Object storage (production, AWS S3 reference)**
 
-```xml
+``xml
 <!-- /etc/clickhouse-server/config.d/backup_disk.xml -->
 <clickhouse>
   <storage_configuration>
@@ -309,14 +309,14 @@ the ClickHouse server config. Two reference configurations:
     <allowed_disk>backup_disk</allowed_disk>
   </backups>
 </clickhouse>
-```
+``
 
 `<allowed_disk>` is required — ClickHouse refuses `BACKUP` /
 `RESTORE` to disks that are not explicitly listed.
 
 ### Restore drill
 
-```bash
+``bash
 # 1. Restore the backup to a side table in staging.
 clickhouse-client --query "
   RESTORE TABLE polaris.analytics_raw AS polaris.analytics_raw_restored
@@ -344,7 +344,7 @@ clickhouse-client --query "
 
 # 4. Drop the side table once verification passes.
 clickhouse-client --query "DROP TABLE polaris.analytics_raw_restored"
-```
+``
 
 The restore script does not auto-drop side tables. Verification is an
 operator decision; the drop step is explicit so a half-verified
@@ -374,14 +374,14 @@ The rationale for "rebuild not restore" lives in
 and is reinforced by Production Readiness:
 
 > ClickHouse projection rebuilds run through the standard replay/rebuild
-> workflow ([P7-005](../../agents/pm/kanban/done/P7-005-clickhouse-rebuild-workflows.md)),
+> workflow (`P7-005`),
 > not as ad-hoc SQL.
 
 ### Verifying TTL is honored
 
 Quarterly check, run during the recovery drill:
 
-```sql
+``sql
 -- Confirm the configured TTL clause matches what the SQL files declare.
 SELECT name, engine, partition_key, sorting_key, primary_key, ttl
 FROM system.tables
@@ -394,15 +394,15 @@ SELECT min(ingested_at) FROM polaris.analytics_ingest_log;
 -- Confirm rows past TTL are being dropped (no rows older than 400d in raw).
 SELECT min(occurred_at) FROM polaris.analytics_raw;
 -- expect: >= now() - INTERVAL 400 DAY
-```
+``
 
 If the `min()` query returns a timestamp older than the TTL window,
 trigger a manual `MATERIALIZE TTL`:
 
-```sql
+``sql
 ALTER TABLE polaris.analytics_raw MATERIALIZE TTL;
 ALTER TABLE polaris.analytics_ingest_log MATERIALIZE TTL;
-```
+``
 
 ## RabbitMQ
 
@@ -429,12 +429,12 @@ Per
 
 The active levers are:
 
-```ini
+``ini
 # RabbitMQ topic config — example for raw.events
 retention.ms=7776000000        # 90 days
 segment.ms=86400000            # 1 day per segment
 segment.bytes=1073741824       # 1 GiB cap per segment
-```
+``
 
 Polaris uses time-based retention first; segment.bytes acts as a cap so
 a sudden traffic surge cannot blow up a single segment.
@@ -532,15 +532,15 @@ Operational notes:
 - Unresolved DLQ records are never auto-purged. A growing DLQ is a
   signal, not a cost problem.
 - Resolution is recorded via the destination-DLQ triage runbook
-  ([P10-006](../../agents/pm/kanban/done/P10-006-dlq-triage-runbook.md)
+  (`P10-006`
   and the destination DLQ work in
-  [P9-007](../../agents/pm/kanban/done/P9-007-destination-delivery-records-and-dlq-triage.md)).
+  `P9-007`).
 - The 30-day post-resolution retention exists so an operator can
   re-investigate a "we marked this fixed but it's still broken"
   case before the record is dropped.
 
 DLQ records carry no plaintext secrets. The destination consumer
-runtime ([P9-001](../../agents/pm/kanban/done/P9-001-destination-consumer-runtime.md))
+runtime (`P9-001`)
 is responsible for redacting secret material before any DLQ write.
 
 ## Attribution chain retention
@@ -562,7 +562,7 @@ The asymmetry is semantic, not a policy preference:
 
 Unlike the audit and DLQ policies above, this one has an implementation:
 
-```bash
+``bash
 # Count first. Writes no audit row.
 polaris processors chains-prune --version v2 --dry-run
 
@@ -572,7 +572,7 @@ polaris processors chains-prune --version v2
 # Narrow by scope, or be more conservative than the window.
 polaris processors chains-prune --version v2 --project storefront --env production
 polaris processors chains-prune --version v2 --idle 15552000   # 180 days
-```
+``
 
 The command refuses `--version v1` and refuses an `--idle` shorter than
 the version's own window — both would delete rows the engine can still
@@ -589,9 +589,9 @@ wraps the command for cron:
 ready-to-install `/etc/cron.d` schedule carrying this job alongside the
 backups:
 
-```bash
+``bash
 sudo install -m 0644 -o root -g root infra/backups/crontab.example /etc/cron.d/polaris
-```
+``
 
 Connection settings come from an operator-owned `/etc/polaris/retention.env`
 that each entry sources, because cron runs with almost no environment and the
@@ -691,7 +691,7 @@ The drill consists of three blocks:
 3. Validate row counts against a known-good baseline from the dump's
    own metadata:
 
-    ```bash
+    ``bash
     pg_restore --list <dump> | head -40        # inspect target tables
     psql polaris_restore_drill -c "
       SELECT 'audit_records' AS table, count(*) FROM audit_records UNION ALL
@@ -700,7 +700,7 @@ The drill consists of three blocks:
       SELECT 'processor_runs', count(*) FROM processor_runs UNION ALL
       SELECT 'identity_links', count(*) FROM identity_links
     "
-    ```
+    ``
 
 4. Record results in the quarterly drill log.
 
@@ -723,7 +723,7 @@ acceptable reason to renegotiate the RPO target with stakeholders.
 2. `RESTORE TABLE polaris.analytics_raw AS polaris.analytics_raw_restored ...`
 3. Run the argMax sanity query on a recent partition:
 
-    ```sql
+    ``sql
     SELECT
       project_id, environment, event, event_id,
       argMax(properties_json, _version) AS properties_json,
@@ -732,7 +732,7 @@ acceptable reason to renegotiate the RPO target with stakeholders.
     WHERE occurred_at >= now() - INTERVAL 1 DAY
     GROUP BY project_id, environment, event, event_id
     LIMIT 100;
-    ```
+    ``
 
 4. Run the `count(DISTINCT event_id)` shape on the same partition and
    confirm it agrees (within a tolerance for in-flight rows) with the
@@ -743,7 +743,7 @@ acceptable reason to renegotiate the RPO target with stakeholders.
 
 Each drill produces one entry:
 
-```text
+``text
 quarter: 2026-Q2
 date: 2026-04-07
 block_1_pg_restore: PASS  (drill duration 11 min)
@@ -751,7 +751,7 @@ block_2_pg_pitr: PASS     (drill duration 38 min, RPO 4m12s)
 block_3_ch_partition: PASS (drill duration 22 min)
 operator: alice@polaris.dev
 notes: -
-```
+``
 
 A failed block must be re-run in the same quarter once the underlying
 issue is fixed. The drill is not "done" with a partial result.
@@ -800,10 +800,10 @@ headers, same destination guardrails.
 
 ### Layout
 
-```
+``
 <prefix>/v1/<project_id>/<environment>/<YYYY-MM-DD>/<stream>/<first>-<last>.ndjson
 <prefix>/v1/<project_id>/<environment>/<YYYY-MM-DD>/_manifest/<stream>.ndjson
-```
+``
 
 - The date is the events' `occurred_at` in **UTC**, not the archiver's
   wall clock. Replay windows are event-time, so a window of "March 3rd"
@@ -859,9 +859,9 @@ above in both direction and purpose: the archive is a REPLAY source that
 keeps envelopes verbatim, and this is an EXTRACT that keeps deduped rows
 in a columnar format nothing replays.
 
-```bash
+``bash
 polaris warehouse export --project storefront --env production --day 2026-08-15
-```
+``
 
 Three datasets, all written unless `--dataset` narrows it:
 
@@ -873,9 +873,9 @@ Three datasets, all written unless `--dataset` narrows it:
 
 ### Layout
 
-```
+``
 <bucket>/<dataset>/<project_id>/<environment>/<YYYY-MM-DD>.parquet
-```
+``
 
 Dataset first because lifecycle rules and external loaders are configured
 per dataset. Reruns overwrite the day's object rather than appending, so
@@ -889,7 +889,7 @@ has no dictionary to redirect them. That is why `merge_map` is exported
 by default, and why an analysis should resolve through it the same way
 `dictGetOrDefault('polaris.profile_canonical', ...)` does online:
 
-```sql
+``sql
 -- DuckDB. Resolve every event to its surviving profile before counting.
 INSTALL httpfs; LOAD httpfs;
 
@@ -910,7 +910,7 @@ FROM events e
 LEFT JOIN merges m ON m.loser_profile_id = e.customer_id
 GROUP BY person
 ORDER BY events DESC;
-```
+``
 
 Counting on `customer_id` without the join double-counts every merged
 person — once under each id they were seen as — and the error grows with

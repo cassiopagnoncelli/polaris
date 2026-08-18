@@ -13,15 +13,15 @@ plus the ClickHouse access enforcement from
 
 The integration workflow is opt-in on PRs because the service matrix is slow
 and still stabilising. Once the vertical-slice smoke test is reliable
-(see [P5-001](../../agents/pm/kanban/done/P5-001-vertical-slice-smoke-test.md)),
+(see `P5-001`),
 the per-service jobs may graduate to required gates.
 
 
 ## Integration tests (broker + database)
 
-```bash
+``bash
 pnpm test:integration
-```
+``
 
 Runs `tests/integration/` against a live RabbitMQ and PostgreSQL. Skipped
 unless `POLARIS_INTEGRATION=1`, so the default `pnpm test` on every PR
@@ -36,9 +36,9 @@ migration, one of which could only be reproduced against a real broker.
 
 Locally:
 
-```bash
+``bash
 docker compose up -d --wait postgres rabbitmq && pnpm db:migrate && pnpm test:integration
-```
+``
 
 The suite declares its own test-scoped topology and deletes it afterwards,
 so it is safe against a shared dev broker.
@@ -93,7 +93,7 @@ and asserts the violation set. The test runs as part of `pnpm test` via
 
 To verify a violation is caught locally:
 
-```bash
+``bash
 # Drop a file outside packages/shared-clickhouse/ that imports the client...
 echo 'import "@clickhouse/client";' > apps/ingester-api/src/_oops.ts
 
@@ -102,7 +102,7 @@ pnpm lint:clickhouse-imports
 
 # Clean up
 rm apps/ingester-api/src/_oops.ts
-```
+``
 
 ## Raw-NUL-byte check
 
@@ -137,7 +137,7 @@ covers it via `pnpm test:scripts`.
 
 To verify a violation is caught locally:
 
-```bash
+``bash
 # printf expands \0 into a real NUL byte.
 printf 'const k = "a\0b";\n' > packages/shared-db/src/_oops.ts
 
@@ -146,7 +146,7 @@ pnpm lint:nul-bytes
 
 # Clean up
 rm packages/shared-db/src/_oops.ts
-```
+``
 
 ## The declared-but-unread project-config key check
 
@@ -184,14 +184,14 @@ To verify a violation is caught locally, add an unread key to any
 
 ## Running the same checks locally
 
-```bash
+``bash
 pnpm install
 pnpm build           # produces dist/ for every package — typecheck and tests need this
 pnpm typecheck
 pnpm lint            # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
 pnpm format:check
 pnpm test            # workspace Vitest + scripts/ Vitest
-```
+``
 
 The Makefile target `make ci` wraps the linter, typecheck, and test
 trio (see [`Makefile`](../../Makefile)) but does not run the build
@@ -200,11 +200,11 @@ mirror CI exactly.
 
 For the migration smoke step, run the local compose stack first:
 
-```bash
+``bash
 docker compose up -d postgres
 pnpm db:migrate
 pnpm db:status
-```
+``
 
 ## Integration-tier checks
 
@@ -212,8 +212,8 @@ The integration workflow stands up real services and runs whatever
 end-to-end suite is defined in the workspace. As of this writing, the
 suite is a placeholder owned by:
 
-- [P4-002 ClickHouse Ingestion Integration](../../agents/pm/kanban/done/P4-002-clickhouse-ingestion-integration.md)
-- [P5-001 Vertical Slice Smoke Test](../../agents/pm/kanban/done/P5-001-vertical-slice-smoke-test.md)
+- `P4-002 ClickHouse Ingestion Integration`
+- `P5-001 Vertical Slice Smoke Test`
 
 ### Opting into integration on a PR
 
@@ -231,13 +231,13 @@ against the branch you want to test. No label required.
 The same services live in `docker-compose.yml`. Bring them up with the
 Makefile target:
 
-```bash
+``bash
 make up                          # docker compose up -d --wait
 pnpm db:migrate                  # apply PostgreSQL migrations
 # (real integration test commands land with P4-002 / P5-001)
 make down                        # stop containers
 make nuke                        # stop and wipe volumes
-```
+``
 
 ## Caching
 
