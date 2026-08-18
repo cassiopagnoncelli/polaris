@@ -173,6 +173,16 @@ export {
   resolvePruneCutoff,
   UnprunableAttributionVersionError,
 } from "./mutations/attribution-chains.js";
+export {
+  type AudienceMembershipRow,
+  type AudienceScope,
+  countOpenAudienceMemberships,
+  enterAudience,
+  exitAudience,
+  listAudienceMemberships,
+  listOpenAudienceMemberships,
+  restampAudienceMemberships,
+} from "./mutations/audience-memberships.js";
 export type { AuditContext, AuditTarget, MutationOutcome } from "./mutations/audited.js";
 export {
   type CatalogSyncOutcome,
@@ -218,16 +228,6 @@ export {
   processorTargetId,
   toProcessorSnapshot,
 } from "./mutations/processor-activations.js";
-export {
-  type AudienceMembershipRow,
-  type AudienceScope,
-  countOpenAudienceMemberships,
-  enterAudience,
-  exitAudience,
-  listAudienceMemberships,
-  listOpenAudienceMemberships,
-  restampAudienceMemberships,
-} from "./mutations/audience-memberships.js";
 export {
   type ProfilePlaneTruncateCounts,
   type TruncateProfilePlaneInput,

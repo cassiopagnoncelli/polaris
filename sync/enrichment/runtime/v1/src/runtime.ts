@@ -37,9 +37,9 @@
  */
 
 import type { Logger } from "@polaris/shared-logger";
-import { STREAM_FAMILY_RESOLVED_EVENTS, buildProfilePartitionKey } from "@polaris/shared-transport";
-import { type IPLookup, enrichGeo } from "@polaris/sync-enrichment-geoip-v1";
-import { type ProfileReader, enrichTraits } from "@polaris/sync-enrichment-traits-v1";
+import { buildProfilePartitionKey, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/shared-transport";
+import { enrichGeo, type IPLookup } from "@polaris/sync-enrichment-geoip-v1";
+import { enrichTraits, type ProfileReader } from "@polaris/sync-enrichment-traits-v1";
 
 import { buildResolvedEvent } from "./emit.js";
 import type { EnrichmentPolicy } from "./policy.js";
@@ -204,11 +204,11 @@ export async function handleEvent(
 // ---------------------------------------------------------------------
 
 import {
+  consumerFamiliesFor,
+  decodeEvent,
   type PolarisConsumer,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   type TransportMessageHandler,
-  consumerFamiliesFor,
-  decodeEvent,
 } from "@polaris/shared-transport";
 
 export interface EnrichmentStageRuntime {

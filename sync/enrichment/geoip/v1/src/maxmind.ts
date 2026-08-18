@@ -26,8 +26,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { Reader } from "mmdb-lib";
 import type { CityResponse } from "mmdb-lib";
+import { Reader } from "mmdb-lib";
 
 import type { GeoResult, IPLookup } from "./lookup.js";
 

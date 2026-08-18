@@ -8,17 +8,17 @@
  */
 
 export {
-  buildSyncEnrichmentApp,
   type BuildAppOptions,
   type BuiltSyncEnrichmentApp,
+  buildSyncEnrichmentApp,
 } from "./app.js";
 export {
   loadSyncEnrichmentConfig,
   STAGE_SERVICE_NAME,
-  syncEnrichmentConfigSchema,
-  syncEnrichmentEnvKeys,
   type SyncEnrichmentConfig,
   type SyncEnrichmentRuntimeConfig,
+  syncEnrichmentConfigSchema,
+  syncEnrichmentEnvKeys,
 } from "./config.js";
 export { loadProjectEnrichmentOverrides } from "./overrides.js";
 export {
@@ -30,19 +30,19 @@ export {
 } from "./pins.js";
 export {
   createPolicyResolver,
+  type EnrichmentPolicy,
   EnrichmentPolicyError,
   MANIFEST_BOUNDS,
   MANIFEST_DEFAULTS,
-  type EnrichmentPolicy,
   type ProjectEnrichmentOverride,
   resolveEnrichmentPolicy,
 } from "./policy.js";
 export {
   createRuntime,
-  handleEvent,
   type EnrichmentResult,
   type EnrichmentStageDeps,
   type EnrichmentStageMetrics,
   type EnrichmentStageRuntime,
   type EnrichmentStageRuntimeDeps,
+  handleEvent,
 } from "./runtime.js";

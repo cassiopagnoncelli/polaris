@@ -470,6 +470,12 @@ export {
   FORBIDDEN_REPLAY_PLAN_FLAG_TOKENS,
   rejectReplayPlanArguments,
 } from "./commands/replay/validation.js";
+export { reverseEtlCommand } from "./commands/reverse-etl/index.js";
+export {
+  buildReverseEtlRunRunner,
+  type ReverseEtlRunHooks,
+  reverseEtlRunCommand,
+} from "./commands/reverse-etl/run.js";
 export {
   sourcesListCommand,
   sourcesShowCommand,

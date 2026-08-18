@@ -1,6 +1,8 @@
 import { attributionFirstTouchAssignedV1PropertiesSchema } from "../events/attribution/first_touch_assigned.v1.js";
 import { attributionLastTouchAssignedV1PropertiesSchema } from "../events/attribution/last_touch_assigned.v1.js";
 import { attributionTouchpointCapturedV1PropertiesSchema } from "../events/attribution/touchpoint_captured.v1.js";
+import { audienceEnteredV1PropertiesSchema } from "../events/audience/entered.v1.js";
+import { audienceExitedV1PropertiesSchema } from "../events/audience/exited.v1.js";
 import { checkoutStartedV1PropertiesSchema } from "../events/checkout/started.v1.js";
 import { enrichedGeoipV1PropertiesSchema } from "../events/enriched/geoip.v1.js";
 import { identityLinkRejectedV1PropertiesSchema } from "../events/identity/link_rejected.v1.js";
@@ -13,8 +15,6 @@ import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
 import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
-import { audienceEnteredV1PropertiesSchema } from "../events/audience/entered.v1.js";
-import { audienceExitedV1PropertiesSchema } from "../events/audience/exited.v1.js";
 import { profileUpdatedV1PropertiesSchema } from "../events/profile/updated.v1.js";
 import { sessionEndedV1PropertiesSchema } from "../events/session/ended.v1.js";
 import { sessionStartedV1PropertiesSchema } from "../events/session/started.v1.js";

@@ -7,7 +7,7 @@
  * population must touch nothing.
  */
 
-import { audienceDefinitionSchema, type AudienceDefinition } from "@polaris/audience-catalog";
+import { type AudienceDefinition, audienceDefinitionSchema } from "@polaris/audience-catalog";
 import { describe, expect, it } from "vitest";
 
 import {

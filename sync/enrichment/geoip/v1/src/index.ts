@@ -25,8 +25,8 @@ export {
   SOURCE_NO_LOOKUP,
 } from "./lookup.js";
 export {
-  mapCityResponse,
   MaxmindIPLookup,
+  mapCityResponse,
   type OpenMaxmindOutcome,
   openMaxmindLookup,
 } from "./maxmind.js";

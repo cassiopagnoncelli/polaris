@@ -163,3 +163,31 @@ MAILTO=""
 30 4 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env development --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1
 35 4 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env staging     --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1
 40 4 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} warehouse export --project storefront --env production  --day "$(date -u -d yesterday +\%Y-\%m-\%d)" >> /var/log/polaris/warehouse-export.log 2>&1
+
+# -----------------------------------------------------------------------------
+# Reverse ETL: warehouse rows back through the ingester (XTSWPW63)
+# -----------------------------------------------------------------------------
+#
+# AFTER the traits cron, not before. A writeback reads projections that
+# the traits pass also reads; running it first would have the two
+# disagree about the same day for the length of one window.
+#
+# No `|| true`. A writeback that exits 0 having had every event refused
+# is a trait that silently stopped updating, and the first person to
+# notice is a marketer asking why a campaign targets the wrong people.
+#
+# The ingest key is NOT here. It lives in project config as an
+# `is_secret` value (`reverse_etl.ingest_api_key`), read by the command
+# itself — a key on this line would be visible to `ps` for every user on
+# the host.
+#
+#   polaris sources create --project storefront --env production \
+#     --id reverse-etl --type job
+#   polaris keys create --project storefront --env production \
+#     --source reverse-etl --type job
+#   polaris config set --project storefront --env production \
+#     --key reverse_etl.ingest_api_key --secret --value <token>
+#
+55 4 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} reverse-etl run ltv_writeback --project storefront --env development >> /var/log/polaris/reverse-etl.log 2>&1
+0  5 * * *  polaris  set -a; . /etc/polaris/retention.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} reverse-etl run ltv_writeback --project storefront --env staging     >> /var/log/polaris/reverse-etl.log 2>&1
+5  5 * * *  polaris  set -a; . /etc/polaris/retention.env; . /etc/polaris/retention-production.env; set +a; ${POLARIS_CLI:-/opt/polaris/bin/polaris} reverse-etl run ltv_writeback --project storefront --env production  >> /var/log/polaris/reverse-etl.log 2>&1

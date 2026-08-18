@@ -1,0 +1,23 @@
+{
+  "name": "@polaris/processor-reverse-etl-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "biome lint src test"
+  },
+  "dependencies": {
+    "@polaris/reverse-etl-catalog": "workspace:*"
+  }
+}

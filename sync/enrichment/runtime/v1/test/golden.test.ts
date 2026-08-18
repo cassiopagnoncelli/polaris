@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";
 import { RecordingProducer, silentLogger } from "./fakes.js";
-import { FIXTURE_LOOKUP, GOLDEN_SCENARIOS as SCENARIOS, fixtureReader } from "./fixtures.js";
+import { FIXTURE_LOOKUP, fixtureReader, GOLDEN_SCENARIOS as SCENARIOS } from "./fixtures.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GOLDEN = resolve(HERE, "golden");

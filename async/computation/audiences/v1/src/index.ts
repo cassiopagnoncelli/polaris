@@ -11,8 +11,8 @@
 export {
   type AudienceDiff,
   type AudienceTransition,
-  diffAudience,
   type DiffAudienceInput,
+  diffAudience,
   type EnteredTransition,
   type ExitedTransition,
   type StoredMembership,

@@ -151,7 +151,16 @@ function rejectedEventsSuperStream(config: RabbitmqConfig): SuperStreamSpec {
  * Clamped rather than fixed so an operator who deliberately shortens the
  * global window is not silently overridden upward here.
  */
-export function defaultRetentionDaysForFamily(defaultDays: number, family: string): number {
+/**
+ * Private since the provisioner stopped calling it.
+ *
+ * It was exported so `scripts/rabbitmq-provision.mjs` could apply the
+ * per-family rule itself — which was the bug: computing the spec at the
+ * call site is how `rejected.events` never reached the broker. The script
+ * takes `defaultSuperStreams()` whole now, so the only caller is the
+ * function above it.
+ */
+function defaultRetentionDaysForFamily(defaultDays: number, family: string): number {
   if (family === STREAM_FAMILY_IDENTIFIED_EVENTS) {
     return Math.min(IDENTIFIED_EVENTS_RETENTION_DAYS, defaultDays);
   }

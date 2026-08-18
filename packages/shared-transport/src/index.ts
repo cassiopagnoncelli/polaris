@@ -161,6 +161,24 @@ export {
   resolveRawEventsPartitionKey,
 } from "./partition-key.js";
 export {
+  createAmqpStreamRangeDriver,
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_SLACK_MS,
+  type FollowStreamInput,
+  type FollowStreamResult,
+  followStream,
+  type ReadStreamRangeInput,
+  type ReadStreamRangeResult,
+  rangeOffsetSpec,
+  readStreamRange,
+  STREAM_RANGE_TERMINATION_REASONS,
+  type StreamRangeDelivery,
+  type StreamRangeDriver,
+  type StreamRangeEvent,
+  type StreamRangeTerminationReason,
+  type StreamTailTerminationReason,
+} from "./partition-stream-readers.js";
+export {
   type CreatePolarisProducerOptions,
   createPolarisProducer,
   type PolarisProducer,
@@ -185,24 +203,6 @@ export {
   sharedOnlyIsolationLookup,
   staticIsolationLookup,
 } from "./stream-family.js";
-export {
-  createAmqpStreamRangeDriver,
-  DEFAULT_IDLE_TIMEOUT_MS,
-  DEFAULT_SLACK_MS,
-  type FollowStreamInput,
-  type FollowStreamResult,
-  followStream,
-  type ReadStreamRangeInput,
-  type ReadStreamRangeResult,
-  rangeOffsetSpec,
-  readStreamRange,
-  STREAM_RANGE_TERMINATION_REASONS,
-  type StreamRangeDelivery,
-  type StreamRangeDriver,
-  type StreamRangeEvent,
-  type StreamRangeTerminationReason,
-  type StreamTailTerminationReason,
-} from "./partition-stream-readers.js";
 export {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
@@ -240,7 +240,6 @@ export {
   declareSuperStream,
   declareTopology,
   declareTopologyOnChannel,
-  defaultRetentionDaysForFamily,
   defaultSuperStreams,
   deleteComponentQueues,
   deleteSuperStream,

@@ -173,12 +173,18 @@ importers:
       '@polaris/processor-audiences-v1':
         specifier: workspace:*
         version: link:../../async/computation/audiences/v1
+      '@polaris/processor-reverse-etl-v1':
+        specifier: workspace:*
+        version: link:../../async/reverse-etl/runner/v1
       '@polaris/processor-traits-v1':
         specifier: workspace:*
         version: link:../../async/computation/traits/v1
       '@polaris/project-config-schemas':
         specifier: workspace:*
         version: link:../../packages/project-config-schemas
+      '@polaris/reverse-etl-catalog':
+        specifier: workspace:*
+        version: link:../../catalog/reverse-etl
       '@polaris/shared-archive':
         specifier: workspace:*
         version: link:../../packages/shared-archive
@@ -512,6 +518,12 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  async/reverse-etl/runner/v1:
+    dependencies:
+      '@polaris/reverse-etl-catalog':
+        specifier: workspace:*
+        version: link:../../../../catalog/reverse-etl
 
   async/warehouse/archiver/v1:
     dependencies:

@@ -8,9 +8,8 @@
  * — that this stage cannot write to the profile store.
  */
 
-import { describe, expect, it } from "vitest";
-
 import { InMemoryIPLookup, NoOpIPLookup } from "@polaris/sync-enrichment-geoip-v1";
+import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";
 import { InMemoryProfileReader, RecordingProducer, silentLogger } from "./fakes.js";

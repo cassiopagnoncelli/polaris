@@ -33,6 +33,7 @@ import { processorsCommand } from "./processors/index.js";
 import { profilesCommand } from "./profiles/index.js";
 import { projectsCommand } from "./projects/index.js";
 import { replayCommand } from "./replay/index.js";
+import { reverseEtlCommand } from "./reverse-etl/index.js";
 import { sourcesCommand } from "./sources/index.js";
 import { topicsCommand } from "./topics/index.js";
 import { traitsCommand } from "./traits/index.js";
@@ -49,6 +50,7 @@ export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   destinationsCommand,
   processorsCommand,
   profilesCommand,
+  reverseEtlCommand,
   traitsCommand,
   violationsCommand,
   warehouseCommand,
@@ -80,6 +82,7 @@ export {
   profilesCommand,
   projectsCommand,
   replayCommand,
+  reverseEtlCommand,
   sourcesCommand,
   topicsCommand,
   traitsCommand,
