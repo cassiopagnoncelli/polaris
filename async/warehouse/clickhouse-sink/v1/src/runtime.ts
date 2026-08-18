@@ -35,7 +35,7 @@
  * the system would say so. Choosing the table instead makes a routing
  * bug visible as rows in the wrong place.
  *
- * Both tables have an identical column shape, so one `toQueueRow`
+ * The two ANALYTICS tables have an identical column shape, so one `toQueueRow`
  * projection serves both paths; only the destination differs.
  *
  * Until this landed the sink read `analytics.events` alone, which meant
@@ -103,6 +103,7 @@ import {
   buildClickHouseVersion,
   type ClickHouseVersionStage,
   PROFILE_EVENTS_QUEUE_TABLE,
+  type ProfileEventQueueRow,
   VIOLATIONS_QUEUE_TABLE,
   type ViolationQueueRow,
 } from "@polaris/shared-clickhouse";
@@ -269,7 +270,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
   const now = deps.now ?? ((): number => Date.now());
   let sourceBatch: AnalyticsQueueRow[] = [];
   let processedBatch: AnalyticsQueueRow[] = [];
-  let profileBatch: AnalyticsQueueRow[] = [];
+  let profileBatch: ProfileEventQueueRow[] = [];
   let violationBatch: ViolationQueueRow[] = [];
   let batchOpenedAt = now();
 
@@ -341,7 +342,7 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
       // only after every write is acknowledged, so a failure here re-reads
       // all three batches rather than stranding the profile rows.
       if (profileRows.length > 0) {
-        await deps.writer.insertBatch(profileRows, PROFILE_EVENTS_QUEUE_TABLE);
+        await deps.writer.insertProfileEvents(profileRows);
       }
       // Fourth INSERT, same single-commit contract.
       if (violationRows.length > 0) {
@@ -421,7 +422,14 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (table === ANALYTICS_QUEUE_TABLE) {
       sourceBatch.push(row);
     } else if (table === PROFILE_EVENTS_QUEUE_TABLE) {
-      profileBatch.push(row);
+      // Reshaped, not pushed as-is. `profile_events_queue` has different
+      // columns; see `toProfileQueueRow`.
+      const profileRow = toProfileQueueRow(row, deps.logger);
+      if (profileRow === undefined) {
+        deps.metrics.recordSkipped();
+        return;
+      }
+      profileBatch.push(profileRow);
     } else {
       processedBatch.push(row);
     }
@@ -534,6 +542,72 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
  * partition and re-deliver forever, stalling ingestion for every healthy
  * event behind it.
  */
+/**
+ * The same envelope, reshaped for `profile_events_queue`.
+ *
+ * Derived from `toQueueRow`'s output rather than re-parsing the payload:
+ * the decode, the required-field check and the `_version` derivation are
+ * decisions that must not have two answers, and this needs the identical
+ * ones. Only the COLUMNS differ.
+ *
+ * Returns undefined when the envelope names no profile. The MV drops such
+ * rows anyway (`profile_id != ''`), so inserting them would be a write
+ * whose only effect is to make the sink's row counter disagree with the
+ * table — which is precisely how the previous bug hid: rows consumed,
+ * batches inserted, nothing stored.
+ */
+export function toProfileQueueRow(
+  row: AnalyticsQueueRow,
+  logger: Logger,
+): ProfileEventQueueRow | undefined {
+  const source = safeParseObject(row.source);
+  const profile = safeParseObject(row.profile);
+  const profileId = str(profile?.["profile_id"]);
+
+  if (profileId === undefined || profileId === "") {
+    logger.warn(
+      {
+        component: "clickhouse-sink.decode",
+        event_id: row.event_id,
+        event: row.event,
+        project_id: row.project_id,
+      },
+      "skipping profile.events payload whose envelope carries no profile.profile_id",
+    );
+    return undefined;
+  }
+
+  return {
+    event_id: row.event_id,
+    event: row.event,
+    schema_version: row.schema_version,
+    project_id: row.project_id,
+    environment: row.environment,
+    occurred_at: row.occurred_at,
+    ingested_at: row.ingested_at,
+    // Flat columns here, a JSON block in the analytics tables. This is the
+    // whole reason the shapes cannot be shared.
+    source_id: str(source?.["id"]) ?? "",
+    source_type: str(source?.["type"]) ?? "",
+    profile_id: profileId,
+    properties: row.properties,
+    _version: row._version,
+  };
+}
+
+/** `JSON.parse` for a column this sink itself serialized; `{}` becomes undefined-safe. */
+function safeParseObject(text: string): Record<string, unknown> | undefined {
+  if (text === "") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function toQueueRow(
   payload: TransportMessagePayload,
   logger: Logger,

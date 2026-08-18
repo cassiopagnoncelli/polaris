@@ -133,6 +133,50 @@ export interface CreateAnalyticsSinkWriterInput {
  * is parsed by the materialized view, matching how the envelope queues
  * handle their timestamps.
  */
+/**
+ * One `profile.events` envelope as its interface table receives it.
+ *
+ * A THIRD shape, and the reason this type exists. `profile_events_queue`
+ * does not mirror `analytics_events_queue`: it carries flat `source_id` /
+ * `source_type` / `profile_id` columns instead of the envelope's JSON
+ * blocks, and none of `identity`, `context`, `consent`, `privacy`,
+ * `processor_*` or the transport lineage.
+ *
+ * The sink pushed `AnalyticsQueueRow` into it until 2026-08-18, on the
+ * strength of a comment reading "Both tables have an identical column
+ * shape" -- true when it was written, and a third table with a different
+ * shape landed after it. ClickHouse dropped the unknown JSON keys and
+ * defaulted the missing ones, so every row arrived with `profile_id = ''`
+ * and the materialized view's `profile_id != ''` filter discarded all of
+ * them. The INSERT succeeded, the metrics counted rows consumed, and
+ * `polaris.profiles` stayed empty.
+ *
+ * Typing it separately is what stops that: same reasoning as
+ * `ViolationQueueRow` below, which got it right because a violation is
+ * obviously not an envelope. A profile event IS an envelope, just not one
+ * this table stores whole -- which is exactly why the mismatch was
+ * invisible.
+ */
+export interface ProfileEventQueueRow {
+  readonly event_id: string;
+  readonly event: string;
+  readonly schema_version: number;
+  readonly project_id: string;
+  readonly environment: string;
+  readonly occurred_at: string;
+  readonly ingested_at: string;
+  readonly source_id: string;
+  readonly source_type: string;
+  /**
+   * The profile this update is ABOUT, from the envelope's platform-owned
+   * `profile` block. The MV keys on it and drops rows where it is empty --
+   * a profile event without one names no person and cannot be stored.
+   */
+  readonly profile_id: string;
+  readonly properties: string;
+  readonly _version: number;
+}
+
 export interface ViolationQueueRow {
   readonly violation_id: string;
   readonly violation_version: number;
@@ -168,6 +212,16 @@ export interface AnalyticsSinkWriter {
    * violation row from being interchangeable at a call site.
    */
   insertViolations(rows: ReadonlyArray<ViolationQueueRow>): Promise<void>;
+  /**
+   * INSERT a batch of profile events into `profile_events_queue`.
+   *
+   * Separate for the same reason as `insertViolations`: the row shape is
+   * different, and typing it separately is what stops an envelope row and
+   * a profile row from being interchangeable at a call site. They were
+   * interchangeable until 2026-08-18, and the compiler had no way to say
+   * so because `insertBatch` took a table name as a string.
+   */
+  insertProfileEvents(rows: ReadonlyArray<ProfileEventQueueRow>): Promise<void>;
   /** Close the underlying connection pool. Idempotent. */
   close(): Promise<void>;
 }
@@ -231,6 +285,30 @@ export function createAnalyticsSinkWriter(
         "inserted analytics batch",
       );
     },
+    async insertProfileEvents(rows): Promise<void> {
+      if (rows.length === 0) return;
+      try {
+        await underlying.insert({
+          table: PROFILE_EVENTS_QUEUE_TABLE,
+          values: rows,
+          format: "JSONEachRow",
+          clickhouse_settings: { date_time_input_format: "best_effort" },
+        });
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "non-Error cause";
+        throw new ClickHouseQueryError(
+          `ClickHouse insert into ${database}.${PROFILE_EVENTS_QUEUE_TABLE} failed (${String(
+            rows.length,
+          )} rows): ${message}`,
+          { cause },
+        );
+      }
+      input.logger?.debug(
+        { component: "clickhouse.sink", table: PROFILE_EVENTS_QUEUE_TABLE, rows: rows.length },
+        "inserted profile event batch",
+      );
+    },
+
     async insertViolations(rows): Promise<void> {
       if (rows.length === 0) return;
       try {

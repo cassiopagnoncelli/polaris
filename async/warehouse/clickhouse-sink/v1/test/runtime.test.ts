@@ -5,6 +5,7 @@ import {
   type AnalyticsSinkWriter,
   buildClickHouseVersion,
   PROFILE_EVENTS_QUEUE_TABLE,
+  type ProfileEventQueueRow,
   type ViolationQueueRow,
 } from "@polaris/shared-clickhouse";
 import {
@@ -79,18 +80,28 @@ function fakeWriter(): {
   batches: AnalyticsQueueRow[][];
   writes: RecordedBatch[];
   violations: ViolationQueueRow[][];
+  profileRows: ProfileEventQueueRow[][];
 } {
   const batches: AnalyticsQueueRow[][] = [];
   const writes: RecordedBatch[] = [];
   const violations: ViolationQueueRow[][] = [];
+  // Captured in their OWN shape. Recording them as AnalyticsQueueRow is how
+  // the previous tests passed against a sink that wrote unusable rows: the
+  // double accepted whatever the sink handed it, and the assertions only
+  // ever read `table`.
+  const profileRows: ProfileEventQueueRow[][] = [];
   return {
     batches,
     writes,
     violations,
+    profileRows,
     writer: {
       async insertBatch(rows, table = ANALYTICS_QUEUE_TABLE) {
         batches.push([...rows]);
         writes.push({ table, rows: [...rows] });
+      },
+      async insertProfileEvents(rows) {
+        profileRows.push([...rows]);
       },
       async insertViolations(rows) {
         violations.push([...rows]);
@@ -279,6 +290,7 @@ describe("clickhouse sink runtime batching", () => {
           };
         });
       },
+      async insertProfileEvents() {},
       async insertViolations() {},
       async close() {},
     };
@@ -303,6 +315,7 @@ describe("clickhouse sink runtime batching", () => {
           });
         }
       },
+      async insertProfileEvents() {},
       async insertViolations() {},
       async close() {},
     };
@@ -480,6 +493,7 @@ describe("derived-event routing", () => {
           expect(await underlying.read("sink", "session.events-1")).toBeUndefined();
         }
       },
+      async insertProfileEvents() {},
       async insertViolations() {},
       async close() {},
     };
@@ -506,6 +520,7 @@ describe("derived-event routing", () => {
         async insertBatch(_rows, table = ANALYTICS_QUEUE_TABLE) {
           if (table === ANALYTICS_PROCESSED_QUEUE_TABLE) throw new Error("clickhouse 503");
         },
+        async insertProfileEvents() {},
         async insertViolations() {},
         async close() {},
       },
@@ -658,6 +673,7 @@ describe("checkpoint safety", () => {
         async insertBatch() {
           throw new Error("clickhouse 503");
         },
+        async insertProfileEvents() {},
         async insertViolations() {},
         async close() {},
       },
@@ -821,12 +837,13 @@ describe("the dual-run: resolved.events alongside analytics.events", () => {
 });
 
 describe("clickhouse sink — profile-plane routing", () => {
+  const PROBE_PROFILE_ID = "01a0155e-2ff0-73c0-b98d-928450ef0b45";
+
   function profilePayload(family: string): TransportMessagePayload {
-    return payload(envelope({ event: "profile.updated" }), {
-      stream: `${family}-0`,
-      family,
-      partition: 0,
-    });
+    return payload(
+      envelope({ event: "profile.updated", profile: { profile_id: PROBE_PROFILE_ID } }),
+      { stream: `${family}-0`, family, partition: 0 },
+    );
   }
 
   it("sends profile.events to its OWN queue, not analytics_processed", async () => {
@@ -834,23 +851,63 @@ describe("clickhouse sink — profile-plane routing", () => {
     // something that HAPPENED, while `profile.updated` records what is now
     // TRUE of a person. Only one of those is current state, and mixing them
     // would force one table to be both a log and a state table.
-    const { writer, writes } = fakeWriter();
+    const { writer, writes, profileRows } = fakeWriter();
     const runtime = runtimeWith(writer, { batchMaxRows: 1 });
     await runtime.handler(profilePayload("profile.events"), {});
 
-    const tables = writes.map((w) => w.table);
-    expect(tables).toContain(PROFILE_EVENTS_QUEUE_TABLE);
-    expect(tables).not.toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+    // It reached the profile writer, and NOT the envelope tables.
+    expect(profileRows.flat()).toHaveLength(1);
+    expect(writes.map((w) => w.table)).not.toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+    expect(writes.map((w) => w.table)).not.toContain(PROFILE_EVENTS_QUEUE_TABLE);
+  });
+
+  it("writes the profile queue's OWN column shape, carrying profile_id", async () => {
+    // The assertion this file was missing. Routing to the right table was
+    // already asserted and already true; the row put there was an
+    // AnalyticsQueueRow, whose keys `profile_events_queue` does not have.
+    // ClickHouse dropped the unknown ones, defaulted `profile_id` to '',
+    // and the materialized view discarded every row on `profile_id != ''`.
+    // Rows consumed, batches inserted, `polaris.profiles` empty.
+    const { writer, profileRows } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(profilePayload("profile.events"), {});
+
+    const row = profileRows.flat()[0];
+    expect(row?.profile_id).toBe(PROBE_PROFILE_ID);
+    // Flat source columns, not the envelope's JSON block.
+    expect(row).toHaveProperty("source_id");
+    expect(row).toHaveProperty("source_type");
+    expect(row).not.toHaveProperty("source");
+    expect(row).not.toHaveProperty("identity");
+    expect(row).not.toHaveProperty("profile");
+  });
+
+  it("skips a profile event whose envelope names no profile", async () => {
+    // The MV drops these anyway, so inserting them would only make the
+    // sink's row counter disagree with the table — which is exactly how
+    // the bug above stayed invisible.
+    const { writer, profileRows } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(
+      payload(envelope({ event: "profile.updated" }), {
+        stream: "profile.events-0",
+        family: "profile.events",
+        partition: 0,
+      }),
+      {},
+    );
+
+    expect(profileRows.flat()).toHaveLength(0);
   });
 
   it("routes an isolated project's profile family too", async () => {
     // Per-project isolation reads `<family>.<project_id>`, which is still
     // the profile plane. The prefix check is what puts an isolated project
     // in the same table as everyone else.
-    const { writer, writes } = fakeWriter();
+    const { writer, profileRows } = fakeWriter();
     const runtime = runtimeWith(writer, { batchMaxRows: 1 });
     await runtime.handler(profilePayload("profile.events.acme"), {});
-    expect(writes.map((w) => w.table)).toContain(PROFILE_EVENTS_QUEUE_TABLE);
+    expect(profileRows.flat()).toHaveLength(1);
   });
 
   it("still routes derived families to analytics_processed", async () => {

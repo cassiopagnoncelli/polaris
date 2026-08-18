@@ -91,6 +91,7 @@ export {
   type CreateAnalyticsSinkWriterInput,
   createAnalyticsSinkWriter,
   PROFILE_EVENTS_QUEUE_TABLE,
+  type ProfileEventQueueRow,
   VIOLATIONS_QUEUE_TABLE,
   type ViolationQueueRow,
 } from "./sink.js";

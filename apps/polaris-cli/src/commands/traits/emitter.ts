@@ -51,6 +51,8 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
     readonly slot: string;
     readonly derivedFrom: string;
     readonly properties: Record<string, unknown>;
+    /** Omitted by `trait.computed`, which is about a definition, not a person. */
+    readonly profileId?: string;
   }): Record<string, unknown> => {
     const at = deps.now().toISOString();
     return {
@@ -67,11 +69,22 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
       occurred_at: at,
       ingested_at: at,
       source: { id: `${PROCESSOR_NAME}-${PROCESSOR_VERSION}`, type: "internal" },
-      // No identity block. A computed trait belongs to a PROFILE, which the
-      // properties name; inventing an identity here would claim the run saw
-      // an identifier it never touched.
+      // No identity block. A computed trait belongs to a PROFILE, and
+      // inventing an anonymous_id or customer_id here would claim the run
+      // saw an identifier it never touched.
       identity: {},
       context: {},
+      // The profile block IS how an envelope names its person, and this
+      // omitted it until 2026-08-18 -- the reasoning above was right about
+      // `identity` and then quietly treated `profile` as the same kind of
+      // claim. It is not: `identity` is what a source observed, `profile`
+      // is what the platform resolved, and a `profile.updated` that names
+      // no profile is not a partial envelope but a meaningless one.
+      //
+      // The cost was total and silent. `profile_events_queue` keys on this
+      // column, the materialized view drops rows where it is empty, and
+      // the properties copy the run also writes is read by nothing.
+      ...(input.profileId === undefined ? {} : { profile: { profile_id: input.profileId } }),
       properties: input.properties,
     };
   };
@@ -87,6 +100,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
           projectId: input.projectId,
           environment: input.environment,
           slot: "profile_updated",
+          profileId: input.profileId,
           // Per profile per run, so a restarted run collapses rather than
           // emitting a second update for the same conclusion.
           derivedFrom: `${input.runId}:${input.profileId}`,
