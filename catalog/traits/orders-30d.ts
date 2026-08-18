@@ -19,6 +19,24 @@
  * SQL is a string, so it type-checks, and the table-name lint passes
  * because the table name was real. `scripts/check-catalog-sql.mjs` now
  * runs every definition against the live schema.
+ *
+ * And it counted `order.completed` until 2026-08-18, which is not an event
+ * this catalog has. The ingester rejects one as `unknown_event`, so the
+ * count was over a name nothing could ever emit and the trait STILL
+ * produced no rows — the same symptom as the projection bug, one layer
+ * out, surviving the fix aimed at it because that fix checked the table.
+ *
+ * `payment.approved` is the revenue event here, deliberately and only:
+ * it is what every destination mapper already reads as its purchase
+ * primitive (Meta `Purchase`, GA4 `purchase`, Braze `purchases`) and it
+ * carries `order_id`. Registering an `order.completed` alongside it would
+ * have given the platform two events meaning "a purchase happened" and
+ * made every consumer choose — the trait was the thing that was wrong,
+ * not the catalog.
+ *
+ * `check-catalog-sql.mjs` now resolves event-name literals against the
+ * registered catalog, because EXPLAIN cannot: `'order.completed'` is a
+ * string, and a string is valid SQL whatever it says.
  */
 
 import { type TraitDefinition, traitDefinitionSchema } from "./types.js";
@@ -38,7 +56,7 @@ export const ordersThirtyDays: TraitDefinition = traitDefinitionSchema.parse({
     FROM polaris.profile_event_daily_counts
     WHERE project_id = {project:String}
       AND environment = {environment:String}
-      AND event = 'order.completed'
+      AND event = 'payment.approved'
       AND occurred_date >= today() - 30
     GROUP BY profile_id
     HAVING value > 0

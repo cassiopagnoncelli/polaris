@@ -46,7 +46,18 @@ export const ltvWriteback: ReverseEtlJob = {
       FROM polaris.profile_event_daily_counts
       WHERE project_id = {project:String}
         AND environment = {environment:String}
-        AND event = 'order.completed'
+        -- payment.approved, not order.completed: this counted the latter
+        -- until 2026-08-18, and the catalog has no such event, so the
+        -- ingester rejected every one as unknown_event and this writeback
+        -- pushed a lifetime order count of nothing to every warehouse row
+        -- it touched. Same defect as orders_30d, found by the same lint on
+        -- the same day.
+        --
+        -- (No backticks in here. This is inside a template literal, so one
+        -- would end the string -- which is how this comment was written
+        -- the first time, and the third time that mistake has been made in
+        -- this repo.)
+        AND event = 'payment.approved'
         AND customer_id != ''
       GROUP BY customer_id
       HAVING lifetime_orders > 0

@@ -84,7 +84,79 @@ export function tablesReferenced(sql) {
 }
 
 /** Problems in one definition file's contents. */
-export function findTraitSqlProblems(contents, file) {
+/**
+ * Event names the catalog registers.
+ *
+ * Read from `catalog/events/**.yaml` rather than a list here, so an event
+ * added or retired moves this check with it. The ingester rejects anything
+ * absent from the catalog as `unknown_event`, which is the contract this
+ * borrows: if the platform will not accept the event, a definition
+ * counting it counts nothing.
+ */
+export function registeredEventNames(root) {
+  const names = new Set();
+  // NOT `walk`, which collects `.ts` and skips everything else -- the
+  // catalog's event entries are YAML. Using it returned an empty set, and
+  // the check then flagged every definition including the correct ones.
+  // Failing closed was the right direction, but see the throw below: an
+  // empty set is a broken check, not a catalog with no events.
+  const files = [];
+  const descend = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (SKIP_DIRS.has(entry) || entry.startsWith(".")) continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) descend(full);
+      else if (full.endsWith(".yaml") || full.endsWith(".yml")) files.push(full);
+    }
+  };
+  descend(join(root, "catalog", "events"));
+
+  for (const file of files) {
+    // `name: checkout.started` at column zero. The catalog entries are
+    // flat maps and `name` appears once; a YAML parser here would be a
+    // dependency for one field.
+    const match = /^name:\s*(\S+)\s*$/m.exec(readFileSync(file, "utf8"));
+    if (match?.[1] !== undefined) names.add(match[1]);
+  }
+
+  // A check that reads no events would flag every definition, which reads
+  // as a catalog full of bugs rather than as a check pointed at the wrong
+  // directory. That is how this was written the first time.
+  if (names.size === 0) {
+    throw new Error(
+      `trait-sql check: no registered events found under ${join(root, "catalog", "events")}. ` +
+        "The check reads `name:` from the event YAML; if the catalog moved, move this with it.",
+    );
+  }
+  return names;
+}
+
+/**
+ * Event-name literals a definition filters on.
+ *
+ * `event = 'x'`, `event IN ('x', 'y')`. Only the `event` column, because
+ * that is the one whose values are a closed set the catalog owns.
+ */
+export function eventLiteralsReferenced(sql) {
+  const out = new Set();
+  for (const match of sql.matchAll(/\bevent\s*=\s*'([^']*)'/gi)) {
+    if (match[1] !== undefined) out.add(match[1]);
+  }
+  for (const match of sql.matchAll(/\bevent\s+in\s*\(([^)]*)\)/gi)) {
+    for (const literal of (match[1] ?? "").matchAll(/'([^']*)'/g)) {
+      if (literal[1] !== undefined) out.add(literal[1]);
+    }
+  }
+  return out;
+}
+
+export function findTraitSqlProblems(contents, file, knownEvents) {
   const problems = [];
   for (const table of tablesReferenced(stripComments(contents))) {
     if (FORBIDDEN_TABLES.includes(table)) {
@@ -105,6 +177,29 @@ export function findTraitSqlProblems(contents, file) {
         reason:
           `reads \`${table}\`, which is not an allowed projection. Allowed: ` +
           `${ALLOWED_TABLES.join(", ")}`,
+      });
+    }
+  }
+
+  // Event names are a closed set the catalog owns, and EXPLAIN cannot see
+  // this: `'order.completed'` is a string, and a string is valid SQL
+  // whatever it says. `orders_30d` counted exactly that for a day -- an
+  // event the ingester rejects as `unknown_event`, so the trait produced
+  // no rows, the `recent_purchasers` audience reading it had no members,
+  // and Braze received nothing. Every layer was individually correct.
+  //
+  // Skipped when the caller passes no set, so the exported helper stays
+  // usable in unit tests that check only table rules.
+  if (knownEvents !== undefined) {
+    for (const event of eventLiteralsReferenced(stripComments(contents))) {
+      if (knownEvents.has(event)) continue;
+      problems.push({
+        file,
+        table: event,
+        reason:
+          `filters on event \`${event}\`, which the catalog does not register. The ingester ` +
+          "rejects it as `unknown_event`, so this definition counts a name nothing can emit. " +
+          "Use a registered event, or register this one under catalog/events/",
       });
     }
   }
@@ -140,14 +235,17 @@ function main() {
   for (const catalogDir of SCANNED_CATALOG_DIRS) {
     files.push(...walk(join(root, "catalog", catalogDir)));
   }
+  const knownEvents = registeredEventNames(root);
   const problems = [];
   for (const file of files) {
-    problems.push(...findTraitSqlProblems(readFileSync(file, "utf8"), relative(root, file)));
+    problems.push(
+      ...findTraitSqlProblems(readFileSync(file, "utf8"), relative(root, file), knownEvents),
+    );
   }
 
   if (problems.length > 0) {
-    console.error(`trait-sql check: ${String(problems.length)} definition(s) read a table they`);
-    console.error("must not. These run on a cron against a shared cluster.\n");
+    console.error(`trait-sql check: ${String(problems.length)} definition(s) read a table or an`);
+    console.error("event they must not. These run on a cron against a shared cluster.\n");
     for (const problem of problems) {
       console.error(`  ${problem.file}  ${problem.reason}`);
     }
@@ -155,7 +253,8 @@ function main() {
     return;
   }
   console.log(
-    `trait-sql check: ${String(files.length)} definition(s) read only allowed projections.`,
+    `trait-sql check: ${String(files.length)} definition(s) read only allowed projections ` +
+      `and registered events.`,
   );
 }
 

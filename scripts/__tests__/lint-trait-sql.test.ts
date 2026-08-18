@@ -19,7 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import {
   ALLOWED_TABLES,
+  eventLiteralsReferenced,
   findTraitSqlProblems,
+  registeredEventNames,
   SCANNED_CATALOG_DIRS,
   stripComments,
   tablesReferenced,
@@ -133,5 +135,90 @@ describe("the allowlist mirrors the catalog", () => {
     const declared = [...block.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
 
     expect([...ALLOWED_TABLES].sort()).toEqual([...declared].sort());
+  });
+});
+
+/**
+ * Event names are a closed set, and only this check enforces it.
+ *
+ * `orders_30d` counted `order.completed` and the reverse-ETL writeback
+ * counted it too. The catalog has no such event, so the ingester rejects
+ * one as `unknown_event` — both definitions aggregated a name nothing
+ * could emit, produced no rows, and left the `recent_purchasers` audience
+ * empty and Braze idle. Every layer in isolation was correct.
+ *
+ * Neither the table lint nor `check-catalog-sql.mjs` could see it: the
+ * table was real, the columns were real, and `'order.completed'` is a
+ * string. EXPLAIN validates the shape of a query, never the meaning of
+ * its constants.
+ */
+describe("event-name literals", () => {
+  const KNOWN = new Set(["payment.approved", "checkout.started"]);
+
+  it("flags an event the catalog does not register", () => {
+    const problems = findTraitSqlProblems(
+      "const t = `SELECT profile_id FROM polaris.profile_event_daily_counts " +
+        "WHERE event = 'order.completed'`;",
+      "t.ts",
+      KNOWN,
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.reason).toMatch(/does not register/);
+  });
+
+  it("accepts a registered one", () => {
+    expect(
+      findTraitSqlProblems(
+        "const t = `SELECT profile_id FROM polaris.profile_event_daily_counts " +
+          "WHERE event = 'payment.approved'`;",
+        "t.ts",
+        KNOWN,
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads IN lists, not just equality", () => {
+    const problems = findTraitSqlProblems(
+      "const t = `SELECT profile_id FROM polaris.profile_event_daily_counts " +
+        "WHERE event IN ('payment.approved', 'order.completed')`;",
+      "t.ts",
+      KNOWN,
+    );
+    expect(problems.map((p) => p.table)).toEqual(["order.completed"]);
+  });
+
+  it("extracts both literal forms", () => {
+    expect([...eventLiteralsReferenced("WHERE event = 'a' OR event IN ('b','c')")].sort()).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("checks nothing when the caller passes no set", () => {
+    // The table rules stay usable on their own; only `main` has a catalog
+    // to read from.
+    expect(
+      findTraitSqlProblems(
+        "const t = `SELECT x FROM polaris.profile_event_daily_counts WHERE event = 'nope'`;",
+        "t.ts",
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads the real catalog, and refuses to pass on an empty one", () => {
+    // The first version called `walk`, which collects `.ts` and skips
+    // YAML — so it read zero events and flagged every definition in the
+    // repo, including the correct ones. Failing closed was right; failing
+    // SILENTLY closed was not, because it reads as a catalog full of bugs
+    // rather than a check pointed at the wrong directory.
+    const real = registeredEventNames(resolve(__dirname, "..", ".."));
+    expect(real.has("payment.approved")).toBe(true);
+    expect(real.has("checkout.started")).toBe(true);
+    expect(real.has("order.completed")).toBe(false);
+
+    expect(() => registeredEventNames(mkdtempSync(join(tmpdir(), "empty-")))).toThrow(
+      /no registered events/,
+    );
   });
 });
