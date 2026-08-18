@@ -12,7 +12,7 @@
 #   polaris-rabbitmq.json     — native broker metrics + publish-fail proxy
 #   polaris-processors.json   — per-processor consumed/emitted/failed/DLQ
 #   polaris-destinations.json — per-vendor delivery success/failure
-#   polaris-clickhouse.json   — analytics-projector proxy + escape-hatch audit
+#   polaris-clickhouse.json   — sink lag/INSERT failures + escape-hatch audit
 #
 # Plus the per-project topic-isolation dashboards from P11-008.
 # See docs/operations/dashboards.md for the panel inventory and gap list.

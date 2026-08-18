@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Polaris processors v1: per-processor consumed/emitted/failed/retry/DLQ rates and observed lag. Panels reference `polaris_processor_*` metrics defined in packages/shared-processor/src/metrics.ts. The $processor_name variable picks one of the five processors (analytics-projector, identity-resolver, sessionizer, geoip-enricher, attribution-engine).",
+  "description": "Polaris processors: per-processor consumed/emitted/failed/retry/DLQ rates and observed lag. Panels reference `polaris_processor_*` metrics defined in packages/shared-processor/src/metrics.ts. The $processor_name variable picks one of the live processors (sync-identity-resolver, sync-enrichment-runtime, sessionizer, attribution-engine, merge-worker).",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -36,7 +36,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. The v1 scrape config (`infra/prometheus/prometheus.yml`) lists `analytics-projector` explicitly; future processors join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `analytics-projector`, `identity-resolver`, `sessionizer`, `geoip-enricher`, `attribution-engine`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels \u2014 feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `processor_dlq_records` table directly via the DLQ triage runbook (P10-006).",
+        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. Each processor gets an explicit job in `infra/prometheus/prometheus.yml`; new ones join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `sync-identity-resolver`, `sync-enrichment-runtime`, `sessionizer`, `attribution-engine`, `merge-worker`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels \u2014 feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `processor_dlq_records` table directly via the DLQ triage runbook (P10-006).",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -73,7 +73,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -125,7 +128,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -180,7 +186,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -232,7 +241,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -293,7 +305,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["max", "lastNotNull"]
+          "calcs": [
+            "max",
+            "lastNotNull"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -345,7 +360,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["max", "lastNotNull"]
+          "calcs": [
+            "max",
+            "lastNotNull"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -411,7 +429,9 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -463,7 +483,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -524,7 +547,10 @@
         "legend": {
           "displayMode": "table",
           "placement": "right",
-          "calcs": ["mean", "max"]
+          "calcs": [
+            "mean",
+            "max"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -558,7 +584,10 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["polaris", "processors"],
+  "tags": [
+    "polaris",
+    "processors"
+  ],
   "templating": {
     "list": [
       {
@@ -606,42 +635,39 @@
         },
         "options": [
           {
-            "text": "All",
-            "value": ".*",
-            "selected": true
+            "selected": true,
+            "text": ".*",
+            "value": ".*"
           },
           {
-            "text": "analytics-projector",
-            "value": "analytics-projector"
-          },
-          {
-            "text": "identity-resolver",
-            "value": "identity-resolver"
-          },
-          {
-            "text": "sessionizer",
-            "value": "sessionizer"
-          },
-          {
-            "text": "geoip-enricher",
-            "value": "geoip-enricher"
-          },
-          {
-            "text": "attribution-engine",
-            "value": "attribution-engine"
-          },
-          {
+            "selected": false,
             "text": "sync-identity-resolver",
             "value": "sync-identity-resolver"
           },
           {
+            "selected": false,
             "text": "sync-enrichment-runtime",
             "value": "sync-enrichment-runtime"
+          },
+          {
+            "selected": false,
+            "text": "sessionizer",
+            "value": "sessionizer"
+          },
+          {
+            "selected": false,
+            "text": "attribution-engine",
+            "value": "attribution-engine"
+          },
+          {
+            "selected": false,
+            "text": "merge-worker",
+            "value": "merge-worker"
           }
         ],
         "label": "Processor",
         "name": "processor_name",
-        "query": ".*,analytics-projector,identity-resolver,sessionizer,geoip-enricher,attribution-engine,sync-identity-resolver,sync-enrichment-runtime",
+        "query": ".*,sync-identity-resolver,sync-enrichment-runtime,sessionizer,attribution-engine,merge-worker",
         "type": "custom",
         "includeAll": false
       }

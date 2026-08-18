@@ -9,11 +9,7 @@ next to each service:
 | `ingester-api`                           | `apps/ingester-api/Dockerfile`                        | `polaris/ingester-api`                           | 4000 |
 | `control-plane-api`                      | `apps/control-plane-api/Dockerfile`                   | `polaris/control-plane-api`                      | 4001 |
 | `polaris-cli`                            | `apps/polaris-cli/Dockerfile`                         | `polaris/polaris-cli`                            | —    |
-| `analytics-projector v1`                 | `sync/legacy/analytics-projector/v1/Dockerfile`        | `polaris/processor-analytics-projector-v1`       | 4010 |
-| `identity-resolver v1`                   | `sync/legacy/identity-resolver/v1/Dockerfile`          | `polaris/processor-identity-resolver-v1`         | 4011 |
 | `sessionizer v1`                         | `async/computation/sessionizer/v1/Dockerfile`                | `polaris/processor-sessionizer-v1`               | 4012 |
-| `geoip-enricher v1`                      | `sync/legacy/geoip-enricher/v1/Dockerfile`             | `polaris/processor-geoip-enricher-v1`            | 4013 |
-| `attribution-engine v1`                  | `async/computation/attribution-engine/v1/Dockerfile`         | `polaris/processor-attribution-engine-v1`        | 4014 |
 | `sync-enrichment runtime v1`             | `sync/enrichment/runtime/v1/Dockerfile`               | `polaris/sync-enrichment-runtime-v1`             | 4015 |
 | `clickhouse-sink v1`                     | `async/warehouse/clickhouse-sink/v1/Dockerfile`       | `polaris/consumer-clickhouse-sink-v1`            | 4016 |
 | `sessionizer v2`                         | `async/computation/sessionizer/v2/Dockerfile`         | `polaris/processor-sessionizer-v2`               | 4017 |
@@ -289,4 +285,5 @@ find apps processors consumers -name Dockerfile -print0 \
 ## Known gaps
 
 - **GeoIP `.mmdb`** files are mounted at runtime, not baked into the image.
-  See `sync/legacy/geoip-enricher/v1/Dockerfile` and the operator runbook.
+  The geo enricher is composed into `sync/enrichment/runtime/v1`; see its
+  Dockerfile and the operator runbook.

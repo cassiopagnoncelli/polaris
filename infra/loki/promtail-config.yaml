@@ -98,7 +98,7 @@ scrape_configs:
             values: ["com.docker.compose.project=polaris"]
 
     relabel_configs:
-      # The compose service name (`ingester-api`, `analytics-projector`,
+      # The compose service name (`ingester-api`, `sync-identity`,
       # `rabbitmq`, ...) becomes the `service` label. This matches the
       # `service` binding emitted by @polaris/shared-logger so logs
       # from JSON-aware services line up with logs from infrastructure
