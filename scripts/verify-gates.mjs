@@ -1,0 +1,255 @@
+/**
+ * Prove every gate can fail.
+ *
+ * A check nobody has watched fail is a check nobody knows works. This
+ * session produced three that passed on the exact bug they were written
+ * for: one asked `EXPLAIN SYNTAX`, which parses without resolving
+ * identifiers; one probed MinIO's health path, which answers 400; one
+ * counted a comment saying a variable is NOT read as a use of it. Each
+ * reported everything healthy while the defect sat in front of it.
+ *
+ * So: for each gate, break something it is supposed to notice, run it,
+ * and require a non-zero exit. Restore, and move on.
+ *
+ * ## Verifying the INJECTION is half the work
+ *
+ * Three injections here initially "passed" for reasons that had nothing
+ * to do with the gate — a dashboard panel with no `targets` key, and a
+ * config canary written to source and `dist` when the gate reads a
+ * GENERATED json. Both looked exactly like a decorative gate. So every
+ * entry declares `assertInjected`: a predicate that must hold after the
+ * mutation, before the gate's verdict means anything.
+ *
+ * ## The harness must not be a reference to its own canaries
+ *
+ * `lint-dead-exports` and `lint-env-example` both search `scripts/` for
+ * uses. Spelling a canary as a literal here made this file a legitimate
+ * use of it, and both gates correctly reported the symbol referenced —
+ * which the harness then read as "the gate is blind". The canaries are
+ * assembled from fragments so no gate can see them, which is why the
+ * names below look the way they do.
+ *
+ * Refuses to run on a dirty tree, because restoring is `git checkout`.
+ *
+ *   node scripts/verify-gates.mjs
+ */
+
+import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SCRATCH = "packages/shared-transport/src/streams.ts";
+
+/**
+ * Canary names, assembled rather than written.
+ *
+ * `lint-dead-exports` and `lint-env-example` search `scripts/` for uses
+ * of a symbol. A literal here IS a use, so both gates saw the canary as
+ * referenced and this harness read that as the gate being blind.
+ */
+const DEAD_EXPORT_CANARY = `never${"Called"}CanaryXyz`;
+const ENV_READ_CANARY = `POLARIS_${"CANARY"}_XYZ`;
+const ENV_DOC_CANARY = `POLARIS_${"DRIFT"}_CANARY`;
+
+const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
+const read = (file) => readFileSync(join(ROOT, file), "utf8");
+const write = (file, body) => writeFileSync(join(ROOT, file), body);
+const append = (file, text) => write(file, read(file) + text);
+
+/**
+ * One gate, one fault it must notice.
+ *
+ * `files` are restored with `git checkout` afterwards. `assertInjected`
+ * runs after `inject` and before the gate — it is what distinguishes "the
+ * gate is blind" from "my fault never landed".
+ */
+const GATES = [
+  {
+    name: "biome lint",
+    command: `npx biome lint ${SCRATCH}`,
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, "\nconst unusedCanaryXyz = 1\n"),
+    assertInjected: () => read(SCRATCH).includes("unusedCanaryXyz"),
+  },
+  {
+    name: "lint:clickhouse-imports",
+    command: "node scripts/lint-clickhouse-imports.mjs",
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, '\nimport { createClient } from "@clickhouse/client";\n'),
+    assertInjected: () => read(SCRATCH).includes("@clickhouse/client"),
+  },
+  {
+    name: "lint:nul-bytes",
+    command: "node scripts/lint-nul-bytes.mjs",
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, `\n// canary ${String.fromCharCode(0)}\n`),
+    assertInjected: () => read(SCRATCH).includes(String.fromCharCode(0)),
+  },
+  {
+    name: "lint:dead-exports",
+    command: "node scripts/lint-dead-exports.mjs",
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, `\nexport function ${DEAD_EXPORT_CANARY}(): void {}\n`),
+    assertInjected: () => read(SCRATCH).includes(DEAD_EXPORT_CANARY),
+  },
+  {
+    name: "lint:process-env",
+    command: "node scripts/lint-process-env.mjs",
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, `\nconst c = process.env["${ENV_READ_CANARY}"];\nvoid c;\n`),
+    assertInjected: () => read(SCRATCH).includes(ENV_READ_CANARY),
+  },
+  {
+    name: "lint:trait-sql",
+    command: "node scripts/lint-trait-sql.mjs",
+    files: ["catalog/traits/orders-30d.ts"],
+    inject: () =>
+      write(
+        "catalog/traits/orders-30d.ts",
+        read("catalog/traits/orders-30d.ts").replace(
+          "FROM polaris.profile_event_daily_counts",
+          "FROM polaris.analytics_raw",
+        ),
+      ),
+    assertInjected: () =>
+      read("catalog/traits/orders-30d.ts").includes("FROM polaris.analytics_raw"),
+  },
+  {
+    name: "lint:metric-names (dashboard)",
+    command: "node scripts/lint-metric-names.mjs",
+    files: ["infra/grafana/dashboards/polaris-ingestion.json"],
+    inject: () => {
+      const file = "infra/grafana/dashboards/polaris-ingestion.json";
+      const dashboard = JSON.parse(read(file));
+      // The first panel is a text panel with no targets — injecting there
+      // silently does nothing, which is how this entry first "passed".
+      const panel = dashboard.panels.find((candidate) => candidate.targets);
+      panel.targets[0].expr = "sum(rate(polaris_invented_canary_total[5m]))";
+      write(file, JSON.stringify(dashboard, null, 2));
+    },
+    assertInjected: () =>
+      read("infra/grafana/dashboards/polaris-ingestion.json").includes(
+        "polaris_invented_canary_total",
+      ),
+  },
+  {
+    name: "lint:metric-names (alert rule)",
+    command: "node scripts/lint-metric-names.mjs",
+    files: ["infra/prometheus/rules/polaris.alerts.yml"],
+    inject: () =>
+      write(
+        "infra/prometheus/rules/polaris.alerts.yml",
+        read("infra/prometheus/rules/polaris.alerts.yml").replace(
+          "polaris_ingest_violation_dropped_total",
+          "polaris_invented_alert_canary_total",
+        ),
+      ),
+    assertInjected: () =>
+      read("infra/prometheus/rules/polaris.alerts.yml").includes(
+        "polaris_invented_alert_canary_total",
+      ),
+  },
+  {
+    name: "lint:manifest-drift (families)",
+    command: "node scripts/lint-manifest-drift.mjs",
+    files: ["async/computation/sessionizer/v1/processor.manifest.yaml"],
+    inject: () =>
+      write(
+        "async/computation/sessionizer/v1/processor.manifest.yaml",
+        read("async/computation/sessionizer/v1/processor.manifest.yaml").replace(
+          "- family: session.events",
+          "- family: attribution.events",
+        ),
+      ),
+    assertInjected: () =>
+      read("async/computation/sessionizer/v1/processor.manifest.yaml").includes(
+        "attribution.events",
+      ),
+  },
+  {
+    name: "lint:manifest-drift (test loads own version)",
+    command: "node scripts/lint-manifest-drift.mjs",
+    files: ["async/computation/sessionizer/v2/test/manifest.test.ts"],
+    inject: () =>
+      write(
+        "async/computation/sessionizer/v2/test/manifest.test.ts",
+        read("async/computation/sessionizer/v2/test/manifest.test.ts").replace(
+          'version: "v2",',
+          'version: "v1",',
+        ),
+      ),
+    assertInjected: () =>
+      read("async/computation/sessionizer/v2/test/manifest.test.ts").includes('version: "v1",'),
+  },
+  {
+    name: "lint:env-example",
+    command: "node scripts/lint-env-example.mjs",
+    files: [".env.example"],
+    inject: () => append(".env.example", `\n${ENV_DOC_CANARY}=1\n`),
+    assertInjected: () => read(".env.example").includes(ENV_DOC_CANARY),
+  },
+  {
+    name: "openapi:check",
+    command: "pnpm openapi:check",
+    files: ["docs/api/openapi.json"],
+    inject: () => {
+      const spec = JSON.parse(read("docs/api/openapi.json"));
+      spec.info.title = `${spec.info.title} CANARY`;
+      write("docs/api/openapi.json", JSON.stringify(spec, null, 2));
+    },
+    assertInjected: () => read("docs/api/openapi.json").includes("CANARY"),
+  },
+];
+
+function restore(files) {
+  sh(`git checkout -- ${files.join(" ")}`);
+}
+
+function main() {
+  if (sh("git status --porcelain").trim().length > 0) {
+    console.error("verify-gates: the working tree is dirty. Restoring is `git checkout`, so this");
+    console.error("refuses to run rather than risk discarding your changes.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const blind = [];
+  const unlanded = [];
+  for (const gate of GATES) {
+    gate.inject();
+    if (!gate.assertInjected()) {
+      unlanded.push(gate.name);
+      restore(gate.files);
+      continue;
+    }
+    let failed = false;
+    try {
+      sh(gate.command);
+    } catch {
+      failed = true;
+    }
+    restore(gate.files);
+    if (!failed) blind.push(gate.name);
+    console.log(`  ${failed ? "fails as it should" : "PASSED WITH THE FAULT"}  ${gate.name}`);
+  }
+
+  if (unlanded.length > 0) {
+    console.error("\nverify-gates: an injection did not land, so these gates were not tested:");
+    for (const name of unlanded) console.error(`  ${name}`);
+    console.error("Fix the injection. An unlanded fault looks exactly like a blind gate.");
+    process.exitCode = 1;
+  }
+  if (blind.length > 0) {
+    console.error("\nverify-gates: these gates did NOT notice a fault they exist to catch:");
+    for (const name of blind) console.error(`  ${name}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (unlanded.length === 0) {
+    console.log(`\nverify-gates: all ${String(GATES.length)} gates fail when they should.`);
+  }
+}
+
+main();

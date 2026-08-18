@@ -60,7 +60,8 @@
     "lint:metric-names": "node scripts/lint-metric-names.mjs",
     "check:catalog-sql": "node scripts/check-catalog-sql.mjs",
     "lint:manifest-drift": "node scripts/lint-manifest-drift.mjs",
-    "lint:env-example": "node scripts/lint-env-example.mjs"
+    "lint:env-example": "node scripts/lint-env-example.mjs",
+    "verify:gates": "node scripts/verify-gates.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
