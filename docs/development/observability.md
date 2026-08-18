@@ -115,17 +115,40 @@ not break anything, and the collector ignores empty intake.
 Prometheus scrapes are driven by [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml).
 The local scrape config points at:
 
-| Job                              | Target                              | Source                                                                 |
-| -------------------------------- | ----------------------------------- | ---------------------------------------------------------------------- |
-| `prometheus`                     | `localhost:9090`                    | Prometheus itself (self-scrape).                                       |
-| `polaris-ingester`               | `host.docker.internal:8080/metrics` | Ingester API — `apps/ingester-api/src/metrics/registry.ts`.            |
-| `polaris-sync-identity`          | `host.docker.internal:8081/metrics` | Identity stage    tor — `packages/shared-processor/src/metrics.ts`.       |
-| `polaris-rabbitmq`               | `polaris-rabbitmq:9644/public_metrics` | RabbitMQ admin API (Prometheus-shape).                              |
-| `polaris-otel-collector`         | `otel-collector:8889/metrics`       | Collector self-metrics.                                                |
+| Job                          | Target                                  | Source                                                        |
+| ---------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `prometheus`                 | `localhost:9090`                        | Prometheus itself (self-scrape).                              |
+| `polaris-ingester`           | `host.docker.internal:8080/metrics`     | `apps/ingester-api/src/metrics/registry.ts`.                  |
+| `polaris-control-plane-api`  | `host.docker.internal:4001/metrics`     | Operator-gate counters.                                       |
+| `polaris-sync-identity`      | `host.docker.internal:4018/metrics`     | `packages/shared-processor/src/metrics.ts`.                   |
+| `polaris-sync-enrichment`    | `host.docker.internal:4015/metrics`     | Same.                                                         |
+| `polaris-sessionizer`        | `host.docker.internal:4012/metrics`     | Same.                                                         |
+| `polaris-sessionizer-v2`     | `host.docker.internal:4017/metrics`     | Same.                                                         |
+| `polaris-attribution-engine-v3` | `host.docker.internal:4020/metrics`  | Same.                                                         |
+| `polaris-merge-worker`       | `host.docker.internal:4021/metrics`     | Same.                                                         |
+| `polaris-clickhouse-sink`    | `host.docker.internal:4016/metrics`     | `async/warehouse/clickhouse-sink/v1/src/metrics.ts`.          |
+| `polaris-webhook-sink`       | `host.docker.internal:4030/metrics`     | `packages/shared-destinations/src/metrics.ts`.                |
+| `polaris-meta-capi`          | `host.docker.internal:4031/metrics`     | Same.                                                         |
+| `polaris-tiktok`             | `host.docker.internal:4032/metrics`     | Same.                                                         |
+| `polaris-ga4`                | `host.docker.internal:4033/metrics`     | Same.                                                         |
+| `polaris-braze`              | `host.docker.internal:4034/metrics`     | Same.                                                         |
+| `polaris-rabbitmq`           | `polaris-rabbitmq:15692`                | RabbitMQ's Prometheus plugin.                                 |
+| `polaris-otel-collector`     | `otel-collector:8889/metrics`           | Collector self-metrics.                                       |
+
+This table and `prometheus.yml` are the only places the local-dev ports are
+written down, so they are the de-facto port registry. Keep them in step.
+
+**A scrape job is load-bearing, not decoration.** `clickhouse-sink` and all
+five destinations exposed `/metrics` with no job here until 2026-08-18,
+which made nine of twenty alerts unfireable — the metric existed, the
+service served it, and nothing collected it.
+`scripts/__tests__/alert-reachability.test.ts` now walks
+alert → recording rule → metric family → emitting service → scrape job and
+fails when any link is missing.
 
 `host.docker.internal` resolves to the host machine from inside the
-compose network. The Polaris service ports (`8080`, `8081`) are the
-local-dev defaults from [Getting Started](./getting-started.md). If
+compose network. The Polaris service ports above are the local-dev
+defaults from [Getting Started](./getting-started.md). If
 you run a service on a different port, edit the scrape config and
 restart Prometheus, or use the runtime reload endpoint:
 

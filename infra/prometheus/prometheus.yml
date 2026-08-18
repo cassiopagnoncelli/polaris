@@ -174,6 +174,79 @@ scrape_configs:
   # See:
   #   https://www.rabbitmq.com/docs/prometheus
   # ---------------------------------------------------------------
+
+  # ---------------------------------------------------------------
+  # Services that emit metrics an alert reads. Absent until 2026-08-18,
+  # which made nine of twenty alerts unfireable: the metric existed, the
+  # service exposed it, and nothing collected it. The metric-name lint
+  # checks that a NAME has a source; it cannot see that the source is
+  # never scraped.
+  #
+  # Ports continue this file's own numbering, which is the only place
+  # they are written down. `docs/development/observability.md` carries the
+  # same table.
+  # ---------------------------------------------------------------
+  - job_name: polaris-clickhouse-sink
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4016"]
+        labels:
+          polaris_service: clickhouse-sink
+          polaris_component: consumer
+
+  - job_name: polaris-control-plane-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4001"]
+        labels:
+          polaris_service: control-plane-api
+          polaris_component: api
+
+  - job_name: polaris-webhook-sink
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4030"]
+        labels:
+          polaris_service: webhook-sink
+          polaris_vendor: webhook-sink
+          polaris_component: destination
+
+  - job_name: polaris-meta-capi
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4031"]
+        labels:
+          polaris_service: meta-capi
+          polaris_vendor: meta-capi
+          polaris_component: destination
+
+  - job_name: polaris-tiktok
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4032"]
+        labels:
+          polaris_service: tiktok
+          polaris_vendor: tiktok
+          polaris_component: destination
+
+  - job_name: polaris-ga4
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4033"]
+        labels:
+          polaris_service: ga4
+          polaris_vendor: ga4
+          polaris_component: destination
+
+  - job_name: polaris-braze
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4034"]
+        labels:
+          polaris_service: braze
+          polaris_vendor: braze
+          polaris_component: destination
+
   - job_name: polaris-rabbitmq
     metrics_path: /metrics/detailed
     params:
