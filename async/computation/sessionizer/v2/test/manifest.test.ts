@@ -16,16 +16,21 @@ const __filename = fileURLToPath(import.meta.url);
 const PROCESSOR_DIR = resolve(dirname(__filename), "..");
 const REPO_ROOT = resolve(PROCESSOR_DIR, "..", "..", "..", "..");
 
-describe("sessionizer v1 manifest", () => {
+describe("sessionizer v2 manifest", () => {
+  // v2, not v1. This file was copied from v1 and kept its version
+  // argument, so it asserted v1's manifest twice and v2's never — while
+  // reading, from its own directory, like coverage. That is why its
+  // assertions below could claim `raw.events` and `memory:sessions` and
+  // still pass: they were true of the file it was loading.
   const loaded = loadProcessorManifest({
     root: REPO_ROOT,
     name: "sessionizer",
-    version: "v1",
+    version: "v2",
   });
 
   it("carries the expected identity fields", () => {
     expect(loaded.manifest.name).toBe("sessionizer");
-    expect(loaded.manifest.version).toBe("v1");
+    expect(loaded.manifest.version).toBe("v2");
     expect(loaded.manifest.owner).toBe("platform-data");
   });
 
@@ -37,13 +42,15 @@ describe("sessionizer v1 manifest", () => {
     expect(loaded.manifest.mode).toBe("streaming");
   });
 
-  it("consumes raw.events and emits session.events", () => {
-    expect(loaded.manifest.inputs).toEqual([{ family: "raw.events", schema_versions: "*" }]);
+  it("consumes RESOLVED.events and emits session.events", () => {
+    // The whole difference from v1: v2 keys sessions on the person the
+    // spine resolved, so it reads the spine's output.
+    expect(loaded.manifest.inputs).toEqual([{ family: "resolved.events", schema_versions: "*" }]);
     expect(loaded.manifest.outputs).toEqual([{ family: "session.events", schema_versions: [1] }]);
   });
 
-  it("declares the in-memory sessions state store", () => {
-    expect(loaded.manifest.state_stores).toContain("memory:sessions");
+  it("declares the REDIS sessions state store", () => {
+    expect(loaded.manifest.state_stores).toContain("redis:sessions");
   });
 
   it("declares the semantic inactivity window in defaults", () => {

@@ -73,7 +73,12 @@ outputs:
 
 # State stores this processor uses.
 state_stores:
-  - memory:sessions
+  # Redis, not memory. This said `memory:sessions` from the day it shipped
+  # while the code read `redisEnvSchema` and wrote to Redis — the manifest
+  # is the artifact an operator consults to know what a processor needs
+  # running, and this one said "nothing". v2's manifest already recorded
+  # the correction; v1's kept the lie because nothing read either.
+  - redis:sessions
 
 # Operational defaults the runtime helpers fall back to when no
 # PostgreSQL activation row overrides them. Non-semantic per the

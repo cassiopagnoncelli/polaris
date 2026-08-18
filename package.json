@@ -12,7 +12,7 @@
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && pnpm -r --if-present run typecheck",
-    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql",
+    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql && pnpm lint:manifest-drift",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
     "lint:nul-bytes": "node scripts/lint-nul-bytes.mjs",
@@ -58,7 +58,8 @@
     "lint:project-config-keys": "node scripts/lint-project-config-keys.mjs",
     "lint:trait-sql": "node scripts/lint-trait-sql.mjs",
     "lint:metric-names": "node scripts/lint-metric-names.mjs",
-    "check:catalog-sql": "node scripts/check-catalog-sql.mjs"
+    "check:catalog-sql": "node scripts/check-catalog-sql.mjs",
+    "lint:manifest-drift": "node scripts/lint-manifest-drift.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

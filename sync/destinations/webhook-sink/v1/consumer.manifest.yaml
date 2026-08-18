@@ -34,6 +34,20 @@ outputs:
   # the destination runtime; that's not an emitted event topic.
   []
 
+# State stores this consumer uses.
+#
+# Redis-backed, with an in-memory fallback when Redis is absent
+# (packages/shared-destinations/src/redis-bootstrap.ts). Declared anyway,
+# and this is the point of declaring: the fallback is per-process, so a
+# deployment running three replicas without Redis dedupes and rate-limits
+# three times independently — correct-looking in one pod and wrong in
+# aggregate. An operator reading this manifest should know Redis belongs
+# in the deployment even though its absence does not crash anything.
+state_stores:
+  - redis:delivery_dedupe
+  - redis:rate_limit
+  - redis:circuit_breaker
+
 mode: streaming
 
 # Per-stage versions stamped onto every delivery_records row. A

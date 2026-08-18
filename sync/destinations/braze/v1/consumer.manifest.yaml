@@ -32,12 +32,32 @@ description: |
 inputs:
   # MVKUP64R: flipped to the spine's output.
   - resolved.events
+  # C195TM1C: the profile plane too. The spine carries what customers DID;
+  # this carries what is now TRUE of them, and audience membership is the
+  # second kind. Braze is the only vendor reading it — the others have no
+  # mapper for a profile-plane event, and subscribing them would mean
+  # every transition reaching a consumer that reports it unmapped.
+  - profile.events
 
 outputs:
   # Braze consumers do not emit Polaris events back into the platform.
   # Delivery is recorded in PostgreSQL `delivery_records` by the
   # destination runtime.
   []
+
+# State stores this consumer uses.
+#
+# Redis-backed, with an in-memory fallback when Redis is absent
+# (packages/shared-destinations/src/redis-bootstrap.ts). Declared anyway,
+# and this is the point of declaring: the fallback is per-process, so a
+# deployment running three replicas without Redis dedupes and rate-limits
+# three times independently — correct-looking in one pod and wrong in
+# aggregate. An operator reading this manifest should know Redis belongs
+# in the deployment even though its absence does not crash anything.
+state_stores:
+  - redis:delivery_dedupe
+  - redis:rate_limit
+  - redis:circuit_breaker
 
 mode: streaming
 

@@ -42,8 +42,12 @@ describe("sessionizer v1 manifest", () => {
     expect(loaded.manifest.outputs).toEqual([{ family: "session.events", schema_versions: [1] }]);
   });
 
-  it("declares the in-memory sessions state store", () => {
-    expect(loaded.manifest.state_stores).toContain("memory:sessions");
+  it("declares the REDIS sessions state store", () => {
+    // It said `memory:sessions` and this test pinned that, while the code
+    // read `redisEnvSchema` and wrote to Redis. A manifest is what an
+    // operator consults to know which dependencies a processor needs
+    // running, and both the manifest and its test said "none".
+    expect(loaded.manifest.state_stores).toContain("redis:sessions");
   });
 
   it("declares the semantic inactivity window in defaults", () => {
