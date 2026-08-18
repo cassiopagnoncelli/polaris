@@ -93,7 +93,7 @@ describe("createClickHouseProbePoller", () => {
     const samples = metrics.getSamples();
     const mvs = samples.filter((s) => s.name === METRIC_CLICKHOUSE_MV_STATE);
     expect(mvs).toHaveLength(2);
-    expect(mvs.find((s) => s.labels.state === "failed")).toBeDefined();
+    expect(mvs.find((s) => s.labels["state"] === "failed")).toBeDefined();
   });
 
   it("clears stale tuples between ticks (vanished views disappear)", async () => {
@@ -118,7 +118,7 @@ describe("createClickHouseProbePoller", () => {
     await poller.tick();
     const samples = metrics.getSamples();
     expect(samples).toHaveLength(1);
-    expect(samples[0]?.labels.view).toBe("mv_new");
+    expect(samples[0]?.labels["view"]).toBe("mv_new");
   });
 
   it("logs a warn on first failure and an error after sustained failure", async () => {

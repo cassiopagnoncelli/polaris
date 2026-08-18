@@ -189,7 +189,6 @@ Source: [`sync/legacy/analytics-projector/v1/src/config.ts`](../../sync/legacy/a
 
 | Variable | Status | Default |
 | --- | --- | --- |
-| `POLARIS_ANALYTICS_PROJECTOR_CONSUMER_GROUP` | optional | `polaris-analytics-projector-v1` |
 | `POLARIS_ANALYTICS_PROJECTOR_CONCURRENCY` | optional | `1` |
 
 #### identity-resolver v1
@@ -200,7 +199,6 @@ Also composes **postgres** (writes `identity_links`).
 
 | Variable | Status | Default |
 | --- | --- | --- |
-| `POLARIS_IDENTITY_RESOLVER_CONSUMER_GROUP` | optional | `polaris-identity-resolver-v1` |
 | `POLARIS_IDENTITY_RESOLVER_CONCURRENCY` | optional | `1` |
 
 #### sessionizer v1
@@ -223,7 +221,6 @@ Source: [`sync/legacy/geoip-enricher/v1/src/config.ts`](../../sync/legacy/geoip-
 
 | Variable | Status | Default |
 | --- | --- | --- |
-| `POLARIS_GEOIP_ENRICHER_CONSUMER_GROUP` | optional | `polaris-geoip-enricher-v1` |
 | `POLARIS_GEOIP_ENRICHER_CONCURRENCY` | optional | `1` |
 
 `POLARIS_GEOIP_DB_PATH` is reserved in `.env.example` but the v1

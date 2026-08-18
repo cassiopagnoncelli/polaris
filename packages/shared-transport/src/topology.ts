@@ -183,20 +183,17 @@ export function diagnosticsSuperStream(config: RabbitmqConfig): SuperStreamSpec 
 
 /** Every Polaris component that owns a retry/DLQ queue set. */
 export const POLARIS_COMPONENTS = [
-  // Spine stages (R1B, R1C). Named for their tree path, deliberately NOT
-  // "identity-resolver": the legacy processor keeps running through the
-  // M6 retirement, and reusing its component name would make the new
-  // stage share its retry/redeliver/DLQ queues during coexistence — two
-  // different semantics dead-lettering into one place.
+  // Spine stages (R1B, R1C). Named for their tree path rather than
+  // "identity-resolver", which was the legacy processor's component name.
+  // That distinction existed so the two would not share retry/redeliver/DLQ
+  // queues while both ran; the legacy one is gone as of 126EPNIQ and the
+  // names stay as they are.
   "sync-identity",
   "sync-enrichment",
   // Retroactive-merge worker (R4).
   "merge-worker",
-  "geoip-enricher",
   "sessionizer",
-  "identity-resolver",
   "attribution-engine",
-  "analytics-projector",
   "clickhouse-sink",
   "braze",
   "ga4",

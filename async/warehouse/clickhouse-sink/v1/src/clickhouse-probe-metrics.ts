@@ -1,10 +1,11 @@
 /**
- * ClickHouse-probe metrics emitted by the analytics-projector.
+ * ClickHouse-probe metrics emitted by the clickhouse-sink.
  *
  * The architecture forbids querying the ingestion interface table
  * directly (see `docs/architecture/07-clickhouse.md`); the
- * canonical-consumer pattern is that the analytics-projector — which
- * already owns the ClickHouse side of analytics ingestion — polls
+ * canonical-consumer pattern is that the clickhouse-sink — which owns
+ * the ClickHouse side of analytics ingestion since 126EPNIQ retired the
+ * analytics-projector — polls
  * `system.*` views on a schedule and re-publishes their state as
  * Polaris Prometheus gauges. One alert gates on these gauges:
  *
@@ -20,11 +21,29 @@
  * emits `polaris_clickhouse_sink_lag_seconds` instead, and the alerts
  * point at that.
  *
- * The registry intentionally lives next to the analytics-projector
+ * The registry intentionally lives next to the canonical consumer
  * (rather than in `@polaris/shared-clickhouse`) because the metrics
- * surface is a property of the canonical consumer, not the
- * ClickHouse client library — there is no second consumer in v1, and
- * pulling these into a shared library would suggest otherwise.
+ * surface is a property of that consumer, not the ClickHouse client
+ * library — there is no second consumer, and pulling these into a shared
+ * library would suggest otherwise. That reasoning is why this moved here
+ * with the retirement rather than being deleted alongside the projector.
+ *
+ * ## KNOWN BROKEN, and not by this move
+ *
+ * `polaris_clickhouse_mv_state` has never carried a value.
+ * `buildMaterializedViewStatesSql` reads `system.view_refreshes`, which
+ * tracks REFRESHABLE materialized views only; all nine of Polaris's are
+ * plain insert-triggered MVs and never appear there. The query also names
+ * columns that table does not have (`name`, `last_exception` — they are
+ * `view` and `exception`), so it errors before returning the zero rows it
+ * would otherwise get.
+ *
+ * So `PolarisClickHouseMVFailure` has never been able to fire, over the
+ * MV layer that several 2026-08 data-loss bugs flowed straight through.
+ * Fixing it means picking a signal that plain MVs actually emit — their
+ * failures surface as exceptions in `system.query_log` against the inner
+ * query — which is a monitoring design decision, not a typo fix, and is
+ * left for one.
  */
 import type { MetricSample } from "@polaris/shared-metrics";
 

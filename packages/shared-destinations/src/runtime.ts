@@ -115,7 +115,7 @@ import {
   type PolarisProducer,
   redeliverQueueName,
   republishToRetry,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   type StreamStartPosition,
   type TransportMessageHandler,
   type TransportMessagePayload,
@@ -621,7 +621,11 @@ export function createDestinationConsumer<Payload>(
   async function start(): Promise<void> {
     if (started) return;
     started = true;
-    const configured = options.inputFamily ?? STREAM_FAMILY_ANALYTICS_EVENTS;
+    // `resolved.events`, not the retired `analytics.events`. A destination
+    // that names no input family gets the spine, which since 126EPNIQ is
+    // the only source of customer events -- the old default would have had
+    // it subscribe to a family nothing declares or produces.
+    const configured = options.inputFamily ?? STREAM_FAMILY_RESOLVED_EVENTS;
     const families = (Array.isArray(configured) ? configured : [configured]).flatMap((family) => [
       ...consumerFamiliesFor(family, []),
     ]);

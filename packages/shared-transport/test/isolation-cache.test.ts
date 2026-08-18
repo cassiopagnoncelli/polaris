@@ -21,9 +21,9 @@ import {
 } from "../src/isolation-cache.js";
 import { resolveStreamFamilyScoped } from "../src/stream-family.js";
 import {
-  STREAM_FAMILY_ANALYTICS_EVENTS,
-  STREAM_FAMILY_ENRICHED_EVENTS,
+  STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_RAW_EVENTS,
+  STREAM_FAMILY_SESSION_EVENTS,
 } from "../src/streams.js";
 
 class RecordingReader implements ScopedIsolationLookup {
@@ -52,7 +52,7 @@ describe("InMemoryScopedIsolationLookup", () => {
     lookup.add(STREAM_FAMILY_RAW_EVENTS, "project-a", "production");
     expect(await lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-a", "production")).toBe(true);
     // Different family — not isolated.
-    expect(await lookup.isIsolated(STREAM_FAMILY_ENRICHED_EVENTS, "project-a", "production")).toBe(
+    expect(await lookup.isIsolated(STREAM_FAMILY_IDENTITY_EVENTS, "project-a", "production")).toBe(
       false,
     );
     // Different environment — not isolated.
@@ -130,8 +130,8 @@ describe("StreamIsolationCache", () => {
     const reader = new RecordingReader();
     const cache = new StreamIsolationCache({ reader, now: () => 1_000 });
     await cache.isIsolated(STREAM_FAMILY_RAW_EVENTS, "project-x", "production");
-    await cache.isIsolated(STREAM_FAMILY_ENRICHED_EVENTS, "project-x", "production");
-    await cache.isIsolated(STREAM_FAMILY_ANALYTICS_EVENTS, "project-x", "production");
+    await cache.isIsolated(STREAM_FAMILY_IDENTITY_EVENTS, "project-x", "production");
+    await cache.isIsolated(STREAM_FAMILY_SESSION_EVENTS, "project-x", "production");
     expect(reader.seen).toHaveLength(3);
   });
 

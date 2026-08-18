@@ -143,7 +143,7 @@ export function buildProcessorsDisableRunner(hooks: ProcessorsDisableHooks = {})
     const root = resolveRoot(explicitRoot);
     if (!verifyManifest(root, key.processor_name, key.processor_version)) {
       throw new UsageError(
-        `manifest not found for processor "${key.processor_name}" version "${key.processor_version}" under ${root}/processors/`,
+        `manifest not found for processor "${key.processor_name}" version "${key.processor_version}" under ${root}/{sync,async}/<stage>/<name>/<version>/`,
       );
     }
 

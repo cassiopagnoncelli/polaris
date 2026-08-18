@@ -267,9 +267,13 @@ export async function runVerticalSliceSmoke({
   if (typeof row.profile_id !== "string" || row.profile_id.length === 0) {
     failures.push(
       "profile_id is empty — the event did not cross the identity stage. " +
-        "Check that sync-identity is running AND that it has an enabled " +
-        "processor_activations row for this project/environment; the stage " +
-        "gates on that and skips silently without one.",
+        "Check that sync-identity is running and consuming raw.events.\n" +
+        "  NOT an activation problem: the gate is open unless an explicit " +
+        "`disabled` row exists (packages/shared-processor/src/" +
+        "activation-gate.ts), so there is no row to go and create. This " +
+        "message used to say the opposite, which would have sent you to " +
+        "write rows that do nothing — and under the wrong name besides, " +
+        "since the gate keys on the manifest's `sync-identity-resolver`.",
     );
   }
   if (row.processor_name === "analytics-projector") {

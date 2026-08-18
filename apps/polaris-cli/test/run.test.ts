@@ -160,7 +160,7 @@ describe("run / polaris version", () => {
       argv: [
         "processors",
         "enable",
-        "analytics-projector",
+        "sync-identity-resolver",
         "--version",
         "v1",
         "--project",

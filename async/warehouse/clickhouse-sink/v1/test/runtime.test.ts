@@ -19,6 +19,14 @@ import { describe, expect, it } from "vitest";
 import { SinkMetrics } from "../src/metrics.js";
 import { createRuntime, toQueueRow } from "../src/runtime.js";
 
+/**
+ * `_version = (stage_rank * 2^48) + ingested_at_ms`, and `resolved.events`
+ * is rank 1. Spelled out rather than pasted as a literal so the scheme
+ * stays readable; the default fixture family became `resolved.events` when
+ * 126EPNIQ retired the rank-0 feed.
+ */
+const RESOLVED_RANK_BAND = 2 ** 48;
+
 const silentLogger = {
   debug: () => undefined,
   info: () => undefined,
@@ -76,8 +84,8 @@ function payload(
   overrides: Partial<TransportMessagePayload> = {},
 ): TransportMessagePayload {
   return {
-    stream: "analytics.events-2",
-    family: "analytics.events",
+    stream: "resolved.events-2",
+    family: "resolved.events",
     partition: 2,
     message: {
       value: Buffer.from(typeof body === "string" ? body : JSON.stringify(body), "utf8"),
@@ -200,9 +208,9 @@ describe("toQueueRow", () => {
       processor_version: "v1",
       // Built from the family + ingested_at, not copied off the envelope
       // — see the dedicated test below.
-      _version: Date.parse("2026-08-01T10:00:01.000Z"),
+      _version: RESOLVED_RANK_BAND + Date.parse("2026-08-01T10:00:01.000Z"),
       // These were Kafka Engine virtual columns; the sink stamps them now.
-      _topic: "analytics.events-2",
+      _topic: "resolved.events-2",
       _partition: 2,
       _offset: 42,
     });
@@ -233,7 +241,7 @@ describe("toQueueRow", () => {
     // `_version` no longer influences it.
     const body = envelope({ _version: 999 });
     const row = toQueueRow(payload(body), silentLogger);
-    expect(row?._version).toBe(Date.parse(String(body["ingested_at"])));
+    expect(row?._version).toBe(RESOLVED_RANK_BAND + Date.parse(String(body["ingested_at"])));
   });
 
   it("falls back to 0 for an unparseable ingest timestamp, so the MV guard catches it", () => {
@@ -450,7 +458,6 @@ describe("derived-event routing", () => {
   });
 
   it.each([
-    "enriched.events",
     "session.events",
     "identity.events",
     "attribution.events",
@@ -463,7 +470,7 @@ describe("derived-event routing", () => {
   });
 
   it("keeps an isolated project's source events on the source table", async () => {
-    // An isolated project reads `analytics.events.<project_id>`. Matching
+    // An isolated project reads `resolved.events.<project_id>`. Matching
     // the bare family alone would divert every isolated project's source
     // events into the derived table.
     const { writer, writes } = fakeWriter();
@@ -471,8 +478,8 @@ describe("derived-event routing", () => {
 
     await runtime.handler(
       payload(envelope(), {
-        stream: "analytics.events.project-alpha-0",
-        family: "analytics.events.project-alpha",
+        stream: "resolved.events.project-alpha-0",
+        family: "resolved.events.project-alpha",
         partition: 0,
       }),
       {},
@@ -522,12 +529,12 @@ describe("derived-event routing", () => {
     const runtime = runtimeWith(writer, { batchMaxRows: 2, checkpoints: deferred });
 
     await runtime.handler(payload(envelope({ event_id: "e1" })), {});
-    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "1" });
+    await deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "1" });
     await runtime.handler(derivedPayload(derivedEnvelope({ event_id: "s1" })), {});
     await deferred.write({ group_name: "sink", stream: "session.events-1", last_offset: "5" });
 
     expect(writes).toEqual([ANALYTICS_QUEUE_TABLE, ANALYTICS_PROCESSED_QUEUE_TABLE]);
-    expect(await underlying.read("sink", "analytics.events-2")).toBe("1");
+    expect(await underlying.read("sink", "resolved.events-2")).toBe("1");
   });
 
   it("rolls the checkpoint back when the derived insert fails after the source one", async () => {
@@ -581,9 +588,7 @@ describe("derived-event routing", () => {
     await runtime.stop();
 
     expect(subscriptions[0]).toEqual([
-      "analytics.events",
       "resolved.events",
-      "enriched.events",
       "session.events",
       "identity.events",
       "attribution.events",
@@ -621,16 +626,17 @@ describe("derived-event routing", () => {
     await runtime.start();
     await runtime.stop();
 
-    expect(subscriptions[0]).toContain("analytics.events.project-alpha");
     expect(subscriptions[0]).toContain("resolved.events.project-alpha");
     expect(subscriptions[0]).toContain("session.events.project-alpha");
     // The profile plane isolates like every other family: an isolated
     // project's `profile.events.<id>` is still the profile plane, which is
     // what the prefix check in `isProfileEventFamily` relies on.
     expect(subscriptions[0]).toContain("profile.events.project-alpha");
-    // Seven families. Six isolate — shared + one dedicated each — and the
-    // quarantine does not, so it contributes exactly one entry.
-    expect(subscriptions[0]).toHaveLength(15);
+    // Six families now: five isolate — shared + one dedicated each — and
+    // the quarantine does not, so it contributes exactly one entry.
+    // Was seven and fifteen until 126EPNIQ retired `analytics.events` and
+    // `enriched.events`.
+    expect(subscriptions[0]).toHaveLength(11);
     expect(subscriptions[0]).toContain("rejected.events");
     expect(subscriptions[0]).not.toContain("rejected.events.project-alpha");
   });
@@ -660,17 +666,17 @@ describe("checkpoint safety", () => {
     // Two rows buffered, nothing inserted. The transport would have
     // written a checkpoint by now; it must not reach the durable store.
     await runtime.handler(payload(envelope({ event_id: "e1" })), {});
-    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "1" });
+    await deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "1" });
     await runtime.handler(payload(envelope({ event_id: "e2" })), {});
-    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "2" });
+    await deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "2" });
 
     expect(batches).toHaveLength(0);
-    expect(await underlying.read("sink", "analytics.events-2")).toBeUndefined();
+    expect(await underlying.read("sink", "resolved.events-2")).toBeUndefined();
 
     // The third row trips the bound; once ClickHouse has acknowledged the
     // insert, the held positions become durable.
     await runtime.handler(payload(envelope({ event_id: "e3" })), {});
-    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "3" });
+    await deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "3" });
 
     expect(batches).toHaveLength(1);
     // Durable at 2, not 3: the transport writes a message's checkpoint
@@ -678,14 +684,14 @@ describe("checkpoint safety", () => {
     // triggered the flush lands in the next batch's window. The lag is
     // one message and it errs the safe way — a crash re-reads offset 3
     // and ReplacingMergeTree collapses the duplicate.
-    expect(await underlying.read("sink", "analytics.events-2")).toBe("2");
+    expect(await underlying.read("sink", "resolved.events-2")).toBe("2");
   });
 
   it("keeps the checkpoint pinned when the insert fails", async () => {
     const underlying = new InMemoryCheckpointStore();
     await underlying.write({
       group_name: "sink",
-      stream: "analytics.events-2",
+      stream: "resolved.events-2",
       last_offset: "10",
     });
     const deferred = new DeferredCheckpointStore(underlying);
@@ -710,11 +716,11 @@ describe("checkpoint safety", () => {
       /clickhouse 503/,
     );
     await expect(
-      deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "11" }),
+      deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "11" }),
     ).resolves.toBeUndefined();
 
     // Still at the pre-batch position, so the rows are re-read.
-    expect(await underlying.read("sink", "analytics.events-2")).toBe("10");
+    expect(await underlying.read("sink", "resolved.events-2")).toBe("10");
   });
 
   it("flushes and commits the position on clean shutdown", async () => {
@@ -733,18 +739,22 @@ describe("checkpoint safety", () => {
     await runtime.start();
 
     await runtime.handler(payload(envelope({ event_id: "e1" })), {});
-    await deferred.write({ group_name: "sink", stream: "analytics.events-2", last_offset: "7" });
-    expect(await underlying.read("sink", "analytics.events-2")).toBeUndefined();
+    await deferred.write({ group_name: "sink", stream: "resolved.events-2", last_offset: "7" });
+    expect(await underlying.read("sink", "resolved.events-2")).toBeUndefined();
 
     await runtime.stop();
     expect(batches).toHaveLength(1);
-    expect(await underlying.read("sink", "analytics.events-2")).toBe("7");
+    expect(await underlying.read("sink", "resolved.events-2")).toBe("7");
   });
 });
 
-describe("the dual-run: resolved.events alongside analytics.events", () => {
-  // M3 puts the SAME event on two feeds at once. They share an event_id
-  // deliberately — two sightings of one fact, not two facts — so they
+describe("the _version storage format", () => {
+  // Was "the dual-run: resolved.events alongside analytics.events". M3 put
+  // the SAME event on two feeds at once; 126EPNIQ retired the legacy one,
+  // so what remains here is the version scheme itself. The original notes
+  // are kept because they explain WHY the scheme exists: two feeds shared
+  // an event_id deliberately — two sightings of one fact, not two facts —
+  // so they
   // share a sort key in `analytics_raw` and collapse into each other.
   // These tests pin the three things that make the collapse land on the
   // enriched row instead of a coin flip.
@@ -781,22 +791,24 @@ describe("the dual-run: resolved.events alongside analytics.events", () => {
     expect(writes[0]?.table).toBe(ANALYTICS_QUEUE_TABLE);
   });
 
-  it("ranks a resolved row above its legacy twin, for the same event", async () => {
-    // THE collapse-deciding property. Both rows carry the same event_id
-    // AND the same ingested_at (the spine preserves it verbatim), so
-    // without the stage rank they would tie and ReplacingMergeTree would
-    // pick arbitrarily — half the surviving rows missing profile_id.
+  it("keeps the stage-rank ordering, though nothing produces rank 0 now", async () => {
+    // The legacy feed is retired (126EPNIQ), so the dual-run this
+    // originally asserted no longer happens. The RANK is a storage format,
+    // not a coexistence device: changing one re-orders rows already merged
+    // under the old value, so rank 0 stays reserved rather than reused.
+    //
+    // What still has to hold is that a source event's `_version` sits
+    // above the bare ingest-ms a pre-scheme row carries -- that is what
+    // makes ReplacingMergeTree pick the spine's row for the same event_id.
     const body = envelope();
-    const legacy = toQueueRow(payload(body), silentLogger) as AnalyticsQueueRow;
     const resolved = toQueueRow(
       payload(body, { family: "resolved.events", stream: "resolved.events-0", partition: 0 }),
       silentLogger,
     ) as AnalyticsQueueRow;
 
-    expect(resolved._version).toBeGreaterThan(legacy._version);
-    // And the legacy value still equals the MVs' own ingest-ms fallback,
-    // so rows merged before this scheme existed sort identically.
-    expect(legacy._version).toBe(Date.parse(String(body["ingested_at"])));
+    expect(resolved._version).toBeGreaterThan(Date.parse(String(body["ingested_at"])));
+    // Still a safe integer: the scheme is only sound while it is.
+    expect(Number.isSafeInteger(resolved._version)).toBe(true);
   });
 
   it("re-derives the same version on a replay, so reruns collapse instead of ratcheting", async () => {

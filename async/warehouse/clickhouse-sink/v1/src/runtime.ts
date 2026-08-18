@@ -115,9 +115,7 @@ import {
   decodeEvent,
   type PolarisConsumer,
   redeliverQueueName,
-  STREAM_FAMILY_ANALYTICS_EVENTS,
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
-  STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_REJECTED_EVENTS,
@@ -135,7 +133,6 @@ import type { SinkMetrics } from "./metrics.js";
  * a SOURCE-FACT family lands in `analytics_processed_queue`.
  */
 const DERIVED_STREAM_FAMILIES = [
-  STREAM_FAMILY_ENRICHED_EVENTS,
   STREAM_FAMILY_SESSION_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_ATTRIBUTION_EVENTS,
@@ -160,10 +157,12 @@ const DERIVED_STREAM_FAMILIES = [
  * `session.started`), which is a different table and a different
  * question.
  */
-const SOURCE_STREAM_FAMILIES = [
-  STREAM_FAMILY_ANALYTICS_EVENTS,
-  STREAM_FAMILY_RESOLVED_EVENTS,
-] as const;
+// One source family now. `analytics.events` was the legacy projector's
+// output and retired with it (126EPNIQ); `resolved.events` is the spine's.
+// The TABLE is unchanged -- `analytics_events_queue` still receives source
+// events, and conflating the retired FAMILY with that table would have
+// taken the spine's own writes down with the fan-out.
+const SOURCE_STREAM_FAMILIES = [STREAM_FAMILY_RESOLVED_EVENTS] as const;
 
 /**
  * The profile plane. Its own queue, its own table, its own engine.

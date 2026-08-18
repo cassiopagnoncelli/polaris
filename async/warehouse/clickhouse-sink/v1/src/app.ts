@@ -19,7 +19,12 @@
  * @see async/warehouse/clickhouse-sink/v1/src/runtime.ts
  */
 
-import { type AnalyticsSinkWriter, createAnalyticsSinkWriter } from "@polaris/shared-clickhouse";
+import {
+  type AnalyticsSinkWriter,
+  type ClickHouseOperatorClient,
+  createAnalyticsSinkWriter,
+  createClickHouseClient,
+} from "@polaris/shared-clickhouse";
 import { closeDb, createDb, type Database } from "@polaris/shared-db";
 import { createLogger } from "@polaris/shared-logger";
 import { toPrometheusText } from "@polaris/shared-metrics";
@@ -45,6 +50,11 @@ import {
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
+import { ClickHouseProbeMetrics } from "./clickhouse-probe-metrics.js";
+import {
+  type ClickHouseProbePoller,
+  createClickHouseProbePoller,
+} from "./clickhouse-probe-poller.js";
 import { type ClickhouseSinkRuntimeConfig, SINK_COMPONENT, SINK_SERVICE_NAME } from "./config.js";
 import { SinkMetrics } from "./metrics.js";
 import { type ClickhouseSinkRuntime, createRuntime } from "./runtime.js";
@@ -163,7 +173,69 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
       : {}),
   });
 
+  // ---- ClickHouse probe poller ----------------------------------------
+  // Re-publishes ClickHouse's `system.*` health as Polaris gauges, which
+  // is what `PolarisClickHouseMVFailure` alerts on.
+  //
+  // This lived in `analytics-projector` until 126EPNIQ retired it, on the
+  // reasoning that the metrics surface belongs to whichever service is the
+  // canonical ClickHouse consumer. That reasoning still holds and now
+  // points here. Deleting the projector without moving it would have left
+  // a dashboard panel and an alert reading a metric nothing emits -- an
+  // alert that never fires, which is the failure this card's own
+  // acceptance criteria single out. `lint-metric-names.mjs` caught it.
+  //
+  // Its OWN client, with the operator role. The sink's writer holds
+  // `polaris_sink`, which has INSERT and deliberately no SELECT anywhere,
+  // so it cannot read `system.*` -- two roles in one process, as the
+  // projector also did. Absent operator credentials the poller is skipped
+  // rather than failing the service: a dev stack should not need them.
+  const probeMetrics = new ClickHouseProbeMetrics();
+  let probeClient: ClickHouseOperatorClient | null = null;
+  let probePoller: ClickHouseProbePoller | null = null;
+  const operator = config.clickhouse.operator;
+  if (operator !== undefined) {
+    try {
+      probeClient = createClickHouseClient({
+        role: "operator",
+        url: config.clickhouse.url,
+        database: config.clickhouse.database,
+        credential: { username: operator.user, password: operator.password },
+        requestTimeoutMs: config.clickhouse.requestTimeoutMs,
+        maxOpenConnections: config.clickhouse.maxOpenConnections,
+        application: SINK_SERVICE_NAME,
+      });
+      probePoller = createClickHouseProbePoller({
+        probes: probeClient.probes,
+        metrics: probeMetrics,
+        logger: sinkLogger,
+        database: config.clickhouse.database,
+      });
+      probePoller.start();
+    } catch (err) {
+      sinkLogger.warn(
+        { component: "clickhouse-sink.probe", err: errSummary(err) },
+        "ClickHouse probe config invalid; probe poller skipped",
+      );
+    }
+  } else {
+    sinkLogger.info(
+      { component: "clickhouse-sink.probe" },
+      "POLARIS_CLICKHOUSE_OPERATOR_{USER,PASSWORD} not set; probe poller skipped",
+    );
+  }
+
   const shutdownTasks: ShutdownTask[] = [];
+  shutdownTasks.push(async () => {
+    // Before the runtime: the poller writes only to its own registry, so
+    // stopping it first means no gauge moves while the batch is flushing.
+    try {
+      await probePoller?.stop();
+      await probeClient?.close();
+    } catch (err) {
+      sinkLogger.error({ err: errSummary(err) }, "probe poller stop error during shutdown");
+    }
+  });
   shutdownTasks.push(async () => {
     // Stops consuming, then flushes the open batch — in that order, so
     // shutdown cannot race a delivery into a batch nobody will write.
@@ -222,14 +294,16 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
         title: "Polaris clickhouse-sink v1",
         version: config.service.serviceVersion,
         description:
-          "Consumes analytics.events and INSERTs batches into ClickHouse. /health, /ready, and /metrics only — no business routes.",
+          "Consumes resolved.events and the derived families, INSERTs batches into ClickHouse, and re-publishes ClickHouse's own system.* health as Polaris gauges. /health, /ready, and /metrics only — no business routes.",
       },
     },
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),
     installShutdown: options.installShutdown ?? true,
     ...(options.shutdownExit !== undefined ? { shutdownExit: options.shutdownExit } : {}),
     metrics: {
-      producer: () => toPrometheusText(metrics.getSamples()),
+      // Both registries. The probe gauges are a separate surface from the
+      // sink's own counters and neither knows about the other.
+      producer: () => toPrometheusText([...metrics.getSamples(), ...probeMetrics.getSamples()]),
     },
   });
 

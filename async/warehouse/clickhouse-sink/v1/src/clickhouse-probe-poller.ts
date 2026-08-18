@@ -102,7 +102,7 @@ export function createClickHouseProbePoller(
       if (recentFailures.length >= FAILURE_ESCALATE_AT) {
         options.logger.error(
           {
-            component: "analytics-projector.clickhouse-probe",
+            component: "clickhouse-sink.clickhouse-probe",
             consecutive_failures: recentFailures.length,
             err_summary: summary,
           },
@@ -111,7 +111,7 @@ export function createClickHouseProbePoller(
       } else {
         options.logger.warn(
           {
-            component: "analytics-projector.clickhouse-probe",
+            component: "clickhouse-sink.clickhouse-probe",
             consecutive_failures: recentFailures.length,
             err_summary: summary,
           },

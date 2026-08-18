@@ -40,7 +40,7 @@ describe("declareSuperStream", () => {
   it("declares streams with both an age and a size bound", async () => {
     const channel = new FakeChannel();
     await declareSuperStream(channel.asChannel(), {
-      family: "analytics.events",
+      family: "resolved.events",
       partitions: 1,
       retentionDays: 30,
       maxLengthBytes: 2048,
@@ -138,10 +138,8 @@ describe("defaultSuperStreams", () => {
       "resolved.events",
       "profile.events",
       "identity.events",
-      "enriched.events",
       "session.events",
       "attribution.events",
-      "analytics.events",
       "rejected.events",
     ]);
   });
@@ -204,10 +202,12 @@ describe("defaultSuperStreams", () => {
       streamRetentionDays: 90,
     });
     const raw = specs.find((s) => s.family === "raw.events");
-    const analytics = specs.find((s) => s.family === "analytics.events");
+    // A family with no override, to show the default still applies. Was
+    // `analytics.events` until 126EPNIQ retired it.
+    const session = specs.find((s) => s.family === "session.events");
     expect(raw?.partitions).toBe(6);
     expect(raw?.retentionDays).toBe(90);
-    expect(analytics?.partitions).toBe(3);
+    expect(session?.partitions).toBe(3);
   });
 });
 

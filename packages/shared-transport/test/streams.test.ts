@@ -46,10 +46,8 @@ describe("canonical stream constants", () => {
       "resolved.events",
       "profile.events",
       "identity.events",
-      "enriched.events",
       "session.events",
       "attribution.events",
-      "analytics.events",
     ]);
   });
 });
@@ -57,7 +55,15 @@ describe("canonical stream constants", () => {
 describe("isCanonicalStreamFamily", () => {
   it("recognizes canonical families", () => {
     expect(isCanonicalStreamFamily("raw.events")).toBe(true);
-    expect(isCanonicalStreamFamily("analytics.events")).toBe(true);
+    expect(isCanonicalStreamFamily("resolved.events")).toBe(true);
+  });
+
+  it("rejects the families retired with the fan-out", () => {
+    // 126EPNIQ. The constants still exist -- attribution-engine v1/v2 name
+    // them -- so `isCanonicalStreamFamily` is what actually decides whether
+    // anything provisions or subscribes to them.
+    expect(isCanonicalStreamFamily("analytics.events")).toBe(false);
+    expect(isCanonicalStreamFamily("enriched.events")).toBe(false);
   });
 
   it("rejects unknown values", () => {
