@@ -556,6 +556,22 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
  * table — which is precisely how the previous bug hid: rows consumed,
  * batches inserted, nothing stored.
  */
+/**
+ * `profile.events` members that name no person, by design.
+ *
+ * `trait.computed` is a run summary about a DEFINITION -- it carries
+ * `trait_key`, `run_id` and the changed/computed counts, and there is no
+ * profile it could name. It rides this family because it is produced by
+ * the same run, not because it is about somebody.
+ *
+ * Naming them matters because the skip below is otherwise a data-loss
+ * warning. Every traits run emitted one warn per definition, and that
+ * routine noise is what hid a REAL loss for as long as it did: the
+ * identity stage's `profile.updated` was tripping the identical line, and
+ * nobody reading a log full of expected warnings sees the unexpected one.
+ */
+const PROFILE_EVENTS_WITHOUT_A_PERSON: ReadonlySet<string> = new Set(["trait.computed"]);
+
 export function toProfileQueueRow(
   row: AnalyticsQueueRow,
   logger: Logger,
@@ -565,6 +581,10 @@ export function toProfileQueueRow(
   const profileId = str(profile?.["profile_id"]);
 
   if (profileId === undefined || profileId === "") {
+    if (PROFILE_EVENTS_WITHOUT_A_PERSON.has(row.event)) {
+      // Expected, and not a warning. See the set above.
+      return undefined;
+    }
     logger.warn(
       {
         component: "clickhouse-sink.decode",

@@ -29,6 +29,27 @@ const silentLogger = {
   child: () => silentLogger,
 } as unknown as Parameters<typeof createRuntime>[0]["logger"];
 
+/**
+ * A logger that records the warn messages, for the two tests that care
+ * whether a skip is loud or quiet.
+ *
+ * Pino-style: the message is the SECOND argument, after the fields object.
+ */
+function loggerCapturing(warnings: string[]) {
+  const self: Record<string, unknown> = {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: (_fields: unknown, message?: string) => {
+      warnings.push(message ?? "");
+    },
+    error: () => undefined,
+    fatal: () => undefined,
+    trace: () => undefined,
+    child: () => self,
+  };
+  return self as unknown as Parameters<typeof createRuntime>[0]["logger"];
+}
+
 function envelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     event_id: "evt-1",
@@ -148,12 +169,13 @@ function runtimeWith(
     batchMaxMs?: number;
     now?: () => number;
     checkpoints?: DeferredCheckpointStore;
+    logger?: Parameters<typeof createRuntime>[0]["logger"];
   } = {},
 ) {
   return createRuntime({
     consumer: noopConsumer,
     writer,
-    logger: silentLogger,
+    logger: overrides.logger ?? silentLogger,
     metrics: new SinkMetrics(),
     batchMaxRows: overrides.batchMaxRows ?? 3,
     batchMaxMs: overrides.batchMaxMs ?? 60_000,
@@ -898,6 +920,55 @@ describe("clickhouse sink — profile-plane routing", () => {
     );
 
     expect(profileRows.flat()).toHaveLength(0);
+  });
+
+  it("WARNS about that skip, because it is data loss", async () => {
+    // The skip above is correct and the warning is the point: a
+    // `profile.updated` with no profile block means a producer is losing
+    // trait writes. The identity stage shipped exactly that, and the line
+    // below is the only thing that said so.
+    const { writer } = fakeWriter();
+    const warnings: string[] = [];
+    const runtime = runtimeWith(writer, {
+      batchMaxRows: 1,
+      logger: loggerCapturing(warnings),
+    });
+    await runtime.handler(
+      payload(envelope({ event: "profile.updated" }), {
+        stream: "profile.events-0",
+        family: "profile.events",
+        partition: 0,
+      }),
+      {},
+    );
+
+    expect(warnings.join(" ")).toMatch(/carries no profile\.profile_id/);
+  });
+
+  it("stays SILENT for an event type that never names a person", async () => {
+    // `trait.computed` is a run summary about a definition -- trait_key,
+    // run_id, counts -- and there is no profile it could name. It rode the
+    // same warn as the real loss above, one per definition per run, and
+    // that routine noise is what kept the identity stage's actual data
+    // loss unnoticed. An operator scanning a log full of expected warnings
+    // does not see the unexpected one.
+    const { writer, profileRows } = fakeWriter();
+    const warnings: string[] = [];
+    const runtime = runtimeWith(writer, {
+      batchMaxRows: 1,
+      logger: loggerCapturing(warnings),
+    });
+    await runtime.handler(
+      payload(envelope({ event: "trait.computed" }), {
+        stream: "profile.events-0",
+        family: "profile.events",
+        partition: 0,
+      }),
+      {},
+    );
+
+    expect(profileRows.flat()).toHaveLength(0);
+    expect(warnings.join(" ")).not.toMatch(/carries no profile/);
   });
 
   it("routes an isolated project's profile family too", async () => {

@@ -212,7 +212,10 @@
         "run_id": "run_fixture"
       },
       "processor_name": "sync-identity-resolver",
-      "processor_version": "v1"
+      "processor_version": "v1",
+      "profile": {
+        "profile_id": "019ffe00-0000-7000-8000-0000000f0001"
+      }
     }
   }
 ]

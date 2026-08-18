@@ -81,6 +81,17 @@ export interface CanonicalEnvelopeInput {
   readonly properties: unknown;
   readonly consent?: unknown;
   readonly privacy?: unknown;
+  /**
+   * Platform-owned blocks (T3K2KULJ). Absent from this type until
+   * 2026-08-18, which meant the stamp below dropped them: `buildSpineEvent`
+   * and the enrichment stage had each independently worked around it by
+   * re-adding their block AFTER stamping, and the resolver's
+   * `buildProfileUpdatedEvent` -- which had no such workaround -- shipped
+   * `profile.updated` with no profile block at all. The sink reads
+   * `profile.profile_id`, found none, and skipped every one.
+   */
+  readonly profile?: unknown;
+  readonly enrichment?: unknown;
 }
 
 /**
@@ -108,10 +119,16 @@ export type StampedEnvelope<E extends CanonicalEnvelopeInput> = E & {
  *     future raw event might carry — the analytics envelope stays a known,
  *     audited shape.
  *
- *   - `consent` and `privacy` are only included on the output when the
- *     input actually had them. Emitting `consent: undefined` would clutter
- *     ClickHouse's `consent` text column with the literal string
- *     `"undefined"` during JSON serialisation.
+ *   - The optional blocks (`consent`, `privacy`, `profile`, `enrichment`)
+ *     are only included on the output when the input actually had them.
+ *     Emitting `consent: undefined` would clutter ClickHouse's `consent`
+ *     text column with the literal string `"undefined"` during JSON
+ *     serialisation.
+ *
+ *   - Keeping that list current is load-bearing. `profile` and
+ *     `enrichment` were missing from it for as long as they have existed,
+ *     so this function silently deleted them; two callers had each worked
+ *     around it locally and a third lost data because it had not.
  *
  *   - The helper does not import `@polaris/shared-schemas`. Processors that
  *     need stricter envelope validation should run the inbound payload
@@ -159,16 +176,19 @@ export function stampProcessorMetadata<E extends CanonicalEnvelopeInput>(
   };
 
   // exactOptionalPropertyTypes forbids re-emitting `consent: undefined`
-  // when the input did not carry it. Branch so the output never has those
-  // keys with undefined values.
-  if (envelope.consent !== undefined && envelope.privacy !== undefined) {
-    return { ...base, consent: envelope.consent, privacy: envelope.privacy } as StampedEnvelope<E>;
-  }
-  if (envelope.consent !== undefined) {
-    return { ...base, consent: envelope.consent } as StampedEnvelope<E>;
-  }
-  if (envelope.privacy !== undefined) {
-    return { ...base, privacy: envelope.privacy } as StampedEnvelope<E>;
-  }
-  return base as StampedEnvelope<E>;
+  // when the input did not carry it, so each optional block is spread in
+  // only when present -- the key is absent rather than set to undefined.
+  //
+  // This was a chain of `if` branches over consent and privacy alone.
+  // Adding a third and fourth block to that shape is a cartesian product
+  // of returns, which is its own argument for spreading: the allowlist is
+  // deliberate (see above) and it should be cheap to keep current, because
+  // the cost of it falling behind the envelope is silent field loss.
+  return {
+    ...base,
+    ...(envelope.consent !== undefined ? { consent: envelope.consent } : {}),
+    ...(envelope.privacy !== undefined ? { privacy: envelope.privacy } : {}),
+    ...(envelope.profile !== undefined ? { profile: envelope.profile } : {}),
+    ...(envelope.enrichment !== undefined ? { enrichment: envelope.enrichment } : {}),
+  } as StampedEnvelope<E>;
 }

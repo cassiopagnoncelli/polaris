@@ -328,6 +328,37 @@ describe("identity stage: traits", () => {
     expect(props["traits"]).toEqual({ tier: "gold", ltv_band: "high" });
   });
 
+  it("names the profile in the PROFILE BLOCK, not only in properties", async () => {
+    // The sink reads `profile.profile_id` to fill the queue table's typed
+    // column and drops the row when it is absent. This event carried the
+    // id in `properties.profile_id` alone until 2026-08-18, so every
+    // trait the identity stage wrote was skipped on the way to
+    // `polaris.profiles` -- while the stage, the publish and the sink all
+    // reported success.
+    //
+    // The sink's own test could not catch it: it builds the envelope by
+    // hand, profile block included, so it proved the sink reads the block
+    // and never that this producer writes one.
+    const { producer, deps } = makeDeps();
+    await handleEvent(
+      deps,
+      event({
+        event: "user.identified",
+        identity: identity({ anonymous_id: "anon_2", customer_id: "cus_2" }),
+        properties: { tier: "silver" },
+      }),
+    );
+
+    const updated = producer.eventsOn(PROFILE)[0];
+    const block = updated?.["profile"] as Record<string, unknown> | undefined;
+    const props = updated?.["properties"] as Record<string, unknown>;
+
+    expect(block?.["profile_id"]).toEqual(expect.any(String));
+    expect(String(block?.["profile_id"])).not.toBe("");
+    // And it agrees with the copy in properties, which readers still use.
+    expect(block?.["profile_id"]).toBe(props["profile_id"]);
+  });
+
   it("ignores traits on non-identify events, keeping one serialized writer", async () => {
     const { producer, deps } = makeDeps();
     const result = await handleEvent(

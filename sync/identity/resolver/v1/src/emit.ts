@@ -97,6 +97,15 @@ interface DerivedEnvelopeInput {
   readonly schemaVersion: number;
   readonly slot: string;
   readonly properties: Record<string, unknown>;
+  /**
+   * Stamps the `profile` block. Required for anything published to
+   * `profile.events`: the sink reads `profile.profile_id` to fill the
+   * queue table's typed column, and drops the row when it is absent.
+   *
+   * Omitted for facts that are not about a person -- `identity.*` travel
+   * on their own family and the sink reads them as ordinary envelopes.
+   */
+  readonly profileId?: string;
   readonly runId: string | null;
   readonly now: Date;
 }
@@ -131,6 +140,20 @@ function buildDerivedEvent(input: DerivedEnvelopeInput): Record<string, unknown>
     // person as the event that produced it.
     identity: input.source["identity"],
     context: {},
+    // The profile block, when this fact is about a person.
+    //
+    // `profile.updated` went out without one until 2026-08-18. The id was
+    // right there in `properties.profile_id`, and the properties bag is
+    // not where the platform names a person -- the profile block is. The
+    // sink reads `profile.profile_id`, found nothing, and skipped every
+    // one of them, so no trait the IDENTITY stage wrote ever reached
+    // `polaris.profiles`.
+    //
+    // It was invisible because the sink logs a warn per skip and
+    // `trait.computed` -- a run summary that legitimately has no person --
+    // was tripping the same line on every traits run. Real data loss,
+    // buried under routine noise.
+    ...(input.profileId === undefined ? {} : { profile: { profile_id: input.profileId } }),
     properties: input.properties,
   };
 
@@ -265,6 +288,7 @@ export function buildProfileUpdatedEvent(args: {
     event: "profile.updated",
     schemaVersion: 1,
     slot: "profile_updated",
+    profileId: args.profileId,
     properties: {
       profile_id: args.profileId,
       traits_version: args.traitsVersion,
