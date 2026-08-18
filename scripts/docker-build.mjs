@@ -76,6 +76,15 @@ export const services = [
     image: "polaris/sync-enrichment-runtime-v1",
   },
   {
+    // Same omission as merge-worker: a Dockerfile on disk, a component
+    // entry, and no build target. Caught by
+    // `scripts/__tests__/docker-build.test.ts` the moment `archiver`
+    // joined POLARIS_COMPONENTS.
+    name: "archiver",
+    dockerfile: "async/warehouse/archiver/v1/Dockerfile",
+    image: "polaris/processor-archiver-v1",
+  },
+  {
     name: "clickhouse-sink",
     dockerfile: "async/warehouse/clickhouse-sink/v1/Dockerfile",
     image: "polaris/consumer-clickhouse-sink-v1",
