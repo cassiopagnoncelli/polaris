@@ -29,6 +29,7 @@ import type { TraitEmitter } from "@polaris/processor-traits-v1";
 import { deriveEventId } from "@polaris/shared-processor";
 import {
   type PolarisProducer,
+  type PublishableEvent,
   STREAM_FAMILY_PROFILE_EVENTS,
   type SyncIsolationLookup,
 } from "@polaris/shared-transport";
@@ -43,6 +44,21 @@ export interface TraitEventEmitterDeps {
 }
 
 export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitter {
+  /**
+   * Typed as what it is, so the compiler checks it.
+   *
+   * This returned `Record<string, unknown>` and every call site ended in
+   * `as never` -- the strongest silencer there is, since `never` is
+   * assignable to everything. The boundary it silenced is the one where
+   * three separate defects have now been found: a missing `profile` block,
+   * a column shape the sink did not share, and an event name the catalog
+   * did not register. None could have been caught here while the cast
+   * stood.
+   *
+   * `PublishableEvent` has an index signature, so the extra envelope
+   * fields still pass through untouched; what it pins down is the handful
+   * the transport actually requires.
+   */
   const envelope = (input: {
     readonly event: string;
     readonly schemaVersion: number;
@@ -53,7 +69,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
     readonly properties: Record<string, unknown>;
     /** Omitted by `trait.computed`, which is about a definition, not a person. */
     readonly profileId?: string;
-  }): Record<string, unknown> => {
+  }): PublishableEvent => {
     const at = deps.now().toISOString();
     return {
       event_id: deriveEventId({
@@ -113,7 +129,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
             source_event_id: null,
             run_id: input.runId,
           },
-        }) as never,
+        }),
       });
     },
 
@@ -138,7 +154,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
             duration_ms: input.durationMs,
             run_id: input.runId,
           },
-        }) as never,
+        }),
       });
     },
   };

@@ -16,6 +16,7 @@ import type { AudienceEmitter } from "@polaris/processor-audiences-v1";
 import { deriveEventId } from "@polaris/shared-processor";
 import {
   type PolarisProducer,
+  type PublishableEvent,
   STREAM_FAMILY_PROFILE_EVENTS,
   type SyncIsolationLookup,
 } from "@polaris/shared-transport";
@@ -83,6 +84,21 @@ export function createAudienceEventEmitter(deps: AudienceEventEmitterDeps): Audi
     return pending;
   };
 
+  /**
+   * Typed as what it is, so the compiler checks it.
+   *
+   * This returned `Record<string, unknown>` and every call site ended in
+   * `as never` -- the strongest silencer there is, since `never` is
+   * assignable to everything. The boundary it silenced is the one where
+   * three separate defects have now been found: a missing `profile` block,
+   * a column shape the sink did not share, and an event name the catalog
+   * did not register. None could have been caught here while the cast
+   * stood.
+   *
+   * `PublishableEvent` has an index signature, so the extra envelope
+   * fields still pass through untouched; what it pins down is the handful
+   * the transport actually requires.
+   */
   const envelope = (input: {
     readonly event: string;
     readonly projectId: string;
@@ -92,7 +108,7 @@ export function createAudienceEventEmitter(deps: AudienceEventEmitterDeps): Audi
     readonly profileId: string;
     readonly canonicalCustomerId: string | null;
     readonly properties: Record<string, unknown>;
-  }): Record<string, unknown> => {
+  }): PublishableEvent => {
     const at = deps.now().toISOString();
     return {
       event_id: deriveEventId({
@@ -152,7 +168,7 @@ export function createAudienceEventEmitter(deps: AudienceEventEmitterDeps): Audi
             re_entry: input.reEntry,
             run_id: input.runId,
           },
-        }) as never,
+        }),
       });
     },
 
@@ -180,7 +196,7 @@ export function createAudienceEventEmitter(deps: AudienceEventEmitterDeps): Audi
             entered_at: input.enteredAt.toISOString(),
             run_id: input.runId,
           },
-        }) as never,
+        }),
       });
     },
   };

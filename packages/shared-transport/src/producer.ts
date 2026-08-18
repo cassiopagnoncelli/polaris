@@ -94,7 +94,17 @@ export interface PublishableEvent {
   readonly environment: string;
   readonly occurred_at: string;
   readonly ingested_at?: string;
-  readonly source?: { readonly id?: string | undefined } | undefined;
+  /**
+   * Only `id` is read here (it lands in the message headers). The rest of
+   * the envelope's source block -- `type`, `sdk`, `sdk_version` -- rides
+   * along, hence the index signature: without it, TypeScript's excess
+   * property check rejects a CORRECT envelope at every literal call site,
+   * which is what pushed the two CLI emitters into `as never` and left
+   * their whole envelope unchecked.
+   */
+  readonly source?:
+    | { readonly id?: string | undefined; readonly [extra: string]: unknown }
+    | undefined;
   readonly identity: PartitionKeyIdentity;
   // The full envelope contains more fields; they pass through
   // serialization untouched. Producers should hand `publishEvent` the
