@@ -41,7 +41,20 @@ describe("vertical-slice smoke", () => {
 
       expect(result.event).toBe("checkout.started");
       expect(result.schemaVersion).toBe(1);
-      expect(result.processor).toEqual({ name: "analytics-projector", version: "v1" });
+      // NOT a processor-name equality. This asserted
+      // `analytics-projector` — the legacy fan-out R-programme exists to
+      // retire — so the repo's only end-to-end test spent three days
+      // confirming the thing being deleted still worked, while both spine
+      // stages threw on every event they saw.
+      //
+      // A resolved profile_id is the better assertion: minting one is the
+      // identity stage's entire job and nothing on the legacy path can
+      // produce one, so a populated value is proof of the crossing rather
+      // than a string a passthrough could echo.
+      expect(result.profileId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+      expect(result.processor.name).not.toBe("analytics-projector");
       expect(result.projectId).toBe(process.env["POLARIS_SMOKE_PROJECT_ID"] ?? "storefront");
       expect(result.environment).toBe(process.env["POLARIS_SMOKE_ENVIRONMENT"] ?? "development");
       expect(result.eventId).toMatch(

@@ -245,13 +245,15 @@ export async function pollClickHouseForEvent({
       );
       const seenCount = readJsonCount(seen);
       if (seenCount >= 1) {
-        // Fetch the full row. We accept any matching row — duplicates
-        // are merged at query time by argMax, but the smoke test only
-        // needs one matched row to assert envelope identity. We use
-        // SETTINGS final = 1 because this is an inspection-shaped
-        // operator query: the table is small, this is the smoke path,
-        // and FINAL is the documented way for ad-hoc operator reads
-        // (07-clickhouse.md Pattern 3).
+        // Fetch the full row, deduped by the argMax idiom.
+        //
+        // Not `SETTINGS final = 1`, which this used to be: FINAL is
+        // sanctioned for ad-hoc operator reads, but this query is not
+        // ad-hoc -- it runs on every smoke, and it is the one read of
+        // analytics_raw a newcomer is most likely to copy. Every other
+        // reader in the repo uses argMax and the lint forbids FINAL in
+        // shared-clickhouse; a smoke test demonstrating the exception
+        // teaches the exception.
         const fullRow = await runClickHouseQuery(
           client,
           `SELECT
@@ -364,6 +366,16 @@ function readJsonFirstRow(parsed) {
     environment: String(row.environment ?? ""),
     processor_name: String(row.processor_name ?? ""),
     processor_version: String(row.processor_version ?? ""),
+    // The spine's proof. Resolving one is the identity stage's whole job,
+    // so a populated value is what says the event crossed it.
+    //
+    // This projection is hand-written per column, which is why it can
+    // disagree with the SELECT above: the column was added to the query
+    // and not to here, and the smoke then reported an empty profile_id
+    // for an event whose row in ClickHouse had a perfectly good one.
+    // A row shape held in two places, updated in one -- the same defect
+    // as the resolver's PublishTarget, in the test built to catch it.
+    profile_id: String(row.profile_id ?? ""),
   };
 }
 
