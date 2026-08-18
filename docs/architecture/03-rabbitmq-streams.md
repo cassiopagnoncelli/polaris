@@ -65,12 +65,19 @@ Polaris uses shared canonical stream families by default:
 
 ```text
 raw.events
+identified.events
+resolved.events
+profile.events
 identity.events
-enriched.events
 session.events
 attribution.events
-analytics.events
 ```
+
+`rejected.events` is declared alongside these but is deliberately NOT
+canonical: it supports no per-project isolation, so consumers subscribe to
+it bare. See `CANONICAL_STREAM_FAMILIES` in
+`packages/shared-transport/src/streams.ts`, which this list mirrors — and
+which `topic_isolations`' CHECK constraint mirrors in turn.
 
 All projects flow through these shared families. Separation is provided by
 envelope fields, partition keys, schemas, processor configuration, and

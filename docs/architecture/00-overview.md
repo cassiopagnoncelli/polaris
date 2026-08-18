@@ -34,25 +34,30 @@ Ingester API
     v
 RabbitMQ: raw.events
     |
-    +--> analytics-projector --> analytics.events
-    +--> geoip-enricher      --> enriched.events
-    +--> sessionizer         --> session.events
-    +--> identity-resolver   --> identity.events
+    v
+sync/identity/resolver  --> identified.events  (+ identity.events, profile.updated)
+    |
+    v
+sync/enrichment/runtime --> resolved.events    (traits + geo, in the envelope)
 
-RabbitMQ: analytics.events
+RabbitMQ: resolved.events
     |
     +--> attribution-engine  --> attribution.events
+    +--> sessionizer         --> session.events
     +--> Destination consumers
     |
     v
 clickhouse-sink
     |
-    +--> analytics_events_queue     <- analytics.events
+    +--> analytics_events_queue     <- resolved.events
     |        +--> analytics_ingest_log      (append-only transport truth)
     |        +--> analytics_raw             (deduped source facts)
     |
-    +--> analytics_processed_queue  <- enriched / session / identity / attribution
-             +--> analytics_processed       (deduped derived facts)
+    +--> analytics_processed_queue  <- session / identity / attribution
+    |        +--> analytics_processed       (deduped derived facts)
+    |
+    +--> profile_events_queue       <- profile.events
+             +--> profiles                  (one row per profile per trait)
 ```
 
 Processors fan out from `raw.events` rather than chaining: each one emits
@@ -103,8 +108,10 @@ minimal SDK sender
 Fastify ingester
 API key authentication
 RabbitMQ raw.events
-one simple processor
-RabbitMQ analytics.events
+sync/identity/resolver
+RabbitMQ identified.events
+sync/enrichment/runtime
+RabbitMQ resolved.events
 clickhouse-sink
 analytics ingest log
 deduped analytics raw table

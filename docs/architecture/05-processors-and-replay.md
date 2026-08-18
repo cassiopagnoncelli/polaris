@@ -8,7 +8,6 @@ Example layout:
 
 ```text
 processors/
-  geoip-enricher/
     v1/
     v2/
   identity-resolver/

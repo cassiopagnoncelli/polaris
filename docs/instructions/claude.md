@@ -31,7 +31,7 @@ SDKs/producers
 - Keep raw events immutable.
 - Keep processors and consumers independent and versioned.
 - Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `packages/shared-destination-normalize/`.
-- Feed ClickHouse through `async/warehouse/clickhouse-sink` from `analytics.events`.
+- Feed ClickHouse through `async/warehouse/clickhouse-sink` from `resolved.events`.
 - Persist ingested rows before querying.
 - `analytics_raw` is never queried without explicit dedupe (`argMax(_version)`, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
 - Preserve replayability within the operational retention window as a primary architectural constraint.
@@ -90,18 +90,20 @@ catalog/
   events/                          file-backed event catalog (yaml + Zod schemas in shared-schemas)
   policy/                          forbidden-field policy and project overrides
 
-processors/
-  identity-resolver/
-    v1/
-  sessionizer/
-    v1/
-  geoip-enricher/
-    v1/
-  attribution-engine/
-    v1/
+sync/                              synchronous spine stages
+  identity/resolver/v1/            raw.events -> identified.events, mints the profile
+  enrichment/runtime/v1/           identified.events -> resolved.events (traits + geo)
+  destinations/                    vendor adapters (braze, ga4, meta-capi, tiktok, webhook-sink)
 
-consumers/
-  webhook-sink/
+async/                             everything off the hot path
+  computation/sessionizer/         v1 reads raw.events, v2 reads resolved.events
+  computation/attribution-engine/v3/
+  computation/traits/v1/
+  computation/audiences/v1/
+  merges/merge-worker/v1/
+  warehouse/clickhouse-sink/v1/
+  warehouse/archiver/v1/
+  reverse-etl/runner/v1/
     v1/                            simplest exemplar; canonical SPEC.md reference
   meta-capi/
     v1/
@@ -350,8 +352,10 @@ schema
 SDK sender
 ingester
 raw.events
-simple processor
-analytics.events
+sync/identity/resolver
+identified.events
+sync/enrichment/runtime
+resolved.events
 ClickHouse ingest
 basic query
 logs/metrics

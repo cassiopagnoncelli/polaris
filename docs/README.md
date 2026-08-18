@@ -52,5 +52,5 @@ SDKs / producers
 - SDKs are transport and identity helpers, not analytics engines.
 - Processors and consumers are independent and versioned.
 - Destination consumers are vendor adapters: normalize, map, deliver. Mapping is the only stage that is purely protocol translation.
-- ClickHouse is fed by `async/warehouse/clickhouse-sink`, which consumes `analytics.events` and INSERTs batches; rows are persisted before querying. `analytics_raw` is never queried without explicit dedupe.
+- ClickHouse is fed by `async/warehouse/clickhouse-sink`, which consumes `resolved.events` and the derived families and INSERTs batches; rows are persisted before querying. `analytics_raw` is never queried without explicit dedupe.
 - Replayability within the operational retention window is a primary architectural constraint.

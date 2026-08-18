@@ -123,10 +123,13 @@ RabbitMQ:
 
 ```text
 raw.events              90 days
+identified.events        7 days   (regenerable by replaying identity)
+resolved.events         30 days
+profile.events          30 days
 identity.events         30 days
-enriched.events         30 days
+session.events          30 days
 attribution.events      30 days
-analytics.events        30 days
+rejected.events          7 days   (a week-old governance signal is a dashboard entry)
 retry topics             7 days
 dlq topics              retain unresolved; 30 days after resolution
 ```
@@ -179,9 +182,11 @@ brokers                         3
 replication_factor              3
 min_in_sync_replicas            2
 raw.events partitions           24
-analytics.events partitions     24
+identified.events partitions    24
+resolved.events partitions      24
+profile.events partitions       12
 identity.events partitions      12
-enriched.events partitions      12
+session.events partitions       12
 attribution.events partitions   12
 retry topic partitions           6
 dlq topic partitions             6

@@ -217,7 +217,7 @@ This default is per consumer-version normalize stage, not a platform-wide rule. 
 
 ## Fan-out
 
-`analytics.events` is the shared canonical stream. Its producer, the analytics-projector, knows nothing about destinations — so nothing on the message says where it should go. The consumer decides.
+`resolved.events` is the shared canonical stream. Its producer, sync/enrichment/runtime, knows nothing about destinations — so nothing on the message says where it should go. The consumer decides.
 
 Each destination consumer reads every message on the stream and delivers one copy per **active destination instance of its own vendor in the envelope's environment**. A vendor with no destination rows delivers nothing; that is the normal state of a consumer nobody has enabled, not an error, and it is counted as `polaris_destination_events_skipped_total{reason="no_active_destinations"}` rather than routed to a DLQ.
 

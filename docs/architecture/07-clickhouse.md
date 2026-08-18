@@ -9,7 +9,7 @@ It is part of the stream graph, not just an afterthought database.
 The mature ingestion path is:
 
 ```text
-RabbitMQ analytics.events          RabbitMQ enriched / session /
+RabbitMQ resolved.events           RabbitMQ session /
     |                               identity / attribution .events
     v                                          |
 ingestion interface table                      v
@@ -33,7 +33,7 @@ Polaris streams carry two kinds of fact, and conflating them makes
 `count()` meaningless:
 
 - **Source events** are what a producer reported. They arrive on
-  `analytics.events` and land in `analytics_raw`.
+  `resolved.events` and land in `analytics_raw`.
 - **Derived events** are what a Polaris processor concluded —
   `enriched.geoip`, `session.started`, `identity.linked`,
   `touchpoint_captured`. They arrive on the four derived families and
