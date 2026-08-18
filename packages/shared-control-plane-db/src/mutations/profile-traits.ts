@@ -66,7 +66,8 @@ export async function findProfilesWithTraits(
 }
 
 /**
- * Apply one profile's trait changes and return its new version.
+ * Apply one profile's trait changes and return its new version, with the
+ * canonical customer id the emitter needs to name the person.
  *
  * Set keys are merged, removed keys are deleted, and `traits_version`
  * increments — all in one statement, so overlapping runs cannot both claim
@@ -83,7 +84,10 @@ export async function applyProfileTraitChange(
     readonly set: Readonly<Record<string, unknown>>;
     readonly remove: readonly string[];
   },
-): Promise<{ readonly traitsVersion: number } | null> {
+): Promise<{
+  readonly traitsVersion: number;
+  readonly canonicalCustomerId: string | null;
+} | null> {
   // `-` removes keys, `||` merges. Applied in that order so a key that is
   // both removed and set — which the diff never produces, but a future
   // caller might — ends up SET rather than absent.
@@ -104,9 +108,18 @@ export async function applyProfileTraitChange(
     .where("profile_id", "=", input.profileId)
     .where("project_id", "=", input.projectId)
     .where("environment", "=", input.environment)
-    .returning("traits_version")
+    // `canonical_customer_id` rides along on the row already being
+    // returned, so the emitter can name the person the same way the
+    // audiences emitter does. Without it `profile.updated` carries a bare
+    // `profile_id`, and Braze's external_id resolution skips exactly that
+    // shape -- a trap that costs nothing today, because nothing routes
+    // this event to a destination yet, and everything on the day one does.
+    .returning(["traits_version", "canonical_customer_id"])
     .executeTakeFirst();
 
   if (row === undefined) return null;
-  return { traitsVersion: Number(row.traits_version) };
+  return {
+    traitsVersion: Number(row.traits_version),
+    canonicalCustomerId: row.canonical_customer_id ?? null,
+  };
 }

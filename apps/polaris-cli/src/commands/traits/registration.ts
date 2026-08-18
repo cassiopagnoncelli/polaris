@@ -108,7 +108,10 @@ export function buildRegisteredTraitsRunner(ctx: CommandContext): TraitsComputeR
               // A profile retired between the diff and the write — a merge
               // or a rebuild can do that. Not an error worth failing a whole
               // run for; the next run simply will not see it.
-              return { traitsVersion: applied?.traitsVersion ?? 0 };
+              return {
+                traitsVersion: applied?.traitsVersion ?? 0,
+                canonicalCustomerId: applied?.canonicalCustomerId ?? null,
+              };
             },
           },
           // Published onto `profile.events`, not logged. Logging left

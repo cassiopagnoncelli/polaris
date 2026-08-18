@@ -78,7 +78,11 @@ export interface TraitProfileStore {
     readonly projectId: string;
     readonly environment: string;
     readonly change: TraitChange;
-  }): Promise<{ readonly traitsVersion: number }>;
+  }): Promise<{
+    readonly traitsVersion: number;
+    /** Named on the emitted event so it identifies a person, not just a row. */
+    readonly canonicalCustomerId: string | null;
+  }>;
 }
 
 /** Emits the two events a run produces. */
@@ -87,6 +91,7 @@ export interface TraitEmitter {
     readonly projectId: string;
     readonly environment: string;
     readonly profileId: string;
+    readonly canonicalCustomerId: string | null;
     readonly traitsVersion: number;
     readonly traits: Readonly<Record<string, unknown>>;
     readonly removedKeys: readonly string[];
@@ -172,7 +177,7 @@ export async function runTraits(input: TraitRunInput): Promise<TraitRunResult> {
   const merged = mergeChanges(perTraitChanges);
 
   for (const change of merged) {
-    const { traitsVersion } = await input.store.applyTraitChange({
+    const { traitsVersion, canonicalCustomerId } = await input.store.applyTraitChange({
       projectId: input.projectId,
       environment: input.environment,
       change,
@@ -181,6 +186,7 @@ export async function runTraits(input: TraitRunInput): Promise<TraitRunResult> {
       projectId: input.projectId,
       environment: input.environment,
       profileId: change.profileId,
+      canonicalCustomerId,
       traitsVersion,
       traits: change.set,
       removedKeys: change.remove,

@@ -69,6 +69,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
     readonly properties: Record<string, unknown>;
     /** Omitted by `trait.computed`, which is about a definition, not a person. */
     readonly profileId?: string;
+    readonly canonicalCustomerId?: string | null;
   }): PublishableEvent => {
     const at = deps.now().toISOString();
     return {
@@ -100,7 +101,20 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
       // The cost was total and silent. `profile_events_queue` keys on this
       // column, the materialized view drops rows where it is empty, and
       // the properties copy the run also writes is read by nothing.
-      ...(input.profileId === undefined ? {} : { profile: { profile_id: input.profileId } }),
+      //
+      // `canonical_customer_id` alongside it, matching the audiences
+      // emitter. A destination resolving an external id from a bare
+      // `profile_id` has nothing to key on -- Braze skips that shape --
+      // and the two emitters disagreeing about the same block is how a
+      // reader ends up handling one and not the other.
+      ...(input.profileId === undefined
+        ? {}
+        : {
+            profile: {
+              profile_id: input.profileId,
+              canonical_customer_id: input.canonicalCustomerId ?? null,
+            },
+          }),
       properties: input.properties,
     };
   };
@@ -117,6 +131,7 @@ export function createTraitEventEmitter(deps: TraitEventEmitterDeps): TraitEmitt
           environment: input.environment,
           slot: "profile_updated",
           profileId: input.profileId,
+          canonicalCustomerId: input.canonicalCustomerId,
           // Per profile per run, so a restarted run collapses rather than
           // emitting a second update for the same conclusion.
           derivedFrom: `${input.runId}:${input.profileId}`,
