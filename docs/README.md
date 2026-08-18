@@ -35,7 +35,7 @@ SDKs / producers
 - [SDK Decision Ledger](../agents/architect/adr/0003-sdk-standards-ledger.md)
 - [Production Readiness Decision Ledger](../agents/architect/adr/0004-production-readiness-ledger.md)
 - [Implementation Playbook](./implementation/README.md)
-- [Implementation Kanban](../agents/pm/kanban) (file-backed board; run `python3 agents/pm/bin/cards.py report`)
+- [Implementation Kanban](../agents/pm/kanban) (file-backed board; run `agents/pm/bin/pm report`)
 - [Delivery Roadmap](./implementation/delivery-roadmap.md)
 - [Coverage Matrix](./implementation/coverage-matrix.md)
 - [Claude Instructions](./instructions/claude.md)

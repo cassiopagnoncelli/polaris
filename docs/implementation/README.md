@@ -19,12 +19,16 @@ The architecture docs are authoritative. If a task conflicts with them, stop and
 
 The implementation board lives at:
 
-- [Implementation Kanban](./kanban.md)
+- [Implementation Kanban](../../agents/pm/kanban) — a directory of card files, one per card, not a single document
 - [Delivery Roadmap](./delivery-roadmap.md)
 - [Pipeline Redesign Plan](./pipeline-redesign-plan.md) — the accepted R programme (post-P12)
 - [Coverage Matrix](./coverage-matrix.md)
 
-The kanban is intentionally Markdown-based so a human coordinator or a single active worker can update it without a separate tool.
+The kanban is intentionally Markdown-based so a human coordinator or a
+single active worker can update it without a separate tool. It is a
+DIRECTORY of one file per card under `agents/pm/kanban/<lane>/`, driven by
+`agents/pm/bin/pm` — this file linked `./kanban.md`, a single document
+that has never existed.
 
 Recommended status flow:
 

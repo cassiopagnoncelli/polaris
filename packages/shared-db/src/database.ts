@@ -6,6 +6,30 @@
  * source of truth; this file is a hand-maintained typed view that lets
  * Kysely produce typed queries over the real schema.
  *
+ * ## This interface does NOT cover every table, and that is deliberate
+ *
+ * 25 tables exist; 16 are here. The other nine are not an oversight and
+ * typing them here would be the mistake:
+ *
+ *   - `audit_records`, `operator_tokens`, `replay_jobs`,
+ *     `clickhouse_rebuild_jobs`, `source_allowed_origins` are typed by
+ *     `@polaris/shared-control-plane-db`, which owns the OPERATOR surface.
+ *     That package exists so an audit row can only be written through a
+ *     function that also writes the thing being audited — a table exposed
+ *     here would let any holder of a `Kysely<Database>` insert one
+ *     directly, which is exactly the guarantee the package is for.
+ *   - `delivery_records`, `dlq_records`, `processor_dlq_records` are typed
+ *     by the packages that own them (`shared-destinations`,
+ *     `shared-processor`). They are per-subsystem operational logs, and a
+ *     service that does not deliver has no business querying them.
+ *   - `schema_migrations` is dbmate's own bookkeeping. Typing it would
+ *     invite code to read it, and the migration tool is the only thing
+ *     entitled to.
+ *
+ * So the rule is: a table belongs here when more than one subsystem reads
+ * it and no invariant governs how. Everything else is typed by whoever
+ * owns the invariant, next to the functions that enforce it.
+ *
  * When a new table is added by a later task, extend this interface in the
  * same change that ships the migration.
  *
