@@ -301,7 +301,7 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
       context,
       metrics,
       logger,
-      message: "failed to decode analytics.events payload",
+      message: "failed to decode resolved.events payload",
     });
     throw err;
   }
@@ -309,14 +309,14 @@ async function handleMessage(input: HandleMessageInput): Promise<void> {
   const raw = assertEnvelope(decoded);
   if (raw === undefined) {
     const fail = new Error(
-      "attribution-engine: analytics.events payload missing required envelope fields",
+      "attribution-engine: resolved.events payload missing required envelope fields",
     );
     handleClassifiedError(fail, {
       payload,
       context,
       metrics,
       logger,
-      message: "analytics.events payload missing required envelope fields",
+      message: "resolved.events payload missing required envelope fields",
     });
     throw fail;
   }

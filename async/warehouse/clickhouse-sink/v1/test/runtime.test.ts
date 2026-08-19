@@ -636,7 +636,7 @@ describe("derived-event routing", () => {
     // Six families now: five isolate — shared + one dedicated each — and
     // the quarantine does not, so it contributes exactly one entry.
     // Was seven and fifteen until 126EPNIQ retired `analytics.events` and
-    // `enriched.events`.
+    // the enriched family.
     expect(subscriptions[0]).toHaveLength(11);
     expect(subscriptions[0]).toContain("rejected.events");
     expect(subscriptions[0]).not.toContain("rejected.events.project-alpha");

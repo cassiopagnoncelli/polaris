@@ -3,8 +3,9 @@
  * Polaris Docker image build orchestrator.
  *
  * Builds production images for every service that ships a Dockerfile:
- * apps/{ingester-api, control-plane-api, polaris-cli}, every processor
- * under processors/<name>/v*\/, and every consumer under consumers/<name>/v*\/.
+ * apps/{ingester-api, control-plane-api, polaris-cli} and every pipeline
+ * unit under {sync,async}/<stage>/<name>/<version>/ — destinations
+ * included, since `sync/destinations/` is a stage like any other.
  *
  * Build args (POLARIS_BUILD_VERSION, POLARIS_GIT_SHA, POLARIS_BUILD_TIME)
  * are resolved automatically from `git` and the current ISO timestamp, and

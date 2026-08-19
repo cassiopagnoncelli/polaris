@@ -30,12 +30,12 @@ import {
 import type { Logger } from "@polaris/shared-logger";
 import { ClickHouseConnectionError, ClickHouseQueryError } from "./errors.js";
 
-/** Ingestion interface table for source events (`analytics.events`). */
+/** Ingestion interface table for source events (`resolved.events`). */
 export const ANALYTICS_QUEUE_TABLE = "analytics_events_queue";
 
 /**
- * Ingestion interface table for derived events (`enriched.events`,
- * `session.events`, `identity.events`, `attribution.events`).
+ * Ingestion interface table for derived events (`session.events`,
+ * `identity.events`, `attribution.events`, and the profile plane).
  *
  * A second table rather than a discriminator column on the first: the
  * sink picks the destination at INSERT time, so each MV downstream stays

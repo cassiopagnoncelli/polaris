@@ -60,13 +60,30 @@ clickhouse-sink
              +--> profiles                  (one row per profile per trait)
 ```
 
-Processors fan out from `raw.events` rather than chaining: each one emits
-its own derived events (`enriched.geoip`, `session.started`,
-`identity.linked`, `touchpoint_captured`) as full canonical envelopes
-stamped with the emitting processor. There is no "enriched copy" of a
-source event anywhere in the system — a source event and the facts
-Polaris derives from it are siblings, which is why they land in two
-tables rather than one.
+The SPINE chains; the consumers fan out. `raw.events` reaches exactly one
+reader, the identity stage, which writes `identified.events`; enrichment
+reads that and writes `resolved.events`. Each stage adds to the SAME
+envelope — the profile block, then traits and geo — so an event keeps its
+`event_id` the whole way down and there is one row per event in
+`analytics_raw`.
+
+Everything downstream reads `resolved.events` in parallel: the
+destinations, the sessionizer, the attribution engine, the journey
+orchestrator, the ClickHouse sink. That fan-out is off the END of the
+spine, not off `raw.events`.
+
+Derived events are still siblings, not copies. `session.started`,
+`identity.linked` and `touchpoint_captured` are full canonical envelopes
+stamped with the processor that concluded them, and they land in
+`analytics_processed` — which is why a page view that opens a session is
+one row in `analytics_raw` and one in `analytics_processed`, not two of
+either.
+
+What is NOT a sibling any more is enrichment. Geoip used to emit an
+`enriched.geoip` event on its own family that consumers joined back by
+`source_event_id`; it now writes the lookup onto the event's own
+`enrichment` block in one broker hop. The successor to that event is a
+field.
 
 ## Primary Stack
 

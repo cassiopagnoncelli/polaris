@@ -25,7 +25,7 @@ import {
  *   POLARIS_RABBITMQ_HEARTBEAT_SECONDS       (30)
  *   POLARIS_RABBITMQ_CONNECTION_TIMEOUT_MS   (10000)
  *   POLARIS_RABBITMQ_PARTITIONS              (3)  — default super-stream width
- *   POLARIS_RABBITMQ_PARTITION_OVERRIDES     (empty) — `raw.events=6,analytics.events=3`
+ *   POLARIS_RABBITMQ_PARTITION_OVERRIDES     (empty) — `raw.events=6,resolved.events=6`
  *   POLARIS_RABBITMQ_ASSIGNED_PARTITIONS     (empty = all) — `0,1,2` static assignment
  *   POLARIS_RABBITMQ_PREFETCH                (100) — per-partition QoS window
  *   POLARIS_RABBITMQ_CHECKPOINT_INTERVAL_MS  (5000)

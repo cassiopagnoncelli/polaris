@@ -246,7 +246,7 @@ export type DestinationStatus = "active" | "paused" | "disabled";
  *   - `test`     no network delivery; used by smoke tests and replay dry runs
  *
  * Modes do not change event-to-vendor mapping behavior. Mapping semantics
- * live in `consumers/<vendor>/v<n>/mappers/`, never here.
+ * live in `sync/destinations/<vendor>/<version>/src/mapper.ts`, never here.
  */
 export type DestinationMode = "live" | "sandbox" | "test";
 
@@ -267,7 +267,7 @@ export type DestinationRetryPolicy = "standard" | "aggressive" | "conservative";
  *
  * **PostgreSQL DOES NOT store mapping semantics.** Mapping semantics
  * (event-to-vendor field maps) live in versioned consumer code under
- * `consumers/<vendor>/v<n>/mappers/`. This interface intentionally has NO
+ * `sync/destinations/<vendor>/<version>/src/mapper.ts`. This interface intentionally has NO
  * column resembling `field_map`, `mapping`, `event_map`, `target_field`, or
  * any other field-translation surface. The CLI cannot define mappings
  * because the typed schema gives it nowhere to store them, and the
@@ -407,8 +407,8 @@ export type ProcessorActivationState = "enabled" | "disabled";
  *
  * **PostgreSQL DOES NOT store processor transform rules.** The semantic
  * definition of every processor (inputs, outputs, mode, transform code)
- * lives in `processors/<name>/v<n>/processor.manifest.yaml` and
- * `processors/<name>/v<n>/src/`. This interface intentionally has NO column
+ * lives in `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml` and
+ * `{sync,async}/<stage>/<name>/<version>/src/`. This interface intentionally has NO column
  * resembling `transform`, `rule`, `mapping`, `input_topic`, `output_topic`,
  * `config_blob`, `routing`, `enrichment`, or any other transform-rule
  * surface. The CLI cannot define semantics because the typed schema gives
@@ -422,7 +422,7 @@ export interface ProcessorActivationsTable {
   /** Processor catalog name (e.g. `analytics-projector`). */
   processor_name: string;
   /**
-   * Immutable version directory under `processors/<name>/`. Free-form text
+   * Immutable version directory under `{sync,async}/<stage>/<name>/`. Free-form text
    * (e.g. `v1`, `v2`, `v1.2.3`) — the manifest file on disk is the source of
    * truth for which versions actually exist.
    */
@@ -474,7 +474,7 @@ export type ProcessorRunStatus = "running" | "completed" | "failed" | "cancelled
  *
  * One row per processor execution. The semantic definition of every
  * processor (inputs, outputs, mode, transform code) lives in
- * `processors/<name>/v<n>/processor.manifest.yaml`. This table records ONLY
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`. This table records ONLY
  * runtime state: which run happened, when, with what outcome and counters.
  *
  * The Kafka consumer-group committed offset remains the authoritative
@@ -491,7 +491,7 @@ export interface ProcessorRunsTable {
   /** Processor catalog name (matches the directory under `processors/`). */
   processor_name: string;
   /**
-   * Immutable version directory under `processors/<name>/`. Free-form text
+   * Immutable version directory under `{sync,async}/<stage>/<name>/`. Free-form text
    * (e.g. `v1`, `v2`, `v1.2.3`); the manifest on disk is the source of
    * truth for which versions actually exist.
    */
@@ -670,7 +670,7 @@ export interface IdentityLinksTable {
   reason: string;
   /** Emitting processor name (matches the directory under `processors/`). */
   processor_name: string;
-  /** Emitting processor version (matches the directory under `processors/<name>/`). */
+  /** Emitting processor version (matches the directory under `{sync,async}/<stage>/<name>/`). */
   processor_version: string;
   /**
    * `processor_runs.run_id` that recorded the link. NULL after the run row

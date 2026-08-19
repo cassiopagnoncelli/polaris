@@ -149,7 +149,7 @@ the vendor is rejecting the request shape, or the credential is wrong.
    --reason <why>`. Then resume delivery — the runtime picks up the new
    value within the 60s instance-cache window, no restart.
 4. If `vendor_response_summary` describes a schema mismatch, the
-   destination's mapper code (`consumers/<vendor>/v<n>/mappers/`) is
+   destination's mapper code (`sync/destinations/<vendor>/<version>/src/mapper.ts`) is
    probably stale relative to the vendor's API. File a follow-up to
    bump the consumer version.
 

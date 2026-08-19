@@ -62,7 +62,9 @@ describe("assertNoMappingSemantics", () => {
       expect(err).toBeInstanceOf(MappingSemanticsError);
       expect((err as MappingSemanticsError).token).toBe("event_map");
       expect((err as Error).message).toContain("project configuration");
-      expect((err as Error).message).toContain("consumers/<vendor>/v<n>/mappers/");
+      expect((err as Error).message).toContain(
+        "sync/destinations/<vendor>/<version>/src/mapper.ts",
+      );
     }
   });
 

@@ -3,15 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris enrichment stage (sync pipeline, stage 3). Consumes identified.events, composes the pinned enrichers in-process — traits snapshot from the profile store, geo from context.ip — and emits resolved.events. Reads the profile store; never writes it.",
+  "description": "Polaris enrichment stage (sync pipeline, stage 3). Consumes identified.events, composes the pinned enrichers in-process \u2014 traits snapshot from the profile store, geo from context.ip \u2014 and emits resolved.events. Reads the profile store; never writes it.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "src",
-    "processor.manifest.yaml",
-    "CHANGELOG.md"
+    "processor.manifest.yaml"
   ],
   "engines": {
     "node": ">=22.0.0"

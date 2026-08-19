@@ -3,15 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris sessionizer processor v2. Consumes resolved.events and maintains an inactivity window per (project_id, environment, profile_id) in Redis, emitting session.started / session.ended on session.events. Keying on the PERSON rather than on whichever identifier an event happened to carry is the whole difference from v1: a login no longer ends one session and orphans another.",
+  "description": "Polaris traits runner v1. Evaluates the definitions in catalog/traits/ against the sanctioned ClickHouse projections, diffs each computed value against the profile's current traits, and writes only what changed \u2014 bumping traits_version and emitting trait.computed / profile.updated on profile.events. No long-lived service: `polaris traits compute` is the entrypoint. Its description was sessionizer v2's, verbatim, until 2026-08-19.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "src",
-    "processor.manifest.yaml",
-    "CHANGELOG.md"
+    "src"
   ],
   "engines": {
     "node": ">=22.0.0"
@@ -23,8 +21,7 @@
     "lint": "biome lint src test",
     "format": "biome format --write src test",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "start": "node dist/main.js"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@polaris/shared-clickhouse": "workspace:*",

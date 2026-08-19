@@ -17,7 +17,7 @@
  *
  *   The CLI MUST NOT define processor transform semantics. Processor
  *   transform rules (inputs, outputs, mode, transform code) live in
- *   versioned code under `processors/<name>/v<n>/`. Every command in this
+ *   versioned code under `{sync,async}/<stage>/<name>/<version>/`. Every command in this
  *   group runs `rejectProcessorRuleArguments` against the parsed args
  *   before any DB work, so a flag like `--transform`, `--input-topic`,
  *   `--field-map`, or `--routing` is refused with a usage error and never
@@ -69,7 +69,7 @@ export const processorsCommand: CommandDefinition = {
       .description(
         "Inspect processor manifests, list runs, and toggle per-(project, env) activations. " +
           "PostgreSQL stores runtime state only; transform semantics live in versioned code " +
-          "under processors/<name>/v<n>/.",
+          "under {sync,async}/<stage>/<name>/<version>/.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

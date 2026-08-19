@@ -22,9 +22,12 @@ Binding architecture references:
 The CLI surface this runbook depends on lives at
 [`apps/polaris-cli/src/commands/topics/`](../../apps/polaris-cli/src/commands/topics/).
 The matching resolver and cache live in
-[`packages/shared-transport/src/topic-family.ts`](../../packages/shared-transport/src/topic-family.ts)
+[`packages/shared-transport/src/streams.ts`](../../packages/shared-transport/src/streams.ts)
 and
-[`packages/shared-transport/src/topic-isolation-cache.ts`](../../packages/shared-transport/src/topic-isolation-cache.ts).
+[`packages/shared-transport/src/isolation-cache.ts`](../../packages/shared-transport/src/isolation-cache.ts);
+0068R added
+[`isolation-snapshot.ts`](../../packages/shared-transport/src/isolation-snapshot.ts),
+which is what a service actually wires.
 The migration that owns the persistent state is
 [`db/migrations/20260514000003_create_topic_isolations.sql`](../../db/migrations/20260514000003_create_topic_isolations.sql).
 

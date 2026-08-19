@@ -2,7 +2,7 @@
   "name": "@polaris/shared-destinations",
   "version": "0.0.0",
   "private": true,
-  "description": "Polaris destination consumer runtime: subscribes to analytics.events, composes the shared normalize step from @polaris/shared-destination-normalize, routes through a vendor mapper and deliverer, and writes delivery_records / DLQ entries. Vendor-AGNOSTIC; each consumers/<vendor>/v<N>/ wraps this runtime with its own mapper + deliverer.",
+  "description": "Polaris destination consumer runtime: subscribes to analytics.events, composes the shared normalize step from @polaris/shared-destination-normalize, routes through a vendor mapper and deliverer, and writes delivery_records / DLQ entries. Vendor-AGNOSTIC; each sync/destinations/<vendor>/<version>/ wraps this runtime with its own mapper + deliverer.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

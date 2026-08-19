@@ -2,7 +2,7 @@
  * Processor manifest loader.
  *
  * Manifests live next to processor code under
- * `processors/<name>/v<n>/processor.manifest.yaml`. They are the SEMANTIC
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`. They are the SEMANTIC
  * definition of each processor version per
  * `docs/architecture/05-processors-and-replay.md`. The CLI (P6-005) reads
  * the same files for `processors list` and `processors show`; the runtime
@@ -149,7 +149,7 @@ export const processorFixtureSchema = z
 export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
 
 /**
- * Shape of `processors/<name>/v<n>/processor.manifest.yaml`. Rejects
+ * Shape of `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`. Rejects
  * unknown top-level keys via `.strict()`.
  *
  * P8-006 adds three optional top-level fields to the v1 manifest contract:

@@ -203,8 +203,8 @@ to each service's `src/config.ts` for the exhaustive list:
 
 - `apps/ingester-api/src/config.ts`
 - `apps/control-plane-api/src/config.ts`
-- `processors/<name>/v1/src/config.ts`
-- `consumers/<name>/v1/src/config.ts`
+- `{sync,async}/<stage>/<name>/v1/src/config.ts`
+- `sync/destinations/<name>/v1/src/config.ts`
 
 The shared HTTP, Postgres, RabbitMQ, Redis, ClickHouse schemas live under
 `packages/shared-config/src/schemas/`. Every variable name is prefixed

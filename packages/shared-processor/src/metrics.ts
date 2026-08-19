@@ -160,7 +160,7 @@ export interface ProcessorMetricLabels {
   readonly environment?: string | undefined;
   /**
    * Logical RabbitMQ topic family this metric scopes to (e.g.
-   * `raw.events`, `enriched.events`). See `CANONICAL_STREAM_FAMILIES` in
+   * `raw.events`, `resolved.events`). See `CANONICAL_STREAM_FAMILIES` in
    * `@polaris/shared-transport`.
    */
   readonly topic_family?: string | undefined;

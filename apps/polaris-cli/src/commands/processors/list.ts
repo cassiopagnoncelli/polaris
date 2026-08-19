@@ -174,7 +174,7 @@ function emit(
 
 function renderHuman(view: readonly ProcessorListView[]): string {
   if (view.length === 0) {
-    return "(no processor manifests discovered under processors/<name>/v<n>/processor.manifest.yaml)";
+    return "(no processor manifests discovered under {sync,async}/<stage>/<name>/<version>/processor.manifest.yaml)";
   }
   const lines: string[] = [`count=${view.length}`];
   for (const proc of view) {

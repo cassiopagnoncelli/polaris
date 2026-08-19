@@ -339,8 +339,8 @@ Polaris is **file-heavy, database-light**. Two halves:
 | Event registry / catalog (`catalog/events/*/*.yaml`)         | `projects` rows (materialized from `catalog/projects/`)    |
 | Forbidden-field policy (`catalog/policy/forbidden-fields.ts`) | `sources` rows (materialized from `catalog/sources/`)      |
 | Project + source declarations (`catalog/projects/`, `catalog/sources/`) | `destination_instances` rows                             |
-| Processor manifests + code (`processors/<name>/v<n>/`)       | `processor_activations` rows (runtime enable/disable)      |
-| Destination consumer mappings + manifests (`consumers/<vendor>/v<n>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
+| Processor manifests + code (`{sync,async}/<stage>/<name>/<version>/`)       | `processor_activations` rows (runtime enable/disable)      |
+| Destination consumer mappings + manifests (`sync/destinations/<vendor>/<version>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
 | SQL DDL and migrations (`sql/`, `db/migrations/`)            | `audit_records`                                            |
 
 The CLI's `--from-catalog` import path (on `projects list`, `projects show`,

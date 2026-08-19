@@ -1,6 +1,6 @@
 # Consumer SPEC: `<vendor>` v`<N>`
 
-> Every destination consumer ships a `SPEC.md` at `consumers/<vendor>/v<N>/SPEC.md` filled from this template. The SPEC is the durable artifact that survives across versions — when v2 is created, v1's SPEC remains for migration reference.
+> Every destination consumer ships a `SPEC.md` at `sync/destinations/<vendor>/<version>/SPEC.md` filled from this template. The SPEC is the durable artifact that survives across versions — when v2 is created, v1's SPEC remains for migration reference.
 
 ## Vendor
 
@@ -122,8 +122,8 @@ If the consumer's identity slot model is complex (Meta CAPI's `user_data` shape,
 Each canonical event the consumer handles has at least one golden fixture pair:
 
 ```text
-consumers/<vendor>/v<N>/test/fixtures/<event>.input.json    canonical event
-consumers/<vendor>/v<N>/test/fixtures/<event>.output.json   vendor payload after normalize+map
+sync/destinations/<vendor>/<version>/test/fixtures/<event>.input.json    canonical event
+sync/destinations/<vendor>/<version>/test/fixtures/<event>.output.json   vendor payload after normalize+map
 ```
 
 Fixtures are deterministic and used by contract tests. The vendor delivery step (network) is not exercised in unit tests; integration tests against vendor sandbox endpoints are documented separately.

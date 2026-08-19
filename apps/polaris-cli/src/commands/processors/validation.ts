@@ -5,7 +5,7 @@
  *
  *   The CLI MUST refuse to write semantic processor config. Processor
  *   transform rules (inputs, outputs, mode, transform code) live in
- *   versioned code under `processors/<name>/v<n>/` — NEVER in PostgreSQL.
+ *   versioned code under `{sync,async}/<stage>/<name>/<version>/` — NEVER in PostgreSQL.
  *
  * This module enforces that contract before any value reaches the DB
  * repository. The rejection list of disallowed flag/argument names lives
@@ -152,7 +152,7 @@ export function rejectProcessorRuleArguments(args: Readonly<Record<string, unkno
       throw new UsageError(
         `--${normalised} is not accepted by the processors CLI. ` +
           "Processor transform rules (inputs, outputs, mode, transform code) " +
-          "live in versioned code under processors/<name>/v<n>/ and are NEVER " +
+          "live in versioned code under {sync,async}/<stage>/<name>/<version>/ and are NEVER " +
           "stored in PostgreSQL. To change a processor's runtime activation, " +
           "use `polaris processors enable` / `disable` with --version, --project, " +
           "and --env. To change transform semantics, ship a new processor version.",

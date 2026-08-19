@@ -16,11 +16,17 @@ Generate code around this path:
 SDKs/producers
   -> Fastify ingester
   -> RabbitMQ raw.events
-  -> versioned processors
-  -> RabbitMQ derived topics
-  -> destination consumers
-  -> clickhouse-sink
+  -> sync/identity/resolver   -> identified.events
+  -> sync/enrichment/runtime  -> resolved.events
+  -> sync/destinations        -> vendor APIs
+  -> async/* off resolved.events, including clickhouse-sink
 ```
+
+The spine CHAINS; it does not fan out. Each stage reads the previous
+stage's family and writes the next, and enrichment lands IN the envelope
+rather than as a sibling event. `async/*` units read `resolved.events`
+alongside the destinations — they are consumers of the spine, not links in
+it.
 
 ## Hard Rules
 

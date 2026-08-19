@@ -10,8 +10,7 @@
   "files": [
     "dist",
     "src",
-    "processor.manifest.yaml",
-    "CHANGELOG.md"
+    "processor.manifest.yaml"
   ],
   "engines": {
     "node": ">=22.0.0"

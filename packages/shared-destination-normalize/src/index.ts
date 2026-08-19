@@ -9,7 +9,7 @@
  *
  * This package owns the destination-agnostic part of NORMALIZE. Each
  * consumer composes its own `normalize/` directory on top, adding vendor-
- * specific rules. Mappers (in `consumers/<vendor>/v<n>/mappers/`) see
+ * specific rules. Mappers (in `sync/destinations/<vendor>/<version>/src/mapper.ts`) see
  * only the normalized intermediate produced here; they never reach back
  * into the raw canonical envelope.
  *

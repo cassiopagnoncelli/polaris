@@ -1216,7 +1216,10 @@ describe("processors command dispatcher wiring", () => {
       meta: META,
     });
     expect(code).toBe(ExitCode.Ok);
-    expect(capture.stdout.join("")).toMatch(/processors\/<name>\/v<n>/);
+    // The tree the help names must be the tree that exists. This pinned
+    // `processors/<name>/v<n>/` — deleted by the R-programme move — so the
+    // assertion kept a stale answer alive rather than catching it.
+    expect(capture.stdout.join("")).toMatch(/\{sync,async\}\/<stage>\/<name>\/<version>\//);
   });
 });
 

@@ -5,7 +5,7 @@
  * (Meta CAPI, GA4, TikTok, Braze, webhook-sink, reverse-etl). One row per
  * deployed instance per `(project, environment)`. The row holds runtime
  * state and operational tuning only — mapping semantics live in versioned
- * consumer code under `consumers/<vendor>/v<n>/mappers/`.
+ * consumer code under `sync/destinations/<vendor>/<version>/src/mapper.ts`.
  *
  * Rules baked into this module:
  *

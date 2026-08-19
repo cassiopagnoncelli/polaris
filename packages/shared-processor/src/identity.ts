@@ -9,8 +9,8 @@
  * with the same names, in the same order.
  *
  * The package intentionally does NOT widen `processor_version` to a closed
- * union: the version directory tree (`processors/<name>/v1/`,
- * `processors/<name>/v2/`, ...) is the source of truth for what versions
+ * union: the version directory tree (`{sync,async}/<stage>/<name>/v1/`,
+ * `{sync,async}/<stage>/<name>/v2/`, ...) is the source of truth for what versions
  * exist. The manifest loader (see `./manifest.ts`) is the actual gate; here
  * the shape is structural so a processor's TypeScript literals (`"v1"`
  * `as const`) flow through unchanged.

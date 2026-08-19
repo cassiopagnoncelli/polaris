@@ -10,10 +10,10 @@ RabbitMQ is the immutable streaming backbone. Polaris is the platform built arou
 SDKs / producers
   -> Ingester API
   -> RabbitMQ raw.events
-  -> versioned processors
-  -> RabbitMQ derived topics
-  -> destination consumers
-  -> ClickHouse analytical storage
+  -> sync/identity/resolver   -> identified.events
+  -> sync/enrichment/runtime  -> resolved.events
+  -> sync/destinations        -> vendor APIs
+  -> async/* off resolved.events, including clickhouse-sink
 ```
 
 ## Reading Order

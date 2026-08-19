@@ -22,7 +22,12 @@ FROM node:22-alpine AS builder
 # `libc6-compat` lets prebuilt linux-musl native modules (e.g.
 # @node-rs/argon2 used by @polaris/shared-secrets) load on Alpine.
 RUN apk add --no-cache libc6-compat \
-    && npm install --global pnpm@10.30.0
+    # No version: pnpm reads `packageManager` from the root package.json and
+    # self-manages to it. Pinning here made a THIRD copy of that version --
+    # the workflow's copy going stale is what killed CI for seven days, and
+    # this one was already a major behind, silently downloading pnpm twice
+    # on every image build.
+    && npm install --global pnpm
 
 WORKDIR /workspace
 

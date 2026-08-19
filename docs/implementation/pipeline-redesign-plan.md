@@ -770,6 +770,23 @@ M7  Async pipelines: merge worker + merge dictionary (R4),
     archive (R10), journeys (R11).
 ```
 
+**What M6 actually did, and how it differs.** `f9ae3d0` deleted all three
+units and both families in one commit. None was marked `deprecated` first
+and no M4/M5 verify artifact exists, so the evidence for the deletion is a
+green smoke test and a green suite, not a comparison against the old path.
+
+That is a deliberate consequence of waiving M3's dual-run: the app is
+pre-production, so there was no traffic to protect, no parity window to
+serve, and nothing for a deprecation period to protect a consumer FROM. It
+is recorded here rather than left implicit, because "deprecate, delete
+after verify" is the platform's rule for a version somebody depends on and
+the next retirement should not read this milestone as a precedent for
+skipping it.
+
+The catalog side did get the full treatment: `enriched.geoip` is
+`lifecycle: deprecated` with a past `sunset_at` rather than deleted, so
+archived NDJSON stays replayable against its original schema.
+
 Replay across the cutover: `raw.events` replays reach the identity stage
 naturally (same first-hop position as the projector). A replay of Stage 2/3
 attaches current profiles — documented as-of semantics (§3). Person-keyed
@@ -791,11 +808,11 @@ starter). One workstream row maps to one or more cards:
 | R0 | Contract evolution | M | — | `T3K2KULJ` `FSHHQ4MH` `RDWVV22H` | Envelope `profile`/`enrichment` blocks in `shared-schemas`; catalog + bindings for the 4 missing mapper events (incl. `user.identified`); SDK `identify()` emits + sends traits (web + node); `profile.events` + `identity.*` v2 + `trait/audience` catalog entries |
 | R0L | Pipeline-shaped repo layout | M | — (parallel with R0) | `7GTZYOYB` | §2.3 tree: move `processors/` + `consumers/` under `sync/` and `async/`; workspace globs, docker-build, docs; moves are non-semantic, nothing re-versions |
 | R1 | Profile store + the two spine stages | L | R0, R0L | `7AJ4O6CW` `XYN5D28L` `32EOJ44P` `VUT47FSY` | §4 migrations; `sync/identity/resolver` v1 + `sync/enrichment` v1 (traits + geoip enrichers; manifests, golden fixtures); **merge safeguards: identifier denylist + merge-rate breaker + `identity.merge_suspended` (§4.2 — must ship inside R1, not after)**; MaxMind backend + mmdb refresh job; `identity.events` v2 emission; `polaris profiles` CLI; metrics + dashboards |
-| R2 | Spine cutover | L | R1 | `F3DBOO9U` `IA4PPS4J` `126EPNIQ` | M1–M3, M6: topology provisioning, sink v2 + DDL, parity verification, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `claude.md`, onboarding "project or source?" guidance) |
+| R2 | Spine cutover | L | R1 | `F3DBOO9U` `IA4PPS4J` `126EPNIQ` `4NKUJUQF` `0068R` | M1–M3, M6: topology provisioning, sink v2 + DDL, retirements; docs updates (`00`, `03`, `05`, `07`, `docs/README.md`, `docs/instructions/claude.md`). Five cards, not three: the parity verification named here was waived with the dual-run (see §7's M6 note), and the docs pass it listed turned out to need two more passes — a conformance audit later found ninety references to the retired tree still standing. `scripts/lint-retired-paths.mjs` is what closed it |
 | R3 | Destination platform | L | R2 (M4) | `H05QEWIB` `WE77L4R8` `MVKUP64R` `60L16ALA` | Routing gate (subscriptions/filters/consent as config values, on the landed `DelivererContext.projectConfig` seam); profile-aware normalize; retry-ladder adoption + attempt propagation + `retry_policy` semantics; Redis dedupe/rate-limit; per-instance circuit breakers (trip on consecutive vendor 5xx, half-open probes); per-destination freshness SLO panels; `skipped_unmapped`/`skipped_filtered` statuses; harness-owned `app.ts` |
 | R4 | Retroactive merge | M | R2 | `U2EV9PRG` | Merge worker; `profile_merge_map` + dictionary DDL; person-keyed query guidance; optional rebuild wiring; `polaris profiles rebuild` (§4.3) |
 | R5 | Traits + profiles sync | M | R2 | `6PRTZ9QY` `ATVSAZHB` | Trait definition loader + `polaris traits compute` cron verb; `profiles` CH table fed from `profile.events`; `profile.updated` end-to-end |
-| R6 | Audiences | M | R5 | `C195TM1C` | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style via existing vendor consumers) |
+| R6 | Audiences | M | R5 | `C195TM1C` | Audience definitions; membership table; entered/exited events; destination delivery of audience transitions (attribute-style). "Existing vendor consumerS" overstates what shipped: Braze alone maps the profile plane, deliberately — it is the vendor whose model has somewhere for "is a member" to live, and subscribing the others would mean every transition reaching a consumer that reports it unmapped |
 | R7 | Reverse ETL | M | R5 | `XTSWPW63` | `async/reverse-etl/runner/v1`; job SQL registry; cron verb; ingester round-trip |
 | R8 | Sessionizer v2 + attribution v3 | M | R2 | `H16JKHSF` `WHYB6L3Q` | M5 as its own stream — mechanical rekeying to `profile_id`, new majors, fixture refresh |
 | R9 | Hardening (rolling) | S× | parallel | `H0GI1EZ0` `2EHGIH6Q` `TWVAPOR8` `LTLKLJIQ` | Items in §9 not consumed by other workstreams |

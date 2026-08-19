@@ -18,7 +18,7 @@
  * means allowed; only an explicit disable stops anything.
  *
  * Neither table carries processor *semantics* — inputs, outputs, mode, replay
- * support live in `processors/<name>/v<n>/processor.manifest.yaml` and in
+ * support live in `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml` and in
  * code, never in Postgres. Throughput, lag, and failure rates are Grafana's
  * `polaris-processors` dashboard; the counters here are per-run totals for
  * triage, not a metrics surface.

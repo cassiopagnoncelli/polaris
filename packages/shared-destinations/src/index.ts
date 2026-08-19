@@ -7,7 +7,7 @@
  *   analytics.events -> subscribe -> NORMALIZE -> MAP -> DELIVER -> RECORD
  *
  * The runtime in this package is destination-AGNOSTIC. Vendor-specific
- * mapping and delivery code live under `consumers/<vendor>/v<N>/` and
+ * mapping and delivery code live under `sync/destinations/<vendor>/<version>/` and
  * compose with this runtime by supplying `Mapper` + `Deliverer`
  * implementations that match the typed contracts in `./types.ts`.
  *

@@ -371,7 +371,7 @@ export async function buildAttributionEngineApp(
         title: "Polaris attribution-engine v1",
         version: config.service.serviceVersion,
         description:
-          "Streaming processor that reads analytics.events and emits attribution.touchpoint_captured / attribution.first_touch_assigned / attribution.last_touch_assigned on attribution.events. No HTTP business routes — /health, /ready, and /metrics only.",
+          "Streaming processor that reads resolved.events and emits attribution.touchpoint_captured / attribution.first_touch_assigned / attribution.last_touch_assigned on attribution.events. No HTTP business routes — /health, /ready, and /metrics only.",
       },
     },
     ...(shutdownTasks.length > 0 ? { shutdownTasks } : {}),

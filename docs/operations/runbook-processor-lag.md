@@ -14,7 +14,9 @@ The processor runtime emitting the lag metric lives at
 [`packages/shared-processor/`](../../packages/shared-processor/). The
 identity and enrichment spine stages that consume the
 shared topics live at
-[`processors/`](../../processors/). The Prometheus rules that trigger
+[`sync/identity/resolver/`](../../sync/identity/resolver/) and
+[`sync/enrichment/runtime/`](../../sync/enrichment/runtime/); the async
+consumers of the spine are under [`async/`](../../async/). The Prometheus rules that trigger
 this runbook live at
 [`infra/prometheus/rules/polaris.alerts.yml`](../../infra/prometheus/rules/polaris.alerts.yml).
 

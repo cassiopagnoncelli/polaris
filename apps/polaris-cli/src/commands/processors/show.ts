@@ -2,7 +2,7 @@
  * `polaris processors show <name> --version <v>` — read-only.
  *
  * Reads the named manifest from
- * `processors/<name>/v<n>/processor.manifest.yaml`, parses it with the Zod
+ * `{sync,async}/<stage>/<name>/<version>/processor.manifest.yaml`, parses it with the Zod
  * schema, and renders the full content plus a table of per-(project, env)
  * activations from `processor_activations`.
  *

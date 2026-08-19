@@ -211,8 +211,10 @@ processor directory + manifest, not a deployment override.
 
 #### attribution-engine v3
 
-Source: [`async/computation/attribution-engine/v1/src/config.ts`](../../async/computation/attribution-engine/v1/src/config.ts),
-[`async/computation/attribution-engine/v2/src/config.ts`](../../async/computation/attribution-engine/v2/src/config.ts).
+Source: [`async/computation/attribution-engine/v3/src/config.ts`](../../async/computation/attribution-engine/v3/src/config.ts).
+v1 and v2 were deleted with the fan-out; the defaults below are kept as the
+history of what those versions used, because a `processor_activations` row
+naming one is still readable and the column values have to mean something.
 
 | Variable | Status | Default (v1) | Default (v2) |
 | --- | --- | --- | --- |

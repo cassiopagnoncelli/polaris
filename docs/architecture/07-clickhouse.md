@@ -35,16 +35,25 @@ Polaris streams carry two kinds of fact, and conflating them makes
 - **Source events** are what a producer reported. They arrive on
   `resolved.events` and land in `analytics_raw`.
 - **Derived events** are what a Polaris processor concluded —
-  `enriched.geoip`, `session.started`, `identity.linked`,
-  `touchpoint_captured`. They arrive on the four derived families and
-  land in `analytics_processed`.
+  `session.started`, `identity.linked`, `touchpoint_captured`, and the
+  profile plane. They arrive on their own families and land in
+  `analytics_processed`.
 
 Both are full canonical envelopes; a derived event carries the emitting
 processor in `source.id` and its own payload schema in `properties`.
-Processors fan out from `raw.events` rather than chaining, so there is no
-"enriched copy" of a source event — the two are siblings, and one page
-view that triggers a geoip lookup and a session start is one row in
-`analytics_raw` and two in `analytics_processed`, not three of anything.
+
+There is no "enriched copy" of a source event, and the reason changed with
+the R-programme move. It used to be that processors fanned out from
+`raw.events` and never touched the source envelope. Now the spine CHAINS
+— identity, then enrichment — and each stage writes into the same
+envelope, keeping the same `event_id`. Either way `analytics_raw` holds
+one row per source event: first because nothing rewrote it, now because
+every rewrite is the same row.
+
+So a page view that gets a geoip lookup and starts a session is ONE row in
+`analytics_raw`, carrying the geo result in its own `enrichment` block,
+and one row in `analytics_processed` for the session. Under the old model
+it was one and two, because the geoip lookup was its own event.
 
 `clickhouse-sink` routes by stream family at INSERT time rather than
 filtering in the materialized views. A `WHERE` in each MV would have to

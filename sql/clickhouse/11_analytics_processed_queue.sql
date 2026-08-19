@@ -5,7 +5,6 @@
 -- Polaris processors *derive* rather than the source events producers
 -- send.
 --
---   enriched.events     enriched.geoip
 --   session.events      session.started, session.ended
 --   identity.events     identity.linked, identity.merged, identity.rotated
 --   attribution.events  touchpoint_captured, ...

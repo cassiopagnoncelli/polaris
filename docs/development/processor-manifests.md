@@ -1,7 +1,7 @@
 # Processor Manifests, Changelogs, and Golden Fixtures
 
 This doc is the contract that every released processor version in
-`processors/<name>/v<n>/` follows. It pairs with the architectural rules
+`{sync,async}/<stage>/<name>/<version>/` follows. It pairs with the architectural rules
 in [Processors and Replay](../architecture/05-processors-and-replay.md)
 and [Engineering Standards](../architecture/09-engineering-standards.md);
 where those docs state the policy, this one names the file layout and the
@@ -74,7 +74,7 @@ runtime helpers (which use this package) accept them.
 | Field            | Type                                | Required        | Notes                                                                                                                                                |
 | ---------------- | ----------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`           | string, lowercase + `[_-]`, 3-64    | yes             | Matches the directory under `processors/`.                                                                                                           |
-| `version`        | `v<int>` or `v<int>.<int>(.<int>)?` | yes             | Matches the directory under `processors/<name>/`.                                                                                                    |
+| `version`        | `v<int>` or `v<int>.<int>(.<int>)?` | yes             | Matches the directory under `{sync,async}/<stage>/<name>/`.                                                                                                    |
 | `owner`          | string, 1-128                       | yes             | Team handle: `platform-data`, `platform-identity`, ...                                                                                               |
 | `description`    | string, 1-8192                      | yes             | Multi-paragraph prose. Owns the "what this processor does" explanation.                                                                              |
 | `release_status` | `released` / `deprecated` / `experimental` | **new in P8-006** | Lifecycle flag. Production-active processors are `released`. See "Release lifecycle".                                                                |
@@ -295,7 +295,7 @@ There are TWO test layers for manifests:
    fixture; it does NOT read the real on-disk manifests.
 
 2. **Per-processor manifest test** —
-   `processors/<name>/v1/test/manifest.test.ts` loads the REAL on-disk
+   `{sync,async}/<stage>/<name>/v1/test/manifest.test.ts` loads the REAL on-disk
    manifest via `@polaris/shared-processor`'s `loadProcessorManifest`,
    asserts the values specific to that processor (expected topic
    families, owner, state stores, semantic defaults, ...), and runs
@@ -312,7 +312,7 @@ catches "someone added a key the schema doesn't know about".
 
 ## Adding a new released processor
 
-1. Create `processors/<name>/v1/` with the layout above.
+1. Create `{sync,async}/<stage>/<name>/v1/` with the layout above.
 2. Write `processor.manifest.yaml` with `release_status: released`,
    the `inputs`/`outputs` topic families, the state stores, and a
    `replay` block.
@@ -327,7 +327,7 @@ catches "someone added a key the schema doesn't know about".
 
 ## Bumping a processor to a new version
 
-1. Create `processors/<name>/v2/` as a SIBLING of `v1/`. Do NOT modify
+1. Create `{sync,async}/<stage>/<name>/v2/` as a SIBLING of `v1/`. Do NOT modify
    `v1/`.
 2. The new directory carries its own manifest, CHANGELOG, fixtures,
    and tests.

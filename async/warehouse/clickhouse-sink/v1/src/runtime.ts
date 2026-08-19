@@ -11,22 +11,33 @@
  *
  * ## Routing
  *
- * Polaris streams carry two kinds of fact, and they answer different
+ * Polaris streams carry three kinds of fact, and they answer different
  * questions:
  *
- *   analytics.events     \  what a producer         -> analytics_events_queue
- *   resolved.events      /   reported
- *   enriched.events      \
- *   session.events        \  what Polaris concluded -> analytics_processed_queue
- *   identity.events       /
+ *   resolved.events         what a producer reported  -> analytics_events_queue
+ *
+ *   session.events       \
+ *   identity.events       >  what Polaris concluded   -> analytics_processed_queue
  *   attribution.events   /
  *
- * `resolved.events` joins the source side during the M3 dual-run. It is
- * the same fact as its `analytics.events` twin — same `event_id`, so the
- * two collapse in `analytics_raw` — carrying the `profile` block the
- * legacy feed cannot produce. `_version` is what makes the collapse pick
- * the enriched row every time instead of a coin flip; see
- * `@polaris/shared-clickhouse/version.ts`.
+ *   profile.events          what is now TRUE of a     -> BOTH: profile_events_queue
+ *                           person                       for state, and the
+ *                                                        processed queue for history
+ *
+ *   rejected.events         a violation record, not   -> violations_queue
+ *                           an envelope
+ *
+ * This paragraph described an M3 dual-run until 2026-08-19: `resolved.events`
+ * "joining the source side" alongside an `analytics.events` twin, with
+ * `_version` deciding which of the two won the collapse. There is no twin.
+ * `f9ae3d0` retired `analytics.events` and `enriched.events` outright —
+ * the app is pre-production, so there was no traffic to protect and no
+ * parity window to serve — and `resolved.events` has been the sole source
+ * feed since.
+ *
+ * `_version` still matters, for the reason it always did: a replayed or
+ * redelivered row must collapse against the original rather than beside
+ * it. See `@polaris/shared-clickhouse/version.ts`.
  *
  * The split is made here, at INSERT time, rather than by a WHERE clause
  * in each materialized view. A filter would have to be right in three
@@ -140,16 +151,14 @@ const DERIVED_STREAM_FAMILIES = [
 
 /**
  * Families carrying source facts — the event itself, not a fact derived
- * from it. Both land in `analytics_events_queue` and therefore in
+ * from it. They land in `analytics_events_queue` and therefore in
  * `analytics_raw`.
  *
- * TWO of them during the M3 dual-run, which is the point of this
- * version. `resolved.events` is the spine's output and carries the
- * `profile` block; `analytics.events` is the legacy projector's output
- * and does not. They deliberately share `event_id`, because they are two
- * sightings of one fact — so they collapse into each other in
- * `analytics_raw`, and `_version` is what decides which survives. See
- * `@polaris/shared-clickhouse/version.ts`.
+ * ONE of them. This block described two during an M3 dual-run, with
+ * `resolved.events` and a legacy `analytics.events` twin sharing an
+ * `event_id` so they would collapse into each other and `_version`
+ * deciding which survived. `f9ae3d0` retired the twin; the plural was
+ * left behind.
  *
  * `resolved.events` is NOT a derived family despite arriving from a
  * processor: the row it produces IS the customer's event, enriched. A
@@ -675,7 +684,7 @@ export function toQueueRow(
         offset: payload.message.offset,
         err: { name: error.name, message: error.message },
       },
-      "skipping undecodable analytics.events payload",
+      "skipping undecodable source payload",
     );
     return undefined;
   }
@@ -703,7 +712,7 @@ export function toQueueRow(
         stream: payload.stream,
         offset: payload.message.offset,
       },
-      "skipping analytics.events payload missing required envelope fields",
+      "skipping source payload missing required envelope fields",
     );
     return undefined;
   }

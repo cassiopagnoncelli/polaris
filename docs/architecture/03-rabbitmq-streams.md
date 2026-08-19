@@ -112,8 +112,13 @@ produces, so the management CLI, the native stream protocol client, and
 `@polaris/shared-transport` all agree on names.
 
 Width is config (`POLARIS_RABBITMQ_PARTITIONS`, with per-family overrides
-in `POLARIS_RABBITMQ_PARTITION_OVERRIDES`). Defaults: `raw.events` = 6,
-everything else = 3. **Changing a width is a migration, not a restart** —
+in `POLARIS_RABBITMQ_PARTITION_OVERRIDES`). Defaults: the three SPINE
+families — `raw.events`, `identified.events`, `resolved.events` — are 6,
+everything else is 3. This said "`raw.events` = 6, everything else = 3"
+until 2026-08-19, which was true only before the spine existed: every
+event that reaches `raw.events` reaches the other two, so narrowing them
+would put the whole firehose through half the partitions one stage later.
+`.env.example` carries the shipped values. **Changing a width is a migration, not a restart** —
 the publisher hashes the partition key modulo the width, so two instances
 disagreeing about it breaks per-identity ordering. See
 `docs/operations/runbook-rabbitmq-topology.md`.

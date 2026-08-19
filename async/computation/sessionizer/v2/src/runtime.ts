@@ -34,15 +34,15 @@
  * Every write passes the inactivity window as a TTL, so the store forgets
  * a session at the moment the domain says it is over.
  *
- * Topic strategy: the manifest declares the output family as
- * `session.events`, but `session.events` is NOT in the canonical topic
- * family list yet (only `raw.events`, `identity.events`,
- * `enriched.events`, `attribution.events`, `analytics.events` per
- * `docs/architecture/03-rabbitmq-streams.md`). To stay inside the task's
- * declared write scope, the runtime publishes via the producer's
- * lower-level `send` method with an explicit topic name and manually-
- * built headers and partition key. Adding `STREAM_FAMILY_SESSION_EVENTS`
- * to `@polaris/shared-transport` is a follow-up cross-cut.
+ * Topic strategy: the runtime publishes through the producer's
+ * lower-level `send` with an explicit topic name and hand-built headers
+ * and partition key, rather than through the family helpers.
+ *
+ * That was a workaround for `session.events` not being a canonical family
+ * — it is one now, and `STREAM_FAMILY_SESSION_EVENTS` exists — so the
+ * lower-level call is the leftover rather than the design. It still works
+ * because the topic name it builds is the one the family resolves to; a
+ * later version should take the helper and delete this paragraph.
  *
  * Caller-owned DLQ orchestration: the runtime does not auto-route to
  * DLQ. Hosts that want DLQ routing wrap the handler with `publishToDlq`

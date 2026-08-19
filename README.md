@@ -13,10 +13,11 @@ built around — not the other way around.
 SDKs / producers
   -> Fastify ingester (apps/ingester-api)
   -> RabbitMQ raw.events
-  -> versioned processors (processors/<name>/v<n>/)
-  -> RabbitMQ derived topics
-  -> destination consumers (consumers/<vendor>/v<n>/)
-  -> clickhouse-sink -> analytics_raw -> projection tables
+  -> sync/identity/resolver      -> identified.events
+  -> sync/enrichment/runtime     -> resolved.events   (traits + geo, in the envelope)
+  -> sync/destinations/<vendor>  -> vendor APIs
+     async/* reads resolved.events alongside: sessionizer, attribution-engine,
+     journey orchestrator, clickhouse-sink -> analytics_raw -> projection tables
 ```
 
 The full path is documented in
@@ -62,7 +63,7 @@ pnpm smoke:vertical-slice
 | [Audit and Export](docs/development/audit-and-export.md)                               | You need to inspect or bulk-export operational state via the `polaris` CLI.       |
 | [CI](docs/development/ci.md)                                                           | You want to know what gates run on every PR and how to opt into integration runs. |
 | [Vertical-Slice Smoke](docs/implementation/runbooks/vertical-slice-smoke.md)           | You're touching the ingester, either spine stage, or ClickHouse DDL.             |
-| [Implementation Kanban](docs/implementation/kanban.md)                                 | You're picking up or coordinating work.                                          |
+| [Delivery roadmap](docs/implementation/delivery-roadmap.md)                            | You're picking up or coordinating work.                                          |
 | [Claude Instructions](docs/instructions/claude.md)                                     | You're a contributor (human or agent). Read this before changing code.            |
 
 ## License

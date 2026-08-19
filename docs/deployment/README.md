@@ -64,8 +64,8 @@ The single rule of thumb:
 - if it is in `packages/shared-config/src/schemas/`, it is shared infrastructure
   (every service reads it).
 - if it is in `apps/<service>/src/config.ts` or
-  `processors/<name>/v1/src/config.ts` or
-  `consumers/<name>/v1/src/config.ts`, it is local to that service.
+  `{sync,async}/<stage>/<name>/v1/src/config.ts` or
+  `sync/destinations/<name>/v1/src/config.ts`, it is local to that service.
 
 A per-service summary, including which shared blocks each service
 composes, lives in [`config-reference.md`](./config-reference.md).

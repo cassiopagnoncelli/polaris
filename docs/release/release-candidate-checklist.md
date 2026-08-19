@@ -55,7 +55,7 @@ holders own their rows.
 | **Operator-on-call** | The operations engineer paired to the release window. | Runbook readiness. Confirms every operator-facing runbook is reachable, accurate, and has no known unaddressed gaps. |
 | **Compliance operator** | The compliance owner named in [Data Classes](../deployment/data-classes.md). | `audit_records` retention posture, identity / PII rows on the deletion list, and any regulated-data exception. |
 | **SDK owner** | The engineer who owns the SDK package being shipped. | SDK handbook accuracy, install snippets, and reason-code stability. |
-| **Destination owner** | The engineer who owns the consumer being shipped (per `consumers/<vendor>/v1/consumer.manifest.yaml`). | Destination delivery / retry / DLQ surface for that vendor. One signature per active vendor in the RC. |
+| **Destination owner** | The engineer who owns the consumer being shipped (per `sync/destinations/<vendor>/v1/consumer.manifest.yaml`). | Destination delivery / retry / DLQ surface for that vendor. One signature per active vendor in the RC. |
 
 If a role holder is unavailable on the day of the release, the role's
 team lead is the canonical fallback. Sign-offs from "the person who

@@ -2,24 +2,44 @@
 
 ## Processor Model
 
-Processors are independent, versioned TypeScript services.
-
-Example layout:
+Processors are independent, versioned TypeScript services. A unit's PATH
+says which pipeline and which stage owns it; the version directory under it
+is immutable once released.
 
 ```text
-processors/
-    v1/
-    v2/
-  identity-resolver/
-    v1/
-    v2/
-  attribution-engine/
-    v1/
-  sessionizer/
-    v1/
+sync/                      in the request-to-vendor path
+  identity/resolver/v1/
+  enrichment/runtime/v1/     composes enrichment/{geoip,traits}/v1/
+  destinations/braze/v1/     and ga4, meta-capi, tiktok, webhook-sink
+
+async/                     reads the spine, off the hot path
+  computation/sessionizer/v2/
+  computation/attribution-engine/v3/
+  journeys/orchestrator/v1/
+  merges/merge-worker/v1/
+  warehouse/{archiver,clickhouse-sink}/v1/
 ```
 
-Processors consume from one topic and emit derived events to another topic. They do not mutate existing events.
+This replaced a flat `processors/<name>/v<n>/` tree, and the change is not
+cosmetic: the directory is the pipeline map, so a unit that cannot be
+placed in it is a unit whose role nobody has decided.
+
+Two shapes of unit live here, and they are not interchangeable:
+
+- **Spine stages** CHAIN. `sync/identity/resolver` reads `raw.events` and
+  writes `identified.events`; `sync/enrichment/runtime` reads that and
+  writes `resolved.events`. Each adds to the SAME envelope — the profile
+  block, then traits and geo — so the event keeps its `event_id` the whole
+  way down. They do not mutate history; they complete an event before it is
+  written anywhere.
+- **Spine consumers** FAN OUT from `resolved.events` and emit derived
+  events on their own families (`session.events`, `attribution.events`,
+  `profile.events`). A derived event is a fact ABOUT an event, not a copy
+  of it.
+
+An in-process unit like `sync/enrichment/geoip/v1` is neither: it has no
+consumer group and no families, and is pinned by the composing runtime's
+`composes:` list instead of shipping its own manifest.
 
 ## Processor Versioning
 
@@ -309,7 +329,12 @@ Rules:
 
 ### Replay Window
 
-The practical replay window equals the retention of the source topic in RabbitMQ. With the v1 defaults, that is **90 days for `raw.events`** and shorter for derived topics.
+The practical replay window equals the retention of the source stream in
+RabbitMQ. With the v1 defaults that is **90 days for `raw.events`**, and
+shorter for every other family — `identified.events` deliberately so, since
+it is fully regenerable by replaying `raw.events` through the identity
+stage. Beyond that window the source is the object-storage archive
+(`async/warehouse/archiver/v1`), not the stream.
 
 Polaris does not promise replay beyond the operational retention window. Any incident requiring older replay is out of scope until object-storage raw archive exists. The principle is "replayability within the operational retention window" — not unbounded replay.
 

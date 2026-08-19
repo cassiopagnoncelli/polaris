@@ -154,7 +154,7 @@ Rules:
 
 ## SPEC.md per consumer version
 
-Every per-vendor consumer ships a `SPEC.md` at `consumers/<vendor>/v<N>/SPEC.md`, filled from [the consumer SPEC template](../implementation/templates/consumer-spec-template.md). The SPEC is the durable artifact that survives across versions and is the starting point for any future redesign.
+Every per-vendor consumer ships a `SPEC.md` at `sync/destinations/<vendor>/<version>/SPEC.md`, filled from [the consumer SPEC template](../implementation/templates/consumer-spec-template.md). The SPEC is the durable artifact that survives across versions and is the starting point for any future redesign.
 
 The SPEC covers:
 

@@ -1706,7 +1706,11 @@ describe("destinations command dispatcher wiring", () => {
       meta: META,
     });
     expect(code).toBe(ExitCode.Ok);
-    expect(capture.stdout.join("")).toMatch(/consumers\/<vendor>\/v<n>\/mappers/);
+    // As in processors-commands.test.ts: this pinned the pre-move path and
+    // so preserved it. Mappers are one file now, not a directory.
+    expect(capture.stdout.join("")).toMatch(
+      /sync\/destinations\/<vendor>\/<version>\/src\/mapper\.ts/,
+    );
   });
 });
 

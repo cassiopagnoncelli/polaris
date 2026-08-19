@@ -1,6 +1,6 @@
 # Canonical consumer manifest for the webhook-sink v1 destination consumer.
 #
-# Mirrors the shape of processors/<name>/v<n>/processor.manifest.yaml. The
+# Mirrors the shape of {sync,async}/<stage>/<name>/<version>/processor.manifest.yaml. The
 # manifest is the SEMANTIC config — what canonical events this consumer
 # delivers, which vendor versions, which normalization profile. Runtime
 # state (per-instance enable/disable, secret_value, max_rps, retry_policy)
