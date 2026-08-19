@@ -38,9 +38,12 @@ import {
   createTransportLogHooks,
   DeferredCheckpointStore,
   InMemoryCheckpointStore,
+  type IsolationSnapshot,
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+  startIsolationSnapshot,
   type TransportConnection,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
@@ -150,6 +153,21 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
     });
   const ownsWriter = options.writer === undefined;
 
+  // Topic isolation for the consumer side. Nothing in production ever
+  // supplied `isolatedProjects`, so this service subscribed only to the
+  // shared family and an isolated project's events sat unread on its
+  // dedicated stream. The snapshot reads `topic_isolations` for this
+  // environment; the consumer subscribes to the union of shared and
+  // dedicated, so an in-flight cutover loses nothing in either direction.
+  let isolationSnapshot: IsolationSnapshot | undefined;
+  if (options.isolatedProjects === undefined) {
+    isolationSnapshot = await startIsolationSnapshot({
+      db: db,
+      environment: config.service.environment,
+      logger: sinkLogger,
+    });
+  }
+
   const runtime = createRuntime({
     consumer,
     writer,
@@ -158,12 +176,19 @@ export async function buildClickhouseSinkApp(options: BuildAppOptions): Promise<
     batchMaxRows: config.sink.batchMaxRows,
     batchMaxMs: config.sink.batchMaxMs,
     checkpoints,
-    ...(options.isolatedProjects !== undefined
-      ? { isolatedProjects: options.isolatedProjects }
-      : {}),
+    isolatedProjects:
+      options.isolatedProjects ??
+      isolationSnapshot?.isolatedProjects(STREAM_FAMILY_RESOLVED_EVENTS) ??
+      [],
   });
 
   const shutdownTasks: ShutdownTask[] = [];
+  if (isolationSnapshot !== undefined) {
+    const snapshot = isolationSnapshot;
+    shutdownTasks.push(async () => {
+      snapshot.stop();
+    });
+  }
   shutdownTasks.push(async () => {
     // Stops consuming, then flushes the open batch — in that order, so
     // shutdown cannot race a delivery into a batch nobody will write.

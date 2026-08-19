@@ -46,12 +46,15 @@ import {
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  type IsolationSnapshot,
   type PoisonRecord,
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
   sharedOnlyIsolationLookup,
+  startIsolationSnapshot,
   staticIsolationLookup,
   type TransportConnection,
   type TransportHooks,
@@ -206,19 +209,33 @@ export async function buildSyncEnrichmentApp(
   // ---- streaming runtime ----------------------------------------------
   const policyFor = createPolicyResolver(options.projectPolicies ?? new Map());
 
-  // Same list the CONSUMER uses. The two sides were answering different
-  // questions about the same projects: one knew which dedicated families
-  // to read, the other had no idea which to write — so every publish
-  // dereferenced `undefined.isIsolated` and the stage rewound forever.
+  // One snapshot, read by both sides. They were answering different
+  // questions about the same projects: the consumer knew which dedicated
+  // families to read, the producer had no idea which to write — so every
+  // publish dereferenced `undefined.isIsolated` and the stage rewound
+  // forever. Reading one object is what stops them diverging again.
+  //
+  // Nothing in production ever supplied `isolatedProjects`, so this was
+  // `sharedOnlyIsolationLookup` in every deployment. The snapshot reads
+  // `topic_isolations` for this environment and refreshes on an interval.
+  let isolationSnapshot: IsolationSnapshot | undefined;
+  if (options.isolatedProjects === undefined) {
+    isolationSnapshot = await startIsolationSnapshot({
+      db: checkpointDb,
+      environment: config.service.environment,
+      logger: processorLogger,
+    });
+  }
   const isolation =
-    options.isolatedProjects === undefined || options.isolatedProjects.length === 0
+    isolationSnapshot?.lookup ??
+    (options.isolatedProjects === undefined || options.isolatedProjects.length === 0
       ? sharedOnlyIsolationLookup
       : staticIsolationLookup(
           options.isolatedProjects.map((project_id) => ({
             family: STREAM_FAMILY_RESOLVED_EVENTS,
             project_id,
           })),
-        );
+        ));
 
   const runtime = createRuntime({
     consumer,
@@ -263,13 +280,22 @@ export async function buildSyncEnrichmentApp(
     },
     isEnabled: async (projectId: string, environment: string) =>
       gate.isEnabled({ project_id: projectId, environment }),
-    ...(options.isolatedProjects !== undefined
-      ? { isolatedProjects: options.isolatedProjects }
-      : {}),
+    // The consumer reads `identified.events`; that family's isolated
+    // projects decide which dedicated streams it subscribes to.
+    isolatedProjects:
+      options.isolatedProjects ??
+      isolationSnapshot?.isolatedProjects(STREAM_FAMILY_IDENTIFIED_EVENTS) ??
+      [],
   });
 
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
+  if (isolationSnapshot !== undefined) {
+    const snapshot = isolationSnapshot;
+    shutdownTasks.push(async () => {
+      snapshot.stop();
+    });
+  }
   shutdownTasks.push(async () => {
     try {
       await runtime.stop();

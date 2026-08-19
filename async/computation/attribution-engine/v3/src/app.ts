@@ -46,11 +46,14 @@ import {
   createPolarisConsumer,
   createPolarisProducer,
   createTransportConnection,
+  type IsolationSnapshot,
   type PoisonRecord,
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  STREAM_FAMILY_RESOLVED_EVENTS,
   type SyncIsolationLookup,
+  startIsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -229,6 +232,21 @@ export async function buildAttributionEngineApp(
   });
 
   // ---- streaming runtime ----------------------------------------------
+  // Topic isolation for the consumer side. Nothing in production ever
+  // supplied `isolatedProjects`, so this service subscribed only to the
+  // shared family and an isolated project's events sat unread on its
+  // dedicated stream. The snapshot reads `topic_isolations` for this
+  // environment; the consumer subscribes to the union of shared and
+  // dedicated, so an in-flight cutover loses nothing in either direction.
+  let isolationSnapshot: IsolationSnapshot | undefined;
+  if (options.isolatedProjects === undefined) {
+    isolationSnapshot = await startIsolationSnapshot({
+      db: checkpointDb,
+      environment: config.service.environment,
+      logger: logger,
+    });
+  }
+
   const runtime = createRuntime({
     consumer,
     producer,
@@ -236,9 +254,10 @@ export async function buildAttributionEngineApp(
     logger: processorLogger,
     metrics,
     ...(options.isolation !== undefined ? { isolation: options.isolation } : {}),
-    ...(options.isolatedProjects !== undefined
-      ? { isolatedProjects: options.isolatedProjects }
-      : {}),
+    isolatedProjects:
+      options.isolatedProjects ??
+      isolationSnapshot?.isolatedProjects(STREAM_FAMILY_RESOLVED_EVENTS) ??
+      [],
     ...(options.now !== undefined ? { now: options.now } : {}),
     run_id: run.run_id,
     gate,
@@ -247,6 +266,12 @@ export async function buildAttributionEngineApp(
 
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
+  if (isolationSnapshot !== undefined) {
+    const snapshot = isolationSnapshot;
+    shutdownTasks.push(async () => {
+      snapshot.stop();
+    });
+  }
   shutdownTasks.push(async () => {
     try {
       await runtime.stop();

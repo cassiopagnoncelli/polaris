@@ -147,6 +147,15 @@ export {
   type StreamIsolationCacheOptions,
 } from "./isolation-cache.js";
 export {
+  type ActiveIsolation,
+  createIsolationSnapshot,
+  type CreateIsolationSnapshotOptions,
+  createKyselyIsolationSnapshotReader,
+  type IsolationSnapshot,
+  type IsolationSnapshotReader,
+  startIsolationSnapshot,
+} from "./isolation-snapshot.js";
+export {
   type CreateTransportLogHooksInput,
   createTransportLogHooks,
 } from "./log-hooks.js";

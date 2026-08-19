@@ -56,8 +56,11 @@ import {
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
+  STREAM_FAMILY_RAW_EVENTS,
   sharedOnlyIsolationLookup,
+  startIsolationSnapshot,
   staticIsolationLookup,
+  type IsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -251,19 +254,35 @@ export async function buildSyncIdentityApp(
   // project that has not declared identity bounds.
   const policyFor = createPolicyResolver(options.projectPolicies ?? new Map());
 
-  // The publish side of isolation. `isolatedProjects` already told the
-  // CONSUMER which dedicated families to subscribe to; the producer needs
-  // the same answer to decide which family to publish onto, and it never
-  // got one — `publishEvent` dereferenced `undefined.isIsolated` on the
-  // first event the stage ever handled, so every event failed and the
-  // reader rewound forever while the service reported itself healthy.
+  // Topic isolation, both sides, from one snapshot.
   //
-  // The stage publishes onto identified/identity/profile events, and a
-  // project isolated for one is isolated for all three, so one lookup
-  // built from the same list the consumer uses keeps the two sides from
-  // disagreeing about who is isolated.
+  // `isolatedProjects` used to be an option nothing in production supplied,
+  // so this defaulted to `sharedOnlyIsolationLookup` and an isolated
+  // project's events kept flowing on the shared stream in both directions
+  // while `polaris topics isolate` refused to write the row that would have
+  // said otherwise. The snapshot reads `topic_isolations` for this
+  // environment and refreshes on an interval: synchronous to read, so the
+  // publish path stays off the database, and enumerable, so the consumer
+  // can build its subscription set from the same answer.
+  //
+  // The producer and the consumer MUST agree. They read one object here for
+  // exactly that reason — the earlier shape had the consumer take a list
+  // and the producer take a lookup built separately from it, which is two
+  // opinions waiting to diverge.
+  //
+  // An explicit `isolatedProjects` still wins, for tests and for a local
+  // run with no control plane.
+  let isolationSnapshot: IsolationSnapshot | undefined;
+  if (options.isolatedProjects === undefined) {
+    isolationSnapshot = await startIsolationSnapshot({
+      db: checkpointDb,
+      environment: config.service.environment,
+      logger: processorLogger,
+    });
+  }
   const isolation =
-    options.isolatedProjects === undefined || options.isolatedProjects.length === 0
+    isolationSnapshot?.lookup ??
+    (options.isolatedProjects === undefined || options.isolatedProjects.length === 0
       ? sharedOnlyIsolationLookup
       : staticIsolationLookup(
           options.isolatedProjects.flatMap((project_id) =>
@@ -273,7 +292,7 @@ export async function buildSyncIdentityApp(
               STREAM_FAMILY_PROFILE_EVENTS,
             ].map((family) => ({ family, project_id })),
           ),
-        );
+        ));
 
   const runtime = createRuntime({
     consumer,
@@ -327,14 +346,24 @@ export async function buildSyncIdentityApp(
     // events would have downstream stages treat them as authoritative.
     isEnabled: async (projectId: string, environment: string) =>
       gate.isEnabled({ project_id: projectId, environment }),
-    ...(options.isolatedProjects !== undefined
-      ? { isolatedProjects: options.isolatedProjects }
-      : {}),
+    // The consumer's half of the same answer. `raw.events` is what this
+    // stage reads, so that is the family whose isolated projects decide
+    // which dedicated streams it subscribes to alongside the shared one.
+    isolatedProjects:
+      options.isolatedProjects ??
+      isolationSnapshot?.isolatedProjects(STREAM_FAMILY_RAW_EVENTS) ??
+      [],
   });
   // Lag is reported by the transport hooks and the reporter's own timer.
 
   // ---- shutdown tasks --------------------------------------------------
   const shutdownTasks: ShutdownTask[] = [];
+  if (isolationSnapshot !== undefined) {
+    const snapshot = isolationSnapshot;
+    shutdownTasks.push(async () => {
+      snapshot.stop();
+    });
+  }
   shutdownTasks.push(async () => {
     try {
       await runtime.stop();

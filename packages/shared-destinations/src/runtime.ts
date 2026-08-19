@@ -111,6 +111,7 @@ import {
   type CanonicalStreamFamily,
   consumerFamiliesFor,
   decodeEvent,
+  type IsolationSnapshot,
   type PolarisConsumer,
   type PolarisProducer,
   redeliverQueueName,
@@ -203,6 +204,21 @@ export interface DestinationConsumerOptions<Payload> {
    * A single value stays accepted, so no unflipped consumer changes.
    */
   readonly inputFamily?: CanonicalStreamFamily | readonly CanonicalStreamFamily[] | undefined;
+  /**
+   * Isolation snapshot, so this consumer subscribes to isolated projects'
+   * dedicated streams as well as the shared one.
+   *
+   * `consumerFamiliesFor(family, [])` was hardcoded here: a destination
+   * subscribed only to the shared family, so once a project was isolated
+   * its events landed on a dedicated stream that no destination read and
+   * were never delivered anywhere. Every other consumer in the platform at
+   * least ACCEPTED an isolated-projects list; this one did not have the
+   * option.
+   *
+   * Optional because a test or a local run without a control plane should
+   * still boot; absent, behaviour is what it was — shared only.
+   */
+  readonly isolation?: IsolationSnapshot | undefined;
   /**
    * Connected PolarisProducer used to republish DLQ messages. The runtime
    * does not own its lifecycle.
@@ -627,7 +643,10 @@ export function createDestinationConsumer<Payload>(
     // it subscribe to a family nothing declares or produces.
     const configured = options.inputFamily ?? STREAM_FAMILY_RESOLVED_EVENTS;
     const families = (Array.isArray(configured) ? configured : [configured]).flatMap((family) => [
-      ...consumerFamiliesFor(family, []),
+      // Shared plus each isolated project's dedicated stream. Per family:
+      // a destination reading both `resolved.events` and `profile.events`
+      // can have a project isolated on one and not the other.
+      ...consumerFamiliesFor(family, options.isolation?.isolatedProjects(family) ?? []),
     ]);
     // The redelivery queue carries messages the broker parked in a retry
     // tier and released when the tier's TTL expired. Consuming it here is

@@ -83,6 +83,7 @@ import {
   type PolarisConsumer,
   type PolarisProducer,
   PostgresCheckpointStore,
+  startIsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
 } from "@polaris/shared-transport";
@@ -280,9 +281,22 @@ export async function buildDestinationHost<Payload, Config extends DestinationHo
     logger: consumerLogger,
   });
 
+  // Topic isolation. `consumerFamiliesFor(family, [])` was hardcoded in the
+  // destination runtime, so once a project was isolated its events landed
+  // on a dedicated stream no destination read and were delivered nowhere --
+  // the one consumer class in the platform that could not even be TOLD
+  // about isolation. Wired here rather than in each vendor's app because
+  // all five route through this host.
+  const isolationSnapshot = await startIsolationSnapshot({
+    db,
+    environment: config.service.environment,
+    logger: consumerLogger,
+  });
+
   const runtime = createDestinationConsumer({
     descriptor,
     inputFamily: input.inputFamily,
+    isolation: isolationSnapshot,
     consumerBuildVersion:
       config.service.releaseLabel ?? config.service.gitSha ?? config.service.serviceVersion,
     consumer,
@@ -316,6 +330,11 @@ export async function buildDestinationHost<Payload, Config extends DestinationHo
       }
     };
   };
+  shutdownTasks.push(
+    guarded("isolation snapshot stop", async () => {
+      isolationSnapshot.stop();
+    }),
+  );
   shutdownTasks.push(guarded("destination runtime stop", () => runtime.stop()));
   if (ownsConsumer) shutdownTasks.push(guarded("consumer disconnect", () => consumer.disconnect()));
   if (ownsProducer) shutdownTasks.push(guarded("producer disconnect", () => producer.disconnect()));
