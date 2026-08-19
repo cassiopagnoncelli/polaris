@@ -1,0 +1,26 @@
+{
+  "name": "@polaris/processor-journey-orchestrator-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@polaris/audience-catalog": "workspace:*",
+    "@polaris/journey-catalog": "workspace:*",
+    "@polaris/shared-db": "workspace:*",
+    "@polaris/shared-logger": "workspace:*",
+    "kysely": "^0.29.0",
+    "uuid": "^13.0.0"
+  }
+}
