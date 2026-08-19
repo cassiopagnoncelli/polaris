@@ -17,6 +17,7 @@ import {
   parseConfigEnvironment,
   parseConfigFormValue,
   parseWriteEnvironment,
+  validateConfigName,
 } from "../src/admin/pages/project-config.js";
 
 function row(overrides: Partial<ProjectConfigRow> = {}): ProjectConfigRow {
@@ -177,6 +178,35 @@ describe("declaredKeyFacts", () => {
       secret: false,
       required: false,
     });
+  });
+});
+
+describe("validateConfigName", () => {
+  // `project_config` CHECK-constrains both names. Before this, a violation
+  // came back from Postgres unhandled and the operator got "Something went
+  // wrong" plus a request id — for a typo in a form field.
+  it("accepts the shapes the CHECK constraints allow", () => {
+    expect(validateConfigName("meta-capi", "pixel_id")).toBeNull();
+    expect(validateConfigName("ingest", "dedupe_window_sec")).toBeNull();
+    // Three characters is the namespace minimum, two the key minimum.
+    expect(validateConfigName("abc", "ab")).toBeNull();
+  });
+
+  it("names the offending value and states the rule", () => {
+    expect(validateConfigName("MyNs", "ok_key")).toContain("MyNs");
+    expect(validateConfigName("MyNs", "ok_key")).toContain("lowercase");
+  });
+
+  it("refuses every shape the database would have refused", () => {
+    // Each of these produced a 500 before the check existed.
+    expect(validateConfigName("ab", "ok_key")).not.toBeNull();
+    expect(validateConfigName("MyNs", "ok_key")).not.toBeNull();
+    expect(validateConfigName("ok-ns", "BadKey")).not.toBeNull();
+    expect(validateConfigName("ok-ns", "trailing_")).not.toBeNull();
+    expect(validateConfigName("ok-ns", "-leading")).not.toBeNull();
+    expect(validateConfigName("ok-ns", "has-hyphen")).not.toBeNull();
+    expect(validateConfigName("", "ok_key")).not.toBeNull();
+    expect(validateConfigName("ok-ns", "")).not.toBeNull();
   });
 });
 

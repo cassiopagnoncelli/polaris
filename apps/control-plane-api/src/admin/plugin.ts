@@ -82,6 +82,7 @@ import {
   parseConfigFilter,
   parseConfigFormValue,
   parseWriteEnvironment,
+  validateConfigName,
 } from "./pages/project-config.js";
 import {
   type ProjectTab,
@@ -826,6 +827,27 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           const rawReason = formField(request, "reason");
           const label = `${namespace}.${key}`;
 
+          // `project_config` CHECK-constrains both names. Without this the
+          // violation came back from Postgres as an unhandled error and the
+          // operator got "Something went wrong" and a request id for what is
+          // a typo in a form field. The CLI has always refused these with a
+          // sentence; this is the same refusal on the same rules.
+          const badName = validateConfigName(namespace, key);
+          if (badName !== null) {
+            request.log.warn(
+              {
+                event: "admin.mutation_refused",
+                action: `config.${action}`,
+                target: `${projectId}/${environment}/${label}`,
+                refusal: "name_format",
+              },
+              badName,
+            );
+            const body = await configPage(request, projectId, environment, { error: badName });
+            if (body === null) return notFound(reply, `No project "${projectId}".`);
+            return sendHtml(reply, 400, body);
+          }
+
           // The stored row and the schema's view of the key, fetched BEFORE
           // the gate: whether the ritual applies is the SERVER's decision. An
           // earlier revision treated an absent confirm field as "ritual
@@ -942,6 +964,22 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           } catch (err) {
             // The write path's own gates. An operator mistake, not a fault:
             // re-render with the message rather than a 500.
+            // A CHECK violation that reaches here is still an operator
+            // mistake — the panel simply has no bespoke message for that
+            // constraint yet. Naming the constraint beats a 500: it says
+            // which rule was broken, and it is greppable in the migrations.
+            const constraint = checkViolation(err);
+            if (constraint !== null) {
+              request.log.warn(
+                { event: "admin.mutation_refused", action: `config.${action}`, err },
+                "project-config write violated a database constraint",
+              );
+              const body = await configPage(request, projectId, environment, {
+                error: `The database refused this write: ${constraint}. The value or one of its names does not satisfy that rule.`,
+              });
+              if (body === null) return notFound(reply, `No project "${projectId}".`);
+              return sendHtml(reply, 400, body);
+            }
             if (err instanceof MappingSemanticsError || err instanceof MaskedSecretWriteError) {
               const message = err.message;
               request.log.warn(
@@ -1670,6 +1708,19 @@ function safeNext(value: string): string | null {
   if (!value.startsWith(ADMIN_PREFIX)) return null;
   if (value.startsWith("//")) return null;
   return value;
+}
+
+/**
+ * The name of the CHECK constraint a write violated, or null.
+ *
+ * `23514` is Postgres' check_violation SQLSTATE. Read structurally rather
+ * than by matching the message text, which is localised and version-dependent.
+ */
+function checkViolation(err: unknown): string | null {
+  if (typeof err !== "object" || err === null) return null;
+  const candidate = err as { code?: unknown; constraint?: unknown };
+  if (candidate.code !== "23514") return null;
+  return typeof candidate.constraint === "string" ? candidate.constraint : "a check constraint";
 }
 
 /**

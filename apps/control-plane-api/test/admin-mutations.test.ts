@@ -1081,6 +1081,65 @@ describe("admin mutations — project-config writes", () => {
     await app.app.close();
   });
 
+  it("refuses an unstorable key name with a message, not a 500", async () => {
+    // `project_config_key_format` and `project_config_namespace_format` are
+    // CHECK constraints. A violation used to travel out of the write path
+    // unhandled and reach the operator as "Something went wrong" plus a
+    // request id — for a typo in a form field. The CLI has always refused
+    // these with a sentence; the panel now does too.
+    const spy = vi.fn(async () => APPLIED);
+    for (const [namespace, key] of [
+      ["MyNs", "ok_key"],
+      ["ab", "ok_key"],
+      ["ok-ns", "BadKey"],
+      ["ok-ns", "trailing_"],
+      ["", "ok_key"],
+      ["ok-ns", ""],
+    ]) {
+      const app = await buildApp({
+        row: destination(),
+        mutations: stubMutations(spy),
+        project: PROJECT,
+      });
+      const res = await app.app.inject({
+        method: "POST",
+        url: "/admin/projects/storefront/config/development/add",
+        headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+        payload: form({ namespace, key, value: "x" }),
+      });
+      expect(res.statusCode, `${namespace}.${key}`).toBe(400);
+      expect(res.body).not.toContain("Something went wrong");
+      await app.app.close();
+    }
+    // Never reached the database.
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("declares a key with an empty value, storing null", async () => {
+    // The shape that produced the 500: a valid name and a deliberately empty
+    // value. The empty box was never the problem, but it is the path the
+    // operator was on when they found the missing name check.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/development/add",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("admin") },
+      payload: form({ namespace: "free-form", key: "scratch_key", value: "" }),
+    });
+    expect(res.statusCode).toBe(303);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ configKey: "scratch_key", value: null }),
+      null,
+      expect.anything(),
+    );
+    await app.app.close();
+  });
+
   it("still demands the typed label AND a reason for a production secret", async () => {
     // Dropping the reason from routine edits must not have dropped it from
     // the ritual: these are the two shapes the ritual exists for.

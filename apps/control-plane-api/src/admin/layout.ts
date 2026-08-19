@@ -902,6 +902,11 @@ form.filters label.filter-check input { min-width: auto; }
 @media (max-width: 520px) {
   .confirm .action-form { left: auto; right: 0; }
 }
+/* A toolbar trigger is always at the right end of its bar, so a left-anchored
+   420px panel runs off the page at every viewport width, not just the narrow
+   ones the query above covers. A max-width cannot save it: the box is clipped
+   by the viewport, not overflowing its own container. */
+.toolbar-actions .confirm .action-form { left: auto; right: 0; }
 input, select, textarea {
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px;

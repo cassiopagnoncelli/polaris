@@ -180,6 +180,49 @@ export function parseConfigFormValue(raw: string, isSecret: boolean): unknown {
 }
 
 /**
+ * The two name formats, mirroring the CHECK constraints in the migration.
+ *
+ * `polaris-cli`'s `commands/config/value.ts` already enforces these, so the
+ * CLI refuses a bad name with a sentence. The admin UI did not, and the
+ * violation surfaced where every unhandled violation surfaces: as a CHECK
+ * error from Postgres, rethrown past the two refusals this handler knows
+ * about, rendered as "Something went wrong" with a request id. A typo in a
+ * form field is not a server fault.
+ *
+ * Duplicated rather than imported: the CLI is a separate deployable that this
+ * service does not depend on, and the source of truth for both is the SQL.
+ */
+const NAMESPACE_FORMAT = /^[a-z][a-z0-9_-]{1,62}[a-z0-9]$/;
+const CONFIG_KEY_FORMAT = /^[a-z][a-z0-9_]{0,62}[a-z0-9]$/;
+
+/**
+ * Why this namespace and key cannot be stored, or null when they can.
+ *
+ * One message rather than a field-by-field report: the declare form is four
+ * inputs, and naming the offending value inline is enough to find it.
+ */
+export function validateConfigName(namespace: string, key: string): string | null {
+  if (namespace.length === 0) return "Give the namespace of the component that reads this value.";
+  if (key.length === 0) return "Give a key name.";
+  if (!NAMESPACE_FORMAT.test(namespace)) {
+    return (
+      `"${namespace}" is not a valid namespace. Namespaces are lowercase, ` +
+      "at least three characters, may contain digits, hyphens and " +
+      "underscores inside, and must start and end with a letter or digit — " +
+      "for example meta-capi, sessionizer, ingest."
+    );
+  }
+  if (!CONFIG_KEY_FORMAT.test(key)) {
+    return (
+      `"${key}" is not a valid key. Keys are lowercase snake_case, at least ` +
+      "two characters, and must start and end with a letter or digit — for " +
+      "example pixel_id, request_timeout_ms."
+    );
+  }
+  return null;
+}
+
+/**
  * Build the effective view: every declared key, plus every stored key the
  * schemas do not know about.
  *
@@ -934,12 +977,27 @@ function renderAddForm(input: ProjectConfigPanelInput): Html {
         </p>
         <label>
           <span>Namespace (the component that reads it)</span>
+          <!--
+            The pattern mirrors the same CHECK the server re-checks, for the
+            same reason the reason box carries minlength: the browser says so
+            at the field, before a round trip that would come back as a
+            re-rendered page with the error somewhere above it.
+
+            The backslash before the hyphen is load-bearing. HTML compiles a
+            pattern with the RegExp v flag, where a bare - at the end of a
+            character class is a syntax error - and an invalid pattern is not
+            reported, it is IGNORED, so the attribute silently validates
+            nothing. Written as \\- in the source because the template
+            literal eats one level.
+          -->
           <input
             type="text"
             name="namespace"
             list="known-namespaces"
             autocomplete="off"
             spellcheck="false"
+            pattern="[a-z][a-z0-9_\\-]{1,62}[a-z0-9]"
+            title="Lowercase, at least three characters, starting and ending with a letter or digit — e.g. meta-capi"
             required
           />
         </label>
@@ -948,7 +1006,15 @@ function renderAddForm(input: ProjectConfigPanelInput): Html {
         </datalist>
         <label>
           <span>Key (lowercase snake_case)</span>
-          <input type="text" name="key" autocomplete="off" spellcheck="false" required />
+          <input
+            type="text"
+            name="key"
+            autocomplete="off"
+            spellcheck="false"
+            pattern="[a-z][a-z0-9_]{0,62}[a-z0-9]"
+            title="Lowercase snake_case, at least two characters, starting and ending with a letter or digit — e.g. pixel_id"
+            required
+          />
         </label>
         <label>
           <span>Value <span class="muted">— leave empty for null</span></span>
