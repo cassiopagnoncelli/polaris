@@ -104,7 +104,7 @@ export interface CreateIsolationSnapshotOptions {
   readonly now?: () => number;
 }
 
-export function createIsolationSnapshot(
+function createIsolationSnapshot(
   options: CreateIsolationSnapshotOptions,
 ): IsolationSnapshot {
   const refreshMs = options.refreshMs ?? 30_000;
@@ -201,9 +201,7 @@ export function createIsolationSnapshot(
  * to live in `apps/polaris-cli`, where no service can reach it, which is a
  * large part of why nothing ever constructed one.
  */
-export function createKyselyIsolationSnapshotReader(
-  db: Kysely<Database>,
-): IsolationSnapshotReader {
+function createKyselyIsolationSnapshotReader(db: Kysely<Database>): IsolationSnapshotReader {
   return {
     async listActive(environment): Promise<ReadonlyArray<ActiveIsolation>> {
       const rows = await db
@@ -218,32 +216,51 @@ export function createKyselyIsolationSnapshotReader(
 }
 
 /**
- * Build, prime and start a snapshot over a Kysely handle — the one call a
- * service bootstrap makes.
+ * Build, prime and start a snapshot — the one call a service bootstrap makes.
  *
- * The first read is awaited and NOT swallowed. A service that booted with
- * an empty snapshot would publish an isolated project's events onto the
- * shared stream and report itself healthy, which is the failure this whole
- * mechanism exists to prevent; and every service that calls this already
- * requires the same database for its checkpoints, so there is no
- * deployment in which the control plane is down and the service is
- * otherwise fine.
+ * The ONLY export of this module, deliberately. `createIsolationSnapshot`
+ * and the Kysely reader are private: an entry point that returns an
+ * unprimed snapshot invites a caller to forget `refresh()`, and a service
+ * running on an empty snapshot publishes an isolated project's events onto
+ * the shared stream while reporting itself healthy. That is the exact
+ * failure this mechanism exists to prevent, so the API does not offer a way
+ * to reach it.
+ *
+ * `reader` is the seam for tests, which is why it is a parameter rather
+ * than a second export — `lint-dead-exports` counts only cross-PACKAGE use,
+ * and it is right that a symbol no other package calls should not be public.
+ *
+ * The first read is awaited and NOT swallowed: every caller already requires
+ * this same database for its checkpoints, so there is no deployment where
+ * the control plane is down and the service is otherwise fine.
  *
  * The caller owns `stop()` — register it with the service's shutdown tasks.
  */
 export async function startIsolationSnapshot(options: {
-  readonly db: Kysely<Database>;
+  readonly db?: Kysely<Database>;
+  /** Overrides `db`. Tests inject a fake; production passes a handle. */
+  readonly reader?: IsolationSnapshotReader;
   readonly environment: string;
   readonly logger?: Logger;
   readonly refreshMs?: number;
+  /** Skip the interval timer, for a test driving `refresh()` by hand. */
+  readonly autoStart?: boolean;
 }): Promise<IsolationSnapshot> {
+  const reader =
+    options.reader ??
+    (options.db !== undefined
+      ? createKyselyIsolationSnapshotReader(options.db)
+      : (() => {
+          throw new Error("startIsolationSnapshot: pass either `db` or `reader`");
+        })());
+
   const snapshot = createIsolationSnapshot({
-    reader: createKyselyIsolationSnapshotReader(options.db),
+    reader,
     environment: options.environment,
     ...(options.logger !== undefined ? { logger: options.logger } : {}),
     ...(options.refreshMs !== undefined ? { refreshMs: options.refreshMs } : {}),
   });
   await snapshot.refresh();
-  snapshot.start();
+  if (options.autoStart !== false) snapshot.start();
   return snapshot;
 }

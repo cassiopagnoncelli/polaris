@@ -148,9 +148,6 @@ export {
 } from "./isolation-cache.js";
 export {
   type ActiveIsolation,
-  createIsolationSnapshot,
-  type CreateIsolationSnapshotOptions,
-  createKyselyIsolationSnapshotReader,
   type IsolationSnapshot,
   type IsolationSnapshotReader,
   startIsolationSnapshot,

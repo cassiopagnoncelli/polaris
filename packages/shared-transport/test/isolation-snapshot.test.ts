@@ -11,12 +11,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   type ActiveIsolation,
-  type CreateIsolationSnapshotOptions,
   consumerFamiliesFor,
-  createIsolationSnapshot,
   type IsolationSnapshotReader,
   STREAM_FAMILY_RAW_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
+  startIsolationSnapshot,
 } from "../src/index.js";
 
 function readerOf(...batches: ReadonlyArray<ReadonlyArray<ActiveIsolation> | Error>) {
@@ -37,25 +36,46 @@ function readerOf(...batches: ReadonlyArray<ReadonlyArray<ActiveIsolation> | Err
 const RAW = { family: STREAM_FAMILY_RAW_EVENTS, project_id: "acme" };
 
 describe("isolation snapshot", () => {
-  it("answers the producer synchronously after a refresh", async () => {
+  it("primes on construction, so a caller cannot forget to refresh", async () => {
     const { reader } = readerOf([RAW]);
-    const snap = createIsolationSnapshot({ reader, environment: "production" });
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      autoStart: false,
+    });
 
-    // Before any refresh, nothing is isolated — the safe default, and the
-    // one that keeps a service bootable when the control plane is down.
-    expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme")).toBe(false);
-
-    await snap.refresh();
-
+    // The reason `createIsolationSnapshot` is private. A snapshot handed back
+    // unprimed would let a service publish an isolated project's events onto
+    // the shared stream while reporting itself healthy.
+    expect(snap.lastRefreshedAt()).not.toBeNull();
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme")).toBe(true);
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "other")).toBe(false);
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RESOLVED_EVENTS, "acme")).toBe(false);
   });
 
+  it("answers the producer synchronously", async () => {
+    // `SyncIsolationLookup.isIsolated` returns a boolean, not a promise:
+    // the publish path is synchronous on purpose, so the answer cannot be
+    // a database round trip per message.
+    const { reader } = readerOf([RAW]);
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      autoStart: false,
+    });
+
+    const answer: boolean = snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme");
+
+    expect(answer).toBe(true);
+  });
+
   it("feeds consumerFamiliesFor the list it needs", async () => {
     const { reader } = readerOf([RAW, { family: STREAM_FAMILY_RAW_EVENTS, project_id: "globex" }]);
-    const snap = createIsolationSnapshot({ reader, environment: "production" });
-    await snap.refresh();
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      autoStart: false,
+    });
 
     const families = consumerFamiliesFor(
       STREAM_FAMILY_RAW_EVENTS,
@@ -72,48 +92,53 @@ describe("isolation snapshot", () => {
 
   it("hands out a copy, so a caller cannot mutate the snapshot", async () => {
     const { reader } = readerOf([RAW]);
-    const snap = createIsolationSnapshot({ reader, environment: "production" });
-    await snap.refresh();
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      autoStart: false,
+    });
 
     (snap.isolatedProjects(STREAM_FAMILY_RAW_EVENTS) as string[]).push("injected");
 
     expect(snap.isolatedProjects(STREAM_FAMILY_RAW_EVENTS)).toEqual(["acme"]);
   });
 
-  it("keeps the last good snapshot when a refresh fails", async () => {
+  it("keeps the last good snapshot when a later refresh fails", async () => {
     // The load-bearing one. Emptying on a database blip would move every
     // isolated project's traffic back onto the shared stream — a routing
     // change caused by a transient error, in a system where the operator
     // believes a cutover is in effect.
     const { reader } = readerOf([RAW], new Error("control plane unreachable"));
     const warn = vi.fn();
-    const snap = createIsolationSnapshot({
+    const snap = await startIsolationSnapshot({
       reader,
       environment: "production",
-      logger: { warn } as unknown as NonNullable<CreateIsolationSnapshotOptions["logger"]>,
+      autoStart: false,
+      logger: { warn } as unknown as NonNullable<Parameters<typeof startIsolationSnapshot>[0]["logger"]>,
     });
-
-    await snap.refresh();
     const firstOk = snap.lastRefreshedAt();
+
     await snap.refresh();
 
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme")).toBe(true);
-    // And it says so, rather than failing silently.
     expect(warn).toHaveBeenCalledOnce();
     // `lastRefreshedAt` does not advance on a failure, so staleness is
     // observable rather than hidden behind a successful-looking timestamp.
     expect(snap.lastRefreshedAt()).toBe(firstOk);
   });
 
-  it("throws when the FIRST refresh fails, rather than booting empty", async () => {
-    // Nothing to fall back to. A service that started with a silently empty
-    // snapshot would route an isolated project's traffic onto the shared
-    // stream and report itself healthy.
+  it("rejects when the FIRST read fails, rather than booting empty", async () => {
     const { reader } = readerOf(new Error("nope"));
-    const snap = createIsolationSnapshot({ reader, environment: "production" });
 
-    await expect(snap.refresh()).rejects.toThrow(/nope/);
-    expect(snap.lastRefreshedAt()).toBeNull();
+    await expect(
+      startIsolationSnapshot({ reader, environment: "production", autoStart: false }),
+    ).rejects.toThrow(/nope/);
+  });
+
+  it("refuses to build with neither a db nor a reader", async () => {
+    await expect(startIsolationSnapshot({ environment: "production" })).rejects.toThrow(
+      /pass either `db` or `reader`/,
+    );
   });
 
   it("drops rows naming a family this build does not know", async () => {
@@ -123,13 +148,12 @@ describe("isolation snapshot", () => {
     // family retired underneath it.
     const { reader } = readerOf([{ family: "analytics.events", project_id: "acme" }, RAW]);
     const warn = vi.fn();
-    const snap = createIsolationSnapshot({
+    const snap = await startIsolationSnapshot({
       reader,
       environment: "production",
-      logger: { warn } as unknown as NonNullable<CreateIsolationSnapshotOptions["logger"]>,
+      autoStart: false,
+      logger: { warn } as unknown as NonNullable<Parameters<typeof startIsolationSnapshot>[0]["logger"]>,
     });
-
-    await snap.refresh();
 
     expect(snap.isolatedProjects("analytics.events")).toEqual([]);
     expect(snap.isolatedProjects(STREAM_FAMILY_RAW_EVENTS)).toEqual(["acme"]);
@@ -138,31 +162,36 @@ describe("isolation snapshot", () => {
 
   it("scopes the read to one environment", async () => {
     const { reader, calls } = readerOf([RAW]);
-    const snap = createIsolationSnapshot({ reader, environment: "staging" });
-    await snap.refresh();
+    await startIsolationSnapshot({ reader, environment: "staging", autoStart: false });
 
     expect(calls).toEqual(["staging"]);
   });
 
   it("replaces the set wholesale, so a de-isolated project disappears", async () => {
     const { reader } = readerOf([RAW], []);
-    const snap = createIsolationSnapshot({ reader, environment: "production" });
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      autoStart: false,
+    });
 
-    await snap.refresh();
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme")).toBe(true);
     await snap.refresh();
     expect(snap.lookup.isIsolated(STREAM_FAMILY_RAW_EVENTS, "acme")).toBe(false);
   });
 
-  it("start/stop are idempotent and do not hold the event loop", () => {
+  it("start/stop are idempotent", async () => {
     const { reader } = readerOf([RAW]);
-    const snap = createIsolationSnapshot({ reader, environment: "production", refreshMs: 10_000 });
+    const snap = await startIsolationSnapshot({
+      reader,
+      environment: "production",
+      refreshMs: 10_000,
+    });
 
-    snap.start();
     snap.start();
     snap.stop();
     snap.stop();
 
-    expect(snap.lastRefreshedAt()).toBeNull();
+    expect(snap.lastRefreshedAt()).not.toBeNull();
   });
 });
