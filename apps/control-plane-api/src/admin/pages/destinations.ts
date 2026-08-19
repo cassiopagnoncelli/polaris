@@ -208,6 +208,14 @@ export function renderDestinationDetailPage(input: {
         is per replica — it bounds one process's in-flight requests, so the
         fleet holds up to <em>replicas × this number</em> open at once.
       </p>
+      <p class="muted">
+        <strong>Consent</strong> is not a setting here. Each vendor's own
+        requirement is fixed in its code and always applies — a project's
+        routing configuration can require <em>more</em> consent than the
+        vendor does, never less, so no configuration change can send an
+        event the vendor's requirement would have dropped. The vendor's
+        requirement is recorded in its <code>consumer.manifest.yaml</code>.
+      </p>
 
       <h2>Configuration</h2>
       <dl class="detail">

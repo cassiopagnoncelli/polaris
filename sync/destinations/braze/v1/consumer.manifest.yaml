@@ -33,10 +33,14 @@ inputs:
   # MVKUP64R: flipped to the spine's output.
   - resolved.events
   # C195TM1C: the profile plane too. The spine carries what customers DID;
-  # this carries what is now TRUE of them, and audience membership is the
-  # second kind. Braze is the only vendor reading it — the others have no
-  # mapper for a profile-plane event, and subscribing them would mean
-  # every transition reaching a consumer that reports it unmapped.
+  # this carries what is now TRUE of them. Two kinds ride it here:
+  # audience membership, and — since 2026-08-19 — the journey plane.
+  #
+  # Braze is the only vendor reading either. The others have no mapper for
+  # a profile-plane event, and subscribing them would mean every
+  # transition reaching a consumer that reports it unmapped. Braze is the
+  # exemplar by design, not by omission: it is the vendor whose model has
+  # somewhere for "is a member" and "reached this step" to live.
   - profile.events
 
 outputs:
@@ -62,10 +66,19 @@ state_stores:
 mode: streaming
 
 # Per-stage versions stamped onto every delivery_records row.
+#
 # v2 (WE77L4R8): shared normalize gained traits / enrichment and a
-# profile-first identity preference. This consumer still reads
-# analytics.events, where there is no profile block, so its OUTPUT is
-# unchanged — but it runs the v2 code and must not claim otherwise.
+# profile-first identity preference. That comment used to add "this
+# consumer still reads analytics.events, where there is no profile block"
+# — untrue since MVKUP64R flipped the input to `resolved.events`, and
+# contradicted by the `inputs` block above. The profile block is exactly
+# what keys a profile-plane delivery, since the orchestrator and the
+# audience emitter both publish with `identity: {}`.
+#
+# `mapper_version` stays v1 across the journey mappers, as it did across
+# the audience ones: adding a mapper for a previously-unmapped event
+# changes no existing delivery. It moves when what this consumer sends for
+# an event it ALREADY mapped changes.
 normalize_version: v2
 mapper_version: v1
 deliverer_version: v1

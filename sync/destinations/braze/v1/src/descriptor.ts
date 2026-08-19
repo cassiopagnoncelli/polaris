@@ -33,6 +33,9 @@ import {
   audienceEnteredMapper,
   audienceExitedMapper,
   checkoutStartedMapper,
+  journeyEnteredMapper,
+  journeyExitedMapper,
+  journeyStepAdvancedMapper,
   paymentApprovedMapper,
   userIdentifiedMapper,
 } from "./mapper.js";
@@ -69,6 +72,14 @@ const MAPPERS: MapperMap<BrazePayload> = Object.freeze({
   // instance actually receives them is the routing gate's decision.
   "audience.entered": audienceEnteredMapper,
   "audience.exited": audienceExitedMapper,
+  // The journey plane. §6.1 says a journey action reaches "any vendor";
+  // until this landed, only webhook-sink's passthrough carried one, so the
+  // promise held for a receiver that accepts anything and for no vendor
+  // that maps. The action is the custom event; entering and leaving are
+  // membership attributes a campaign suppresses on.
+  "journey.step_advanced": journeyStepAdvancedMapper,
+  "journey.entered": journeyEnteredMapper,
+  "journey.exited": journeyExitedMapper,
 });
 
 /**

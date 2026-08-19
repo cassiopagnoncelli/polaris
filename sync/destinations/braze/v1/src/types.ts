@@ -105,7 +105,7 @@ export interface BrazeEventObject {
   readonly device_id?: string;
   readonly name: string;
   readonly time: string;
-  readonly properties?: BrazeEventProperties;
+  readonly properties?: BrazeEventProperties | BrazeJourneyEventProperties;
   readonly _update_existing_only?: boolean;
 }
 
@@ -120,6 +120,32 @@ export interface BrazeEventProperties {
   readonly cart_id?: string;
   readonly page_url?: string;
   readonly num_items?: number;
+}
+
+/**
+ * Properties on a `polaris_journey_step` custom event.
+ *
+ * The one place the "narrow well-known slots" rule above is relaxed, and
+ * deliberately confined to its own type rather than loosened on
+ * {@link BrazeEventProperties}. An action step's payload is author-defined
+ * — `catalog/journeys` decides what `message: "thank_you_repeat"` is, and
+ * the orchestrator carries it through uninterpreted — so this event cannot
+ * have a closed slot set the way `checkout.started` can.
+ *
+ * Putting the index signature on the shared type instead would buy that
+ * flexibility at the cost of every other mapper: `properties.currncy = x`
+ * would typecheck, and a typo'd slot silently reaching a vendor is the
+ * failure the closed set exists to prevent.
+ *
+ * Primitives only. Braze rejects nested objects in custom-event
+ * properties, and the mapper drops anything else rather than producing a
+ * 400 the runtime records as a delivery failure.
+ */
+export interface BrazeJourneyEventProperties {
+  readonly journey: string;
+  readonly step_id: string;
+  readonly journey_version?: number;
+  readonly [key: string]: string | number | boolean | undefined;
 }
 
 /**

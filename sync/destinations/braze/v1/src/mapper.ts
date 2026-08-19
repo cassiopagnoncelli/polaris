@@ -41,6 +41,7 @@ import type {
   BrazeAttributeObject,
   BrazeEventObject,
   BrazeEventProperties,
+  BrazeJourneyEventProperties,
   BrazePayload,
   BrazePurchaseObject,
 } from "./types.js";
@@ -68,6 +69,18 @@ type PropertiesBuilder = {
 export const BRAZE_EVENT_CHECKOUT_STARTED = "checkout_started" as const;
 
 /**
+ * The single Braze custom-event name every journey step advance carries.
+ *
+ * ONE name, with `journey` and `step_id` as properties — not
+ * `journey_welcome_thank_repeat` per step. Braze custom-event names are a
+ * bounded, billed dimension in the account, and a name minted per
+ * (journey, step) would let a Polaris catalog change consume a customer's
+ * Braze namespace. A campaign filters on the properties instead, which is
+ * what Braze's trigger filters are for.
+ */
+export const BRAZE_EVENT_JOURNEY_STEP = "polaris_journey_step" as const;
+
+/**
  * Closed-set mapping from canonical event name → Braze wire family. The
  * descriptor uses this map as the keys for the per-event `MapperMap`.
  * Tests pin it so a future contributor cannot widen the matrix without
@@ -84,6 +97,18 @@ export const CANONICAL_TO_BRAZE_FAMILY = Object.freeze({
   // which is not what membership means.
   "audience.entered": "attributes",
   "audience.exited": "attributes",
+  // A journey is a sequence of MOMENTS, which is the opposite of the
+  // audience case above. "Reached the thank-you step" happened at a time
+  // and is what a Braze campaign triggers on; membership in an audience
+  // is a lasting fact you segment by. So the same file maps one to
+  // attributes and the other to events, on the same reasoning.
+  "journey.step_advanced": "events",
+  // Entering and leaving a journey are the exception, and go back to
+  // attributes: "is currently in the welcome series" is a state, and the
+  // question it answers is suppression — do not send the promo to someone
+  // mid-onboarding. That is a segment, not a trigger.
+  "journey.entered": "attributes",
+  "journey.exited": "attributes",
 }) as Readonly<Record<string, "events" | "purchases" | "attributes">>;
 
 /**
@@ -98,6 +123,21 @@ export const BRAZE_AUDIENCE_ATTRIBUTE_PREFIX = "polaris_audience_" as const;
 /** The attribute name a given audience writes. */
 export function brazeAudienceAttribute(audience: string): string {
   return `${BRAZE_AUDIENCE_ATTRIBUTE_PREFIX}${audience}`;
+}
+
+/**
+ * Prefix for the per-journey membership attribute.
+ *
+ * Distinct from the audience prefix so the two namespaces cannot collide:
+ * an audience and a journey may legitimately share a key — `vip` is a
+ * plausible name for both — and one overwriting the other would make a
+ * suppression rule silently follow the wrong thing.
+ */
+export const BRAZE_JOURNEY_ATTRIBUTE_PREFIX = "polaris_journey_" as const;
+
+/** The attribute name a given journey's membership writes. */
+export function brazeJourneyAttribute(journey: string): string {
+  return `${BRAZE_JOURNEY_ATTRIBUTE_PREFIX}${journey}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +428,120 @@ function buildAudienceAttributeMapper(member: boolean): Mapper<BrazePayload> {
 
 export const audienceEnteredMapper: Mapper<BrazePayload> = buildAudienceAttributeMapper(true);
 export const audienceExitedMapper: Mapper<BrazePayload> = buildAudienceAttributeMapper(false);
+
+/**
+ * `journey.step_advanced` → `events[]` entry named `polaris_journey_step`.
+ *
+ * This is the path §6.1 of the redesign describes: an action step emits an
+ * event, the event travels the ordinary destination route, and a vendor
+ * acts on it. The orchestrator holds no vendor credentials and makes no
+ * vendor call, so "a journey sent this" and "a destination sent this" stay
+ * ONE delivery record rather than two.
+ *
+ * The action's own payload rides `properties.properties`, carried through
+ * the orchestrator uninterpreted — deciding what `message:
+ * "thank_you_repeat"` means is this layer's job, not the engine's. It is
+ * merged UNDER the journey coordinates, so a payload key called `journey`
+ * or `step_id` cannot overwrite the ones a campaign filters on.
+ *
+ * Values are flattened to primitives. Braze rejects nested objects in
+ * custom-event properties, and a mapper that passed one through would
+ * produce a 400 the runtime records as a delivery failure — a vendor
+ * error for a payload this layer could see was wrong.
+ *
+ * Skips without an identifier, like every Braze event mapper: Braze
+ * rejects `events[]` entries with no external/braze id, and a skip is
+ * cheaper than the round trip.
+ */
+export const journeyStepAdvancedMapper: Mapper<BrazePayload> = (
+  ctx: MapperContext,
+): MapperResult<BrazePayload> => {
+  const journey = readString(ctx.normalized.properties, "journey");
+  const stepId = readString(ctx.normalized.properties, "step_id");
+  if (journey === null || stepId === null) {
+    // Guaranteed upstream by the property schema. A mapper that trusted
+    // that and sent `journey: undefined` would make every campaign filter
+    // silently match nothing.
+    return { kind: "skip", reason: "journey_coordinates_missing_from_properties" };
+  }
+  const identifier = resolveBrazeIdentifier(ctx.normalized);
+  if (identifier === null) {
+    return { kind: "skip", reason: "no_identifier_for_braze_event" };
+  }
+
+  const properties: Record<string, string | number | boolean> = {};
+  const action = ctx.normalized.properties["properties"];
+  if (action !== null && typeof action === "object" && !Array.isArray(action)) {
+    for (const [key, value] of Object.entries(action as Record<string, unknown>)) {
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        properties[key] = value;
+      }
+    }
+  }
+  // After the action payload, never before. See above.
+  properties["journey"] = journey;
+  properties["step_id"] = stepId;
+  const version = ctx.normalized.properties["journey_version"];
+  if (typeof version === "number") properties["journey_version"] = version;
+
+  const eventBuilder = applyBrazeIdentifier(
+    {
+      name: BRAZE_EVENT_JOURNEY_STEP,
+      time: ctx.normalized.occurred_at,
+      properties: Object.freeze(properties) as BrazeJourneyEventProperties,
+    },
+    identifier,
+  );
+  attachDeviceIdIfApp(eventBuilder, identifier, ctx.normalized);
+  const event = eventBuilder as BrazeEventObject;
+  return {
+    kind: "mapped",
+    payload: { events: Object.freeze([Object.freeze(event)]) },
+    dedupe_key: ctx.normalized.event_id,
+  };
+};
+
+/**
+ * `journey.entered` / `journey.exited` → `attributes[]` entry.
+ *
+ * One boolean per journey, `true` on entry and `false` on exit — the same
+ * shape as audience membership, for the same reason: an ABSENT attribute
+ * is indistinguishable from "this user predates the journey", so a
+ * suppression rule written against non-members would quietly include
+ * everyone Polaris has never evaluated.
+ *
+ * `_update_existing_only: true`. Entering a journey is not a first-touch
+ * identification, and creating a bare Braze profile carrying nothing but a
+ * journey flag adds a user the brand cannot message and inflates their MAU
+ * billing.
+ */
+function buildJourneyAttributeMapper(member: boolean): Mapper<BrazePayload> {
+  return (ctx: MapperContext): MapperResult<BrazePayload> => {
+    const journey = readString(ctx.normalized.properties, "journey");
+    if (journey === null) {
+      return { kind: "skip", reason: "journey_missing_from_properties" };
+    }
+    const identifier = resolveBrazeIdentifier(ctx.normalized);
+    if (identifier === null) {
+      return { kind: "skip", reason: "no_identifier_for_braze_attribute" };
+    }
+
+    const attribute: Record<string, unknown> = {
+      _update_existing_only: true,
+      [brazeJourneyAttribute(journey)]: member,
+    };
+    applyBrazeIdentifier(attribute, identifier);
+    const frozen = Object.freeze(attribute) as BrazeAttributeObject;
+    return {
+      kind: "mapped",
+      payload: { attributes: Object.freeze([frozen]) },
+      dedupe_key: ctx.normalized.event_id,
+    };
+  };
+}
+
+export const journeyEnteredMapper: Mapper<BrazePayload> = buildJourneyAttributeMapper(true);
+export const journeyExitedMapper: Mapper<BrazePayload> = buildJourneyAttributeMapper(false);
 
 // ---------------------------------------------------------------------------
 // External ID resolution
