@@ -528,6 +528,15 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  catalog/journeys:
+    dependencies:
+      '@polaris/audience-catalog':
+        specifier: workspace:*
+        version: link:../audiences
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   catalog/policy:
     dependencies:
       '@polaris/shared-policy':

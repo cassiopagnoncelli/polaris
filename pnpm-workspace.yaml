@@ -13,6 +13,7 @@ packages:
   # And for audiences: the CLI lists definitions, the runner evaluates
   # them, and both must agree on what is registered.
   - "catalog/audiences"
+  - "catalog/journeys"
   - "catalog/reverse-etl"
   - "tests"
 allowBuilds:
