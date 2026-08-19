@@ -1,0 +1,95 @@
+# Polaris processor manifest — journey-orchestrator v1
+#
+# Semantic definition for the journey orchestrator. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are immutable;
+# any change to what this service CONCLUDES is a new version directory.
+#
+# Written on 2026-08-19, after the unit had been running for a day without
+# one. A manifest is what `polaris processors list` reads and what
+# `lint-manifest-drift.mjs` checks the wiring against — a service without
+# one is invisible to the first and unchecked by the second, which is how
+# `merge-worker` came to be subscribed to the wrong family for its whole
+# existence.
+
+name: journey-orchestrator
+version: v1
+owner: platform-data
+release_status: released
+description: |
+  Walks profiles through the versioned step graphs in `catalog/journeys/`.
+
+  A journey is a graph of waits, branches, actions and exits. This service
+  owns none of those semantics: `engine.ts` decides them in memory and is
+  pure, the repository stores participant state, and this unit moves bytes
+  between them and the broker. That split is what makes every rule —
+  the loop guard, re-entry policy, branches reading traits at the moment
+  they are REACHED rather than at entry — testable without a database.
+
+  ## It publishes to a family it consumes
+
+  `audience.entered`, the declarative trigger, rides `profile.events`. So
+  does everything this service emits. Every message it publishes therefore
+  comes back to it, and that is not an accident to be routed around: it is
+  why the loop guard exists.
+
+  A `journey.*` event is dropped on arrival, before any definition is
+  consulted. The catalog cannot express a definition that would match one,
+  but the catalog only governs definitions in this repository — a replay, a
+  hand-published message, or a future definition source reaches the loop
+  without passing it. So the guard is checked at runtime as well as in the
+  schema.
+
+  ## It reaches no vendor
+
+  An action emits an event; the event travels the ordinary destination
+  path. This service holds no vendor credentials and makes no vendor call,
+  which is what keeps "a journey sent this" and "a destination sent this"
+  the same delivery record rather than two.
+
+  ## The sweep runs in-process
+
+  `polaris journeys sweep` exists for an operator, but a wait elapsing
+  should not depend on a crontab entry somebody remembered to add — and
+  the sweep produces effects that something has to publish. The service
+  that owns the producer is the natural place for the loop.
+
+mode: streaming
+
+inputs:
+  - family: resolved.events
+    # Event triggers. A journey with `trigger: { type: event }` admits a
+    # profile from here.
+    schema_versions: "*"
+  - family: profile.events
+    # `audience.entered` — the declarative trigger — and this service's own
+    # output, which the loop guard drops before anything else looks at it.
+    schema_versions: "*"
+
+outputs:
+  - family: profile.events
+    # `journey.entered`, `journey.step_advanced`, `journey.exited`. The
+    # same family as one of the inputs, which the drift lint could not
+    # express until 2026-08-19: its output pattern matched `families:` as
+    # well as `family:` and subtracted every input to compensate.
+    schema_versions: [1]
+
+# No state store in the transport sense. Participant state is a PostgreSQL
+# table (`journey_participants`), claimed with `FOR UPDATE SKIP LOCKED` so
+# two sweeps cannot advance one participant twice, and entry is an INSERT
+# against a partial unique index rather than a check-then-write.
+state_stores: []
+
+defaults:
+  consumer_group: polaris-journey-orchestrator-v1
+
+replay:
+  supported: false
+  restrictions:
+    - >-
+      Replaying a trigger re-admits profiles that already completed the
+      journey, subject to the definition's own `reentry` policy. That is
+      the policy working, not a replay guarantee, and a replay of
+      `profile.events` would additionally feed this service its own past
+      output — dropped by the loop guard, but only after the participant
+      rows have already moved.

@@ -10,7 +10,8 @@
   "files": [
     "dist",
     "src",
-    "SPEC.md"
+    "SPEC.md",
+    "processor.manifest.yaml"
   ],
   "engines": {
     "node": ">=22.0.0"

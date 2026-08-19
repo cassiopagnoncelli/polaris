@@ -54,9 +54,12 @@ KEY_TYPE    ?= web
 POLARIS_CLI = apps/polaris-cli/dist/bin/polaris.js
 
 # Code surfaces tracked by `make stats`. Mirrors the architecture docs:
-# apps/, packages/, processors/, consumers/ hold runtime code; catalog/ holds
-# the file-backed event catalog and policy; sql/ + db/migrations hold DDL.
-LOC_DIRS = apps packages processors consumers catalog sql db/migrations
+# apps/ and packages/ hold the services and shared libraries; sync/ and async/
+# hold the pipeline units (this said `processors consumers` until 2026-08-19,
+# which is where they lived before the R-programme move -- both globs had
+# matched nothing since, so the whole pipeline counted as zero lines);
+# catalog/ holds the file-backed registries; sql/ + db/migrations hold DDL.
+LOC_DIRS = apps packages sync async catalog sql db/migrations
 LOC_PRUNE = \( -name node_modules -o -name dist -o -name build -o -name .next -o -name out -o -name coverage \) -prune
 LOC_FIND_TYPES = \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' \)
 LOC_GIT_PATHS = \
@@ -64,6 +67,8 @@ LOC_GIT_PATHS = \
 	':(glob)apps/**/*.tsx' \
 	':(glob)packages/**/*.ts' \
 	':(glob)packages/**/*.tsx' \
+	':(glob)sync/**/*.ts' \
+	':(glob)async/**/*.ts' \
 	':(glob)processors/**/*.ts' \
 	':(glob)consumers/**/*.ts' \
 	':(glob)catalog/**/*.ts' \

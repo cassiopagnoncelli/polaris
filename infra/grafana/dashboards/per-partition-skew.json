@@ -108,14 +108,16 @@
         "current": { "text": "raw.events", "value": "raw.events" },
         "options": [
           { "text": "raw.events", "value": "raw.events", "selected": true },
+          { "text": "identified.events", "value": "identified.events" },
+          { "text": "resolved.events", "value": "resolved.events" },
+          { "text": "profile.events", "value": "profile.events" },
           { "text": "identity.events", "value": "identity.events" },
-          { "text": "enriched.events", "value": "enriched.events" },
-          { "text": "attribution.events", "value": "attribution.events" },
-          { "text": "analytics.events", "value": "analytics.events" }
+          { "text": "session.events", "value": "session.events" },
+          { "text": "attribution.events", "value": "attribution.events" }
         ],
         "label": "Topic family",
         "name": "topic_family",
-        "query": "raw.events,identity.events,enriched.events,attribution.events,analytics.events",
+        "query": "raw.events,identified.events,resolved.events,profile.events,identity.events,session.events,attribution.events",
         "type": "custom"
       },
       {

@@ -15,8 +15,8 @@
     "**/coverage",
     "apps",
     "packages",
-    "processors",
-    "consumers",
+    "sync",
+    "async",
     "tests"
   ]
 }

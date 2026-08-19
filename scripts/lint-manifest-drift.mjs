@@ -22,12 +22,47 @@
  * skipped. Two patterns carry direction:
  *
  *   consumerFamiliesFor(STREAM_FAMILY_X   -> input
- *   subscribe({ families: [...X...]       -> input
- *   family: STREAM_FAMILY_X               -> output
  *   inputFamily: STREAM_FAMILY_X          -> input
+ *   family: STREAM_FAMILY_X               -> output
  *
  * Import lines and comments are stripped first, so a family that only
  * appears in an import or a sentence is not counted as wiring.
+ *
+ * ## Singular `family:` only, and why that matters
+ *
+ * The output pattern used to match `famil(y|ies):` and then SUBTRACT every
+ * input from the result, on the reasoning that `subscribe({ families })`
+ * would otherwise read as a publish. Nothing in the tree passes a literal
+ * to `families:` — every subscribe builds the list from a variable — so
+ * the plural branch only ever fired on a shape that does not exist, while
+ * the subtraction it justified had a real cost: it made a unit that
+ * consumes and produces the SAME family inexpressible. Declaring the
+ * output was reported as drift, and omitting it left the manifest silent
+ * about a publish.
+ *
+ * `journey-orchestrator` is exactly that unit. It reads `profile.events`
+ * for `audience.entered` and publishes `journey.*` back onto the same
+ * plane, which is not a mistake to be routed around — the loop guard in
+ * its runtime is what makes it safe, and its manifest should say so.
+ *
+ * ## Family-list constants
+ *
+ * `clickhouse-sink` names its six inputs in four `const *_FAMILIES`
+ * arrays, grouped by what the sink DOES with each — source fact, derived
+ * event, profile state, quarantine record — and then passes them through a
+ * `flatMap`. Every use site therefore reads `consumerFamiliesFor(family,`,
+ * with a lambda parameter where the pattern above wants a constant, so the
+ * scan saw none of the six and the unit had no manifest at all. It was the
+ * platform's largest consumer and the one whose routing had already
+ * discarded an entire event plane.
+ *
+ * So a `STREAM_FAMILY_*` inside an array literal bound to a `const` whose
+ * name ends `_FAMILIES` counts as an input, in a file that calls
+ * `.subscribe(`. Both halves matter: the array alone is a list, and the
+ * subscribe is what makes it a list of INPUTS. This is a heuristic and
+ * stated as one — a unit that built an array of families to PUBLISH to
+ * would be mislabelled, which is why the singular `family:` publish scan
+ * stays independent of it and a family can be both.
  *
  * ## What it does NOT do
  *
@@ -91,12 +126,33 @@ export function wiredFamilies(source) {
       inputs.add(familyFromConstant(inner[0]));
     }
   }
-  for (const match of body.matchAll(/\bfamil(?:y|ies):\s*\[?\s*(STREAM_FAMILY_[A-Z_]+)/g)) {
+  // Singular only. See the module header: the plural form is a subscribe,
+  // and matching it here cost the ability to describe a unit that reads
+  // and writes one family.
+  for (const match of body.matchAll(/\bfamily:\s*(STREAM_FAMILY_[A-Z_]+)/g)) {
     outputs.add(familyFromConstant(match[1]));
   }
-  // A family both consumed and produced is an input; the `family:` form
-  // appears inside `subscribe({ families })` too.
-  for (const family of inputs) outputs.delete(family);
+  // A literal list handed to `families:` would be a subscribe, and is
+  // counted as an input rather than ignored — nothing writes one today,
+  // and the first unit that does should not silently go unchecked.
+  for (const match of body.matchAll(/\bfamilies:\s*\[([^\]]*)\]/g)) {
+    for (const inner of match[1].matchAll(/STREAM_FAMILY_[A-Z_]+/g)) {
+      inputs.add(familyFromConstant(inner[0]));
+    }
+  }
+
+  // Family-list constants, in a file that subscribes. See the module
+  // header: this is what makes `clickhouse-sink` visible, and it is a
+  // heuristic rather than a rule the language enforces.
+  if (/\.subscribe\(/.test(body)) {
+    for (const match of body.matchAll(
+      /\bconst\s+[A-Z][A-Z0-9_]*_FAMILIES\s*(?::[^=]*)?=\s*\[([^\]]*)\]/g,
+    )) {
+      for (const inner of match[1].matchAll(/STREAM_FAMILY_[A-Z_]+/g)) {
+        inputs.add(familyFromConstant(inner[0]));
+      }
+    }
+  }
   return { inputs, outputs };
 }
 

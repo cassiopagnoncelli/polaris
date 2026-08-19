@@ -1,0 +1,90 @@
+# Polaris processor manifest — clickhouse-sink v1
+#
+# Semantic definition for the ClickHouse sink. Per
+# docs/architecture/05-processors-and-replay.md ("Processor Versioning"),
+# the contents of this file for a given (name, version) pair are immutable;
+# any change to what this consumer CONCLUDES is a new version directory.
+#
+# `processor.manifest.yaml` and not `consumer.manifest.yaml`: the consumer
+# manifest describes a DESTINATION — a vendor, a normalize/mapper/deliverer
+# pin, a consent requirement. This unit has no vendor. It is a pipeline
+# unit whose output happens to be a store, which is what the processor
+# manifest describes, and which is why `outputs` below is empty.
+
+name: clickhouse-sink
+version: v1
+owner: platform-data
+release_status: released
+description: |
+  Writes the platform's streams into ClickHouse, one queue table per
+  plane, and lets materialized views do the projection.
+
+  Six families arrive here and they are not interchangeable. The spine
+  (`resolved.events`) is the source fact. The derived families
+  (`session`, `identity`, `attribution`) record things that HAPPENED. The
+  profile plane records what is now TRUE of a person, and needs both a
+  state write and a history write — routing it only to the state queue
+  discarded every `trait.computed`, `audience.*` and `journey.*` for as
+  long as that lasted, inside a `Null` table, with the INSERT reporting
+  success and this sink counting the rows. The quarantine carries a
+  violation record rather than an envelope, because the events it
+  describes failed envelope validation by definition.
+
+  ## The checkpoint waits for durability
+
+  A batching consumer whose handler returns before the insert lands has
+  told the transport "handled" about rows that exist only in this
+  process's memory. So the checkpoint is held to the last offset that
+  actually reached ClickHouse, and un-flushed events are redelivered.
+
+  ## Batches close on size OR age
+
+  Size alone starves a low-traffic project, whose checkpoint would sit
+  still for as long as it took to fill a batch; age alone makes batches
+  unbounded under load.
+
+mode: streaming
+
+inputs:
+  - family: resolved.events
+    # The source fact. `analytics_raw`.
+    schema_versions: "*"
+  - family: session.events
+    schema_versions: "*"
+  - family: identity.events
+    schema_versions: "*"
+  - family: attribution.events
+    schema_versions: "*"
+  - family: profile.events
+    # Both the state path (`polaris.profiles`, via the queue's MV) and the
+    # history path (`analytics_processed`). Two purposes, two rows.
+    schema_versions: "*"
+  - family: rejected.events
+    # The schema-governance quarantine. Subscribed BARE rather than through
+    # `consumerFamiliesFor`, which throws for a non-canonical family — this
+    # one is deliberately outside isolation because it has no spine
+    # consumer to starve.
+    schema_versions: "*"
+
+outputs:
+  # Nothing is emitted back onto the platform. The output is a set of
+  # ClickHouse tables, which is a sink, not an event family.
+  []
+
+# No state store. The batch buffer is in memory by design and is not state
+# in the durable sense: everything in it is still on the stream, behind a
+# checkpoint that has not advanced past it.
+state_stores: []
+
+defaults:
+  consumer_group: polaris-clickhouse-sink-v1
+
+replay:
+  supported: true
+  restrictions:
+    - >-
+      Every target table is a ReplacingMergeTree or a SummingMergeTree
+      keyed so a replayed row collapses against the original rather than
+      accumulating. A replay is therefore repeatable, but the collapse is
+      what makes it so — a reader using `FINAL`, or one that forgets the
+      argMax idiom, sees the duplicates a replay creates between merges.
