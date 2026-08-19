@@ -952,11 +952,62 @@ describe("admin UI — processors page", () => {
     // which explains what the state means and is not a row.
     expect(disabled.body).toContain("1 of 3 combinations");
 
-    const explicit = await fetchPage(
+    // `enabled` is the EFFECTIVE state: a combination nobody has decided
+    // about is running, so it belongs here. Two of the three combinations
+    // for this processor are undecided; the disabled one is not.
+    const enabled = await fetchPage(
       { listProcessorActivations: async () => [{ ...ACTIVATION, enabled_state: "disabled" }] },
       "state=enabled",
     );
-    expect(explicit.body).toContain("No combination matches these filters.");
+    expect(enabled.body).toContain("2 of 3 combinations");
+
+    // And the provenance question — what has nobody decided — is its own
+    // option rather than something to infer from the other two.
+    const undecided = await fetchPage(
+      { listProcessorActivations: async () => [{ ...ACTIVATION, enabled_state: "disabled" }] },
+      "state=default",
+    );
+    expect(undecided.body).toContain("2 of 3 combinations");
+  });
+
+  it("opens on a default view: the only project, this deployment's environment, enabled", async () => {
+    // The unfiltered matrix is versions x projects x environments, capped at
+    // 500 rows — never a useful landing state. The service runs as `local`,
+    // which is a deployment environment and not a row value, so the default
+    // is the development data it fronts.
+    const res = await fetchPage({
+      listProcessorActivations: async () => [ACTIVATION],
+      listProcessorRuns: async () => [RUN],
+    });
+    expect(res.body).toContain("Default view:");
+    expect(res.body).toContain("storefront · development · Enabled (running)");
+    // Announced, with a way out — a default filter that says nothing is how
+    // an operator concludes their data is missing.
+    expect(res.body).toContain("Show everything");
+  });
+
+  it("lets a cleared filter stay cleared", async () => {
+    // `?state=` is an operator who cleared the select; no `state` at all is
+    // one who has not touched it. Only the second gets a default, or the
+    // select springs back the moment it is cleared.
+    const res = await fetchPage(
+      { listProcessorActivations: async () => [ACTIVATION], listProcessorRuns: async () => [RUN] },
+      "name=&project=&environment=&state=",
+    );
+    expect(res.body).not.toContain("Default view:");
+    // Nothing filtered, so nothing hidden and no count line.
+    expect(res.body).not.toContain("of 3 combinations");
+  });
+
+  it("carries the filters across a tab switch", async () => {
+    // Switching between intent and reality must not silently widen the view
+    // back to everything — or, now, back to the defaults.
+    const res = await fetchPage(
+      { listProcessorActivations: async () => [ACTIVATION], listProcessorRuns: async () => [RUN] },
+      "state=disabled&project=storefront",
+    );
+    expect(res.body).toContain("tab=runs");
+    expect(res.body).toContain("project=storefront");
   });
 
   it("filters the matrix by processor name", async () => {

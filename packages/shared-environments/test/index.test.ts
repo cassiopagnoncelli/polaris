@@ -5,6 +5,7 @@ import {
   isPolarisEnvironment,
   POLARIS_ENVIRONMENTS,
   polarisEnvironmentSchema,
+  rowEnvironmentFor,
 } from "../src/index.js";
 
 describe("POLARIS_ENVIRONMENTS", () => {
@@ -56,5 +57,25 @@ describe("isPolarisEnvironment", () => {
     expect(isPolarisEnvironment("local")).toBe(false);
     expect(isPolarisEnvironment(undefined)).toBe(false);
     expect(isPolarisEnvironment(3)).toBe(false);
+  });
+});
+
+describe("rowEnvironmentFor", () => {
+  it("maps a local deployment onto development", () => {
+    // The one translation that matters: `local` is a deployment environment
+    // and no `environment` column accepts it.
+    expect(rowEnvironmentFor("local")).toBe("development");
+  });
+
+  it("keeps a deployment that is already a row environment", () => {
+    for (const env of POLARIS_ENVIRONMENTS) {
+      expect(rowEnvironmentFor(env)).toBe(env);
+    }
+  });
+
+  it("points anything unrecognised at development, never production", () => {
+    for (const bad of ["", "test", "prod", "PRODUCTION"]) {
+      expect(rowEnvironmentFor(bad)).toBe("development");
+    }
   });
 });

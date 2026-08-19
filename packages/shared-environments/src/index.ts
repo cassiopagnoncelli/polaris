@@ -56,3 +56,22 @@ export const DEPLOYMENT_ENVIRONMENTS = ["local", "development", "staging", "prod
 export type DeploymentEnvironment = (typeof DEPLOYMENT_ENVIRONMENTS)[number];
 
 export const deploymentEnvironmentSchema = z.enum(DEPLOYMENT_ENVIRONMENTS);
+
+/**
+ * The row environment a deployment reads and writes by default.
+ *
+ * Only `local` needs translating, and it is the whole reason this exists: a
+ * developer machine is not a row environment, `local` must never reach an
+ * `environment` column, and every surface that wants to preselect "the
+ * environment I am looking at" would otherwise write its own `=== "local"`
+ * check. A local control plane fronts development data, so that is the
+ * answer.
+ *
+ * Deliberately total rather than nullable. Callers are choosing a default for
+ * a filter or a form, not validating input — `isPolarisEnvironment` is the
+ * predicate for that — and an unrecognised deployment string is safest
+ * pointed at development rather than at production.
+ */
+export function rowEnvironmentFor(deployment: string): PolarisEnvironment {
+  return isPolarisEnvironment(deployment) ? deployment : "development";
+}

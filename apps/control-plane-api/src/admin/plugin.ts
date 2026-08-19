@@ -71,6 +71,7 @@ import { renderKeyDetailPage, renderKeysPage } from "./pages/keys.js";
 import { renderOverviewPage } from "./pages/overview.js";
 import {
   ACTIVATION_ENVIRONMENTS,
+  defaultProcessorFilters,
   parseProcessorTab,
   renderActivationDetailPage,
   renderProcessorsPage,
@@ -1550,6 +1551,30 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           deps.queries.listProcessorRuns(config.pageSize),
           deps.queries.listProjects(),
         ]);
+        // Defaults are for an operator who has not filtered anything, so a
+        // single filter parameter — even an empty one — switches them off
+        // entirely. Empty is how a submitted form says "any", and honouring
+        // a default over it would make a select the operator just cleared
+        // spring back. Per-key defaults would do exactly that.
+        const projectIds = projects.map((p) => p.project_id);
+        const defaulted = !PROCESSOR_FILTER_KEYS.some((key) => hasQueryKey(request, key));
+        const filters = defaulted
+          ? defaultProcessorFilters({
+              projects: projectIds,
+              serviceEnvironment: deps.environment,
+            })
+          : {
+              // `name` rather than `processor`, so the filter shares its
+              // parameter with the activation-detail link the table's own
+              // rows already build — clicking through and coming back keeps
+              // the filter instead of quietly widening it.
+              processor: queryString(request, "name"),
+              project: queryString(request, "project"),
+              environment: queryString(request, "environment"),
+              state: queryString(request, "state"),
+              status: queryString(request, "status"),
+            };
+
         return sendHtml(
           reply,
           200,
@@ -1557,20 +1582,11 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             ctx: context(request),
             activations,
             runs,
-            projects: projects.map((p) => p.project_id),
+            projects: projectIds,
             environments: ACTIVATION_ENVIRONMENTS,
-            // `name` rather than `processor`, so the filter shares its
-            // parameter with the activation-detail link the table's own rows
-            // already build — clicking through and coming back keeps the
-            // filter instead of quietly widening it.
-            filters: {
-              processor: queryString(request, "name"),
-              project: queryString(request, "project"),
-              environment: queryString(request, "environment"),
-              state: queryString(request, "state"),
-              status: queryString(request, "status"),
-            },
+            filters,
             tab: parseProcessorTab(queryString(request, "tab")),
+            defaulted,
           }),
         );
       });
@@ -1721,6 +1737,22 @@ function checkViolation(err: unknown): string | null {
   const candidate = err as { code?: unknown; constraint?: unknown };
   if (candidate.code !== "23514") return null;
   return typeof candidate.constraint === "string" ? candidate.constraint : "a check constraint";
+}
+
+/** The query parameters that mean "the operator has chosen a view". */
+const PROCESSOR_FILTER_KEYS = ["name", "project", "environment", "state", "status"] as const;
+
+/**
+ * Whether a query parameter was SENT, as opposed to sent empty.
+ *
+ * `queryString` cannot tell the two apart — both come back "" — and here the
+ * difference is the whole mechanism: `?state=` is an operator who cleared the
+ * state filter, while no `state` at all is an operator who has not touched
+ * it. Only the second gets a default.
+ */
+function hasQueryKey(request: FastifyRequest, name: string): boolean {
+  const query = request.query as Record<string, unknown> | undefined;
+  return query !== undefined && Object.hasOwn(query, name);
 }
 
 /**

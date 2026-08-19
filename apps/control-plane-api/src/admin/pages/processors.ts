@@ -24,7 +24,7 @@
  * triage, not a metrics surface.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS, rowEnvironmentFor } from "@polaris/shared-environments";
 import { type Html, html } from "../html.js";
 import {
   type AdminPageContext,
@@ -194,8 +194,29 @@ export function parseProcessorTab(raw: string | undefined): ProcessorTab {
     : "activations";
 }
 
-/** The state axis, as an operator would name it rather than as it is stored. */
+/**
+ * The state axis, as an operator would name it rather than as it is stored.
+ *
+ * `enabled` means EFFECTIVELY enabled — an explicit `enabled` row and a
+ * combination nobody has decided about are both running, and the gate only
+ * closes on an explicit disable. An earlier revision had it mean "explicitly
+ * enabled" on the reasoning that somebody filtering for it wants decisions
+ * that were made. That was defensible while it was something you opted into
+ * and wrong the moment it became the default view: on an install where
+ * nothing has been decided, every combination is a default, and the page
+ * would have opened on an empty table reading as "no processors".
+ *
+ * `default` stays as its own option because "what has nobody decided about?"
+ * is a real question. It is a subset of `enabled`, not a peer of it, and the
+ * label says so.
+ */
 export const ACTIVATION_STATES = ["enabled", "disabled", "default"] as const;
+
+const STATE_LABELS: Readonly<Record<string, string>> = {
+  enabled: "Enabled (running)",
+  disabled: "Disabled",
+  default: "No decision recorded",
+};
 
 /** Statuses a run row can carry, for the runs filter. */
 export const RUN_STATUSES = ["running", "completed", "failed"] as const;
@@ -234,13 +255,17 @@ export function applyActivationFilters(
     if (filters.processor.length > 0 && cell.processor_name !== filters.processor) return false;
     if (filters.project.length > 0 && cell.project_id !== filters.project) return false;
     if (filters.environment.length > 0 && cell.environment !== filters.environment) return false;
-    // "enabled" means explicitly enabled, and excludes the default. An
-    // operator filtering for `enabled` is looking for decisions somebody
-    // made; folding the defaults in would return almost the whole matrix and
-    // answer a question nobody asked.
     if (filters.state.length > 0) {
-      const wanted = filters.state === "default" ? "default_enabled" : filters.state;
-      if (cell.state !== wanted) return false;
+      // `enabled` is the effective state, so it matches the undecided
+      // combinations too — see ACTIVATION_STATES. `default` narrows to just
+      // those.
+      const matches =
+        filters.state === "enabled"
+          ? cell.state === "enabled" || cell.state === "default_enabled"
+          : filters.state === "default"
+            ? cell.state === "default_enabled"
+            : cell.state === filters.state;
+      if (!matches) return false;
     }
     return true;
   });
@@ -262,6 +287,72 @@ export function applyRunFilters(
   });
 }
 
+/**
+ * What the page shows before anyone has filtered anything.
+ *
+ * The unfiltered matrix is versions x projects x environments and is capped
+ * at 500 rows, so "no filter" was never a useful landing state — it opened on
+ * a wall of combinations that are running because nobody has said otherwise.
+ * The default view answers the question an operator actually arrives with:
+ * what is on, here, now.
+ *
+ *   - **project** — the only project, when there is exactly one. Polaris is
+ *     multi-project by design, so there is no notion of a main one; with
+ *     several, picking any of them would be a guess and the filter stays
+ *     open.
+ *   - **environment** — the one this deployment fronts. `POLARIS_ENV` is a
+ *     deployment environment and `local` is not a row value, so the
+ *     translation goes through `rowEnvironmentFor` rather than a `=== "local"`
+ *     check written here.
+ *   - **state** — enabled, meaning actually running. What is switched off is
+ *     one select away and is counted on the tab from either side.
+ *
+ * Run status is deliberately not defaulted. `completed` and `failed` runs are
+ * the history the tab exists to show, and hiding them behind a default would
+ * make the failure count on the tab point at rows the operator cannot see.
+ */
+export function defaultProcessorFilters(input: {
+  projects: readonly string[];
+  serviceEnvironment: string;
+}): ProcessorFilterValues {
+  return {
+    processor: "",
+    project: input.projects.length === 1 ? (input.projects[0] ?? "") : "",
+    environment: rowEnvironmentFor(input.serviceEnvironment),
+    state: "enabled",
+    status: "",
+  };
+}
+
+/** Whether any of these filters is doing something. */
+function isFiltered(filters: ProcessorFilterValues): boolean {
+  return (
+    filters.processor.length > 0 ||
+    filters.project.length > 0 ||
+    filters.environment.length > 0 ||
+    filters.state.length > 0 ||
+    filters.status.length > 0
+  );
+}
+
+/** The query string these filters correspond to, for a tab or a reset link. */
+function filterQuery(filters: ProcessorFilterValues, tab: ProcessorTab): string {
+  const params = new URLSearchParams();
+  if (tab !== "activations") params.set("tab", tab);
+  // Every key is emitted once any is set, so the URL says "these are my
+  // filters" rather than "these plus whatever the defaults are" — which is
+  // also how the route tells a deliberate `any` from an unvisited page.
+  if (isFiltered(filters)) {
+    params.set("name", filters.processor);
+    params.set("project", filters.project);
+    params.set("environment", filters.environment);
+    if (tab === "runs") params.set("status", filters.status);
+    else params.set("state", filters.state);
+  }
+  const query = params.toString();
+  return query.length > 0 ? `?${query}` : "";
+}
+
 /** Every processor name the control plane has seen, for the filter menu. */
 function knownProcessors(
   activations: readonly ProcessorActivationRow[],
@@ -281,6 +372,12 @@ export function renderProcessorsPage(input: {
   environments: readonly string[];
   filters: ProcessorFilterValues;
   tab?: ProcessorTab | undefined;
+  /**
+   * True when `filters` came from `defaultProcessorFilters` rather than from
+   * the operator. Only the route knows whether it happened; only the page
+   * knows to say so.
+   */
+  defaulted?: boolean | undefined;
 }): string {
   const tab = input.tab ?? "activations";
   const base = `${ADMIN_PREFIX}/processors`;
@@ -299,8 +396,10 @@ export function renderProcessorsPage(input: {
   const disabled = allCells.filter((cell) => cell.state === "disabled").length;
   const failed = input.runs.filter((run) => run.status === "failed").length;
 
-  const href = (target: ProcessorTab): string =>
-    target === "activations" ? base : `${base}?tab=${target}`;
+  // Filters ride along, so moving between intent and reality keeps the scope
+  // the operator set. Without this, switching tabs silently widened the view
+  // back to everything — and, once defaults existed, back to the defaults.
+  const href = (target: ProcessorTab): string => `${base}${filterQuery(input.filters, target)}`;
 
   const tabs = tabStrip({
     label: "Processor views",
@@ -334,7 +433,10 @@ export function renderProcessorsPage(input: {
     heading: "Processors",
     lede: html`Operator intent, and what is actually running.`,
     tabs,
-    body: tab === "runs" ? renderRunsTab(input, base) : renderActivationsTab(input, base, allCells),
+    body:
+      tab === "runs"
+        ? renderRunsTab(input, base)
+        : renderActivationsTab({ ...input, defaulted: input.defaulted === true }, base, allCells),
   });
 }
 
@@ -350,6 +452,7 @@ function renderActivationsTab(
     activations: readonly ProcessorActivationRow[];
     runs: readonly ProcessorRunRow[];
     filters: ProcessorFilterValues;
+    defaulted: boolean;
   },
   base: string,
   allCells: readonly ActivationCell[],
@@ -426,7 +529,7 @@ function renderActivationsTab(
         input.filters.environment,
         "any environment",
       ),
-      selectField("state", "State", ACTIVATION_STATES, input.filters.state, "any state"),
+      labelledSelect("state", "State", ACTIVATION_STATES, input.filters.state, "any state"),
     ])}
 
     ${
@@ -440,6 +543,7 @@ function renderActivationsTab(
           </p>`
         : null
     }
+    ${defaultViewNotice(input, base)}
     ${countLine(cells.length, allCells.length, "combination", "combinations")}
 
     <div class="table-wrap">
@@ -568,6 +672,60 @@ function countLine(shown: number, total: number, one: string, many: string): Htm
   if (shown === total) return null;
   return html`<p class="muted filter-count">
     ${String(shown)} of ${String(total)} ${total === 1 ? one : many}
+  </p>`;
+}
+
+/**
+ * A select whose option text differs from its value.
+ *
+ * `enabled` as a bare word does not say whether it includes the combinations
+ * nobody decided about, and that is the one thing about this filter worth
+ * saying — so the menu says "Enabled (running)" and submits `enabled`.
+ */
+function labelledSelect(
+  name: string,
+  label: string,
+  options: readonly string[],
+  selected: string,
+  anyLabel: string,
+): Html {
+  return html`<label>
+    <span>${label}</span>
+    <select name="${name}">
+      <option value="">${anyLabel}</option>
+      ${options.map(
+        (option) =>
+          html`<option value="${option}" ${option === selected ? "selected" : ""}>
+            ${STATE_LABELS[option] ?? option}
+          </option>`,
+      )}
+    </select>
+  </label>`;
+}
+
+/**
+ * Says out loud that the page narrowed itself, and offers the way out.
+ *
+ * A default filter is the fastest way to make an operator think data is
+ * missing. The same reasoning as the truncation notice above it: a view that
+ * quietly shows a subset reads as "this is everything". The escape is a link
+ * rather than an instruction to change three selects.
+ */
+function defaultViewNotice(
+  input: { filters: ProcessorFilterValues; defaulted: boolean },
+  base: string,
+): Html | null {
+  if (!input.defaulted) return null;
+  const scope = [
+    input.filters.project.length > 0 ? input.filters.project : null,
+    input.filters.environment.length > 0 ? input.filters.environment : null,
+    input.filters.state.length > 0 ? (STATE_LABELS[input.filters.state] ?? null) : null,
+  ].filter((part): part is string => part !== null);
+  if (scope.length === 0) return null;
+
+  return html`<p class="muted filter-count">
+    Default view: <strong>${scope.join(" · ")}</strong>.
+    <a href="${base}?name=&amp;project=&amp;environment=&amp;state=">Show everything →</a>
   </p>`;
 }
 
