@@ -87,8 +87,12 @@ would falsify the record the file exists to keep.
   credentials, no external URLs, no personal identifiers — but "who may
   read our architecture decisions" is now answered by the repository's
   visibility rather than by a `.gitignore` entry.
-- Follow-up: reconcile `agents/architect/AGENT.md` with the new location,
-  or move the records back and drop the links instead.
+- Follow-up, done: `agents/architect/AGENT.md` and its README now say the
+  records live in `docs/adr/` with a symlink here, and narrow the "never
+  shipped" claim to what it was always about — the FRAMEWORK does not ship
+  records in either direction, which is untouched by where one project
+  keeps its own. Those files are installer-managed, so the edit may not
+  survive the next install; this ADR is the durable copy of the reasoning.
 - Follow-up: `README.md` in this directory indexed only ADR-0000 while
   0001 through 0005 existed. Fixed in this commit; the index is
   hand-maintained and drifted the moment a second ADR was written.
