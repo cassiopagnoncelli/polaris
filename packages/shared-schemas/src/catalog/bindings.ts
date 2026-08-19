@@ -12,6 +12,9 @@ import { identityMergeSuspendedV1PropertiesSchema } from "../events/identity/mer
 import { identityMergedV1PropertiesSchema } from "../events/identity/merged.v1.js";
 import { identityMergedV2PropertiesSchema } from "../events/identity/merged.v2.js";
 import { identityRotatedV1PropertiesSchema } from "../events/identity/rotated.v1.js";
+import { journeyEnteredV1PropertiesSchema } from "../events/journey/entered.v1.js";
+import { journeyExitedV1PropertiesSchema } from "../events/journey/exited.v1.js";
+import { journeyStepAdvancedV1PropertiesSchema } from "../events/journey/step_advanced.v1.js";
 import { pageViewedV1PropertiesSchema } from "../events/page/viewed.v1.js";
 import { pageViewedV2PropertiesSchema } from "../events/page/viewed.v2.js";
 import { paymentApprovedV1PropertiesSchema } from "../events/payment/approved.v1.js";
@@ -137,6 +140,21 @@ export const defaultSchemaBindings: readonly SchemaBinding[] = [
     event: "audience.exited",
     schema_version: 1,
     propertiesSchema: audienceExitedV1PropertiesSchema,
+  },
+  {
+    event: "journey.entered",
+    schema_version: 1,
+    propertiesSchema: journeyEnteredV1PropertiesSchema,
+  },
+  {
+    event: "journey.step_advanced",
+    schema_version: 1,
+    propertiesSchema: journeyStepAdvancedV1PropertiesSchema,
+  },
+  {
+    event: "journey.exited",
+    schema_version: 1,
+    propertiesSchema: journeyExitedV1PropertiesSchema,
   },
   {
     event: "payment.approved",

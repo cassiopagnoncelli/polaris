@@ -917,6 +917,36 @@ export interface ProfileMergesTable {
  * `catalog/audiences/`. A predicate column would make an audience's meaning
  * editable without a deploy, which is what the file-heavy rule forbids.
  */
+/**
+ * Where a profile is in a journey graph right now.
+ *
+ * The graph is code in `catalog/journeys/`; only this is runtime state.
+ * A participant walks the version it entered on to completion — see
+ * `db/migrations/20260818000002_create_journey_participants.sql` for why
+ * migrating live participants has no correct answer.
+ */
+export interface JourneyParticipantsTable {
+  id: string;
+  /** Project scope. References `projects(project_id)`. */
+  project_id: string;
+  /** Environment scope. Closed set: development | staging | production. */
+  environment: string;
+  /** Catalog key from `catalog/journeys/`. */
+  journey: string;
+  /** Graph version this participant walks to completion. Never revised. */
+  journey_version: number;
+  profile_id: string;
+  /** Step id from the entry version's graph. */
+  step_id: string;
+  /** Set while parked on a wait step; the sweep's only input. */
+  wait_until: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  entered_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  exited_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  /** Closed set, mirroring JOURNEY_EXIT_REASONS. Null while active. */
+  exit_reason: string | null;
+  updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 export interface AudienceMembershipsTable {
   /** Project scope. References `projects(project_id)`. */
   project_id: string;
@@ -943,6 +973,7 @@ export interface Database {
   api_keys: ApiKeyTable;
   attribution_touchpoint_chains: AttributionTouchpointChainsTable;
   audience_memberships: AudienceMembershipsTable;
+  journey_participants: JourneyParticipantsTable;
   destinations: DestinationsTable;
   identity_links: IdentityLinksTable;
   processor_activations: ProcessorActivationsTable;

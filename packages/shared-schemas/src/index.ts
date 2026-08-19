@@ -9,6 +9,19 @@ export {
   attributionFirstTouchAssignedV1PropertiesSchema,
 } from "./events/attribution/first_touch_assigned.v1.js";
 export {
+  journeyEnteredV1PropertiesSchema,
+  type JourneyEnteredV1Properties,
+} from "./events/journey/entered.v1.js";
+export {
+  JOURNEY_EXIT_REASONS,
+  journeyExitedV1PropertiesSchema,
+  type JourneyExitedV1Properties,
+} from "./events/journey/exited.v1.js";
+export {
+  journeyStepAdvancedV1PropertiesSchema,
+  type JourneyStepAdvancedV1Properties,
+} from "./events/journey/step_advanced.v1.js";
+export {
   type AttributionLastTouchAssignedV1Properties,
   attributionLastTouchAssignedV1PropertiesSchema,
 } from "./events/attribution/last_touch_assigned.v1.js";

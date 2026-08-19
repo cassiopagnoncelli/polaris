@@ -1,0 +1,21 @@
+# Catalog entry: journey.entered v1 (ACTIVE)
+#
+# Emitted by `async/journeys/orchestrator/v1` onto `profile.events`.
+#
+# The `journey.*` namespace may NEVER trigger a journey. An action step
+# emits one of these; if that could admit a profile to a journey, a
+# definition could enter a profile into itself — or into a second journey
+# whose action re-enters the first — and the pair would emit events as fast
+# as the spine carries them. `catalog/journeys/types.ts` refuses such a
+# definition and the orchestrator re-checks at runtime, because the loader
+# only protects definitions in this repository.
+name: journey.entered
+schema_version: 1
+domain: journey
+owner: platform-data
+description: >-
+  Records that a profile was admitted to a journey, naming the graph version it will walk to completion.
+lifecycle: active
+since: "2026-08-18"
+schema_module: "@polaris/shared-schemas/events/journey/entered.v1"
+schema_export: journeyEnteredV1PropertiesSchema

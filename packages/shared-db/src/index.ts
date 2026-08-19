@@ -42,6 +42,7 @@ export type {
   Environment,
   IdentityLinkConfidence,
   IdentityLinksTable,
+  JourneyParticipantsTable,
   ProcessorActivationState,
   ProcessorActivationsTable,
   ProcessorRunStatus,
