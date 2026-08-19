@@ -131,6 +131,25 @@ export const PROJECT_CONFIG_SCHEMAS: Record<string, ProjectConfigSchemaEntry> = 
       instance: [],
     },
   },
+  reverse_etl: {
+    project: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      properties: {
+        enabled_jobs: {
+          items: {
+            pattern: "^[a-z][a-z0-9_]*$",
+            type: "string",
+          },
+          type: "array",
+        },
+      },
+      type: "object",
+    },
+    secretKeys: {
+      project: [],
+      instance: [],
+    },
+  },
   tiktok: {
     project: {
       $schema: "https://json-schema.org/draft/2020-12/schema",

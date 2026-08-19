@@ -33,6 +33,8 @@
 
 import {
   type IngestBatchResult,
+  jobEnabled,
+  PROJECT_CONFIG_NAMESPACE,
   type ReverseEtlRunResult,
   runReverseEtl,
 } from "@polaris/processor-reverse-etl-v1";
@@ -75,6 +77,18 @@ export interface ReverseEtlRunHooks {
   ) => { send(events: readonly Record<string, unknown>[]): Promise<IngestBatchResult> };
   readonly now?: () => Date;
   readonly generateRunId?: () => string;
+  /**
+   * This project's `reverse_etl` config slice, for the enablement check.
+   *
+   * A hook rather than a direct read so the check is testable without a
+   * control plane — and absent means "no control plane wired", which is
+   * the shape a `--dry-run` or a unit test has. Absent is treated as no
+   * restriction, exactly as an unset key is.
+   */
+  readonly readProjectConfig?: (
+    ctx: CommandContext,
+    scope: { projectId: string; environment: string },
+  ) => Promise<Readonly<Record<string, unknown>>>;
 }
 
 export function buildReverseEtlRunRunner(hooks: ReverseEtlRunHooks = {}) {
@@ -92,6 +106,47 @@ export function buildReverseEtlRunRunner(hooks: ReverseEtlRunHooks = {}) {
     const projectId = requireArg(args.project, "--project");
     const environment = requireArg(args.env, "--env");
     const batchSize = parseBatchSize(args.batchSize);
+
+    // Enablement, before any client is built. A disabled job should not
+    // open a ClickHouse connection to discover it has nothing to do.
+    //
+    // Exit ZERO when skipped. Cron treats non-zero as "wake somebody up",
+    // and a job an operator deliberately switched off is not an incident —
+    // the failure this command's non-zero rule exists for is a run that
+    // was SUPPOSED to happen and did not.
+    if (hooks.readProjectConfig !== undefined) {
+      const slice = await hooks.readProjectConfig(ctx, { projectId, environment });
+      const verdict = jobEnabled(job.key, slice);
+      if (!verdict.enabled) {
+        ctx.logger.info(
+          {
+            audit_action: "reverse_etl.skipped",
+            job: job.key,
+            projectId,
+            environment,
+            reason: verdict.reason,
+          },
+          "reverse-etl job not enabled for this project",
+        );
+        ctx.output.writeOut(
+          renderAccordingTo(ctx.config.output, {
+            human:
+              `skipped: ${job.key} is not enabled for ${projectId}/${environment}\n` +
+              `  ${verdict.reason ?? ""}\n` +
+              `  enable it: polaris config set --project ${projectId} --env ${environment} ` +
+              `--key ${PROJECT_CONFIG_NAMESPACE}.enabled_jobs --value '["${job.key}"]'\n`,
+            json: {
+              status: "skipped",
+              job: job.key,
+              project_id: projectId,
+              environment,
+              reason: verdict.reason,
+            },
+          }),
+        );
+        return undefined;
+      }
+    }
 
     if (hooks.query === undefined || hooks.ingest === undefined) {
       // Reachable only from a caller that built the runner without hooks.

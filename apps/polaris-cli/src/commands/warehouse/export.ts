@@ -16,18 +16,32 @@
  *
  * ## Datasets
  *
- *   events     — `analytics_raw` for the day, deduped by the argMax
- *                idiom. Never raw rows: between merges a
- *                ReplacingMergeTree holds every duplicate, and an
- *                extract that shipped them would make every downstream
- *                count wrong in a way that looks like real traffic.
+ * The facts, on ReplacingMergeTree — deduped by the argMax idiom, never
+ * raw rows, because between merges the engine holds every duplicate and
+ * an extract that shipped them would make downstream counts wrong in a
+ * way that looks like real traffic:
+ *
+ *   events     — `analytics_raw` for the day.
  *   profiles   — current trait state per profile.
  *   merge_map  — the whole merge map, so canonical resolution works
  *                offline. Exported alongside `profiles` by default,
  *                because a profiles snapshot without it is one whose
  *                keys silently stop resolving.
  *
- * `--dataset` narrows to one; omitted, the command writes all three.
+ * The projections, on SummingMergeTree — summed rather than argMax'd,
+ * because this engine's unmerged parts are ADDENDS of one day's number
+ * rather than older versions of it. Using the fact tables' idiom here
+ * would return a number, not an error:
+ *
+ *   event_daily_counts          — per (event, day).
+ *   session_daily_metrics       — sessions started/ended per day.
+ *   profile_event_daily_counts  — the person-dimensioned one.
+ *
+ * These are the same three tables a computed trait may read. They exist
+ * to be read by something other than the pipeline, which is exactly the
+ * argument for exporting them.
+ *
+ * `--dataset` narrows to one; omitted, the command writes all six.
  *
  * ## Day is the EVENTS' day, not the run's
  *

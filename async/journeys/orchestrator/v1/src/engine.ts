@@ -187,9 +187,22 @@ export function advance(input: {
 
     switch (step.type) {
       case "wait": {
-        // A resting point. The due time is the participant's, computed from
-        // the moment it arrived here.
-        const waitUntil = new Date(input.now.getTime() + step.minutes * 60_000);
+        // A resting point. Two ways to name the due moment, and the schema
+        // guarantees exactly one is set:
+        //
+        //   minutes  relative to THIS participant's arrival here
+        //   until    an absolute instant, the same one for everybody
+        //
+        // An `until` already in the past parks with a due time in the past,
+        // which the sweep claims on its next pass — the participant moves
+        // one tick later rather than immediately. Advancing straight
+        // through instead would make this branch the only step that can
+        // continue the walk without a resting point, and the walk's
+        // termination argument rests on every wait stopping it.
+        const waitUntil =
+          step.until !== undefined
+            ? new Date(step.until)
+            : new Date(input.now.getTime() + (step.minutes ?? 0) * 60_000);
         effects.push({ kind: "park", step_id: step.id, wait_until: waitUntil });
         return { effects, restingStepId: step.id };
       }

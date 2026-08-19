@@ -1,4 +1,8 @@
-import type { WarehouseExportResult, WarehouseExportTarget } from "@polaris/shared-clickhouse";
+import {
+  WAREHOUSE_DATASETS,
+  type WarehouseExportResult,
+  type WarehouseExportTarget,
+} from "@polaris/shared-clickhouse";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -94,14 +98,18 @@ const ARGS = { project: "storefront", env: "production", day: "2026-08-15" };
 describe("polaris warehouse export", () => {
   it("writes every dataset when none is named", async () => {
     // A profiles snapshot without the merge map is one whose keys
-    // silently stop resolving, so the default is all three rather than
-    // an operator remembering to ask for the third.
+    // silently stop resolving, so the default is everything rather than
+    // an operator remembering which ones travel together.
+    //
+    // Asserted against WAREHOUSE_DATASETS rather than a literal list:
+    // the three projections were added to that constant and this test
+    // would otherwise have been the thing that had to be remembered.
     const store = storeThat(ok);
     const cap = capture();
 
     await buildWarehouseExportRunner(store.hooks)(ARGS, makeContext(cap.streams));
 
-    expect(store.calls.map((call) => call.dataset)).toEqual(["events", "profiles", "merge_map"]);
+    expect(store.calls.map((call) => call.dataset)).toEqual([...WAREHOUSE_DATASETS]);
     expect(store.closedCount()).toBe(1);
   });
 
@@ -129,7 +137,7 @@ describe("polaris warehouse export", () => {
 
     expect(jobs[0]?.status).toBe("completed");
     expect(jobs[0]?.job_id).toBe("polaris_wxj_1");
-    expect(jobs[0]?.datasets).toHaveLength(3);
+    expect(jobs[0]?.datasets).toHaveLength(WAREHOUSE_DATASETS.length);
     expect(jobs[0]?.datasets[0]).toMatchObject({ dataset: "events", status: "written", rows: 42 });
   });
 
@@ -158,7 +166,7 @@ describe("polaris warehouse export", () => {
     await expect(
       buildWarehouseExportRunner(store.hooks)(ARGS, makeContext(cap.streams)),
     ).rejects.toThrow(/events \(clickhouse timeout\)/);
-    expect(store.calls.map((call) => call.dataset)).toEqual(["events", "profiles", "merge_map"]);
+    expect(store.calls.map((call) => call.dataset)).toEqual([...WAREHOUSE_DATASETS]);
   });
 
   it("records the job even when the run fails", async () => {

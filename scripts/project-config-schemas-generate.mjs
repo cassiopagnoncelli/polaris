@@ -103,6 +103,14 @@ export const REGISTRY = [
     packageName: "@polaris/consumer-webhook-sink-v1",
     distEntry: "sync/destinations/webhook-sink/v1/dist/project-config.js",
   },
+  // The first non-destination, non-ingest component, and the first whose
+  // namespace already existed: `reverse_etl.ingest_api_key` was being
+  // written and read before any schema described the namespace.
+  {
+    namespace: "reverse_etl",
+    packageName: "@polaris/processor-reverse-etl-v1",
+    distEntry: "async/reverse-etl/runner/v1/dist/project-config.js",
+  },
 ];
 
 /** Header stamped into every generated file. */

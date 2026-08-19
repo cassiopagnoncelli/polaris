@@ -49,6 +49,35 @@ export function argMaxProjection(columns: readonly string[]): string {
 }
 
 /**
+ * Compose a `sum(col) AS col` projection for each column in the list.
+ *
+ * The SummingMergeTree counterpart to {@link argMaxProjection}, and it
+ * exists for the same reason that one does: between merges the engine
+ * holds several partial rows per sort key, and a reader that selected them
+ * raw would report the same day's traffic as several smaller days. On a
+ * ReplacingMergeTree that mistake ships duplicates; here it ships numbers
+ * that are individually plausible and collectively wrong, which is worse
+ * because nothing looks broken.
+ *
+ * `sum` and not `argMax`: the two engines disagree about what an unmerged
+ * duplicate MEANS. A ReplacingMergeTree's extra rows are older versions of
+ * one fact, so the newest wins. A SummingMergeTree's are addends of one
+ * fact, so they add. Using the wrong idiom on either table returns a
+ * number rather than an error.
+ */
+export function sumProjection(columns: readonly string[]): string {
+  if (columns.length === 0) {
+    throw new ClickHouseInvariantError("sumProjection requires at least one column.");
+  }
+  return columns
+    .map((c) => {
+      const safe = assertIdentifier(c, "sum column");
+      return `sum(${safe}) AS ${safe}`;
+    })
+    .join(",\n        ");
+}
+
+/**
  * Validate that a generated SQL string does not contain the bare `FINAL`
  * keyword. This is a defense-in-depth check used by the internal SQL
  * builders. Callers using the escape hatch can include `FINAL` themselves;

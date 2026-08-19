@@ -14,3 +14,10 @@ export {
   type ReverseEtlRunResult,
   runReverseEtl,
 } from "./runner.js";
+
+export { jobEnabled } from "./enablement.js";
+export {
+  PROJECT_CONFIG_NAMESPACE,
+  projectConfigSchema,
+  type ReverseEtlProjectConfig,
+} from "./project-config.js";

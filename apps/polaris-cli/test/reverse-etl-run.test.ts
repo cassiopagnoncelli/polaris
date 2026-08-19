@@ -59,6 +59,80 @@ function hooks(rows: readonly ReverseEtlRow[], ingestResult?: Partial<IngestBatc
   };
 }
 
+describe("polaris reverse-etl enablement", () => {
+  it("runs the job when no restriction is configured", async () => {
+    const h = hooks([{ customer_id: "cus_1", lifetime_orders: 4 }]);
+    const cap = capture();
+
+    await buildReverseEtlRunRunner({ ...h.value, readProjectConfig: async () => ({}) })(
+      ARGS,
+      makeContext(cap.streams),
+    );
+
+    expect(h.sent).toHaveLength(1);
+  });
+
+  it("skips without opening a client when the job is not enabled", async () => {
+    // Before any client is built: a disabled job should not open a
+    // ClickHouse connection to discover it has nothing to do.
+    const h = hooks([{ customer_id: "cus_1", lifetime_orders: 4 }]);
+    const cap = capture();
+
+    await buildReverseEtlRunRunner({
+      ...h.value,
+      readProjectConfig: async () => ({ enabled_jobs: ["something_else"] }),
+    })(ARGS, makeContext(cap.streams));
+
+    expect(h.sent).toHaveLength(0);
+    expect(h.closedCount()).toBe(0);
+  });
+
+  it("exits ZERO when skipped, because a switched-off job is not an incident", async () => {
+    // The distinction cron depends on. Non-zero means "wake somebody up",
+    // and the failure this command's exit rule exists for is a run that
+    // was supposed to happen and did not — not one an operator turned off.
+    const h = hooks([]);
+    const cap = capture();
+
+    await expect(
+      buildReverseEtlRunRunner({
+        ...h.value,
+        readProjectConfig: async () => ({ enabled_jobs: [] }),
+      })(ARGS, makeContext(cap.streams)),
+    ).resolves.toBeUndefined();
+
+    const payload = JSON.parse(cap.stdout.join("")) as Record<string, unknown>;
+    expect(payload["status"]).toBe("skipped");
+    expect(payload["job"]).toBe("ltv_writeback");
+  });
+
+  it("skips when the config value is malformed rather than running anyway", async () => {
+    const h = hooks([{ customer_id: "cus_1", lifetime_orders: 4 }]);
+    const cap = capture();
+
+    await buildReverseEtlRunRunner({
+      ...h.value,
+      readProjectConfig: async () => ({ enabled_jobs: "ltv_writeback" }),
+    })(ARGS, makeContext(cap.streams));
+
+    expect(h.sent).toHaveLength(0);
+  });
+
+  it("tells the operator how to enable it", async () => {
+    const h = hooks([]);
+    const cap = capture();
+
+    await buildReverseEtlRunRunner({
+      ...h.value,
+      readProjectConfig: async () => ({ enabled_jobs: [] }),
+    })(ARGS, makeContext(cap.streams, "human"));
+
+    expect(cap.stdout.join("")).toContain(
+      "polaris config set --project storefront --env production --key reverse_etl.enabled_jobs",
+    );
+  });
+});
+
 describe("polaris reverse-etl run", () => {
   it("maps rows to internal-sourced events and posts them", async () => {
     const h = hooks([{ customer_id: "cus_1", lifetime_orders: 4 }]);

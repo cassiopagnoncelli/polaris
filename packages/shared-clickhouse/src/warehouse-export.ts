@@ -37,10 +37,38 @@
 
 import type { ClickHouseClient as UnderlyingClickHouseClient } from "@clickhouse/client";
 import { ClickHouseInvariantError } from "./errors.js";
-import { argMaxProjection, assertNoFinal } from "./internal/sql.js";
+import { argMaxProjection, assertNoFinal, sumProjection } from "./internal/sql.js";
 
-/** Datasets `polaris warehouse export` can write. */
-export const WAREHOUSE_DATASETS = ["events", "profiles", "merge_map"] as const;
+/**
+ * Datasets `polaris warehouse export` can write.
+ *
+ * A closed set, and it stays closed. §6.2 asks for "Parquet snapshots of
+ * the projection tables and `analytics_raw` slices", which reads like an
+ * argument for an open `--table` flag — but every entry below needs a
+ * hand-written SELECT that is correct for its storage engine, and a verb
+ * that took a table name would be a verb that skips that. The three
+ * projections were the missing half of the promise; they are added as
+ * datasets, not as a parameter.
+ *
+ * Two engines, two dedupe idioms, and using the wrong one returns a
+ * number rather than an error:
+ *
+ *   ReplacingMergeTree   events, profiles, merge_map      argMax by version
+ *   SummingMergeTree     the three *_daily_* projections  sum
+ *
+ * The projection names match `READABLE_PROJECTIONS` in `catalog/traits`
+ * and `ALLOWED_TABLES` in `lint-trait-sql.mjs` — the same three tables a
+ * computed trait may read, which is not a coincidence: they are the
+ * tables that exist to be read by something other than the pipeline.
+ */
+export const WAREHOUSE_DATASETS = [
+  "events",
+  "profiles",
+  "merge_map",
+  "event_daily_counts",
+  "session_daily_metrics",
+  "profile_event_daily_counts",
+] as const;
 export type WarehouseDataset = (typeof WAREHOUSE_DATASETS)[number];
 
 export function isWarehouseDataset(value: string): value is WarehouseDataset {
@@ -236,6 +264,64 @@ function selectFor(request: WarehouseExportRequest): string {
         WHERE project_id = {project:String}
           AND environment = {environment:String}
         GROUP BY project_id, environment, loser_profile_id
+      `;
+
+    // ---- the projections ------------------------------------------------
+    // SummingMergeTree, so `sum` and not `argMax`: the engine's unmerged
+    // parts are ADDENDS of one day's count, not older versions of it.
+    // Selecting them raw would split one day's traffic across several
+    // rows that each look like a plausible smaller day.
+
+    case "event_daily_counts":
+      return `
+        SELECT
+          project_id,
+          environment,
+          event,
+          occurred_date,
+          ${sumProjection(["event_count"])}
+        FROM polaris.event_daily_counts
+        WHERE project_id = {project:String}
+          AND environment = {environment:String}
+          AND occurred_date = toDate({day:String})
+        GROUP BY project_id, environment, event, occurred_date
+      `;
+
+    case "session_daily_metrics":
+      return `
+        SELECT
+          project_id,
+          environment,
+          occurred_date,
+          ${sumProjection(["sessions_started", "sessions_ended"])}
+        FROM polaris.session_daily_metrics
+        WHERE project_id = {project:String}
+          AND environment = {environment:String}
+          AND occurred_date = toDate({day:String})
+        GROUP BY project_id, environment, occurred_date
+      `;
+
+    case "profile_event_daily_counts":
+      // `customer_id` is not in the table's sort key
+      // (project_id, environment, profile_id, event, occurred_date), so the
+      // engine already keeps an arbitrary one of the collapsed values.
+      // `any()` matches that rather than pretending otherwise: grouping BY
+      // it would emit more rows than the table logically holds whenever a
+      // profile's customer_id changed.
+      return `
+        SELECT
+          project_id,
+          environment,
+          profile_id,
+          any(customer_id) AS customer_id,
+          event,
+          occurred_date,
+          ${sumProjection(["event_count"])}
+        FROM polaris.profile_event_daily_counts
+        WHERE project_id = {project:String}
+          AND environment = {environment:String}
+          AND occurred_date = toDate({day:String})
+        GROUP BY project_id, environment, profile_id, event, occurred_date
       `;
 
     default: {

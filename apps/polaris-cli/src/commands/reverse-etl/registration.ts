@@ -25,7 +25,7 @@ import type { IngestBatchResult } from "@polaris/processor-reverse-etl-v1";
 import type { ReverseEtlRow } from "@polaris/reverse-etl-catalog";
 import { createClickHouseClient } from "@polaris/shared-clickhouse";
 
-import { revealProjectConfigSecret } from "@polaris/shared-control-plane-db";
+import { listProjectConfig, revealProjectConfigSecret } from "@polaris/shared-control-plane-db";
 
 import type { CommandContext } from "../../command.js";
 import { connectDb } from "../../db/index.js";
@@ -43,6 +43,31 @@ export const INGEST_KEY_CONFIG_KEY = `${INGEST_KEY_NAMESPACE}.${INGEST_KEY_NAME}
 
 export function buildRegisteredReverseEtlHooks(): ReverseEtlRunHooks {
   return {
+    /**
+     * The `reverse_etl` slice, for the enablement check.
+     *
+     * `listProjectConfig` masks secret values, which is exactly right
+     * here: this slice also holds `ingest_api_key`, and the enablement
+     * check has no business seeing it. The one caller that needs the
+     * plaintext goes through `revealProjectConfigSecret` below, which is
+     * greppable for that reason.
+     */
+    readProjectConfig: async (ctx, scope) => {
+      const handle = connectDb({ env: ctx.env });
+      try {
+        const rows = await listProjectConfig(handle.db, {
+          projectId: scope.projectId,
+          environment: scope.environment as Parameters<
+            typeof listProjectConfig
+          >[1]["environment"],
+          namespace: "reverse_etl",
+        });
+        return Object.fromEntries(rows.map((row) => [row.config_key, row.value]));
+      } finally {
+        await handle.close();
+      }
+    },
+
     query: (ctx: CommandContext) => {
       const url = ctx.env[CLICKHOUSE_URL_ENV];
       if (url === undefined || url.trim().length === 0) {

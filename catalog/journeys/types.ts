@@ -157,17 +157,73 @@ export type JourneyReentry = z.infer<typeof journeyReentrySchema>;
  */
 const waitMinutesSchema = z.number().int().min(1).max(90 * 24 * 60);
 
+/**
+ * An absolute moment to wait FOR, as an ISO 8601 UTC instant.
+ *
+ * The other half of the wait: `minutes` expresses "a day after this
+ * profile got here", which is per-participant and relative, and `until`
+ * expresses "when the sale opens", which is the same instant for everyone
+ * and cannot be written as a duration by an author who does not know when
+ * each participant will arrive.
+ *
+ * UTC only, and a literal `Z`. A campaign timestamp is exactly the value
+ * somebody writes in local time and nobody notices until it fires at the
+ * wrong hour, and an offset in the string would make the definition's
+ * meaning depend on where it was authored.
+ *
+ * Not validated as future-dated. A definition outlives the moment it names
+ * — a campaign journey stays in the catalog after its date passes — and a
+ * schema that refused the past would fail to load a whole catalog because
+ * one old journey went stale. A wait whose instant has passed is simply
+ * already elapsed, which is what the engine does with it.
+ */
+const waitUntilSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u, {
+    message: "must be an ISO 8601 UTC instant ending in Z, e.g. 2026-11-27T00:00:00Z",
+  })
+  .refine(
+    (value) => {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return false;
+      // `Date.parse` does not refuse a day that does not exist — it rolls
+      // 2026-02-31 forward to March 3 and reports success. A NaN check
+      // alone would let a typo become a wait that fires three days late,
+      // so the only reliable test is what came back.
+      return parsed.toISOString().startsWith(value.slice(0, 10));
+    },
+    { message: "must be a real calendar date" },
+  );
+
 export const journeyStepSchema = z
   .union([
     z
       .object({
         id: stepIdSchema,
         type: z.literal("wait"),
-        minutes: waitMinutesSchema,
+        /**
+         * Relative: this many minutes after the participant ARRIVES here.
+         * Exactly one of `minutes` / `until` is required — see the refine
+         * below, which is where that is enforced, because a Zod union of
+         * two object shapes reports "no arm matched" for a typo in either
+         * and buries which one the author meant.
+         */
+        minutes: waitMinutesSchema.optional(),
+        /** Absolute: wait until this instant, the same one for everybody. */
+        until: waitUntilSchema.optional(),
         /** Where to go when the wait elapses. Omitted means exit. */
         next: stepIdSchema.optional(),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (step) => (step.minutes === undefined) !== (step.until === undefined),
+        {
+          message:
+            "a wait step needs exactly one of `minutes` (relative to arrival) or " +
+            "`until` (an absolute instant) — neither leaves the participant parked " +
+            "with no due time, and both would make the resting point ambiguous",
+        },
+      ),
     z
       .object({
         id: stepIdSchema,
