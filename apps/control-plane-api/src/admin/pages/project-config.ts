@@ -158,9 +158,20 @@ export function declaredKeyFacts(namespace: string, key: string): DeclaredKeyFac
  * is what an operator typing into a form expects. A secret always stays a
  * string: `project_config_secret_is_string` requires it, and a credential of
  * all digits must not be retyped as a number and lose its leading zeroes.
+ *
+ * An empty box is `null`, and `null` is a value.
+ *
+ * `project_config.value` is `jsonb NOT NULL`, which rejects SQL NULL but not
+ * JSON null — `upsertProjectConfigValue` writes `JSON.stringify(value)::jsonb`,
+ * so this lands as `'null'::jsonb` and the constraint holds. That gives the
+ * panel two distinct answers where it previously had one: *unset* removes the
+ * row and the component falls back to its own default, while `null` is a
+ * stored decision that nothing should be configured here. An operator who
+ * means the second had no way to say it, because the field was `required`.
  */
 export function parseConfigFormValue(raw: string, isSecret: boolean): unknown {
   if (isSecret) return raw;
+  if (raw.length === 0) return null;
   try {
     return JSON.parse(raw);
   } catch {
@@ -732,8 +743,11 @@ function renderInlineSetForm(
         required
       />`;
     }
+    // A menu of the declared options, plus null. Without the empty option a
+    // closed set is the one shape of key an operator could never clear.
     if (declared?.enumValues !== undefined) {
-      return html`<select name="value" required>
+      return html`<select name="value">
+        <option value="" ${current === "" ? "selected" : ""}>null</option>
         ${declared.enumValues.map(
           (option) =>
             html`<option value="${option}" ${option === current ? "selected" : ""}>
@@ -743,7 +757,8 @@ function renderInlineSetForm(
       </select>`;
     }
     if (declared?.type === "boolean") {
-      return html`<select name="value" required>
+      return html`<select name="value">
+        <option value="" ${current === "" ? "selected" : ""}>null</option>
         <option value="true" ${current === "true" ? "selected" : ""}>true</option>
         <option value="false" ${current === "false" ? "selected" : ""}>false</option>
       </select>`;
@@ -756,15 +771,19 @@ function renderInlineSetForm(
         ${declared.type === "integer" ? html`step="1"` : null}
         ${declared.minimum !== undefined ? html`min="${String(declared.minimum)}"` : null}
         ${declared.maximum !== undefined ? html`max="${String(declared.maximum)}"` : null}
-        required
       />`;
     }
     // An object or array is JSON, and JSON does not fit on one line. The
     // handler parses it with the same `parseConfigFormValue` the CLI uses, so
     // what is typed here and what `polaris config set` accepts are one syntax.
     if (declared?.type === "object" || declared?.type === "array") {
-      return html`<textarea name="value" rows="5" spellcheck="false" required>${current}</textarea>`;
+      return html`<textarea name="value" rows="5" spellcheck="false">${current}</textarea>`;
     }
+    // No `required` on any of these: an empty box is a value — `null` — and
+    // the browser refusing to submit it is what stopped an operator from
+    // saying "nothing is configured here" at all. `minlength` still applies
+    // to a non-empty entry, which is the constraint the schema actually
+    // stated.
     return html`<input
       type="text"
       name="value"
@@ -772,7 +791,6 @@ function renderInlineSetForm(
       autocomplete="off"
       spellcheck="false"
       ${declared?.minLength !== undefined ? html`minlength="${String(declared.minLength)}"` : null}
-      required
     />`;
   })();
 
@@ -801,6 +819,7 @@ function renderHint(declared: DeclaredFacts | undefined): Html {
     return html`<p class="field-hint">
       No component schema declares this key, so nothing validates it. It is
       stored and hydrated; components that do not read it ignore it.
+      ${emptyMeansNull()}
     </p>`;
   }
 
@@ -827,7 +846,23 @@ function renderHint(declared: DeclaredFacts | undefined): Html {
 
   return html`<p class="field-hint">
     ${parts.map((part, index) => (index === 0 ? part : html` · ${part}`))}
+    ${emptyMeansNull()}
   </p>`;
+}
+
+/**
+ * The distinction the panel now has to teach, because it now has two answers.
+ *
+ * Saving an empty box stores JSON `null` — a decision on record that nothing
+ * is configured here. Unset deletes the row, and the component falls back to
+ * its own default. They are not the same, and nothing else on the row says
+ * which is which.
+ */
+function emptyMeansNull(): Html {
+  return html`<span class="hint-null"
+    >Leave empty to store <code>null</code>. Use <strong>Unset</strong> to
+    remove the key and fall back to the component default.</span
+  >`;
 }
 
 /** Render a stored jsonb value for an input field. */
@@ -916,8 +951,8 @@ function renderAddForm(input: ProjectConfigPanelInput): Html {
           <input type="text" name="key" autocomplete="off" spellcheck="false" required />
         </label>
         <label>
-          <span>Value</span>
-          <input type="text" name="value" autocomplete="off" required />
+          <span>Value <span class="muted">— leave empty for null</span></span>
+          <input type="text" name="value" autocomplete="off" />
         </label>
         <label class="checkbox">
           <input type="checkbox" name="secret" value="true" />

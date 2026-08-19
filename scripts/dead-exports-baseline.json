@@ -100,7 +100,6 @@
     "packages/shared-control-plane-db/src/queries/project-config.ts::deleteProjectConfigValue",
     "packages/shared-control-plane-db/src/queries/project-config.ts::findProjectConfigValue",
     "packages/shared-control-plane-db/src/queries/project-config.ts::notifyProjectConfigChanged",
-    "packages/shared-control-plane-db/src/queries/project-config.ts::upsertProjectConfigValue",
     "packages/shared-control-plane-db/src/queries/projects.ts::insertProject",
     "packages/shared-control-plane-db/src/queries/projects.ts::insertSource",
     "packages/shared-control-plane-db/src/queries/projects.ts::updateProject",

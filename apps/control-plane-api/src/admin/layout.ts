@@ -809,6 +809,9 @@ form.filters label { display: flex; flex-direction: column; gap: 4px;
 /* What the schema knows, under the field it constrains. */
 .field-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .field-hint code { font-size: 11px; color: var(--muted); }
+/* On its own line: it distinguishes two actions rather than describing the
+   field, and run inline after the type it reads as more schema. */
+.hint-null { display: block; margin-top: 3px; }
 .var-unset { margin: 12px 0 0; }
 /* Destructive, and secondary to the thing the operator opened the row to do:
    outlined until hovered, never a filled red button competing with Save. */

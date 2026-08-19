@@ -191,6 +191,18 @@ describe("parseConfigFormValue", () => {
     expect(parseConfigFormValue("graph.facebook.com", false)).toBe("graph.facebook.com");
   });
 
+  it("reads an empty box as null, which is a value and not an absence", () => {
+    // `null` and unset are different answers: unset deletes the row and the
+    // component falls back to its own default, while null is a stored
+    // decision that nothing is configured. The field used to be `required`,
+    // so an operator could not express the second at all.
+    expect(parseConfigFormValue("", false)).toBeNull();
+  });
+
+  it("keeps a typed `null` and an empty box the same value", () => {
+    expect(parseConfigFormValue("null", false)).toBeNull();
+  });
+
   it("never coerces a secret reference", () => {
     // A ref that happens to look numeric is still a ref; coercing it would
     // produce a value the secret-ref CHECK rejects, with a confusing message.
