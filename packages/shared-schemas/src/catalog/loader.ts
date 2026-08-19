@@ -86,6 +86,25 @@ export class EventCatalog {
     return !this.entries.has(catalogKey(event, schemaVersion));
   }
 
+  /**
+   * True when the catalog registers this event NAME at any version.
+   *
+   * Distinct from {@link isUnknownVersion}, which asks about one
+   * (name, version) pair. The name alone is what bounds a metric label:
+   * a rejected event's name is producer-supplied and may be anything at
+   * all, so a counter labelled with it directly is an unbounded-cardinality
+   * hazard handed to whoever holds an API key. Callers label with the name
+   * only when this returns true, and with a fixed sentinel otherwise —
+   * WHICH unregistered name arrived is a question for the quarantine
+   * sample, not for a time series.
+   */
+  hasEvent(event: string): boolean {
+    for (const entry of this.entries.values()) {
+      if (entry.name === event) return true;
+    }
+    return false;
+  }
+
   /** Iterate every entry in the catalog (used by CLI inspection commands). */
   list(): CatalogEntry[] {
     return Array.from(this.entries.values()).sort((a, b) => {

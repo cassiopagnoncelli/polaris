@@ -95,6 +95,11 @@ const ALLOW = new Map([
   ["apps/polaris-cli/src/clickhouse/connect.ts", "CLI's own ClickHouse connection resolution"],
   ["apps/polaris-cli/src/catalog/root.ts", "resolves POLARIS_CATALOG_ROOT before any config"],
   ["apps/polaris-cli/src/package-meta.ts", "reads npm_package_* for --version"],
+  [
+    "apps/polaris-cli/src/commands/journeys/sweep.ts",
+    "cron sweep stands in FOR journey-orchestrator: sets that service's own identity " +
+      "defaults before calling its config loader, rather than forking a second config path",
+  ],
 
   // --- published SDKs: a customer's process, not a Polaris service -------
   [

@@ -1,14 +1,26 @@
 import { z } from "zod";
 
 /**
- * `enriched.geoip` v1 — ACTIVE.
+ * `enriched.geoip` v1 — DEPRECATED, sunset 2026-08-18.
  *
- * Emitted by `sync/legacy/geoip-enricher/v1/` once per source `raw.events`
- * record. The enricher reads `envelope.context.ip` from the source event,
- * looks the address up in a local IP-to-geo database, and republishes the
- * geo result on `enriched.events` keyed back to the source `event_id`.
- * Downstream consumers (analytics, attribution) join on `event_id` rather
- * than mutating the immutable source envelope.
+ * Was emitted by `sync/legacy/geoip-enricher/v1/` once per source
+ * `raw.events` record. The enricher read `envelope.context.ip` from the
+ * source event, looked the address up in a local IP-to-geo database, and
+ * republished the geo result on `enriched.events` keyed back to the source
+ * `event_id`. Downstream consumers (analytics, attribution) joined on
+ * `event_id` rather than mutating the immutable source envelope.
+ *
+ * `f9ae3d0` removed the producer and the `enriched.events` family together,
+ * so nothing can publish this event. The schema stays because the catalog
+ * entry stays: a replay of archived `enriched.events` NDJSON validates the
+ * bytes it reads back against this shape, and deleting it would make those
+ * events unreadable rather than merely un-producible. See
+ * `catalog/events/enriched/geoip.v1.yaml`.
+ *
+ * The capability moved rather than ended — `sync/enrichment/geoip/v1/`
+ * writes the same lookup onto the event's own `enrichment` block on
+ * `resolved.events`. The successor is a field, not an event, which is why
+ * there is no v2 here.
  *
  * Design notes:
  *

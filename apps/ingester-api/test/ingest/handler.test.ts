@@ -146,6 +146,7 @@ describe("ingest handler — valid batch", () => {
       metrics.getCounter(METRIC_INGEST_BATCH_ACCEPTED_TOTAL, {
         project_id: "checkout",
         environment: "production",
+        event: "page.viewed",
       }),
     ).toBe(1);
   });
@@ -216,6 +217,9 @@ describe("ingest handler — forbidden-field policy", () => {
         project_id: "checkout",
         environment: "production",
         reason: "forbidden_field_rejected",
+        // Rejected BEFORE validation, and `page.viewed` is a catalog event,
+        // so the label is the real name rather than the sentinel.
+        event: "page.viewed",
       }),
     ).toBe(1);
   });
@@ -563,6 +567,7 @@ describe("ingest handler — publish failures", () => {
         project_id: "checkout",
         environment: "production",
         reason: BATCH_REASON_PUBLISH_FAILED,
+        event: "page.viewed",
       }),
     ).toBe(1);
     expect(

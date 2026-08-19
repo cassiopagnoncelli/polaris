@@ -201,6 +201,13 @@ export function renderDestinationDetailPage(input: {
         Configured ceilings, not live readings — actual throughput and failure
         rates are in the Grafana <em>polaris-destinations</em> dashboard.
       </p>
+      <p class="muted">
+        The two ceilings are scoped differently. <strong>Max RPS</strong> is
+        fleet-wide: replicas share one counter in Redis, so this is the rate
+        the vendor sees however many are running. <strong>Max concurrency</strong>
+        is per replica — it bounds one process's in-flight requests, so the
+        fleet holds up to <em>replicas × this number</em> open at once.
+      </p>
 
       <h2>Configuration</h2>
       <dl class="detail">

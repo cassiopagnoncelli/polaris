@@ -55,5 +55,3 @@ outputs:
 # byte-identical rows that collapse rather than accumulate, so a dedupe
 # store would be a second answer to a question already answered.
 state_stores: []
-
-required_consent: {}

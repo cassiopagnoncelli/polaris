@@ -116,9 +116,9 @@ async function defaultRunSweep(input: {
   // second config path that could drift from the one the service uses.
   process.env["POLARIS_SERVICE_NAME"] ??= "journey-orchestrator";
   // The service port from infra/service-ports.json. This process starts no
-  // listener it needs —  — but the config schema wants
-  // a valid port, and borrowing a second one would put a number in a third
-  // place the port registry does not know about.
+  // listener, so it needs no port — but the config schema demands a valid
+  // one, and inventing a number here would put a port in a third place the
+  // registry does not know about.
   process.env["POLARIS_HTTP_PORT"] ??= "4023";
 
   const config = loadJourneyOrchestratorConfig();

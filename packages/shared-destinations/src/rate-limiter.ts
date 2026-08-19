@@ -26,10 +26,30 @@
  *     is intentionally a small ring buffer rather than a token bucket so
  *     the wait calculation is exact.
  *
- * The limiter is single-process. Multi-pod deployments must run the
- * cluster's destination consumers in a topology where each instance has a
- * known fraction of total concurrency (e.g. `max_concurrency / replicas`
- * rounded up). A Redis-backed cluster limiter is future work.
+ * ## This limiter is single-process, and only half of it still needs to be
+ *
+ * `rate-limiter-redis.ts` shipped and makes RPS GLOBAL: a counter per
+ * `(destination_id, environment, second)` that every replica increments,
+ * so `max_rps` is the number the vendor sees no matter how many replicas
+ * run. `destination-host` wires it through `createDestinationSharedState`.
+ *
+ * Concurrency stays here, per-process, deliberately: `max_concurrency`
+ * bounds one process's in-flight sockets and event loop, and a distributed
+ * semaphore would need lease renewal and crash recovery to avoid leaking
+ * permits after a replica dies.
+ *
+ * **Operator note.** This paragraph used to say a cluster limiter was
+ * future work and that a multi-pod deployment should give each instance
+ * `max_concurrency / replicas`. Applying that advice to `max_rps` is now
+ * actively wrong — the bound is already global, so dividing it again caps
+ * the destination at `max_rps / replicas`. Set `max_rps` to the rate the
+ * VENDOR permits; set `max_concurrency` to what ONE replica should hold
+ * open, knowing the fleet's total in-flight is `replicas ×
+ * max_concurrency`.
+ *
+ * When Redis is unreachable, `createDestinationSharedState` falls back to
+ * this limiter for both bounds and logs a warning; `distributed: false` on
+ * the returned object is how a health check reads that state.
  */
 
 import type { DestinationInstance } from "./db/destination-instance.js";

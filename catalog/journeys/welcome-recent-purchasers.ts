@@ -41,7 +41,7 @@ export const welcomeRecentPurchasers: JourneyDefinition = journeyDefinitionSchem
       id: "is_repeat_customer",
       type: "branch",
       when: { trait: "orders_30d", op: "gte", value: 2 },
-      then: "thank_repeat",
+      matched: "thank_repeat",
       otherwise: "thank_first",
     },
     {

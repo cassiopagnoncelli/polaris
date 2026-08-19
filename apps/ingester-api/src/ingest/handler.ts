@@ -31,7 +31,7 @@ import {
 } from "@polaris/shared-transport";
 import type { IngestConfig } from "../config.js";
 import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
-import type { IngestMetrics } from "../metrics/registry.js";
+import { eventLabel, type IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
 import type { IngestProjectConfigLookup } from "../project-config-lookup.js";
 import type { QuarantineCandidate, QuarantinePublisher } from "./quarantine.js";
@@ -227,6 +227,10 @@ async function processOneEvent(
   // fields, even if they happen to match — overwriting is unconditional.
   const stamped = stampTrustedMetadata(raw, context, auth);
   const eventIdHint = readStringField(raw, "event_id");
+  // Read before validation, because the two rejections below happen before
+  // validation. `eventLabel` is what keeps a producer-supplied string from
+  // reaching a metric as-is.
+  const rawEventLabel = eventLabel(readStringField(raw, "event"), deps.catalog);
 
   // ---- forbidden-field policy ------------------------------------------
   // Run the policy BEFORE catalog validation so a producer leaking a
@@ -250,6 +254,7 @@ async function processOneEvent(
       project_id: auth.projectId,
       environment: auth.environment,
       reason: POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
+      event: rawEventLabel,
     });
     return { kind: "rejected", rejected };
   }
@@ -278,6 +283,7 @@ async function processOneEvent(
       project_id: auth.projectId,
       environment: auth.environment,
       reason: catalogResult.code,
+      event: rawEventLabel,
     });
     return { kind: "rejected", rejected };
   }
@@ -315,6 +321,7 @@ async function processOneEvent(
       project_id: envelope.project_id,
       environment: envelope.environment,
       reason: BATCH_REASON_IN_PROGRESS,
+      event: envelope.event,
     });
     return {
       kind: "rejected",
@@ -337,6 +344,7 @@ async function processOneEvent(
       project_id: envelope.project_id,
       environment: envelope.environment,
       reason: BATCH_REASON_DUPLICATE,
+      event: envelope.event,
     });
     return {
       kind: "rejected",
@@ -396,6 +404,9 @@ async function processOneEvent(
     deps.metrics.incrementAccepted({
       project_id: envelope.project_id,
       environment: envelope.environment,
+      // Post-validation, so the name is a catalog event by construction —
+      // `validateCatalogEvent` rejected everything else above.
+      event: envelope.event,
     });
     deps.logger.info(
       {
@@ -442,6 +453,7 @@ async function processOneEvent(
       project_id: envelope.project_id,
       environment: envelope.environment,
       reason: BATCH_REASON_PUBLISH_FAILED,
+      event: envelope.event,
     });
     return {
       kind: "rejected",

@@ -105,6 +105,58 @@ export interface BatchOutcomeLabels {
   readonly project_id: string;
   readonly environment: string;
   readonly reason?: string;
+  /**
+   * The event NAME, or `UNREGISTERED_EVENT_LABEL` when the producer sent
+   * one the catalog does not register.
+   *
+   * Required, not optional. R12 promises per-event-type volume-anomaly
+   * alerts, and this counter is what they read: without the dimension the
+   * alert groups by, `PolarisIngestRejectionSpike` could only say "this
+   * project's rejections spiked" — the same answer for a bad SDK release
+   * and for one broken event type. The label types declare `environment`
+   * optional and that is exactly how an emitter shipped without scope
+   * once; a required field is the only version of this a compiler
+   * enforces at every call site.
+   *
+   * Cardinality is bounded by the catalog because callers pass
+   * {@link eventLabel}, never a raw producer string.
+   */
+  readonly event: string;
+}
+
+/**
+ * Stand-in for an event name the catalog does not register.
+ *
+ * Angle brackets so it cannot collide with a real name — the catalog's own
+ * format rules forbid them.
+ */
+export const UNREGISTERED_EVENT_LABEL = "<unregistered>" as const;
+
+/**
+ * The `event` label for the ingest counters, bounded by the catalog.
+ *
+ * An event name arriving on a rejected event is producer-supplied and has
+ * not been validated yet — passing it to a counter unfiltered lets anyone
+ * holding an API key mint unlimited Prometheus series by sending events
+ * named after a UUID. Everything the catalog does not register collapses
+ * to one sentinel.
+ *
+ * WHICH unregistered name arrived is not lost: the quarantine record on
+ * `rejected.events` carries it verbatim, and that is a store built for
+ * unbounded strings. `polaris violations list` is where you look; a time
+ * series is not.
+ *
+ * The catalog is taken structurally so both call sites — the ingest
+ * handler and the quarantine's counter callback — pass the same
+ * `EventCatalog` without this module importing it, and so a test can pass
+ * a two-line stub.
+ */
+export function eventLabel(
+  name: string | undefined,
+  catalog: { hasEvent(event: string): boolean },
+): string {
+  if (name === undefined || name === "") return UNREGISTERED_EVENT_LABEL;
+  return catalog.hasEvent(name) ? name : UNREGISTERED_EVENT_LABEL;
 }
 
 export interface DedupeOutcomeLabels {

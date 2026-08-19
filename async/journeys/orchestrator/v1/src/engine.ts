@@ -199,7 +199,7 @@ export function advance(input: {
         // the branch is reached — not at entry. A day may have passed in a
         // wait, and re-reading is the whole reason a branch is a step.
         const taken = evaluatePredicate(step.when, input.profile.traits)
-          ? step.then
+          ? step.matched
           : step.otherwise;
         previousId = step.id;
         currentId = taken;

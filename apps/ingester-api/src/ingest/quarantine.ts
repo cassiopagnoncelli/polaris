@@ -59,6 +59,14 @@ export interface QuarantinePublisherDeps {
     readonly projectId: string;
     readonly environment: string;
     readonly reason: string;
+    /**
+     * The name VERBATIM off the rejected payload, unbounded and possibly
+     * absent. The caller bounds it before it reaches a metric — see
+     * `eventLabel` in `../metrics/registry.js`. It is passed raw here
+     * because this module has no catalog and should not grow one to
+     * decorate a callback.
+     */
+    readonly event: string | null;
   }) => void;
   readonly onFailed?: (input: { readonly reason: string; readonly err: unknown }) => void;
   readonly generateId?: () => string;
@@ -93,6 +101,7 @@ export function createQuarantinePublisher(deps: QuarantinePublisherDeps): Quaran
             projectId: candidate.projectId,
             environment: candidate.environment,
             reason: record.reason,
+            event: record.event,
           });
         } catch (err) {
           // Swallowed on purpose. The event is already rejected and the

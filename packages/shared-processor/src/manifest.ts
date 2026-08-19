@@ -222,7 +222,21 @@ export const processorManifestSchema = z
     release_status: processorReleaseStatusSchema.optional(),
     mode: processorModeSchema,
     inputs: z.array(processorTopicSpecSchema).min(1),
-    outputs: z.array(processorTopicSpecSchema).min(1),
+    /**
+     * Emitted families. MAY be empty: a terminal processor's output is a
+     * store, not a family. `merge-worker` writes `polaris.profile_merge_map`
+     * and `archiver` writes object storage; neither publishes an event, and
+     * both were rejected by a `.min(1)` written when every processor was a
+     * fan-out step that did.
+     *
+     * Nothing is lost by relaxing it. The guard against a processor that
+     * publishes but forgets to say so is `scripts/lint-manifest-drift.mjs`,
+     * which compares this list against the `family:` sites in the unit's own
+     * source — a stronger check than a cardinality bound, and one that
+     * `.min(1)` could not make: satisfying it needed one entry, not the
+     * right ones.
+     */
+    outputs: z.array(processorTopicSpecSchema),
     state_stores: z.array(z.string()).default([]),
     defaults: processorDefaultsSchema.optional(),
     replay: processorReplaySchema.optional(),

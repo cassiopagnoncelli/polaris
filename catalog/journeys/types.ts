@@ -174,7 +174,18 @@ export const journeyStepSchema = z
         type: z.literal("branch"),
         /** Evaluated against the profile's traits at the moment it is reached. */
         when: audiencePredicateSchema,
-        then: stepIdSchema,
+        /**
+         * Where the true arm goes.
+         *
+         * Named `matched` rather than the obvious `then` because an object
+         * carrying a `then` property is a thenable: anything that returns
+         * a step from an async function hands the runtime an object the
+         * promise machinery will inspect. A string `then` happens to be
+         * inert — the spec only follows a CALLABLE one — but the shape is
+         * a trap for the first refactor that makes it a function, and
+         * `noThenProperty` is right to refuse it.
+         */
+        matched: stepIdSchema,
         /** Omitted means exit on the false arm. */
         otherwise: stepIdSchema.optional(),
       })
@@ -277,7 +288,7 @@ export function edgesOf(step: JourneyStep): ReadonlyArray<readonly [string, stri
       return [["next", step.next]];
     case "branch":
       return [
-        ["then", step.then],
+        ["matched", step.matched],
         ["otherwise", step.otherwise],
       ];
     case "exit":

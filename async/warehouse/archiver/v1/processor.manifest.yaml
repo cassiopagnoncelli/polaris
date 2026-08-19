@@ -57,5 +57,3 @@ outputs:
 # state in the durable sense: everything in it is still on the stream,
 # behind a checkpoint that has not advanced past it.
 state_stores: []
-
-required_consent: {}

@@ -1,28 +1,58 @@
-# Catalog entry: enriched.geoip v1 (ACTIVE)
+# Catalog entry: enriched.geoip v1 (DEPRECATED — sunset 2026-08-18)
 #
-# Emitted by `sync/legacy/geoip-enricher/v1/` once per source `raw.events`
-# record. The enricher looks up `envelope.context.ip` against a local
-# IP-to-geo database and republishes the geo result on `enriched.events`
-# keyed back to the source `event_id` via `source_event_id`. Downstream
-# consumers (analytics, attribution) join on `source_event_id` rather than
-# mutating the immutable source envelope.
+# Emitted by `sync/legacy/geoip-enricher/v1/` onto `enriched.events`, once
+# per source `raw.events` record, keyed back via `source_event_id`. Both the
+# producer and the family were removed by `f9ae3d0` when the fan-out was
+# retired, so from that commit forward there has been nowhere to publish
+# this event: `STREAM_FAMILY_ENRICHED_EVENTS` does not exist.
 #
-# The IP itself never appears on the enriched event. Per
+# It stayed `lifecycle: active` for a day after that. An active entry is not
+# inert documentation — the ingester accepts producer traffic for active
+# versions, so the catalog was still advertising an event the platform could
+# not carry, and a client sending one would have been told it was fine.
+#
+# ## GeoIP enrichment itself did not go away
+#
+# It moved. `sync/enrichment/geoip/v1/` resolves the same lookup inside the
+# enrichment stage and writes the result onto the event's own
+# `enrichment` block on `resolved.events`. That is the R-programme shape:
+# an enricher annotates the event in place, in one broker hop, instead of
+# republishing a second event that consumers must join back.
+#
+# So there is no v2 of this entry and there will not be one. The successor
+# is a field, not an event.
+#
+# ## Why the entry survives at all
+#
+# `sunset_at` in the past is what refuses new traffic (see
+# `EventCatalog.isSunset` — the ingester answers `schema_version_sunset`).
+# Deleting the entry outright would instead make the event UNKNOWN, and it
+# would take the Zod schema in `packages/shared-schemas/src/events/enriched/`
+# with it — the schema a replay of archived `enriched.events` NDJSON still
+# needs to validate what it reads back.
+#
+# The IP itself never appeared on the enriched event. Per
 # `docs/architecture/01-event-contract.md` § "Forbidden-Field Policy", the
-# enricher persists only `source_ip_hash` (lowercase SHA-256 hex) so
-# downstream lineage can verify which observation produced the geo result
-# without re-exposing the raw IP.
+# enricher persisted only `source_ip_hash` (lowercase SHA-256 hex) so
+# lineage could name the observation without re-exposing the address.
 name: enriched.geoip
 schema_version: 1
 domain: enriched
 owner: platform-data
 description: >-
-  GeoIP enrichment derived from `envelope.context.ip`. Keyed back to the
-  source event_id via `source_event_id`. v1 ships a swappable
-  `IPLookup` backend; the default runtime uses an `InMemoryIPLookup` (test
-  fixtures) or a `NoOpIPLookup` (production fail-open). A MaxMind
-  GeoLite2-backed lookup lands in a follow-up task.
-lifecycle: active
+  GeoIP enrichment derived from `envelope.context.ip`, keyed back to the
+  source event_id via `source_event_id`. Retired with the fan-out: the
+  producer and the `enriched.events` family were both removed, and geoip
+  enrichment now annotates `resolved.events` in place rather than emitting
+  a second event.
+lifecycle: deprecated
+sunset_at: "2026-08-18T00:00:00Z"
 since: "2026-05-12"
+notes: >-
+  No successor version. GeoIP moved from a fan-out processor to an in-place
+  enricher (`sync/enrichment/geoip/v1/`), so the replacement for this event
+  is the `enrichment` block on `resolved.events`, not `enriched.geoip` v2.
+  The entry is retained so archived events remain replayable against their
+  original schema.
 schema_module: "@polaris/shared-schemas/events/enriched/geoip.v1"
 schema_export: enrichedGeoipV1PropertiesSchema

@@ -44,7 +44,7 @@ import {
 import { buildRedisOptions } from "./dedupe/redis.js";
 import { createIngestHandler, type IngestHandler } from "./ingest/handler.js";
 import { createQuarantinePublisher } from "./ingest/quarantine.js";
-import { IngestMetrics } from "./metrics/registry.js";
+import { eventLabel, IngestMetrics } from "./metrics/registry.js";
 import { openApiSetup as defaultOpenApiSetup } from "./openapi/index.js";
 import {
   AllowedOriginsCache,
@@ -459,11 +459,15 @@ export async function buildIngesterApp(
   const quarantine = createQuarantinePublisher({
     producer,
     now: () => new Date(),
-    onPublished: ({ projectId, environment, reason }) => {
+    onPublished: ({ projectId, environment, reason, event }) => {
       metrics.incrementViolationPublished({
         project_id: projectId,
         environment,
         reason,
+        // The name off a rejected payload is whatever the producer sent.
+        // `eventLabel` collapses anything the catalog does not register,
+        // so a bad SDK cannot mint a series per malformed event.
+        event: eventLabel(event ?? undefined, catalog),
       });
     },
     onFailed: ({ reason, err }) => {
