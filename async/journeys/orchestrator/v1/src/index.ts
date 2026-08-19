@@ -8,8 +8,8 @@
  */
 
 export {
-  advance,
   type AdvanceResult,
+  advance,
   edgesOf,
   evaluatePredicate,
   isForbiddenTrigger,
@@ -19,3 +19,10 @@ export {
   type ProfileSnapshot,
   stepIds,
 } from "./engine.js";
+export {
+  createKyselyJourneyRepository,
+  type EnterInput,
+  type JourneyRepository,
+  type ParticipantRow,
+} from "./repository.js";
+export { definitionKey, type SweepInput, type SweepResult, sweep } from "./sweep.js";

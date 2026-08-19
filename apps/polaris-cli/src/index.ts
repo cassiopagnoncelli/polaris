@@ -284,6 +284,11 @@ export {
   versionCommand,
 } from "./commands/index.js";
 export {
+  buildJourneysSweepRunner,
+  type JourneysSweepSummary,
+  journeysCommand,
+} from "./commands/journeys/index.js";
+export {
   buildKeysCreateRunner,
   type KeysCreateHooks,
   type KeysCreateStore,

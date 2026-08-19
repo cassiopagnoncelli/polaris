@@ -27,6 +27,7 @@ import { destinationsCommand } from "./destinations/index.js";
 import { dlqCommand } from "./dlq/index.js";
 import { eventsCommand } from "./events/index.js";
 import { exportCommand } from "./export/index.js";
+import { journeysCommand } from "./journeys/index.js";
 import { keysCommand } from "./keys/index.js";
 import { operatorsCommand } from "./operators/index.js";
 import { processorsCommand } from "./processors/index.js";
@@ -44,6 +45,7 @@ import { warehouseCommand } from "./warehouse/index.js";
 export const BUILTIN_COMMANDS: readonly CommandDefinition[] = [
   versionCommand,
   audiencesCommand,
+  journeysCommand,
   projectsCommand,
   sourcesCommand,
   keysCommand,
@@ -76,6 +78,7 @@ export {
   dlqCommand,
   eventsCommand,
   exportCommand,
+  journeysCommand,
   keysCommand,
   operatorsCommand,
   processorsCommand,

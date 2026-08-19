@@ -428,6 +428,65 @@ Rules:
 - Changing a projection's engine after it ships is a rebuild operation (P7-005), not a migration.
 - Ad-hoc operator queries against projection tables use plain `SELECT`; the MV has already deduped.
 
+### Journey funnels
+
+Journeys emit `journey.entered`, `journey.step_advanced` and
+`journey.exited` onto `profile.events`, which lands them in
+`analytics_processed` like any other derived fact. A funnel is therefore a
+query, not a new pipeline — and deliberately so: a projection maintained by
+the orchestrator would be a second count of the same participants, free to
+disagree with the events they came from.
+
+Count DISTINCT participants per step, not rows. A participant emits one
+`step_advanced` per step it reaches, but a redelivery repeats it, and
+`analytics_processed` keeps duplicates until its merge collapses them:
+
+```sql
+SELECT
+    JSONExtractString(properties, 'journey')                    AS journey,
+    JSONExtractUInt(properties, 'journey_version')              AS journey_version,
+    JSONExtractString(properties, 'step_id')                    AS step_id,
+    uniqExact(JSONExtractString(properties, 'profile_id'))      AS participants
+FROM polaris.analytics_processed
+WHERE project_id = {project:String}
+  AND environment = {environment:String}
+  AND event = 'journey.step_advanced'
+  AND toDate(occurred_at) >= today() - 30
+GROUP BY journey, journey_version, step_id
+ORDER BY journey, journey_version, participants DESC
+```
+
+**Group by `journey_version`, always.** A participant finishes on the
+version it entered on, so two versions of one journey run concurrently
+until the older cohort drains. Summing across them compares steps that may
+not mean the same thing — a `step_id` reused with a different predicate is
+a different funnel stage wearing an old name.
+
+Exits split by reason, and the split is the interesting part:
+
+```sql
+SELECT
+    JSONExtractString(properties, 'journey')  AS journey,
+    JSONExtractString(properties, 'reason')   AS reason,
+    uniqExact(JSONExtractString(properties, 'profile_id')) AS participants
+FROM polaris.analytics_processed
+WHERE project_id = {project:String}
+  AND environment = {environment:String}
+  AND event = 'journey.exited'
+  AND toDate(occurred_at) >= today() - 30
+GROUP BY journey, reason
+```
+
+`completed` and `exit_step` are the journey working. `merged_away` is the
+identity plane retiring a duplicate profile — expected, and not a drop-off
+to investigate. `definition_retired` is the one that should be zero: it
+means participants were walking a graph that no longer exists.
+
+Live participation is PostgreSQL's, not ClickHouse's: `journey_participants`
+holds where each profile is right now, and a "how many are parked on step
+X" question is a `SELECT` there. ClickHouse answers what HAPPENED; the
+control plane answers what IS.
+
 ## Profiles
 
 `polaris.profiles` holds what Polaris currently believes about each person, fed from `profile.events` through its own queue and MV (`sql/clickhouse/35`–`37`).
