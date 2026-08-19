@@ -19,7 +19,9 @@ The architecture docs are authoritative. If a task conflicts with them, stop and
 
 The implementation board lives at:
 
-- [Implementation Kanban](../../agents/pm/kanban) — a directory of card files, one per card, not a single document
+- Implementation Kanban — `agents/pm/kanban`, a directory of card files, one
+  per card, not a single document. **Not in this repository**: `agents/` is
+  gitignored, so this used to be a link nobody who clones Polaris could follow.
 - [Delivery Roadmap](./delivery-roadmap.md)
 - [Pipeline Redesign Plan](./pipeline-redesign-plan.md) — the accepted R programme (post-P12)
 - [Coverage Matrix](./coverage-matrix.md)

@@ -30,12 +30,22 @@ SDKs / producers
 - [Engineering Standards](./architecture/09-engineering-standards.md)
 - [SDK Standards](./architecture/10-sdk-standards.md)
 - [Production Readiness](./architecture/11-production-readiness.md)
-- [Architecture Decision Ledger](../agents/architect/adr/0001-platform-architecture-ledger.md)
-- [Engineering Decision Ledger](../agents/architect/adr/0002-engineering-standards-ledger.md)
-- [SDK Decision Ledger](../agents/architect/adr/0003-sdk-standards-ledger.md)
-- [Production Readiness Decision Ledger](../agents/architect/adr/0004-production-readiness-ledger.md)
 - [Implementation Playbook](./implementation/README.md)
-- [Implementation Kanban](../agents/pm/kanban) (file-backed board; run `agents/pm/bin/pm report`)
+
+The decision ledgers and the delivery board are **not in this repository**.
+`agents/` is gitignored — it is an agent workspace, not a published tree — so
+these were links to files nobody who clones Polaris can open, and are listed
+here as paths rather than as links until somebody decides where they belong:
+
+- `agents/architect/adr/0001-platform-architecture-ledger.md`
+- `agents/architect/adr/0002-engineering-standards-ledger.md`
+- `agents/architect/adr/0003-sdk-standards-ledger.md`
+- `agents/architect/adr/0004-production-readiness-ledger.md`
+- `agents/pm/kanban` — file-backed board; run `agents/pm/bin/pm report`
+
+An architecture decision record is documentation of the kind this directory
+exists to hold, so `docs/adr/` is the obvious home for the four ledgers.
+Moving them makes them public, which is a call for whoever owns the repo.
 - [Delivery Roadmap](./implementation/delivery-roadmap.md)
 - [Coverage Matrix](./implementation/coverage-matrix.md)
 - [Claude Instructions](./instructions/claude.md)

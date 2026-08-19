@@ -20,13 +20,26 @@
  * Seven links, in the operational runbooks and the front page — the two
  * places a reader is least able to shrug it off.
  *
- * So the resolution is by filesystem, for every target, with no extension
- * filter. A directory target counts as resolved: several runbooks
- * deliberately point at a directory rather than a file, because the useful
- * thing is "the code lives over here" and naming one file inside would go
- * stale faster.
+ * So the resolution is over every target, with no extension filter. A
+ * directory target counts as resolved: several runbooks deliberately point
+ * at a directory rather than a file, because the useful thing is "the code
+ * lives over here" and naming one file inside would go stale faster.
+ *
+ * ## Resolved against git, not against the disk
+ *
+ * The first version asked `existsSync`, which is the author's machine
+ * rather than the repository. It passed locally and failed in CI on six
+ * links into `agents/` — the gitignored agent workspace holding the pm
+ * board and the architect's decision ledgers. Those files are real, and
+ * nobody who clones this repository has them.
+ *
+ * A reader gets what is IN the repository, so that is the oracle. The same
+ * mistake, in the same session, as three unit tests that passed only
+ * because a PostgreSQL happened to be running locally: a green that came
+ * from the environment rather than from the code.
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,16 +91,36 @@ interface DeadLink {
   readonly target: string;
 }
 
+/**
+ * Every path git tracks, plus every directory implied by one.
+ *
+ * A link to `apps/polaris-cli/src/commands/replay/` is a link to a
+ * directory, which `git ls-files` never lists on its own.
+ */
+function trackedPaths(): ReadonlySet<string> {
+  const out = new Set<string>();
+  const listed = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" })
+    .split("\0")
+    .filter((line) => line.length > 0);
+  for (const file of listed) {
+    out.add(file);
+    const parts = file.split("/");
+    for (let i = 1; i < parts.length; i++) out.add(parts.slice(0, i).join("/"));
+  }
+  return out;
+}
+
 function deadLinks(): readonly DeadLink[] {
+  const tracked = trackedPaths();
   const dead: DeadLink[] = [];
   for (const file of markdownFiles()) {
     const source = readFileSync(file, "utf8");
     for (const match of source.matchAll(RELATIVE_LINK)) {
       const target = (match[1] as string).trim();
       // Directory targets included: a runbook pointing at a directory is
-      // deliberate, and `existsSync` resolves both.
-      const resolved = normalize(join(dirname(file), target));
-      if (existsSync(resolved)) continue;
+      // deliberate, and both resolve through the tracked set.
+      const resolved = relative(ROOT, normalize(join(dirname(file), target)));
+      if (tracked.has(resolved)) continue;
       const line = source.slice(0, match.index).split("\n").length;
       dead.push({ where: `${relative(ROOT, file)}:${String(line)}`, target });
     }
