@@ -63,7 +63,8 @@
     "lint:env-example": "node scripts/lint-env-example.mjs",
     "verify:gates": "node scripts/verify-gates.mjs",
     "lint:retired-paths": "node scripts/lint-retired-paths.mjs",
-    "check:catalog-sql:ci": "node scripts/check-catalog-sql.mjs --require-clickhouse"
+    "check:catalog-sql:ci": "node scripts/check-catalog-sql.mjs --require-clickhouse",
+    "verify:gates:services": "node scripts/verify-gates.mjs --with-services"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.15",

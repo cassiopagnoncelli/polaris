@@ -62,6 +62,20 @@ const ENV_DOC_CANARY = `POLARIS_${"DRIFT"}_CANARY`;
  */
 const RETIRED_PATH_CANARY = `consumers${"/"}<vendor>/v<n>/mappers/`;
 
+/**
+ * A project-config key nothing reads.
+ *
+ * `lint-project-config-keys` scans the declaring component's `src/` for the
+ * key, EXCLUDING the file that declares it — a key mentioned only in its own
+ * declaration is operator surface that changes nothing when set. So the
+ * injection has to add a property to the generated schema artifact, which is
+ * what that lint reads, and leave the component's source alone.
+ */
+const CONFIG_KEY_CANARY = `unread_${"canary"}_key`;
+
+/** A column no ClickHouse table has. Assembled, like every canary here. */
+const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -124,6 +138,46 @@ const GATES = [
       ),
     assertInjected: () =>
       read("catalog/traits/orders-30d.ts").includes("FROM polaris.analytics_raw"),
+  },
+  {
+    // A declared key that nothing reads. Injected into the GENERATED artifact
+    // rather than into a component's `project-config.ts`, because that is the
+    // file the lint reads — and a canary in the source would also have to be
+    // absent from the rest of `src/`, which is a harder thing to arrange than
+    // it is to verify.
+    name: "lint:project-config-keys",
+    command: "node scripts/lint-project-config-keys.mjs",
+    files: ["packages/project-config-schemas/schemas/ingest.project.schema.json"],
+    inject: () => {
+      const path = "packages/project-config-schemas/schemas/ingest.project.schema.json";
+      const schema = JSON.parse(read(path));
+      schema.properties[CONFIG_KEY_CANARY] = { type: "string" };
+      write(path, `${JSON.stringify(schema, null, 2)}\n`);
+    },
+    assertInjected: () =>
+      read("packages/project-config-schemas/schemas/ingest.project.schema.json").includes(
+        CONFIG_KEY_CANARY,
+      ),
+  },
+  {
+    // Drift between a component's Zod schema and its checked-in artifact.
+    // Injected into the SOURCE, not the artifact: the generator regenerates
+    // from source and diffs against disk, so mutating the artifact alone is
+    // the same fault from the other side and would also be caught — but
+    // mutating the source is the direction a real change arrives from.
+    name: "config-schemas:check",
+    command: "node scripts/project-config-schemas-generate.mjs --check",
+    files: ["apps/ingester-api/src/project-config.ts"],
+    inject: () =>
+      write(
+        "apps/ingester-api/src/project-config.ts",
+        read("apps/ingester-api/src/project-config.ts").replace(
+          "rate_limit_rps: positiveIntSchema.optional(),",
+          `rate_limit_rps: positiveIntSchema.optional(),\n  ${CONFIG_KEY_CANARY}: positiveIntSchema.optional(),`,
+        ),
+      ),
+    assertInjected: () =>
+      read("apps/ingester-api/src/project-config.ts").includes(CONFIG_KEY_CANARY),
   },
   {
     // Injected into a DOC rather than into source: the check scans both, and
@@ -224,6 +278,42 @@ const GATES = [
   },
 ];
 
+/**
+ * Gates that need a live service, and so cannot run in static analysis.
+ *
+ * Kept as a separate roster rather than a flag on each entry, because the
+ * default run has to stay service-free: a harness that silently skipped
+ * three gates when nothing was listening would be the same "green for no
+ * work" this script exists to refuse. `--with-services` opts in, and
+ * `integration.yml` is where that happens.
+ */
+const SERVICE_GATES = [
+  {
+    // A trait selecting a column the projection does not have. This is the
+    // gate's founding bug: `orders_30d` selected `profile_id` and filtered on
+    // `day` against a table with neither, the trait had never run, and the
+    // table-name lint passed because the table name was right.
+    name: "check:catalog-sql (needs ClickHouse)",
+    command: "node scripts/check-catalog-sql.mjs --require-clickhouse",
+    files: ["catalog/traits/orders-30d.ts"],
+    // A column added to the SELECT LIST, not a second SELECT. The first
+    // attempt spliced `SELECT <canary> FROM ...` in front of the FROM, which
+    // ClickHouse rejects as a syntax error at position 90 — so the gate went
+    // red for parsing rather than for resolution, and would have gone red
+    // under `EXPLAIN SYNTAX` too. That is the exact weaker check this gate
+    // exists to replace, so the injection would have proven nothing about it.
+    inject: () =>
+      write(
+        "catalog/traits/orders-30d.ts",
+        read("catalog/traits/orders-30d.ts").replace(
+          "        profile_id,",
+          `        profile_id,\n        ${SQL_COLUMN_CANARY},`,
+        ),
+      ),
+    assertInjected: () => read("catalog/traits/orders-30d.ts").includes(SQL_COLUMN_CANARY),
+  },
+];
+
 function restore(files) {
   sh(`git checkout -- ${files.join(" ")}`);
 }
@@ -236,10 +326,13 @@ function main() {
     return;
   }
 
+  const withServices = process.argv.includes("--with-services");
+  const roster = withServices ? [...GATES, ...SERVICE_GATES] : GATES;
+
   const blind = [];
   const unlanded = [];
   const alreadyRed = [];
-  for (const gate of GATES) {
+  for (const gate of roster) {
     // Green BEFORE the fault, or "fails as it should" means nothing.
     //
     // A gate that is already failing on a clean tree fails again with the
@@ -299,11 +392,11 @@ function main() {
   // is the failure this script exists to refuse in the checks it polices.
   const skipped = unlanded.length + alreadyRed.length;
   if (skipped === 0) {
-    console.log(`\nverify-gates: all ${String(GATES.length)} gates fail when they should.`);
+    console.log(`\nverify-gates: all ${String(roster.length)} gates fail when they should.`);
     return;
   }
   console.error(
-    `\nverify-gates: ${String(GATES.length - skipped)} of ${String(GATES.length)} gates ` +
+    `\nverify-gates: ${String(roster.length - skipped)} of ${String(roster.length)} gates ` +
       `tested; ${String(skipped)} skipped and proven nothing.`,
   );
   process.exitCode = 1;

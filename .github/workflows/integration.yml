@@ -239,6 +239,16 @@ jobs:
       # attaching at a timestamp, and the Postgres checkpoint store's SQL.
       # Every defect this covers was found live AFTER the unit suite was
       # green.
+
+      # The service half of the meta-gate: break what each service-dependent
+      # check is supposed to notice, run it, require a non-zero exit. The
+      # default `verify:gates` roster is service-free by design and runs in
+      # static analysis; this is the part that needs the compose stack.
+      - name: Prove every service-dependent gate can fail
+        env:
+          POLARIS_CLICKHOUSE_URL: http://localhost:8123
+        run: pnpm verify:gates:services
+
       # The only check that reads the REAL ClickHouse schema. `lint-trait-sql`
       # checks which tables a definition names; it cannot check whether the
       # COLUMNS exist, and that gap shipped three broken definitions.
