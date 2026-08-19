@@ -239,6 +239,22 @@ jobs:
       # attaching at a timestamp, and the Postgres checkpoint store's SQL.
       # Every defect this covers was found live AFTER the unit suite was
       # green.
+      # The only check that reads the REAL ClickHouse schema. `lint-trait-sql`
+      # checks which tables a definition names; it cannot check whether the
+      # COLUMNS exist, and that gap shipped three broken definitions.
+      #
+      # `--require-clickhouse` so a compose failure cannot turn this into a
+      # silent pass: without the flag the script exits 0 when no server
+      # answers, which is right on a laptop and useless as a gate.
+      - name: Catalog SQL resolves against the real schema
+        env:
+          # Named explicitly rather than leaning on the script's default
+          # happening to match the compose port. The job's other ClickHouse
+          # vars are unprefixed (`CLICKHOUSE_URL`), which this script does
+          # not read.
+          POLARIS_CLICKHOUSE_URL: http://localhost:8123
+        run: pnpm check:catalog-sql:ci
+
       - name: Run broker + database integration tests
         run: pnpm test:integration
         env:

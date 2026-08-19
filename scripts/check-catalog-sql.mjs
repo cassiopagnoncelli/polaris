@@ -82,6 +82,18 @@ async function explain(sql) {
 
 async function main() {
   if (!(await reachable())) {
+    // `--require-clickhouse` turns the skip into a failure. Without it this
+    // exits 0 when there is no server, which is right for a developer running
+    // `pnpm lint` on a laptop and WRONG for CI: a step that silently passes
+    // when it checked nothing is a green tick for no work, which is the
+    // failure mode this whole check was written to avoid one layer down.
+    if (process.argv.includes("--require-clickhouse")) {
+      console.error(`catalog-sql check: no ClickHouse at ${URL_BASE}, and --require-clickhouse`);
+      console.error("was passed. This check is the only thing that reads the real schema, so");
+      console.error("skipping it here would report a gate that ran nothing as a pass.");
+      process.exitCode = 1;
+      return;
+    }
     console.log(`catalog-sql check: no ClickHouse at ${URL_BASE} — skipped.`);
     console.log("Start one and re-run; this check is the only thing that reads the real schema.");
     return;

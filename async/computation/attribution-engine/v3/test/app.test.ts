@@ -111,6 +111,14 @@ function stubProducer(): PolarisProducer {
 
 async function build(runs: InMemoryProcessorRunRepository, installShutdown = false) {
   return buildAttributionEngineApp({
+    // No live PostgreSQL in this suite. Without it, `startIsolationSnapshot`
+    // reads `topic_isolations` at boot and its FIRST read must succeed —
+    // deliberately, since serving an empty snapshot would reroute every
+    // isolated project's traffic. Supplying the list is the seam that skips
+    // it. `c6a0507` wired the snapshot in and left these tests depending on
+    // a database that happened to be running on the author's machine; CI
+    // was dead at the time, so nothing said so for a day.
+    isolatedProjects: [],
     config: TEST_CONFIG,
     installShutdown,
     ...(installShutdown ? { shutdownExit: () => {} } : {}),
@@ -168,6 +176,14 @@ describe("buildAttributionEngineApp activation gate", () => {
     const asked: Array<{ project_id: string; environment: string }> = [];
     const runs = new InMemoryProcessorRunRepository();
     const result = await buildAttributionEngineApp({
+      // No live PostgreSQL in this suite. Without it, `startIsolationSnapshot`
+      // reads `topic_isolations` at boot and its FIRST read must succeed —
+      // deliberately, since serving an empty snapshot would reroute every
+      // isolated project's traffic. Supplying the list is the seam that skips
+      // it. `c6a0507` wired the snapshot in and left these tests depending on
+      // a database that happened to be running on the author's machine; CI
+      // was dead at the time, so nothing said so for a day.
+      isolatedProjects: [],
       config: TEST_CONFIG,
       installShutdown: false,
       consumer: stubConsumer(),

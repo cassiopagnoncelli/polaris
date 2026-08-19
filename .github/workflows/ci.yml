@@ -54,7 +54,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Full history: `config-schemas:check` compares each generated artifact
+      # against its version in git HEAD to enforce additive-only changes, and
+      # a shallow clone makes that comparison silently vacuous.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -83,6 +88,25 @@ jobs:
 
       - name: Format check (Biome)
         run: pnpm format:check
+
+      # Two checks that existed and no workflow ran -- found while auditing why
+      # CI had been failing for a week. A gate nobody runs is a gate that does
+      # not exist, which is the same shape as the pnpm version that broke this
+      # workflow in the first place.
+      #
+      # `check:catalog-sql` is deliberately NOT here. It needs a reachable
+      # ClickHouse and exits 0 with "skipped" when there is none, so a step
+      # here would always pass -- a green tick for a check that ran nothing.
+      # It belongs in `integration.yml`, where the compose stack is up.
+      - name: OpenAPI document in sync with the code
+        run: pnpm openapi:check
+
+      # Also enforces the rule the generator states: a breaking config change
+      # must fail its own PR, not a rolling deploy. That half compares each
+      # artifact against its version in git HEAD, which is why this job now
+      # checks out full history.
+      - name: Project-config schemas in sync, and additive-only
+        run: pnpm config-schemas:check
 
   test:
     name: Tests (unit + contract + catalog)
