@@ -94,17 +94,22 @@ help: ## Show this help
 # DESTRUCTIVE, and deliberately so. Nothing else may take `setup` as a
 # prerequisite — the day something does, that target silently becomes a wipe.
 # `make db-migrate` is the verb for picking up new migrations after a pull.
+#
+# The script holds each step's output and prints the tail of whatever failed.
+# `make setup VERBOSE=1` streams all of it instead, for the failure that is not
+# in the tail. It is the same install either way — see `--verbose` in the
+# script header.
 setup: ## Install locally from scratch: drop every Polaris store, then rebuild, seed, and issue keys
-	@./bin/setup
+	@./bin/setup $(if $(VERBOSE),--verbose)
 
 destroy: ## Drop every Polaris store (postgres, clickhouse, rabbitmq, redis) without rebuilding
-	@./bin/setup --destroy
+	@./bin/setup --destroy $(if $(VERBOSE),--verbose)
 
 # Kept as its own target because re-seeding after a catalog change is a normal
 # thing to do on its own — it is the one phase of `setup` that destroys
 # nothing, and so the one that is safe against a machine you do not want reset.
 seed: build-cli ## Re-run the catalog syncs and the browser origin allow-list (destroys nothing)
-	@./bin/setup --seed
+	@./bin/setup --seed $(if $(VERBOSE),--verbose)
 
 install: ## Install pnpm workspace dependencies
 	pnpm install

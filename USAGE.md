@@ -46,6 +46,17 @@ make seed      # re-run the catalog syncs and origin allow-list; destroys nothin
 `make setup` refuses to run unless every endpoint is on localhost and
 `POLARIS_ENV` is not a deployed environment.
 
+It prints one line per step and holds each step's output. When a step fails,
+the tail of what it said is printed under it — for the failure the tail does
+not explain, or for watching a step that seems to be hanging:
+
+```bash
+make setup VERBOSE=1
+```
+
+That streams every step in full. It is the same install either way, and
+`VERBOSE=1` works on `make destroy` and `make seed` too.
+
 Check service health:
 
 ```bash

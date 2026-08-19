@@ -57,18 +57,43 @@
 //               `catalog/` is a normal thing to want, and it should not cost
 //               a wipe. This is what `make seed` runs.
 //
+// `--verbose` (`make setup VERBOSE=1`) is not a third mode and does not count
+// against that limit: it changes what is printed and nothing about what runs.
+// Every step's output is captured either way. Normally a step shows a line and
+// a tick, and a step that fails prints the tail of what it said right under
+// itself, because on a good run the child output is thousands of lines nobody
+// reads and on a bad one it is the twenty that matter. `--verbose` streams all
+// of it live, for the failure that is not in the tail — a hang, or a step that
+// exits zero having done the wrong thing.
+//
 // What re-running costs you: the dev data in those four stores, with no
 // prompt. That is intended — a prompt breaks the non-tty case and trains
 // people to hit `y` — but it is why `make db-migrate` stays the verb for
 // "pick up new migrations after a pull". This is the verb for "give me the
 // machine the repo describes".
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { loadEnvLocal, REPO_ROOT, stopRunningStack } from "./lib/local-stack.mjs";
+import {
+  bold,
+  cyan,
+  dim,
+  duration,
+  green,
+  liveLine,
+  pad,
+  quote,
+  red,
+  rightAlign,
+  section,
+  stripAnsi,
+  symbols,
+  width,
+} from "./lib/tty.mjs";
 
 const CLI = resolve(REPO_ROOT, "apps/polaris-cli/dist/bin/polaris.js");
 
@@ -149,9 +174,37 @@ const ENV_FILES = [
 const ORIGIN_PATTERN = /^https?:\/\/[A-Za-z0-9.\-:[\]_]+$/;
 const ORIGIN_MAX_LENGTH = 255;
 
+/** Set once by {@link main}; read by {@link step} and nothing else. */
+let VERBOSE = false;
+
+/**
+ * Whether the destroy phase has run, which is the only thing that changes what
+ * a failure means. Before it, a failed step leaves the machine exactly as it
+ * found it and the fix is to run the command again; after it, the stores are
+ * empty and saying "nothing has changed" would be a lie the developer acts on.
+ * The whole reason install comes before destroy is to make the first case the
+ * common one — see the header.
+ */
+let DESTROYED = false;
+
+/** Everything this script accepts. Anything else is a typo, and is treated so. */
+const FLAGS = ["--destroy", "--seed", "--verbose"];
+
 async function main() {
+  // An unrecognised argument used to be ignored in silence, which is the worst
+  // available answer for a flag whose only job is to change what you see: a
+  // mistyped `--verbsoe` looked exactly like a `--verbose` that did not work.
+  const unknown = process.argv.slice(2).filter((arg) => !FLAGS.includes(arg));
+  if (unknown.length > 0) {
+    fail(
+      `unrecognised ${unknown.length === 1 ? "argument" : "arguments"}: ${unknown.join(", ")}.\n` +
+        `  This script takes ${FLAGS.join(", ")}, or nothing at all.`,
+    );
+  }
+
   const destroyOnly = process.argv.includes("--destroy");
   const seedOnly = process.argv.includes("--seed");
+  VERBOSE = process.argv.includes("--verbose");
   if (destroyOnly && seedOnly) {
     fail("--destroy and --seed do opposite things; pass one or neither.");
   }
@@ -168,37 +221,85 @@ async function main() {
   // things to keep in step.
   assertLocalDevOnly(endpoints);
 
+  const startedAt = Date.now();
   const lock = takeLock();
   try {
     if (seedOnly) {
       requireCli();
-      seed(endpoints);
-      console.log("Seeded. `make setup` if you also want a clean database.");
+      banner("Seeding the catalog", "Re-applies `catalog/` to the database. Nothing is dropped.");
+      await seed(endpoints);
+      finished("Seeded", startedAt, [["make setup", "also give me a clean database"]]);
       return;
+    }
+
+    if (destroyOnly) {
+      banner("Tearing down", "Drops every Polaris store. Nothing is rebuilt.");
+    } else {
+      banner("Local install", "Drops every Polaris store, then rebuilds it from this checkout.");
     }
 
     await preflight(endpoints);
 
     const stopped = stopRunningStack();
     if (stopped > 0) {
-      console.log(`Stopped a dev stack that was running (${stopped} processes).\n`);
+      // Indented with the preflight list rather than given a heading of its
+      // own: it is the same "getting ready" beat, and a section that appears
+      // only when a stack happened to be running is a section people learn to
+      // read as an error.
+      const note = `${symbols.pending} stopped a dev stack that was running (${stopped} processes)`;
+      console.log(`    ${dim(note)}`);
     }
 
-    install(destroyOnly);
-    destroy(endpoints);
+    await install(destroyOnly);
+    await destroy(endpoints);
 
     if (destroyOnly) {
-      console.log("\nDestroyed. `make setup` rebuilds.");
+      finished("Destroyed", startedAt, [["make setup", "rebuild the machine this repo describes"]]);
       return;
     }
 
-    provision(endpoints);
-    seed(endpoints);
-    const keys = issueKeys(endpoints);
-    await printReceipt(endpoints, keys);
+    await provision(endpoints);
+    await seed(endpoints);
+    const keys = await issueKeys(endpoints);
+    await printReceipt(endpoints, keys, startedAt);
   } finally {
     releaseLock(lock);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Presentation
+// ---------------------------------------------------------------------------
+
+/**
+ * What this run is about to do, in two lines, before it does any of it.
+ *
+ * All three modes open with one so that the destructive ones cannot be
+ * mistaken for each other in a scrollback — the difference between `--destroy`
+ * and a full install is one word on a command line and every byte in four
+ * stores.
+ */
+function banner(title, subtitle) {
+  console.log("");
+  console.log(`  ${cyan(symbols.bullet)} ${bold("Polaris")} ${dim(symbols.arrow)} ${title}`);
+  console.log(`    ${dim(subtitle)}`);
+}
+
+/** The closing line of a run that had no receipt to print. */
+function finished(verb, startedAt, next) {
+  const took = dim(`in ${duration(Date.now() - startedAt)}`);
+  console.log(`\n  ${green(`${symbols.ok} ${verb}`)} ${took}`);
+  printNext(next);
+}
+
+function printNext(entries) {
+  if (entries.length === 0) return;
+  section("Next");
+  const commandWidth = Math.max(...entries.map(([command]) => command.length));
+  for (const [command, note] of entries) {
+    console.log(`    ${cyan(pad(command, commandWidth))}   ${dim(note)}`);
+  }
+  console.log("");
 }
 
 /**
@@ -336,6 +437,8 @@ function isLoopback(host) {
  * the phase that needs them with that phase's error message attached.
  */
 async function preflight(endpoints) {
+  section("Preflight");
+
   const targets = [
     ["PostgreSQL", endpoints.postgres.host, endpoints.postgres.port],
     ["ClickHouse", endpoints.clickhouse.host, endpoints.clickhouse.port],
@@ -343,6 +446,7 @@ async function preflight(endpoints) {
     ["Redis", endpoints.redis.host, endpoints.redis.port],
   ];
 
+  const line = liveLine(dim("reaching the four stores"));
   const results = await Promise.all(
     targets.map(async ([name, host, port]) => ({
       name,
@@ -351,13 +455,23 @@ async function preflight(endpoints) {
       up: await probeTcp(host, port),
     })),
   );
+  line.end();
+
+  const nameWidth = Math.max(...results.map((result) => result.name.length));
+  for (const result of results) {
+    const mark = result.up ? green(symbols.ok) : red(symbols.fail);
+    const where = dim(`${result.host}:${result.port}`);
+    console.log(`    ${mark} ${pad(result.name, nameWidth)}   ${where}`);
+  }
 
   const down = results.filter((result) => !result.up);
   if (down.length > 0) {
+    const one = down.length === 1;
     fail(
-      "these services are not reachable:\n" +
-        down.map((d) => `    ${d.name.padEnd(11)} ${d.host}:${d.port}`).join("\n") +
-        "\n  Start them with `make docker-up`, or run them natively.\n" +
+      `${one ? "a service is" : `${down.length} services are`} not reachable — ` +
+        `${down.map((d) => d.name).join(", ")}.\n` +
+        `  Start ${one ? "it" : "them"} with \`make docker-up\`, or run ` +
+        `${one ? "it" : "them"} natively.\n` +
         "  Nothing has been changed.",
     );
   }
@@ -393,14 +507,19 @@ function probeTcp(host, port) {
  * for. The shared packages are not: the RabbitMQ teardown imports its
  * object names from `@polaris/shared-transport`.
  */
-function install(destroyOnly) {
+async function install(destroyOnly) {
+  section("Install");
   // CI must not be able to rewrite the lockfile as a side effect of running
   // the installer. Locally the plain form is right — a `package.json` edit
   // should just work rather than fail with a lockfile mismatch.
-  step("install", "pnpm", process.env.CI ? ["install", "--frozen-lockfile"] : ["install"]);
-  step("build packages", "pnpm", ["-r", "--filter", "./packages/*", "run", "build"]);
+  await step(
+    "dependencies",
+    "pnpm",
+    process.env.CI ? ["install", "--frozen-lockfile"] : ["install"],
+  );
+  await step("shared packages", "pnpm", ["-r", "--filter", "./packages/*", "run", "build"]);
   if (!destroyOnly) {
-    step("build cli", "pnpm", ["--filter", "@polaris/polaris-cli", "run", "build"]);
+    await step("polaris cli", "pnpm", ["--filter", "@polaris/polaris-cli", "run", "build"]);
   }
 }
 
@@ -419,45 +538,54 @@ function install(destroyOnly) {
  * docker-nuke` is still there for when wiping the containers is what you
  * actually want.)
  */
-function destroy(endpoints) {
-  step("destroy postgres", "node", ["scripts/postgres-bootstrap-local.mjs", "--destroy"], {
-    POLARIS_DATABASE_URL: endpoints.postgres.url,
-    PGHOST: endpoints.postgres.host,
-    PGPORT: String(endpoints.postgres.port),
+async function destroy(endpoints) {
+  section("Destroy");
+  await step("postgres", "node", ["scripts/postgres-bootstrap-local.mjs", "--destroy"], {
+    env: {
+      POLARIS_DATABASE_URL: endpoints.postgres.url,
+      PGHOST: endpoints.postgres.host,
+      PGPORT: String(endpoints.postgres.port),
+    },
   });
-  step("destroy clickhouse", "node", ["scripts/clickhouse-bootstrap-local.mjs", "--destroy"], {
-    CLICKHOUSE_URL: endpoints.clickhouse.url,
+  await step("clickhouse", "node", ["scripts/clickhouse-bootstrap-local.mjs", "--destroy"], {
+    env: { CLICKHOUSE_URL: endpoints.clickhouse.url },
   });
-  step("destroy rabbitmq", "node", ["scripts/rabbitmq-provision.mjs", "--destroy"], {
-    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  await step("rabbitmq", "node", ["scripts/rabbitmq-provision.mjs", "--destroy"], {
+    env: { POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url },
   });
-  step("destroy redis", "node", ["scripts/redis-destroy-local.mjs"], {
-    POLARIS_REDIS_HOST: endpoints.redis.host,
-    POLARIS_REDIS_PORT: String(endpoints.redis.port),
+  await step("redis", "node", ["scripts/redis-destroy-local.mjs"], {
+    env: {
+      POLARIS_REDIS_HOST: endpoints.redis.host,
+      POLARIS_REDIS_PORT: String(endpoints.redis.port),
+    },
   });
+  DESTROYED = true;
 }
 
 // ---------------------------------------------------------------------------
 // Phase 6 — provision
 // ---------------------------------------------------------------------------
 
-function provision(endpoints) {
-  step("postgres role + database", "node", ["scripts/postgres-bootstrap-local.mjs"], {
-    POLARIS_DATABASE_URL: endpoints.postgres.url,
-    PGHOST: endpoints.postgres.host,
-    PGPORT: String(endpoints.postgres.port),
+async function provision(endpoints) {
+  section("Provision");
+  await step("postgres role and database", "node", ["scripts/postgres-bootstrap-local.mjs"], {
+    env: {
+      POLARIS_DATABASE_URL: endpoints.postgres.url,
+      PGHOST: endpoints.postgres.host,
+      PGPORT: String(endpoints.postgres.port),
+    },
   });
-  step("postgres migrations", "pnpm", ["--filter", "@polaris/shared-db", "db:migrate"], {
-    DATABASE_URL: endpoints.postgres.url,
+  await step("postgres migrations", "pnpm", ["--filter", "@polaris/shared-db", "db:migrate"], {
+    env: { DATABASE_URL: endpoints.postgres.url },
   });
-  step("clickhouse schema", "node", ["scripts/clickhouse-bootstrap-local.mjs"], {
-    CLICKHOUSE_URL: endpoints.clickhouse.url,
+  await step("clickhouse schema", "node", ["scripts/clickhouse-bootstrap-local.mjs"], {
+    env: { CLICKHOUSE_URL: endpoints.clickhouse.url },
   });
-  step("rabbitmq user", "node", ["scripts/rabbitmq-bootstrap-local.mjs"], {
-    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  await step("rabbitmq user", "node", ["scripts/rabbitmq-bootstrap-local.mjs"], {
+    env: { POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url },
   });
-  step("rabbitmq topology", "node", ["scripts/rabbitmq-provision.mjs"], {
-    POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url,
+  await step("rabbitmq topology", "node", ["scripts/rabbitmq-provision.mjs"], {
+    env: { POLARIS_RABBITMQ_URL: endpoints.rabbitmq.url },
   });
 }
 
@@ -478,12 +606,13 @@ function provision(endpoints) {
  * materialize. Until there is, this is how a bare-metal dev gets a browser
  * origin past the ingester's CORS check.
  */
-function seed(endpoints) {
-  step("projects sync", "node", [CLI, "projects", "sync"], {
-    POLARIS_DATABASE_URL: endpoints.postgres.url,
+async function seed(endpoints) {
+  section("Seed");
+  await step("projects", "node", [CLI, "projects", "sync"], {
+    env: { POLARIS_DATABASE_URL: endpoints.postgres.url },
   });
-  step("sources sync", "node", [CLI, "sources", "sync"], {
-    POLARIS_DATABASE_URL: endpoints.postgres.url,
+  await step("sources", "node", [CLI, "sources", "sync"], {
+    env: { POLARIS_DATABASE_URL: endpoints.postgres.url },
   });
 
   const sql =
@@ -500,24 +629,29 @@ function seed(endpoints) {
     // because `-c` hands its string straight to the server without running
     // psql's lexer, and `:'name'` interpolation is a lexer feature — via
     // `-c` the colon form reaches PostgreSQL verbatim and is a syntax error.
-    stepWithInput(`origin ${origin}`, "psql", [
-      endpoints.postgres.url,
-      "-X",
-      "-w",
-      "-q",
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-v",
-      `project=${BLUEPRINT.projectId}`,
-      "-v",
-      `source=${BLUEPRINT.originSourceId}`,
-      "-v",
-      `environment=${ENVIRONMENT}`,
-      "-v",
-      `origin=${origin}`,
-      "-f",
-      "-",
-    ], sql);
+    await step(
+      `origin ${origin}`,
+      "psql",
+      [
+        endpoints.postgres.url,
+        "-X",
+        "-w",
+        "-q",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-v",
+        `project=${BLUEPRINT.projectId}`,
+        "-v",
+        `source=${BLUEPRINT.originSourceId}`,
+        "-v",
+        `environment=${ENVIRONMENT}`,
+        "-v",
+        `origin=${origin}`,
+        "-f",
+        "-",
+      ],
+      { input: sql },
+    );
   }
 }
 
@@ -603,11 +737,12 @@ function assertValidOrigin(origin) {
  * are written to `.env.<mode>.local` rather than injected by the blueprint's
  * `next.config.ts`. See ENV_FILES.
  */
-function issueKeys(endpoints) {
+async function issueKeys(endpoints) {
+  section("Keys");
   const issued = [];
   for (const key of BLUEPRINT.keys) {
-    const stdout = capture(
-      `key ${key.sourceId}`,
+    const stdout = await step(
+      `${key.sourceId} ${dim(`(${key.type})`)}`,
       "node",
       [
         CLI,
@@ -624,7 +759,7 @@ function issueKeys(endpoints) {
         "--type",
         key.type,
       ],
-      { POLARIS_DATABASE_URL: endpoints.postgres.url },
+      { env: { POLARIS_DATABASE_URL: endpoints.postgres.url } },
     );
 
     let parsed;
@@ -726,37 +861,52 @@ function renderEnvFile(issued, envFile) {
  *
  * Every phase already knows what it made; reading it back is the difference
  * between "exited 0" and knowing what is on the machine. The counts are
- * queried fresh rather than accumulated from the phases above, so the
- * receipt reports what is actually there.
+ * queried fresh rather than accumulated from the phases above, so the receipt
+ * reports what is actually there.
+ *
+ * What it deliberately does not repeat is where each store lives. Preflight
+ * printed all four endpoints at the top of this same run, and carrying them
+ * again here cost forty columns — enough to wrap every row on an eighty-column
+ * terminal, for an address the reader has already been given.
  */
-async function printReceipt(endpoints, keys) {
-  const pg = pgCounts(endpoints);
-  const tables = await clickhouseTableCount(endpoints);
-  const topology = await topologySize();
-
-  const rows = [
-    ["postgres", `${endpoints.postgres.host}:${endpoints.postgres.port}/polaris`, pg],
-    ["clickhouse", `${endpoints.clickhouse.host}:${endpoints.clickhouse.port}/polaris`, tables],
-    ["rabbitmq", `${endpoints.rabbitmq.host}:${endpoints.rabbitmq.port}`, topology],
-    ["redis", `${endpoints.redis.host}:${endpoints.redis.port}`, "polaris:* cleared"],
-    ["keys", rel(KEY_FILE), keys.map((k) => `${k.sourceId} (${k.type})`).join(", ")],
-    ...ENV_FILES.map((envFile) => [
-      "blueprint",
-      rel(envFile.path),
-      `same tokens, for \`${envFile.runBy}\``,
-    ]),
+async function printReceipt(endpoints, keys, startedAt) {
+  const line = liveLine(dim("counting what was made"));
+  const stores = [
+    ["postgres", pgCounts(endpoints)],
+    ["clickhouse", await clickhouseTableCount(endpoints)],
+    ["rabbitmq", await topologySize()],
+    ["redis", "polaris:* cleared"],
+    ["keys", keys.map((k) => `${k.sourceId} (${k.type})`).join(dim(` ${symbols.pending} `))],
   ];
+  line.end();
 
-  const width = Math.max(...rows.map(([name]) => name.length));
-  const endpointWidth = Math.max(...rows.map(([, endpoint]) => endpoint.length));
+  const took = dim(`in ${duration(Date.now() - startedAt)}`);
+  console.log(`\n  ${green(`${symbols.ok} Ready`)} ${took}\n`);
 
-  console.log("\nPolaris local install complete.\n");
-  for (const [name, endpoint, detail] of rows) {
-    console.log(`  ${name.padEnd(width)}  ${endpoint.padEnd(endpointWidth)}  ${detail}`);
+  const nameWidth = Math.max(...stores.map(([name]) => name.length));
+  for (const [name, detail] of stores) {
+    console.log(`    ${bold(pad(name, nameWidth))}   ${detail}`);
   }
-  console.log("\nNext:\n");
-  console.log("  make dev                    # run the platform");
-  console.log("  pnpm smoke:vertical-slice   # prove the wire path end to end\n");
+
+  // The tokens get their own block because their column is a path, not a
+  // count, and pushing three filenames through the width of the table above
+  // is what made every row too wide to read.
+  const files = [
+    // All three notes name a reader, because "which file do I look in" is the
+    // only question this block exists to answer.
+    [rel(KEY_FILE), "read outside the app"],
+    ...ENV_FILES.map((envFile) => [rel(envFile.path), `loaded by \`${envFile.runBy}\``]),
+  ];
+  const pathWidth = Math.max(...files.map(([path]) => path.length));
+  console.log(`\n  ${bold("Tokens")}`);
+  for (const [path, note] of files) {
+    console.log(`    ${pad(path, pathWidth)}   ${dim(note)}`);
+  }
+
+  printNext([
+    ["make dev", "run the platform"],
+    ["pnpm smoke:vertical-slice", "prove the wire path end to end"],
+  ]);
 }
 
 /** Migrations, catalog rows, and allow-list entries, in one round trip. */
@@ -773,12 +923,19 @@ function pgCounts(endpoints) {
     ],
     { encoding: "utf8" },
   );
-  if (result.status !== 0) return "(counts unavailable)";
+  if (result.status !== 0) return dim("(counts unavailable)");
   const [migrations, projects, sources, origins] = result.stdout.trim().split("|");
-  return (
-    `${migrations} migrations, ${projects} project(s), ` +
-    `${sources} source(s), ${origins} origin(s)`
-  );
+  return [
+    plural(migrations, "migration"),
+    plural(projects, "project"),
+    plural(sources, "source"),
+    plural(origins, "origin"),
+  ].join(dim(` ${symbols.pending} `));
+}
+
+/** `1 project`, `6 sources` — a receipt nobody has to decode. */
+function plural(count, noun) {
+  return `${count} ${noun}${Number(count) === 1 ? "" : "s"}`;
 }
 
 async function clickhouseTableCount(endpoints) {
@@ -787,10 +944,10 @@ async function clickhouseTableCount(endpoints) {
     const resp = await fetch(`${endpoints.clickhouse.url}/?query=${encodeURIComponent(sql)}`, {
       headers: { Authorization: `Basic ${Buffer.from("polaris:polaris").toString("base64")}` },
     });
-    if (!resp.ok) return "(count unavailable)";
-    return `${(await resp.text()).trim()} tables`;
+    if (!resp.ok) return dim("(count unavailable)");
+    return plural((await resp.text()).trim(), "table");
   } catch {
-    return "(count unavailable)";
+    return dim("(count unavailable)");
   }
 }
 
@@ -804,11 +961,11 @@ async function topologySize() {
     const plan = buildPlan();
     const streams = plan.superStreams.reduce((sum, spec) => sum + spec.partitions, 0);
     return (
-      `${plan.superStreams.length} super streams (${streams} partitions), ` +
-      `${plan.components.length} component queue sets`
+      `${plural(plan.superStreams.length, "super stream")} (${plural(streams, "partition")})` +
+      `${dim(` ${symbols.pending} `)}${plural(plan.components.length, "component queue set")}`
     );
   } catch {
-    return "topology declared";
+    return dim("topology declared");
   }
 }
 
@@ -866,64 +1023,148 @@ function processIsAlive(pid) {
 // Running things
 // ---------------------------------------------------------------------------
 
+/** How many trailing lines of a failed step's output to show. */
+const FAILURE_TAIL_LINES = 24;
+
 /**
- * Run one step, streaming its output, and stop the whole install if it
- * fails.
+ * The column step timings are flushed against.
+ *
+ * A constant rather than the terminal width: the longest label here is under
+ * forty characters, and on a maximised terminal a full-width flush puts
+ * `0.4s` most of a screen away from the `sources` it belongs to. Narrower than
+ * the terminal on every terminal wide enough to matter, and clamped by
+ * {@link width} for the ones that are not.
+ */
+const TIME_COLUMN = 56;
+
+/**
+ * Run one step and stop the whole install if it fails.
+ *
+ * There was one of these per calling convention — stream it, feed it stdin,
+ * capture its stdout — and they had drifted into three copies of the same
+ * error handling. Capturing unconditionally collapses them into one: stdout
+ * comes back for the caller that parses it, and the callers that ignore the
+ * return value are the ones that used to stream.
+ *
+ * Capturing is also what makes a clean run readable. `pnpm install` alone
+ * prints hundreds of lines that are only ever read when something breaks, so
+ * they are held rather than shown, and the tail is printed under the step that
+ * failed. `--verbose` echoes every chunk as it arrives on top of that, for a
+ * failure the tail does not explain.
  *
  * `env` is merged over the inherited environment so each child sees the
  * endpoints this script resolved, under the names that child reads.
  */
-function step(label, command, args, env = {}) {
-  console.log(`==> ${label}`);
-  const result = spawnSync(command, args, {
-    cwd: REPO_ROOT,
-    stdio: ["ignore", "inherit", "inherit"],
-    env: { ...process.env, ...env },
-  });
-  assertStepOk(label, command, args, result);
-  console.log("");
-}
+async function step(label, command, args, { env = {}, input } = {}) {
+  if (VERBOSE) console.log(`\n  ${dim(symbols.arrow)} ${label}`);
+  const line = VERBOSE
+    ? {
+        end(final) {
+          if (final !== undefined) console.log(final);
+        },
+      }
+    : liveLine(dim(label));
 
-/** As {@link step}, but feeds `input` on stdin and stays quiet when it works. */
-function stepWithInput(label, command, args, input) {
-  console.log(`==> ${label}`);
-  const result = spawnSync(command, args, {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    input,
-    env: process.env,
-  });
-  assertStepOk(label, command, args, result);
-  console.log("");
-}
+  const startedAt = Date.now();
+  const result = await spawnCaptured(command, args, { env, input, echo: VERBOSE });
+  const elapsed = duration(Date.now() - startedAt);
 
-/** As {@link step}, but returns stdout instead of streaming it. */
-function capture(label, command, args, env = {}) {
-  console.log(`==> ${label}`);
-  const result = spawnSync(command, args, {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-  });
-  assertStepOk(label, command, args, result);
-  console.log("");
-  return result.stdout;
-}
-
-function assertStepOk(label, command, args, result) {
   if (result.error !== undefined) {
+    line.end(stepLine(red(symbols.fail), label, elapsed));
     fail(`could not run \`${command}\`: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    fail(
-      `step "${label}" failed (exit ${result.status}).\n` +
-        `  ${command} ${args.map(rel).join(" ")}\n` +
-        (output === "" ? "" : `${indent(output)}\n`) +
-        "\n  This machine is part-way through an install. Re-run `make setup`\n" +
-        "  once the cause is fixed — it starts from a clean slate every time.",
-    );
+    line.end(stepLine(red(symbols.fail), label, elapsed));
+    failStep(label, command, args, result);
   }
+
+  line.end(stepLine(green(symbols.ok), label, elapsed));
+  return result.stdout;
+}
+
+/** `    ✔ label                                 1.2s` */
+function stepLine(mark, label, elapsed) {
+  return rightAlign(`    ${mark} ${label}`, dim(elapsed), Math.min(width(), TIME_COLUMN));
+}
+
+/**
+ * Spawn a child, hold everything it says, and resolve with how it went.
+ *
+ * `stdout` is kept apart from `output` because one caller parses it as JSON
+ * and would choke on a stray warning from stderr, while the failure report
+ * wants both in the order the terminal would have shown them.
+ *
+ * Resolves rather than rejects: a step failing is an expected outcome here,
+ * reported by {@link failStep} with the child's own words attached, not an
+ * exception to unwind through the phases.
+ */
+function spawnCaptured(command, args, { env = {}, input, echo = false }) {
+  return new Promise((done) => {
+    const child = spawn(command, args, {
+      cwd: REPO_ROOT,
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      env: { ...process.env, ...env },
+    });
+
+    let stdout = "";
+    let output = "";
+    const collect = (stream, isStdout) => {
+      stream.setEncoding("utf8");
+      stream.on("data", (chunk) => {
+        if (isStdout) stdout += chunk;
+        output += chunk;
+        if (echo) process.stdout.write(chunk);
+      });
+    };
+    collect(child.stdout, true);
+    collect(child.stderr, false);
+
+    if (input !== undefined) {
+      // A child that exits without reading its stdin gives us EPIPE, which is
+      // its exit status to report and not a crash of this script.
+      child.stdin.on("error", () => {});
+      child.stdin.end(input);
+    }
+
+    // `error` and `close` can both fire for the same child — a command that
+    // does not exist raises ENOENT and then closes. First one wins.
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      done(result);
+    };
+    child.once("error", (error) => settle({ error }));
+    // `close` rather than `exit`: it waits for the pipes, so nothing the child
+    // wrote just before dying is lost from the failure report.
+    child.once("close", (status, signal) => settle({ status, signal, stdout, output }));
+  });
+}
+
+function failStep(label, command, args, result) {
+  const how = result.signal ? `killed by ${result.signal}` : `exit ${result.status}`;
+  const tail = lastLines(result.output.trimEnd(), FAILURE_TAIL_LINES);
+
+  const state = DESTROYED
+    ? "This machine is part-way through an install. Re-run `make setup` once\n" +
+      "the cause is fixed — it starts from a clean slate every time."
+    : "Nothing has been dropped. Fix the cause and run it again.";
+
+  fail(
+    `${stripAnsi(label)} failed (${how}).\n` +
+      `${dim(`${command} ${args.map(rel).join(" ")}`)}\n` +
+      (tail === "" ? "" : `\n${quote(tail)}\n`) +
+      `\n${state}` +
+      (VERBOSE ? "" : `\n${dim("`make setup VERBOSE=1` shows every step in full.")}`),
+  );
+}
+
+/** The end of a child's output, which is where it says why it stopped. */
+function lastLines(text, limit) {
+  if (text === "") return "";
+  const lines = text.split("\n");
+  if (lines.length <= limit) return text;
+  return [dim(`... ${lines.length - limit} earlier lines`), ...lines.slice(-limit)].join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -960,8 +1201,22 @@ function rel(absolute) {
     : absolute;
 }
 
+/**
+ * Stop, saying why, in the shape every other line here has.
+ *
+ * The first line goes beside the mark and the rest is pushed two spaces right,
+ * so a message that indents its own detail keeps that structure and still
+ * lines up under the mark. Callers write plain multi-line strings and get the
+ * layout for free — the alternative was every call site owning its own
+ * indentation, which is how they drift.
+ */
 function fail(message) {
-  console.error(`\nbin/setup: ${message}`);
+  const [summary, ...rest] = String(message).split("\n");
+  console.error(`\n  ${red(symbols.fail)} ${bold(summary)}`);
+  for (const line of rest) {
+    console.error(line === "" ? "" : `  ${line}`);
+  }
+  console.error("");
   process.exit(1);
 }
 
