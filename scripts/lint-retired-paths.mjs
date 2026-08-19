@@ -85,6 +85,11 @@ const SKIP_DIRS = new Set([
   // Editing one to satisfy a lint would be falsifying the history the file
   // exists to keep.
   "migrations",
+  // Accepted ADRs, for the same reason. ADR-0005 names
+  // `processors/sessionizer/v1/src/store.ts` because that is where the file
+  // was when the decision was made; the record is of the decision, not of
+  // the current tree. Superseding is how an ADR changes, not editing.
+  "adr",
 ]);
 
 const SCANNED_EXT = new Set([

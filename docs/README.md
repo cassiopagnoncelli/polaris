@@ -30,22 +30,20 @@ SDKs / producers
 - [Engineering Standards](./architecture/09-engineering-standards.md)
 - [SDK Standards](./architecture/10-sdk-standards.md)
 - [Production Readiness](./architecture/11-production-readiness.md)
+- [Architecture Decision Records](./adr/README.md) — why the platform is
+  shaped the way it is, one decision per file. The four ledgers
+  ([platform](./adr/0001-platform-architecture-ledger.md),
+  [engineering](./adr/0002-engineering-standards-ledger.md),
+  [SDK](./adr/0003-sdk-standards-ledger.md),
+  [production readiness](./adr/0004-production-readiness-ledger.md)) are the
+  ones to read first.
 - [Implementation Playbook](./implementation/README.md)
 
-The decision ledgers and the delivery board are **not in this repository**.
-`agents/` is gitignored — it is an agent workspace, not a published tree — so
-these were links to files nobody who clones Polaris can open, and are listed
-here as paths rather than as links until somebody decides where they belong:
-
-- `agents/architect/adr/0001-platform-architecture-ledger.md`
-- `agents/architect/adr/0002-engineering-standards-ledger.md`
-- `agents/architect/adr/0003-sdk-standards-ledger.md`
-- `agents/architect/adr/0004-production-readiness-ledger.md`
-- `agents/pm/kanban` — file-backed board; run `agents/pm/bin/pm report`
-
-An architecture decision record is documentation of the kind this directory
-exists to hold, so `docs/adr/` is the obvious home for the four ledgers.
-Moving them makes them public, which is a call for whoever owns the repo.
+The delivery board is **not in this repository**: `agents/pm/kanban` lives in
+the gitignored agent workspace, and `agents/pm/bin/pm report` prints it. The
+decision records were in that workspace too until 2026-08-19, which meant the
+links above returned nothing for anyone with a clone — see
+[ADR-0006](./adr/0006-publish-the-decision-records.md).
 - [Delivery Roadmap](./implementation/delivery-roadmap.md)
 - [Coverage Matrix](./implementation/coverage-matrix.md)
 - [Claude Instructions](./instructions/claude.md)
