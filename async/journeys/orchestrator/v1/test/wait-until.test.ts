@@ -67,9 +67,9 @@ function parkedAt(definition: JourneyDefinition, now: Date) {
 
 describe("the wait step's schema", () => {
   it("accepts a relative wait", () => {
-    expect(
-      journeyStepSchema.safeParse({ id: "hold", type: "wait", minutes: 60 }).success,
-    ).toBe(true);
+    expect(journeyStepSchema.safeParse({ id: "hold", type: "wait", minutes: 60 }).success).toBe(
+      true,
+    );
   });
 
   it("accepts an absolute wait", () => {

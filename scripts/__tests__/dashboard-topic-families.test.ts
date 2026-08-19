@@ -48,9 +48,7 @@ function canonicalFamilies(): readonly string[] {
     "utf8",
   );
   const literals = new Map<string, string>();
-  for (const match of source.matchAll(
-    /export const (STREAM_FAMILY_[A-Z_]+) = "([a-z.]+)"/g,
-  )) {
+  for (const match of source.matchAll(/export const (STREAM_FAMILY_[A-Z_]+) = "([a-z.]+)"/g)) {
     literals.set(match[1] as string, match[2] as string);
   }
   const block = /export const CANONICAL_STREAM_FAMILIES = \[([\s\S]*?)\] as const;/.exec(source);

@@ -51,8 +51,7 @@ export const METRIC_SINK_INSERT_DURATION_MS_LAST =
  * produced a value. Counting the failures where they actually surface is
  * the honest replacement.
  */
-export const METRIC_SINK_INSERT_FAILURES_TOTAL =
-  "polaris_clickhouse_sink_insert_failures_total";
+export const METRIC_SINK_INSERT_FAILURES_TOTAL = "polaris_clickhouse_sink_insert_failures_total";
 /** Ingestion lag in seconds: now − the envelope's `ingested_at`. */
 export const METRIC_SINK_LAG_SECONDS = "polaris_clickhouse_sink_lag_seconds";
 

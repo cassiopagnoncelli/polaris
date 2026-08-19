@@ -105,39 +105,38 @@ function findConsumerManifests(): ReadonlyArray<{ vendorDir: string; unitDir: st
 const MANIFESTS = findConsumerManifests();
 
 /**
- * The consent object a descriptor declares, read out of its source.
+ * A boolean-valued constant a descriptor declares, read out of its source.
  *
- * Matches `const REQUIRED_CONSENT: RequiredConsent = Object.freeze({...})`
- * and normalises an omitted dimension to `false` — the gate's
- * `evaluateConsent` treats absent as not-required, so `{ marketing: true }`
- * and `{ marketing: true, analytics: false }` are the same declaration.
+ * Matches `const NAME: Type = Object.freeze({...})` and fills every
+ * dimension the caller names, defaulting an omitted one to `false` — the
+ * gate's `evaluateConsent` treats absent as not-required, so
+ * `{ marketing: true }` and `{ marketing: true, analytics: false }` are the
+ * same declaration and must compare equal.
  */
-function descriptorConsent(unitDir: string): Record<string, boolean> {
-  const source = readFileSync(join(unitDir, "src", "descriptor.ts"), "utf8");
-  const match = /REQUIRED_CONSENT[^=]*=\s*Object\.freeze\(\{([^}]*)\}\)/.exec(source);
-  if (match === null) throw new Error(`no REQUIRED_CONSENT in ${unitDir}/src/descriptor.ts`);
-  const out: Record<string, boolean> = {
-    marketing: false,
-    analytics: false,
-    personalization: false,
-  };
-  for (const pair of match[1].matchAll(/(\w+)\s*:\s*(true|false)/g)) {
-    out[pair[1] as string] = pair[2] === "true";
+function descriptorFlags(
+  unitDir: string,
+  constant: string,
+  dimensions: readonly string[],
+): Record<string, boolean> {
+  const file = join(unitDir, "src", "descriptor.ts");
+  const source = readFileSync(file, "utf8");
+  const body = new RegExp(`${constant}[^=]*=\\s*Object\\.freeze\\(\\{([^}]*)\\}\\)`).exec(
+    source,
+  )?.[1];
+  if (body === undefined) throw new Error(`no ${constant} in ${file}`);
+  const out: Record<string, boolean> = Object.fromEntries(dimensions.map((d) => [d, false]));
+  for (const [, key, value] of body.matchAll(/(\w+)\s*:\s*(true|false)/g)) {
+    if (key === undefined) continue;
+    out[key] = value === "true";
   }
   return out;
 }
 
-/** The same, for `IDENTITY_HASHING`. */
-function descriptorHashing(unitDir: string): Record<string, boolean> {
-  const source = readFileSync(join(unitDir, "src", "descriptor.ts"), "utf8");
-  const match = /IDENTITY_HASHING[^=]*=\s*Object\.freeze\(\{([^}]*)\}\)/.exec(source);
-  if (match === null) throw new Error(`no IDENTITY_HASHING in ${unitDir}/src/descriptor.ts`);
-  const out: Record<string, boolean> = { email: false, phone: false };
-  for (const pair of match[1].matchAll(/(\w+)\s*:\s*(true|false)/g)) {
-    out[pair[1] as string] = pair[2] === "true";
-  }
-  return out;
-}
+const descriptorConsent = (unitDir: string) =>
+  descriptorFlags(unitDir, "REQUIRED_CONSENT", ["marketing", "analytics", "personalization"]);
+
+const descriptorHashing = (unitDir: string) =>
+  descriptorFlags(unitDir, "IDENTITY_HASHING", ["email", "phone"]);
 
 function manifestOf(unitDir: string): z.infer<typeof consumerManifestSchema> {
   return consumerManifestSchema.parse(
@@ -168,42 +167,36 @@ describe("every consumer manifest", () => {
     expect(issues, `${vendor} does not parse`).toEqual([]);
   });
 
-  it.each(MANIFESTS.map((m) => [m.vendorDir, m.unitDir]))(
-    "%s declares the version its directory claims",
-    (_vendor, unitDir) => {
-      expect(manifestOf(unitDir).version).toBe(unitDir.split("/").pop());
-    },
-  );
+  it.each(
+    MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
+  )("%s declares the version its directory claims", (_vendor, unitDir) => {
+    expect(manifestOf(unitDir).version).toBe(unitDir.split("/").pop());
+  });
 });
 
 describe("the manifest agrees with the descriptor", () => {
-  it.each(MANIFESTS.map((m) => [m.vendorDir, m.unitDir]))(
-    "%s: required_consent matches what the gate enforces",
-    (vendor, unitDir) => {
-      // The compliance question, written in two places. The manifest is
-      // what an operator reads; the descriptor is what drops the event.
-      expect(manifestOf(unitDir).required_consent, `${vendor} manifest disagrees`).toEqual(
-        descriptorConsent(unitDir),
-      );
-    },
-  );
+  it.each(
+    MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
+  )("%s: required_consent matches what the gate enforces", (vendor, unitDir) => {
+    // The compliance question, written in two places. The manifest is
+    // what an operator reads; the descriptor is what drops the event.
+    expect(manifestOf(unitDir).required_consent, `${vendor} manifest disagrees`).toEqual(
+      descriptorConsent(unitDir),
+    );
+  });
 
-  it.each(MANIFESTS.map((m) => [m.vendorDir, m.unitDir]))(
-    "%s: identity_hashing matches what normalize is told",
-    (vendor, unitDir) => {
-      expect(manifestOf(unitDir).identity_hashing, `${vendor} manifest disagrees`).toEqual(
-        descriptorHashing(unitDir),
-      );
-    },
-  );
+  it.each(
+    MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
+  )("%s: identity_hashing matches what normalize is told", (vendor, unitDir) => {
+    expect(manifestOf(unitDir).identity_hashing, `${vendor} manifest disagrees`).toEqual(
+      descriptorHashing(unitDir),
+    );
+  });
 
-  it.each(MANIFESTS.map((m) => [m.vendorDir, m.unitDir]))(
-    "%s: the DLQ family names this vendor and version",
-    (_vendor, unitDir) => {
-      const manifest = manifestOf(unitDir);
-      expect(manifest.dlq_topic_family).toBe(
-        `destination.${manifest.name}.${manifest.version}.dlq`,
-      );
-    },
-  );
+  it.each(
+    MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
+  )("%s: the DLQ family names this vendor and version", (_vendor, unitDir) => {
+    const manifest = manifestOf(unitDir);
+    expect(manifest.dlq_topic_family).toBe(`destination.${manifest.name}.${manifest.version}.dlq`);
+  });
 });

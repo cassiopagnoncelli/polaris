@@ -31,8 +31,22 @@ env:
   # Pin a single Node major across all jobs. >= 22 is the Active LTS pinned
   # in the root package.json `engines` field.
   NODE_VERSION: "22"
-  # Pin pnpm to match `packageManager` in the root package.json.
-  PNPM_VERSION: "10.30.0"
+  # pnpm's version is NOT pinned here. `pnpm/action-setup` refuses to run when
+  # its `version` input and the root package.json's `packageManager` field both
+  # name a version and they disagree -- it fails at the install step, before
+  # any gate runs, so every job reports a failure that says nothing about the
+  # code.
+  #
+  # That is exactly what happened. `a61bf2f` (2026-08-12) bumped
+  # `packageManager` from pnpm@10.30.0 to pnpm@11.21.0 and left the workflow's
+  # copy behind. CI failed on every push for the next seven days -- 60 runs,
+  # not one green -- so typecheck, lint, format and the entire test suite went
+  # unenforced while commit after commit claimed them.
+  #
+  # Deleting the pin rather than syncing it: two places holding one version is
+  # what broke, and syncing them only resets the clock until the next bump.
+  # `packageManager` is the copy the repository already has to keep correct,
+  # because corepack and every local `pnpm` invocation read it.
 
 jobs:
   static-analysis:
@@ -45,7 +59,6 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Setup Node ${{ env.NODE_VERSION }}
@@ -81,7 +94,6 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Setup Node ${{ env.NODE_VERSION }}
@@ -130,7 +142,6 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Setup Node ${{ env.NODE_VERSION }}

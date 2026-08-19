@@ -104,9 +104,7 @@ export interface CreateIsolationSnapshotOptions {
   readonly now?: () => number;
 }
 
-function createIsolationSnapshot(
-  options: CreateIsolationSnapshotOptions,
-): IsolationSnapshot {
+function createIsolationSnapshot(options: CreateIsolationSnapshotOptions): IsolationSnapshot {
   const refreshMs = options.refreshMs ?? 30_000;
   const now = options.now ?? Date.now;
 

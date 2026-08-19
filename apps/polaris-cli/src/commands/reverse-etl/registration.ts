@@ -57,9 +57,7 @@ export function buildRegisteredReverseEtlHooks(): ReverseEtlRunHooks {
       try {
         const rows = await listProjectConfig(handle.db, {
           projectId: scope.projectId,
-          environment: scope.environment as Parameters<
-            typeof listProjectConfig
-          >[1]["environment"],
+          environment: scope.environment as Parameters<typeof listProjectConfig>[1]["environment"],
           namespace: "reverse_etl",
         });
         return Object.fromEntries(rows.map((row) => [row.config_key, row.value]));

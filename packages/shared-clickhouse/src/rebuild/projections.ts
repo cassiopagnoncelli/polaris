@@ -110,8 +110,7 @@ export const REBUILDABLE_CLICKHOUSE_PROJECTIONS: readonly ClickhouseProjectionDe
     name: "profile_event_daily_counts",
     qualifiedTable: "polaris.profile_event_daily_counts",
     sqlFile: "sql/clickhouse/projections/44_profile_event_daily_counts.sql",
-    feederMvFile:
-      "sql/clickhouse/materialized-views/45_mv_raw_to_profile_event_daily_counts.sql",
+    feederMvFile: "sql/clickhouse/materialized-views/45_mv_raw_to_profile_event_daily_counts.sql",
     rebuildSelectFile: "sql/clickhouse/projections/44_profile_event_daily_counts_rebuild.sql",
     description:
       "Per-day event counts keyed by (project_id, environment, profile_id, event). " +

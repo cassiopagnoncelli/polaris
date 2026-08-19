@@ -22,13 +22,14 @@ export const journeyStepAdvancedV1PropertiesSchema = z
     /** Step just entered. */
     step_id: z.string().regex(/^[a-z][a-z0-9_]*$/),
     /** Step left, absent on the first advance out of entry. */
-    from_step_id: z.string().regex(/^[a-z][a-z0-9_]*$/).nullish(),
+    from_step_id: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .nullish(),
     /** An action step's payload, carried through uninterpreted. */
     properties: z.record(z.string(), z.unknown()).nullish(),
     run_id: z.string().min(1).max(128),
   })
   .strict();
 
-export type JourneyStepAdvancedV1Properties = z.infer<
-  typeof journeyStepAdvancedV1PropertiesSchema
->;
+export type JourneyStepAdvancedV1Properties = z.infer<typeof journeyStepAdvancedV1PropertiesSchema>;

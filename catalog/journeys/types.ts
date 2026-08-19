@@ -155,7 +155,11 @@ export type JourneyReentry = z.infer<typeof journeyReentrySchema>;
  * re-trigger, not a wait, and holding a participant row for a year to
  * express it makes the table a scheduling backlog.
  */
-const waitMinutesSchema = z.number().int().min(1).max(90 * 24 * 60);
+const waitMinutesSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(90 * 24 * 60);
 
 /**
  * An absolute moment to wait FOR, as an ISO 8601 UTC instant.
@@ -215,15 +219,12 @@ export const journeyStepSchema = z
         next: stepIdSchema.optional(),
       })
       .strict()
-      .refine(
-        (step) => (step.minutes === undefined) !== (step.until === undefined),
-        {
-          message:
-            "a wait step needs exactly one of `minutes` (relative to arrival) or " +
-            "`until` (an absolute instant) — neither leaves the participant parked " +
-            "with no due time, and both would make the resting point ambiguous",
-        },
-      ),
+      .refine((step) => (step.minutes === undefined) !== (step.until === undefined), {
+        message:
+          "a wait step needs exactly one of `minutes` (relative to arrival) or " +
+          "`until` (an absolute instant) — neither leaves the participant parked " +
+          "with no due time, and both would make the resting point ambiguous",
+      }),
     z
       .object({
         id: stepIdSchema,

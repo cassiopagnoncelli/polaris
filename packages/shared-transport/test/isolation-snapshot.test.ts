@@ -114,7 +114,9 @@ describe("isolation snapshot", () => {
       reader,
       environment: "production",
       autoStart: false,
-      logger: { warn } as unknown as NonNullable<Parameters<typeof startIsolationSnapshot>[0]["logger"]>,
+      logger: { warn } as unknown as NonNullable<
+        Parameters<typeof startIsolationSnapshot>[0]["logger"]
+      >,
     });
     const firstOk = snap.lastRefreshedAt();
 
@@ -152,7 +154,9 @@ describe("isolation snapshot", () => {
       reader,
       environment: "production",
       autoStart: false,
-      logger: { warn } as unknown as NonNullable<Parameters<typeof startIsolationSnapshot>[0]["logger"]>,
+      logger: { warn } as unknown as NonNullable<
+        Parameters<typeof startIsolationSnapshot>[0]["logger"]
+      >,
     });
 
     expect(snap.isolatedProjects("analytics.events")).toEqual([]);

@@ -1088,6 +1088,9 @@ describe("admin mutations — project-config writes", () => {
     // request id — for a typo in a form field. The CLI has always refused
     // these with a sentence; the panel now does too.
     const spy = vi.fn(async () => APPLIED);
+    // `as const` so the destructure yields `string`, not `string | undefined`:
+    // under `noUncheckedIndexedAccess` a bare `string[][]` makes both halves
+    // optional, and `form()` takes strings.
     for (const [namespace, key] of [
       ["MyNs", "ok_key"],
       ["ab", "ok_key"],
@@ -1095,7 +1098,7 @@ describe("admin mutations — project-config writes", () => {
       ["ok-ns", "trailing_"],
       ["", "ok_key"],
       ["ok-ns", ""],
-    ]) {
+    ] as const) {
       const app = await buildApp({
         row: destination(),
         mutations: stubMutations(spy),

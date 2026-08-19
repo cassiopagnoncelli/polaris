@@ -141,9 +141,7 @@ describe("the projections, on SummingMergeTree", () => {
     // customer_id changed — a snapshot that disagrees with its source.
     const { query } = await sqlFor("profile_event_daily_counts");
     expect(query).toMatch(/any\(customer_id\) AS customer_id/);
-    expect(query).toMatch(
-      /GROUP BY project_id, environment, profile_id, event, occurred_date/,
-    );
+    expect(query).toMatch(/GROUP BY project_id, environment, profile_id, event, occurred_date/);
   });
 });
 

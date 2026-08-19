@@ -145,31 +145,29 @@ describe("every processor manifest on disk", () => {
     expect(MANIFESTS.length).toBeGreaterThanOrEqual(5);
   });
 
-  it.each(MANIFESTS.map((path) => [relative(REPO_ROOT, path), path]))(
-    "%s parses against processorManifestSchema",
-    (rel, path) => {
-      const parsed = processorManifestSchema.safeParse(parseYaml(readFileSync(path, "utf8")));
-      // The raw issue list, not a boolean: a failure should say which key
-      // and why without a second run.
-      const issues = parsed.success
-        ? []
-        : parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`);
-      expect(issues, `${rel} does not parse`).toEqual([]);
-    },
-  );
+  it.each(
+    MANIFESTS.map((path) => [relative(REPO_ROOT, path), path]),
+  )("%s parses against processorManifestSchema", (rel, path) => {
+    const parsed = processorManifestSchema.safeParse(parseYaml(readFileSync(path, "utf8")));
+    // The raw issue list, not a boolean: a failure should say which key
+    // and why without a second run.
+    const issues = parsed.success
+      ? []
+      : parsed.error.issues.map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`);
+    expect(issues, `${rel} does not parse`).toEqual([]);
+  });
 
-  it.each(MANIFESTS.map((path) => [relative(REPO_ROOT, path), path]))(
-    "%s declares the name and version its directory claims",
-    (_rel, path) => {
-      const manifest = processorManifestSchema.parse(parseYaml(readFileSync(path, "utf8")));
-      // `<plane>/<stage>/<unit>/<version>/processor.manifest.yaml`. The
-      // unit directory is a convention and the loader matches on the body,
-      // so only the version segment is load-bearing — but a manifest whose
-      // version disagrees with its directory is the sessionizer-v2 test
-      // bug in a different file, and it costs one line to refuse.
-      expect(manifest.version).toBe(dirname(path).split("/").pop());
-    },
-  );
+  it.each(
+    MANIFESTS.map((path) => [relative(REPO_ROOT, path), path]),
+  )("%s declares the name and version its directory claims", (_rel, path) => {
+    const manifest = processorManifestSchema.parse(parseYaml(readFileSync(path, "utf8")));
+    // `<plane>/<stage>/<unit>/<version>/processor.manifest.yaml`. The
+    // unit directory is a convention and the loader matches on the body,
+    // so only the version segment is load-bearing — but a manifest whose
+    // version disagrees with its directory is the sessionizer-v2 test
+    // bug in a different file, and it costs one line to refuse.
+    expect(manifest.version).toBe(dirname(path).split("/").pop());
+  });
 });
 
 describe("every unit in the pipeline tree", () => {
