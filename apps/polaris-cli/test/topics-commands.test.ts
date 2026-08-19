@@ -301,43 +301,61 @@ describe("topics isolate runner", () => {
   // constructs a StreamIsolationCache. So the write changed no traffic while
   // telling an operator — often mid-incident, following a runbook that
   // recommends it — that a cutover was underway.
-  it("refuses, because the runtime does not honour the row it would write", async () => {
-    const capture = captureOutput();
-    const runner = buildTopicsIsolateRunner();
-    await expect(
-      runner(
-        {
-          project: "storefront",
-          env: "production",
-          family: "raw.events",
-          reason: "hot partition",
-        },
-        makeContext(capture.streams),
-      ),
-    ).rejects.toMatchObject({ name: "NotImplementedError" });
-  });
-
-  it("does not touch the store when refusing", async () => {
-    // Nothing may be written, and no audit row may claim otherwise.
-    let opened = 0;
+  it("writes the isolation row and its audit record together", async () => {
+    // The refusal this replaces was correct while it stood: nothing read the
+    // row, so writing one would have told an operator under incident pressure
+    // that a cutover was in progress while changing no traffic. Producers and
+    // consumers read a live snapshot now, so the row means something.
+    const store = new InMemoryTopicStore();
     const capture = captureOutput();
     const runner = buildTopicsIsolateRunner({
-      openStore: () => {
-        opened += 1;
-        throw new Error("store must not be opened");
-      },
+      openStore: () => store.asIsolateStore(),
+      now: () => new Date("2026-08-18T12:00:00.000Z"),
+      issueId: () => "polaris_tiso_fixed",
+      generateAuditId: () => "polaris_aud_fixed",
+      actorLabel: () => "operator@example.test",
     });
-    await expect(
-      runner(
-        { project: "storefront", env: "production", family: "raw.events", reason: "x" },
-        makeContext(capture.streams),
-      ),
-    ).rejects.toMatchObject({ name: "NotImplementedError" });
-    expect(opened).toBe(0);
+
+    await runner(
+      { project: "storefront", env: "production", family: "raw.events", reason: "hot partition" },
+      makeContext(capture.streams),
+    );
+
+    expect(store.inserts).toHaveLength(1);
+    expect(store.inserts[0]).toMatchObject({
+      id: "polaris_tiso_fixed",
+      project_id: "storefront",
+      environment: "production",
+      topic_family: "raw.events",
+      // The name the transport will resolve to, materialised at write time so
+      // an operator reads the same string the runtime will publish onto.
+      concrete_topic: "raw.events.storefront",
+      reason: "hot partition",
+      actor_id: "operator@example.test",
+    });
   });
 
-  it("still validates its arguments before refusing", async () => {
-    // A bad --env should read as a usage error, not as the feature gap.
+  it("refuses a duplicate rather than cycling the isolation silently", async () => {
+    const store = new InMemoryTopicStore();
+    const capture = captureOutput();
+    const runner = buildTopicsIsolateRunner({ openStore: () => store.asIsolateStore() });
+    const args = {
+      project: "storefront",
+      env: "production",
+      family: "raw.events",
+      reason: "hot partition",
+    };
+
+    await runner(args, makeContext(capture.streams));
+
+    await expect(runner(args, makeContext(captureOutput().streams))).rejects.toMatchObject({
+      name: "UsageError",
+    });
+    expect(store.inserts).toHaveLength(1);
+  });
+
+  it("still validates its arguments before writing", async () => {
+    // A bad --env must not reach the store.
     const capture = captureOutput();
     const runner = buildTopicsIsolateRunner();
     await expect(

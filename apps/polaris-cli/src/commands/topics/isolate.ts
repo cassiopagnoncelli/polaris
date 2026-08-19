@@ -36,15 +36,21 @@ import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
+  dedicatedStreamFamily,
   isCanonicalStreamFamily,
 } from "@polaris/shared-transport";
+import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
-import type {
-  AuditActorSource,
-  AuditEnvironment,
-  InsertTopicIsolationInput,
+import {
+  type AuditActorSource,
+  type AuditEnvironment,
+  connectDb,
+  type InsertTopicIsolationInput,
+  isolateTopicWithAudit,
 } from "../../db/index.js";
-import { NotImplementedError, UsageError } from "../../errors.js";
+
+import { UsageError } from "../../errors.js";
+import { renderAccordingTo } from "../../output.js";
 
 const SUPPORTED_ENVIRONMENTS = POLARIS_ENVIRONMENTS;
 type SupportedEnvironment = (typeof SUPPORTED_ENVIRONMENTS)[number];
@@ -130,9 +136,11 @@ export const topicsIsolateCommand: CommandDefinition = {
           "Activate dedicated-topic isolation for a (family, project, environment) triple.",
           "Writes a topic_isolations row + audit_records row in one transaction.",
           "",
-          "REFUSED in this build: no service reads the isolation row, so writing one",
-          "would change no traffic while reporting a cutover. See the runner for what",
-          "wiring it requires.",
+          "Producers and consumers read the active rows through a snapshot refreshed",
+          "on an interval, so the cutover becomes live within one refresh window across",
+          "every service. Consumers subscribe to the shared family AND each dedicated",
+          "one, so nothing is lost while the window closes. See",
+          "docs/operations/topic-isolation-cutover.md for the sequence.",
         ].join("\n"),
       )
       .requiredOption("--project <project_id>", "Project to isolate.")
@@ -149,57 +157,134 @@ export const topicsIsolateCommand: CommandDefinition = {
   },
 };
 
-export function buildTopicsIsolateRunner(_hooks: TopicsIsolateHooks = {}) {
-  return async function runner(args: TopicsIsolateArgs, _ctx: CommandContext): Promise<undefined> {
-    // Validate first: a bad --env should read as a usage error, not as the
-    // feature gap. The parsed value is named in the refusal so the operator
-    // sees which triple was refused.
-    const validated = validate(args);
+export function buildTopicsIsolateRunner(hooks: TopicsIsolateHooks = {}) {
+  const issueId = hooks.issueId ?? (() => `${TOPIC_ISOLATION_ID_PREFIX}${uuidv7()}`);
+  const generateAuditId = hooks.generateAuditId ?? (() => `polaris_aud_${uuidv7()}`);
+  const nowFn = hooks.now ?? (() => new Date());
+  const actorLabelOverride = hooks.actorLabel;
 
-    // Refuse, because the runtime does not honour the row this would write.
-    //
-    // `StreamIsolationCache` exists and is correct, and NOTHING constructs one:
-    // every producer and every consumer in the platform resolves families
-    // through `sharedOnlyIsolationLookup`, so an isolated project's events keep
-    // flowing on the shared stream in both directions. Writing the row would
-    // change no traffic while telling an operator — under incident pressure,
-    // following a runbook that recommends exactly this — that a cutover is in
-    // progress. A command that appears to act and does nothing is worse than
-    // one that refuses.
-    //
-    // Wiring it is a real task: thread a `ScopedIsolationLookup` + cache
-    // through every app, and give the destination runtime the
-    // `isolatedProjects` option that `packages/shared-destinations/src/runtime.ts`
-    // hardcodes to `[]`. Delete this guard in the same change that lands it.
-    throw new NotImplementedError(
-      [
-        `topic isolation is not honoured by the runtime, so isolating ${validated.family} for ` +
-          `${validated.project}/${validated.env} would write a row that changes nothing.`,
-        "",
-        "Every producer and consumer resolves stream families through sharedOnlyIsolationLookup;",
-        "no service constructs a StreamIsolationCache. An isolated project's events would keep",
-        "flowing on the shared stream, in both directions, while this command reported success.",
-        "",
-        "`polaris topics list` and `deisolate` still work, so existing rows remain inspectable",
-        "and removable.",
-      ].join("\n"),
-    );
-    // The write path lived here: issue an id, materialise the dedicated
-    // topic name, upsert `topic_isolations` and its audit row, render the
-    // cutover instructions. It is unreachable behind the refusal above and
-    // biome's noUnreachable rightly flags dead code, so it is gone rather
-    // than commented out — `git show b5a6ddc^:apps/polaris-cli/src/commands/topics/isolate.ts`
-    // has it intact for whoever wires isolation into the runtime.
+  return async function runner(args: TopicsIsolateArgs, ctx: CommandContext): Promise<undefined> {
+    const openStore = hooks.openStore ?? (() => defaultStore(ctx.env));
+    const validated = validate(args);
+    const now = nowFn();
+    const id = issueId();
+    const concreteTopic = dedicatedStreamFamily(validated.family, validated.project);
+    const actorLabel = actorLabelOverride?.() ?? ctx.actor.label;
+    const auditId = generateAuditId();
+
+    const insertInput: InsertTopicIsolationInput = {
+      id,
+      project_id: validated.project,
+      environment: validated.env,
+      topic_family: validated.family,
+      concrete_topic: concreteTopic,
+      reason: validated.reason,
+      actor_id: actorLabel,
+    };
+
+    const after: TopicIsolationAuditSnapshot = {
+      id,
+      project_id: validated.project,
+      environment: validated.env,
+      topic_family: validated.family,
+      concrete_topic: concreteTopic,
+      reason: validated.reason,
+      actor_id: actorLabel,
+      activated_at: now.toISOString(),
+    };
+    const auditPayload: TopicsIsolateAuditPayload = {
+      auditId,
+      actorSource: ctx.actor.source,
+      actorLabel,
+      occurredAt: now,
+      after,
+      projectId: validated.project,
+      environment: validated.env as AuditEnvironment,
+      reason: validated.reason,
+    };
+
+    const store = openStore();
+    try {
+      const outcome = await store.insertWithAudit(insertInput, auditPayload);
+      if (outcome === "duplicate") {
+        throw new UsageError(
+          `topic_isolations: project "${validated.project}" is already isolated for family "${validated.family}" in environment "${validated.env}". ` +
+            "Run `polaris topics deisolate` first if you intend to cycle the isolation.",
+        );
+      }
+
+      ctx.logger.info(
+        {
+          audit_id: auditId,
+          audit_action: "topics.isolate",
+          topic_isolation_id: id,
+          project_id: validated.project,
+          environment: validated.env,
+          topic_family: validated.family,
+          concrete_topic: concreteTopic,
+          reason: validated.reason,
+          occurred_at: now.toISOString(),
+        },
+        "topic isolation activated (audit row persisted)",
+      );
+
+      emit(ctx, {
+        id,
+        project: validated.project,
+        env: validated.env,
+        family: validated.family,
+        concreteTopic,
+        reason: validated.reason,
+        activatedAt: now.toISOString(),
+      });
+    } finally {
+      await store.close();
+    }
+    return undefined;
   };
 }
 
 const runTopicsIsolate = buildTopicsIsolateRunner();
+
+function defaultStore(env: NodeJS.ProcessEnv): TopicsIsolateStore {
+  const handle = connectDb({ env });
+  return {
+    insertWithAudit: async (input, audit): Promise<IsolateInsertOutcome> => {
+      try {
+        await isolateTopicWithAudit(handle.db, input, {
+          auditId: audit.auditId,
+          actorSource: audit.actorSource,
+          actorLabel: audit.actorLabel,
+          reason: audit.reason,
+          occurredAt: audit.occurredAt,
+          before: null,
+          after: audit.after,
+        });
+        return "inserted";
+      } catch (error) {
+        // The partial unique index on (family, project, environment) WHERE
+        // deactivated_at IS NULL is what enforces one active isolation per
+        // triple; a duplicate is an operator mistake, not a failure.
+        if (isUniqueViolation(error)) {
+          return "duplicate";
+        }
+        throw error;
+      }
+    },
+    close: () => handle.close(),
+  };
+}
 
 /**
  * PostgreSQL's `unique_violation` error code is `23505`. The Kysely
  * error wraps the underlying `pg` `DatabaseError`, which surfaces the
  * code via the `code` property.
  */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const obj = error as Record<string, unknown>;
+  return obj["code"] === "23505";
+}
 
 interface ValidatedArgs {
   readonly project: string;
@@ -249,8 +334,63 @@ function requireTrim(value: string | undefined, flag: string): string {
   return trimmed;
 }
 
+interface EmitInput {
+  readonly id: string;
+  readonly project: string;
+  readonly env: string;
+  readonly family: string;
+  readonly concreteTopic: string;
+  readonly reason: string;
+  readonly activatedAt: string;
+}
+
+function emit(ctx: CommandContext, input: EmitInput): void {
+  ctx.output.writeOut(
+    renderAccordingTo(ctx.config.output, {
+      human: renderHuman(input),
+      json: {
+        topic_isolation_id: input.id,
+        project_id: input.project,
+        environment: input.env,
+        topic_family: input.family,
+        concrete_topic: input.concreteTopic,
+        reason: input.reason,
+        activated_at: input.activatedAt,
+        cutover_instructions: cutoverInstructions(input),
+      },
+    }),
+  );
+}
+
+function renderHuman(input: EmitInput): string {
+  const lines = [
+    "topic isolation activated",
+    `  id              ${input.id}`,
+    `  project_id      ${input.project}`,
+    `  environment     ${input.env}`,
+    `  topic_family    ${input.family}`,
+    `  concrete_topic  ${input.concreteTopic}`,
+    `  activated_at    ${input.activatedAt}`,
+    `  reason          ${input.reason}`,
+    "",
+    "Cutover instructions:",
+    ...cutoverInstructions(input).map((line) => `  ${line}`),
+  ];
+  return lines.join("\n");
+}
+
 /**
  * Operational instructions returned alongside the activation. Mirrors
  * the producer-first / consumer-second sequence from the cutover
  * runbook so the CLI output stays self-contained.
  */
+function cutoverInstructions(input: EmitInput): readonly string[] {
+  return [
+    `1. Create the topic "${input.concreteTopic}" on RabbitMQ (e.g. via the same Terraform / pulumi module that owns "${input.family}"; partition count and retention should match or exceed the shared topic's settings).`,
+    `2. Producers will start writing to "${input.concreteTopic}" within one resolver-cache TTL window (default 60s).`,
+    `3. Wait for the shared topic "${input.family}" to drain for project "${input.project}" before stopping consumers from reading the shared partitions.`,
+    `4. Once drained, restart consumers so they re-subscribe; the resolver picks up the dedicated topic on consumer-group reconnect.`,
+    "5. Verify the per-project dashboards (per-project share / lag / partition skew / schema validation) reflect the cutover.",
+    `6. Run \`polaris topics deisolate --project ${input.project} --env ${input.env} --family ${input.family}\` to roll back after the dedicated topic is drained.`,
+  ];
+}
