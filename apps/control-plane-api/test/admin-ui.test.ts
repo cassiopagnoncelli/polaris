@@ -1009,6 +1009,96 @@ describe("admin UI — pages", () => {
     await app.app.close();
   });
 
+  /**
+   * The project detail page, rendered with a stored value in every shape the
+   * column can hold.
+   *
+   * None of this was covered before, which is how a render fault reached an
+   * operator as a 500 with nothing but a request id. `value` is `jsonb`: a
+   * number, a string, an object, a boolean and SQL `NULL` are all legal, and
+   * the panel has to render each of them at rest, in an input, and in the
+   * search index.
+   */
+  const CONFIG_ROWS = [
+    {
+      project_id: "storefront",
+      environment: "development",
+      namespace: "ingest",
+      config_key: "dedupe_window_sec",
+      value: 3600,
+      is_secret: false,
+      updated_at: "2026-08-13T12:00:00.000Z",
+      updated_by: EMAIL,
+    },
+    {
+      project_id: "storefront",
+      environment: "development",
+      namespace: "ga4",
+      config_key: "api_host",
+      value: "analytics.example.com",
+      is_secret: false,
+      updated_at: "2026-08-13T12:00:00.000Z",
+      updated_by: EMAIL,
+    },
+    {
+      project_id: "storefront",
+      environment: "development",
+      namespace: "ga4",
+      config_key: "routing",
+      value: { purchase: "G-ABC" },
+      is_secret: false,
+      updated_at: "2026-08-13T12:00:00.000Z",
+      updated_by: EMAIL,
+    },
+    {
+      project_id: "storefront",
+      environment: "development",
+      namespace: "free-form",
+      config_key: "explicitly_null",
+      value: null,
+      is_secret: false,
+      updated_at: "2026-08-13T12:00:00.000Z",
+      updated_by: EMAIL,
+    },
+    {
+      project_id: "storefront",
+      environment: "development",
+      namespace: "free-form",
+      config_key: "flag",
+      value: false,
+      is_secret: false,
+      updated_at: "2026-08-13T12:00:00.000Z",
+      updated_by: EMAIL,
+    },
+  ] as never;
+
+  for (const tab of ["overview", "variables", "sources", "destinations", "keys"]) {
+    it(`renders the ${tab} tab`, async () => {
+      const app = await buildApp({ queries: { listProjectConfig: async () => CONFIG_ROWS } });
+      const res = await app.app.inject({
+        method: "GET",
+        url: `/admin/projects/storefront?tab=${tab}&env=development`,
+        headers: { cookie: sessionCookie("owner-token") },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain("could not render");
+      await app.app.close();
+    });
+  }
+
+  it("renders the Variables tab under search and every filter", async () => {
+    for (const query of ["", "?q=routing", "?filter=set", "?filter=missing", "?filter=secret"]) {
+      const app = await buildApp({ queries: { listProjectConfig: async () => CONFIG_ROWS } });
+      const res = await app.app.inject({
+        method: "GET",
+        url: `/admin/projects/storefront?tab=variables&env=development&${query.replace("?", "")}`,
+        headers: { cookie: sessionCookie("owner-token") },
+      });
+      expect(res.statusCode, `filter ${query}`).toBe(200);
+      await app.app.close();
+    }
+  });
+
   it("404s an unknown project", async () => {
     const app = await buildApp();
     const res = await app.app.inject({

@@ -1,14 +1,29 @@
 /**
  * merge-worker v1 runtime.
  *
- * Consumes `profile.events`, acts on `identity.merged` v2, and keeps
+ * Consumes `identity.events`, acts on `identity.merged` v2, and keeps
  * `polaris.profile_merge_map` current so person-keyed ClickHouse reads
  * resolve a tombstoned profile to its survivor.
  *
- * Every other event on the family is ignored without ceremony —
- * `profile.events` also carries `profile.created` and `profile.updated`, and
- * a worker that treated an unrecognised event as an error would fail on
- * normal traffic.
+ * ## It subscribed to the wrong family until 2026-08-19
+ *
+ * This read `profile.events` while the identity stage publishes
+ * `identity.merged` to `identity.events` -- one array over from the
+ * `profileEvents` array, at `sync/identity/resolver/v1/src/runtime.ts:365`.
+ * So this worker was fully built, deployed, healthy, and had never received
+ * a single event it acts on: `profile_merge_map` was never written, and
+ * every person-keyed ClickHouse read resolved a merged-away profile to
+ * itself rather than to its survivor.
+ *
+ * Nothing failed. A consumer subscribed to a real family it has no interest
+ * in looks exactly like a consumer with nothing to do, and the plan named
+ * the right family all along (SS4.2 step 5: "the retroactive-merge worker
+ * picks it up from `identity.events`").
+ *
+ * Every other event on the family is ignored without ceremony --
+ * `identity.events` also carries `identity.linked`, `identity.rotated` and
+ * `identity.link_rejected`, and a worker that treated an unrecognised event
+ * as an error would fail on normal traffic.
  *
  * ## Idempotence
  *

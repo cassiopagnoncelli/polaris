@@ -927,19 +927,56 @@ describe("clickhouse sink — profile-plane routing", () => {
     );
   }
 
-  it("sends profile.events to its OWN queue, not analytics_processed", async () => {
-    // The criterion, and the reason for it: a derived event records
-    // something that HAPPENED, while `profile.updated` records what is now
-    // TRUE of a person. Only one of those is current state, and mixing them
-    // would force one table to be both a log and a state table.
+  it("sends profile.events to its own queue AND to analytics_processed", async () => {
+    // This asserted `not.toContain(ANALYTICS_PROCESSED_QUEUE_TABLE)` until
+    // 2026-08-19, and in doing so pinned a hole the whole profile plane fell
+    // through.
+    //
+    // The distinction it defended is real — a derived event records what
+    // HAPPENED, `profile.updated` records what is now TRUE — but the
+    // conclusion drawn from it was wrong. State and history are two
+    // purposes, so they get two rows, not one row and a silent drop. The
+    // profile queue's single materialized view filters
+    // `event = 'profile.updated'`, so as the family's ONLY reader it
+    // discarded `trait.computed`, `audience.entered`, `audience.exited` and
+    // every `journey.*` — inside a Null table, with the INSERT reporting
+    // success. The plan's own "traits history lives in ClickHouse" (§12) had
+    // nowhere to live either.
     const { writer, writes, profileRows } = fakeWriter();
     const runtime = runtimeWith(writer, { batchMaxRows: 1 });
     await runtime.handler(profilePayload("profile.events"), {});
 
-    // It reached the profile writer, and NOT the envelope tables.
+    // State: the reshaped row, on the profile writer.
     expect(profileRows.flat()).toHaveLength(1);
-    expect(writes.map((w) => w.table)).not.toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+    // History: the full envelope, where every other derived fact lives.
+    expect(writes.map((w) => w.table)).toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
+    // Never the source table — that is for the spine.
+    expect(writes.map((w) => w.table)).not.toContain(ANALYTICS_QUEUE_TABLE);
+    // The profile writer is its own seam, so the queue table name never
+    // appears in `writes`; the reshaped row above is the proof it was used.
     expect(writes.map((w) => w.table)).not.toContain(PROFILE_EVENTS_QUEUE_TABLE);
+  });
+
+  it("keeps a journey event out of the state path but in history", async () => {
+    // `journey.step_advanced` names a profile but is not a trait change, so
+    // it must not reach `polaris.profiles`. It must still be queryable — the
+    // funnel guidance in 07-clickhouse.md reads exactly these rows out of
+    // `analytics_processed`, and read zero of them before this.
+    const { writer, writes, profileRows } = fakeWriter();
+    const runtime = runtimeWith(writer, { batchMaxRows: 1 });
+    await runtime.handler(
+      payload(envelope({ event: "journey.step_advanced" }), {
+        stream: "profile.events-0",
+        family: "profile.events",
+        partition: 0,
+      }),
+      {},
+    );
+
+    // No profile block on this fixture, so nothing reaches the state path...
+    expect(profileRows.flat()).toHaveLength(0);
+    // ...and the event still lands in history rather than evaporating.
+    expect(writes.map((w) => w.table)).toContain(ANALYTICS_PROCESSED_QUEUE_TABLE);
   });
 
   it("writes the profile queue's OWN column shape, carrying profile_id", async () => {

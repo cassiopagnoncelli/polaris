@@ -432,14 +432,32 @@ export function createRuntime(deps: ClickhouseSinkRuntimeDeps): ClickhouseSinkRu
     if (table === ANALYTICS_QUEUE_TABLE) {
       sourceBatch.push(row);
     } else if (table === PROFILE_EVENTS_QUEUE_TABLE) {
-      // Reshaped, not pushed as-is. `profile_events_queue` has different
-      // columns; see `toProfileQueueRow`.
+      // BOTH tables, and this is the fix for a hole the whole profile plane
+      // fell through until 2026-08-19.
+      //
+      // `profile_events_queue` is STATE: its one materialized view filters
+      // `event = 'profile.updated'` and folds trait changes into
+      // `polaris.profiles`. That filter is correct for what it feeds — but
+      // it was the family's only reader, so every other event on the plane
+      // reached ClickHouse and was silently discarded: `trait.computed`,
+      // `audience.entered`, `audience.exited`, and every `journey.*`.
+      //
+      // Nothing failed. The INSERT succeeded, the sink counted the rows, and
+      // the events evaporated inside a Null table — the same shape as the
+      // `profile_id = ''` bug, one layer up.
+      //
+      // Two things the plan promised depended on this and could not work:
+      // "traits history lives in ClickHouse (`profile.updated` events), not
+      // Postgres" (§12), and the journey funnel queries in 07-clickhouse.md,
+      // which read `analytics_processed` for events that never arrived.
+      //
+      // So the plane's events go to `analytics_processed` as HISTORY —
+      // where every other derived fact already lives — and profile.updated
+      // additionally rides the state path. One message, two rows, two
+      // purposes, neither standing in for the other.
       const profileRow = toProfileQueueRow(row, deps.logger);
-      if (profileRow === undefined) {
-        deps.metrics.recordSkipped();
-        return;
-      }
-      profileBatch.push(profileRow);
+      if (profileRow !== undefined) profileBatch.push(profileRow);
+      processedBatch.push(row);
     } else {
       processedBatch.push(row);
     }

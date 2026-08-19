@@ -39,7 +39,8 @@ import {
   createTransportConnection,
   type PolarisConsumer,
   PostgresCheckpointStore,
-  STREAM_FAMILY_PROFILE_EVENTS,
+  STREAM_FAMILY_IDENTITY_EVENTS,
+  startIsolationSnapshot,
 } from "@polaris/shared-transport";
 import type { Kysely } from "kysely";
 
@@ -143,8 +144,21 @@ export async function buildMergeWorkerApp(options: BuildAppOptions): Promise<Bui
     },
   });
 
+  // Topic isolation (0068R). This consumer was missed when the snapshot was
+  // wired into the others, so an isolated project's `identity.events` would
+  // have gone unread here even after the family was repointed.
+  const isolationSnapshot = await startIsolationSnapshot({
+    db,
+    environment: config.service.environment,
+    logger,
+  });
+  const isolatedProjects = isolationSnapshot.isolatedProjects(STREAM_FAMILY_IDENTITY_EVENTS);
+
   // Ordered: stop consuming before closing what the handler writes to.
   const shutdownTasks: ShutdownTask[] = [
+    async () => {
+      isolationSnapshot.stop();
+    },
     async () => {
       await consumer.disconnect().catch(() => {});
     },
@@ -194,7 +208,7 @@ export async function buildMergeWorkerApp(options: BuildAppOptions): Promise<Bui
       try {
         await poisonProducer.connect();
         await consumer.subscribe({
-          families: consumerFamiliesFor(STREAM_FAMILY_PROFILE_EVENTS, []),
+          families: consumerFamiliesFor(STREAM_FAMILY_IDENTITY_EVENTS, isolatedProjects),
         });
         await consumer.runEach(handle);
       } catch (err) {

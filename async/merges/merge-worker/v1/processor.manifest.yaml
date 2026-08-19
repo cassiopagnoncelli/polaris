@@ -36,9 +36,11 @@ description: |
 mode: streaming
 
 inputs:
-  - family: profile.events
-    # Acts on `identity.merged` v2 only; `profile.created` and
-    # `profile.updated` share the family and are ignored without ceremony.
+  - family: identity.events
+    # Acts on `identity.merged` v2 only; `identity.linked`, `identity.rotated`
+    # and `identity.link_rejected` share the family and are ignored without
+    # ceremony. This said `profile.events` until 2026-08-19, which is the
+    # family the identity stage does NOT publish the merge on.
     schema_versions: "*"
 
 outputs:

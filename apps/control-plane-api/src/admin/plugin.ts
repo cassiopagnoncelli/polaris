@@ -78,10 +78,16 @@ import {
   declaredKeyFacts,
   needsConfirmation,
   parseConfigEnvironment,
+  parseConfigFilter,
   parseConfigFormValue,
   parseWriteEnvironment,
 } from "./pages/project-config.js";
-import { renderProjectDetailPage, renderProjectsPage } from "./pages/projects.js";
+import {
+  type ProjectTab,
+  parseProjectTab,
+  renderProjectDetailPage,
+  renderProjectsPage,
+} from "./pages/projects.js";
 import {
   type PlatformRoleName,
   platformRoleAtLeast,
@@ -700,6 +706,10 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           if (project === null) return notFound(reply, `No project "${projectId}".`);
 
           const environment = parseConfigEnvironment(queryString(request, "env"));
+          // All four run whatever tab is showing, because the tab strip states
+          // how many rows are behind each one — that count is the whole reason
+          // hiding three of the tables is not a loss of information. They are
+          // small, indexed, single-project reads issued in parallel.
           const [sources, destinations, apiKeys, configRows] = await Promise.all([
             deps.queries.listSources(projectId),
             deps.queries.listDestinations({ projectId }),
@@ -715,7 +725,14 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
               sources,
               destinations,
               apiKeys,
-              config: { projectId, environment, rows: configRows },
+              config: {
+                projectId,
+                environment,
+                rows: configRows,
+                query: queryString(request, "q"),
+                filter: parseConfigFilter(queryString(request, "filter")),
+              },
+              tab: requestedProjectTab(request),
             }),
           );
         },
@@ -738,7 +755,12 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
         request: FastifyRequest,
         projectId: string,
         environment: PolarisEnvironment,
-        extra: { refusal?: MutationRefusal; conflictKey?: string; error?: string },
+        extra: {
+          refusal?: MutationRefusal;
+          refusalKey?: string;
+          conflictKey?: string;
+          error?: string;
+        },
       ): Promise<string | null> => {
         const project = await deps.queries.findProject(projectId);
         if (project === null) return null;
@@ -759,9 +781,15 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             environment,
             rows: configRows,
             ...(extra.refusal !== undefined ? { refusal: extra.refusal } : {}),
+            ...(extra.refusalKey !== undefined ? { refusalKey: extra.refusalKey } : {}),
             ...(extra.conflictKey !== undefined ? { conflictKey: extra.conflictKey } : {}),
             ...(extra.error !== undefined ? { error: extra.error } : {}),
           },
+          // Not `requestedProjectTab`: this is the response to a config POST,
+          // which carries no query string at all. The refusal it is carrying
+          // is rendered inside the Variables panel, so any other tab would
+          // return a page that looks as though nothing happened.
+          tab: "variables",
         });
       };
 
@@ -827,10 +855,15 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             role: request.adminContext?.role ?? "none",
             // When the ritual applies the operator's typing must match; when
             // it does not, the label satisfies itself so one code path still
-            // enforces role and reason for both form shapes.
+            // enforces the role gate for both form shapes.
             confirmation: ritualRequired ? typed : label,
             expectedConfirmation: label,
-            reason: rawReason,
+            // The reason belongs to the ritual, not to every write. A routine
+            // value edit has no reason box to fill, so demanding one here
+            // would refuse a form that is behaving correctly. The role gate
+            // and the audit row are unchanged either way, and
+            // `audit_records.reason` is nullable for exactly this.
+            reason: ritualRequired ? rawReason : null,
           });
 
           if (!check.ok) {
@@ -845,6 +878,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             );
             const body = await configPage(request, projectId, environment, {
               refusal: check.refusal,
+              refusalKey: label,
             });
             if (body === null) return notFound(reply, `No project "${projectId}".`);
             return sendHtml(reply, check.refusal.kind === "role" ? 403 : 400, body);
@@ -934,7 +968,7 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
           );
 
           return reply.redirect(
-            `${ADMIN_PREFIX}/projects/${encodeURIComponent(projectId)}?env=${environment}`,
+            `${ADMIN_PREFIX}/projects/${encodeURIComponent(projectId)}?tab=variables&env=${environment}`,
             303,
           );
         };
@@ -1627,6 +1661,21 @@ function safeNext(value: string): string | null {
   if (!value.startsWith(ADMIN_PREFIX)) return null;
   if (value.startsWith("//")) return null;
   return value;
+}
+
+/**
+ * Which tab of a project page to render.
+ *
+ * `?env=` with no `?tab=` means Variables. That combination is not
+ * hypothetical: it is what the config write path redirects to, and what every
+ * link written before the page had tabs looks like. Landing it on the
+ * overview would show the operator a page with no sign of the change they
+ * just made.
+ */
+function requestedProjectTab(request: FastifyRequest): ProjectTab {
+  const tab = queryString(request, "tab");
+  if (tab.length > 0) return parseProjectTab(tab);
+  return queryString(request, "env").length > 0 ? "variables" : "overview";
 }
 
 /**

@@ -85,11 +85,20 @@ export function actionForm(input: ActionFormInput): Html {
       </label>
       <label>
         <span>Reason (recorded in the audit log, min ${String(MIN_REASON_LENGTH)} characters)</span>
+        <!--
+          \`minlength\` mirrors the server's own rule rather than replacing it:
+          \`checkMutation\` still refuses a short reason, so a stripped form or
+          a curl gains nothing. What it buys is where the operator is told —
+          at the field, before the round trip, instead of on a re-rendered
+          page that has lost their scroll position and, on a long table, the
+          row they were editing.
+        -->
         <input
           type="text"
           name="reason"
           autocomplete="off"
           value="${input.previous?.reason ?? ""}"
+          minlength="${String(MIN_REASON_LENGTH)}"
           required
         />
       </label>

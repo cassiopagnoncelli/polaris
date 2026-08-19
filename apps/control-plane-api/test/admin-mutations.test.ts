@@ -9,7 +9,8 @@
  *   - the row's environment decides the required role, not the service's
  *   - production needs POLARIS_ADMIN_PRODUCTION_MIN_ROLE (default owner)
  *   - the confirmation is the human label, typed exactly
- *   - the reason is mandatory and lands in the audit row
+ *   - the reason is mandatory on the ritual forms and lands in the audit
+ *     row; a routine project-config edit has none and records NULL
  *   - a same-origin check runs before anything is read or written
  *   - a no-op transition writes NO audit row
  */
@@ -1025,7 +1026,11 @@ describe("admin mutations — project-config writes", () => {
     await app.app.close();
   });
 
-  it("applies an ordinary development edit inline — reason only, no ritual", async () => {
+  it("applies an ordinary development edit with no ritual and no reason", async () => {
+    // The everyday path: a value and a Save button. The form carries no
+    // `confirm` and no `reason` because the panel does not render either for
+    // an edit this cheap, and the handler must not demand what it did not
+    // ask for. `audit_records.reason` is nullable for exactly this shape.
     const spy = vi.fn(async () => APPLIED);
     const app = await buildApp({
       row: destination(),
@@ -1041,15 +1046,66 @@ describe("admin mutations — project-config writes", () => {
         key: "rate_limit_rps",
         value: "5000",
         expected_updated_at: "",
-        reason: "raising the launch budget",
       }),
     });
     expect(res.statusCode).toBe(303);
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({ isSecret: false, value: 5000 }),
-      "raising the launch budget",
+      null,
       expect.anything(),
     );
+    await app.app.close();
+  });
+
+  it("lands on the Variables tab after a write, not the project overview", async () => {
+    // The panel is one tab of five now. A redirect that dropped the tab would
+    // return the operator to a page with no sign of the change they just made.
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(vi.fn(async () => APPLIED)),
+      project: PROJECT,
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/production/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({
+        namespace: "ingest",
+        key: "rate_limit_rps",
+        value: "5000",
+        expected_updated_at: "",
+      }),
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers["location"]).toBe("/admin/projects/storefront?tab=variables&env=production");
+    await app.app.close();
+  });
+
+  it("still demands the typed label AND a reason for a production secret", async () => {
+    // Dropping the reason from routine edits must not have dropped it from
+    // the ritual: these are the two shapes the ritual exists for.
+    const spy = vi.fn(async () => APPLIED);
+    const app = await buildApp({
+      row: destination(),
+      mutations: stubMutations(spy),
+      project: PROJECT,
+    });
+    const res = await app.app.inject({
+      method: "POST",
+      url: "/admin/projects/storefront/config/production/set",
+      headers: { ...FORM_HEADERS, cookie: sessionCookie("owner") },
+      payload: form({
+        namespace: "meta-capi",
+        key: "access_token",
+        value: "vault:polaris/production/meta",
+        secret: "true",
+        expected_updated_at: "",
+        confirm: "meta-capi.access_token",
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("at least 10 characters");
+    expect(spy).not.toHaveBeenCalled();
     await app.app.close();
   });
 });

@@ -236,7 +236,6 @@
     "packages/shared-project-config/src/assemble.ts::snapshotKey",
     "packages/shared-project-config/src/constants.ts::CONFIG_NOTIFY_CHANNEL",
     "packages/shared-project-config/src/constants.ts::DEFAULT_CACHE_CAPACITY",
-    "packages/shared-project-config/src/constants.ts::DEFAULT_SWEEP_INTERVAL_MS",
     "packages/shared-project-config/src/constants.ts::SWEEP_JITTER_RATIO",
     "packages/shared-project-config/src/errors.ts::PinMissingError",
     "packages/shared-project-config/src/errors.ts::ProjectConfigAssemblyError",

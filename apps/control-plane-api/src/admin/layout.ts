@@ -107,6 +107,58 @@ export function valueBadge(value: string | null | undefined): Html {
   return html`<span class="badge">${value}</span>`;
 }
 
+/**
+ * One entry in a page's tab strip.
+ *
+ * `count` is what makes tabs affordable. A tab hides its contents by
+ * definition, so a strip without counts costs the operator the one thing a
+ * long scrolling page gave away for free — whether there is anything in there
+ * at all. `alert` is the other half: a state that is *wrong* must not be
+ * discoverable only by clicking the tab it happens to live behind.
+ */
+export interface PageTab {
+  readonly label: string;
+  readonly href: string;
+  readonly current: boolean;
+  /** How many things are behind this tab. Rendered as a neutral chip. */
+  readonly count?: number | undefined;
+  /** How many of them are in a broken state, and what that state is. */
+  readonly alert?: { readonly count: number; readonly label: string } | undefined;
+}
+
+/**
+ * A page's tab strip: server-rendered links, not controls.
+ *
+ * Same reasoning as the environment pills inside the Variables panel — the
+ * panel ships no JavaScript, so switching section is a navigation, with a URL
+ * an operator can bookmark and paste into an incident channel. `aria-current`
+ * rather than `role="tab"` for exactly that reason: these are links to pages,
+ * and announcing them as a tablist would promise arrow-key behaviour that a
+ * document with no script cannot deliver.
+ *
+ * Underlines here, pills in the panel. The two levels have to look unalike:
+ * this row picks what the page is showing, the row inside Variables picks
+ * which environment's values are shown, and rendering both as pills invites
+ * reading them as one flat set of six choices.
+ */
+export function tabStrip(input: { label: string; tabs: readonly PageTab[] }): Html {
+  // One line per anchor, like the theme buttons above: the chips are flex
+  // siblings of the label, and a `<a>` broken across lines puts the source's
+  // own indentation between them on top of the gap the rule already sets.
+  const links = input.tabs.map((tab) => {
+    const alert = tab.alert;
+    const count =
+      tab.count === undefined ? null : html`<span class="tab-count">${String(tab.count)}</span>`;
+    const flag =
+      alert === undefined || alert.count === 0
+        ? null
+        : html`<span class="tab-count alert" title="${alert.label}">${String(alert.count)}</span>`;
+    return html`<a href="${tab.href}" class="${tab.current ? "tab current" : "tab"}" aria-current="${tab.current ? "page" : "false"}"><span>${tab.label}</span>${count}${flag}</a>`;
+  });
+
+  return html`<nav class="tabs" aria-label="${input.label}">${links}</nav>`;
+}
+
 /** The breadcrumb above the `h1`. Renders nothing when a page has no trail. */
 function crumbs(trail: readonly Crumb[] | undefined): Html | null {
   if (trail === undefined || trail.length === 0) return null;
@@ -228,6 +280,14 @@ export interface PageInput {
   /** One line under the `h1`: what this row is, and what state it is in. */
   readonly lede?: Html | undefined;
   /**
+   * Section tabs under the heading, from `tabStrip`.
+   *
+   * Chrome rather than body: it navigates between views of the same subject,
+   * which is the heading block's job, and putting it here means one rule owns
+   * the space between the title and whatever is showing.
+   */
+  readonly tabs?: Html | undefined;
+  /**
    * Controls acting on the thing the `h1` names, on the line beside it.
    *
    * A page's one destructive action belongs where its subject is named. Below
@@ -279,7 +339,7 @@ export function page(input: PageInput): string {
         </div>
         ${input.lede !== undefined ? html`<div class="page-lede">${input.lede}</div>` : null}
       </div>
-      ${input.body}
+      ${input.tabs ?? null} ${input.body}
     </main>
     <footer class="footer">
       <span>request ${ctx.requestId}</span>
@@ -568,23 +628,213 @@ form.filters label { display: flex; flex-direction: column; gap: 4px;
 }
 .action-form.inline input { width: auto; min-width: 96px; flex: 0 1 auto; }
 .action-form.inline input[type="number"] { min-width: 84px; }
+/* The value is the only field on an inline form now, so it gets the room the
+   reason box used to take — a hostname or a vault reference in a 96px input
+   was a scrollable slot you could not read back. */
+.action-form.inline input[name="value"] { min-width: 260px; flex: 1 1 260px; }
 .action-form.inline button { padding: 4px 10px; font-size: 12px; }
 .action-form label.checkbox {
   grid-template-columns: auto 1fr; align-items: center; gap: 8px; color: var(--text);
 }
 .action-form label.checkbox input { width: auto; }
-.panel { margin: 24px 0; }
-.panel > p { max-width: 78ch; }
-/* Environment tabs. Server-rendered links, not controls: the panel ships no
-   JavaScript, so switching environment is a navigation. */
-.env-tabs { display: flex; gap: 6px; margin: 12px 0 14px; flex-wrap: wrap; }
-.env-tab {
-  padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
-  background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
-  text-decoration: none;
+/* Page tabs. Links, not controls — see \`tabStrip\`. Underlined rather than
+   pilled so this row and the environment pills inside Variables never read as
+   one flat set of choices: this one picks what the page is showing, that one
+   picks whose values are shown. */
+.tabs {
+  display: flex; gap: 2px; flex-wrap: wrap;
+  margin: 0 0 22px; border-bottom: 1px solid var(--line);
 }
-.env-tab:hover { color: var(--text); }
-.env-tab.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tab {
+  display: flex; align-items: center; gap: 7px; white-space: nowrap;
+  padding: 9px 13px; color: var(--muted); font-size: 13px; font-weight: 600;
+  /* Pulled onto the strip's own rule, so the active underline replaces that
+     line rather than sitting a pixel below it. */
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); text-decoration: none; }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px 4px 0 0; }
+.tab.current { color: var(--text); border-bottom-color: var(--accent); }
+/* How many things are behind a tab, since a tab otherwise hides that. */
+.tab-count {
+  min-width: 21px; padding: 0 6px; border-radius: 999px; text-align: center;
+  background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 11px; font-weight: 600; color: var(--muted);
+}
+.tab.current .tab-count { color: var(--text); }
+/* How many of them are in a state someone has to do something about. Loud on
+   every tab, because the alternative is an operator finding out by clicking. */
+.tab-count.alert { background: var(--bad); border-color: var(--bad); color: #fff; }
+.panel { margin: 0 0 24px; }
+.panel > p { max-width: 78ch; }
+.panel-lede { margin-top: 0; }
+/* Segmented control. Server-rendered links, not controls: the panel ships no
+   JavaScript, so picking an environment is a navigation. One recessed track
+   with the current option raised out of it, rather than a row of loose pills
+   — the options are one choice, and loose pills read as several. */
+.seg {
+  display: inline-flex; gap: 2px; padding: 3px; margin: 14px 0 18px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+  flex-wrap: wrap;
+}
+.seg-option {
+  padding: 5px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  color: var(--muted); text-decoration: none; border: 1px solid transparent;
+}
+.seg-option:hover { color: var(--text); text-decoration: none; }
+.seg-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.seg-option.current {
+  background: var(--panel); color: var(--text);
+  border-color: var(--line); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* Search, filter, and the one button that creates something, on one line.
+   The button is at the far end because it is the only thing here that
+   writes; everything to its left only changes what is displayed. */
+.toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 18px 0 12px;
+}
+.toolbar-search { display: flex; align-items: center; gap: 6px; flex: 1 1 320px; }
+.toolbar-search input[type="search"] { flex: 1 1 200px; min-width: 160px; }
+.toolbar-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.toolbar-count { font-size: 12px; white-space: nowrap; }
+/* Available to a screen reader, absent from the layout. Used for labels on
+   controls a sighted operator reads from the placeholder. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* One component's keys. The heading is the namespace, because that is the
+   thing that reads them. */
+.var-groups { display: flex; flex-direction: column; gap: 20px; }
+.var-group-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 8px; padding: 0 2px;
+}
+.var-group-head h3 {
+  margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text);
+}
+.var-group-head span { font-size: 12px; }
+.var-list {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 9px; overflow: hidden;
+  background: var(--panel);
+}
+
+/* A key, read at rest and edited on demand.
+
+   A <details> per row rather than an input per row: the old table put every
+   key into edit mode at once, which is a wall of form fields on a page whose
+   commonest use is reading one number.
+
+   The editor expands the row instead of floating over it. A popover would be
+   clipped — any scroll container establishes one, and a confirmation card
+   half-hidden behind the edge of its own list is worse than no fold. */
+.var { border-bottom: 1px solid var(--line); }
+.var:last-child { border-bottom: none; }
+.var[open] { background: var(--panel-2); }
+.var-head {
+  display: grid; align-items: center; gap: 12px; padding: 11px 14px;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(140px, 1.4fr) auto 14px;
+  cursor: pointer; list-style: none; user-select: none;
+}
+/* Safari draws its own disclosure triangle unless this is turned off. */
+.var-head::-webkit-details-marker { display: none; }
+.var-head:hover { background: var(--panel-2); }
+.var-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.var-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.var-key code { font-size: 13px; color: var(--text); }
+.var-val { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.var-meta { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; }
+/* The disclosure chevron, drawn rather than typed. \`\u25be\` renders as a
+   4px smudge inside its em box at any size a row can afford, and its weight
+   varies by platform font; two borders rotated 45 degrees are crisp
+   everywhere and scale with the rule instead of with a typeface. */
+.var-caret {
+  width: 7px; height: 7px; justify-self: end; margin-top: -3px;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg); transition: transform 130ms ease, border-color 130ms ease;
+}
+.var-head:hover .var-caret { border-color: var(--text); }
+.var[open] .var-caret {
+  transform: rotate(225deg); margin-top: 2px; border-color: var(--text);
+}
+
+/* The value at rest. Truncated rather than wrapped: a row is one line high,
+   and the full value is one click away inside the editor. */
+.val {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%; font-size: 12px;
+}
+.val-default { color: var(--muted); }
+.val-empty { color: var(--muted); font-size: 12px; font-style: italic; }
+.val-missing { color: var(--bad); font-size: 12px; font-weight: 600; }
+.val-tag {
+  flex: none; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px;
+}
+/* A required key with no value is the reason someone opened this page. */
+.var-alert .var-head { box-shadow: inset 3px 0 0 var(--bad); }
+
+/* Type and flags, small enough to sit beside the key without competing. */
+.chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.chip {
+  font-size: 10px; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 4px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.var[open] .chip { background: var(--panel); }
+.chip-req { color: var(--warn-text); border-color: var(--warn-line); }
+.chip-secret { color: var(--accent); border-color: var(--accent); }
+.chip-unknown { color: var(--muted); border-style: dashed; }
+
+/* The opened editor. */
+/* \`flex-end\` so the Unset button lands on Save's line rather than floating
+   at the top of a form whose height depends on the field type. */
+.var-body {
+  display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;
+  padding: 4px 14px 16px; border-top: 1px solid var(--line);
+}
+.var-edit { display: grid; gap: 8px; flex: 1 1 380px; max-width: 620px; margin: 12px 0 0; }
+.var-edit > label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+.var-edit input, .var-edit select, .var-edit textarea { width: 100%; }
+.var-edit textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  resize: vertical;
+}
+.var-edit button { justify-self: start; }
+/* What the schema knows, under the field it constrains. */
+.field-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.field-hint code { font-size: 11px; color: var(--muted); }
+.var-unset { margin: 12px 0 0; }
+/* Destructive, and secondary to the thing the operator opened the row to do:
+   outlined until hovered, never a filled red button competing with Save. */
+.ghost-danger {
+  background: none; color: var(--bad); border: 1px solid var(--bad-line);
+  padding: 7px 14px; font-weight: 600;
+}
+.ghost-danger:hover { background: var(--bad); color: #fff; border-color: var(--bad); filter: none; }
+/* A ritual form inside an opened row is already a bordered card; it does not
+   need the row's padding on top of its own. */
+.var-body .action-form { margin: 12px 0 0; flex: 1 1 380px; }
+
+.empty-state {
+  padding: 40px 20px; text-align: center; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: 9px; margin: 0;
+}
+
+/* Below this the four-column row is wider than the screen. The value drops
+   under the key and the timestamp goes — it is the least urgent thing in
+   the row, and it is repeated inside the editor. */
+@media (max-width: 720px) {
+  .var-head { grid-template-columns: 1fr 14px; }
+  .var-val { grid-column: 1; }
+  .var-meta { display: none; }
+  .var-caret { grid-row: 1; grid-column: 2; align-self: start; }
+}
 .action-form .notice { margin-bottom: 0; }
 .action-form label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
 .action-form input { width: 100%; min-width: 0; }
@@ -602,6 +852,12 @@ form.filters label { display: flex; flex-direction: column; gap: 4px;
 .confirm-trigger::-webkit-details-marker { display: none; }
 .confirm-trigger:hover { border-color: var(--muted); }
 .confirm-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* The one control in a toolbar that creates something, styled like the
+   submit button it stands in for rather than like the neutral fold it is. */
+.confirm-trigger.primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+}
+.confirm-trigger.primary:hover { filter: brightness(1.08); border-color: var(--accent); }
 .confirm-trigger.danger { color: var(--bad); border-color: var(--bad-line); }
 .confirm-trigger.danger:hover { background: var(--bad); color: #fff; border-color: var(--bad); }
 /* The form itself is the box: lifted out of flow so opening it does not shove

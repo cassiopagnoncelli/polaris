@@ -432,7 +432,16 @@ Rules:
 
 Journeys emit `journey.entered`, `journey.step_advanced` and
 `journey.exited` onto `profile.events`, which lands them in
-`analytics_processed` like any other derived fact. A funnel is therefore a
+`analytics_processed` like any other derived fact.
+
+That last clause was false when this section was written, and the queries
+below returned nothing for two reasons at once. The sink routed
+`profile.events` ONLY into `profile_events_queue`, whose single materialized
+view filters `event = 'profile.updated'` — so every other event on the plane
+was discarded inside a `Null` table with the INSERT reporting success. And
+these queries named a column `properties`; the table's column is
+`properties_json`. Both are fixed; the query below was run against a real
+row before this paragraph was written. A funnel is therefore a
 query, not a new pipeline — and deliberately so: a projection maintained by
 the orchestrator would be a second count of the same participants, free to
 disagree with the events they came from.
@@ -443,10 +452,10 @@ Count DISTINCT participants per step, not rows. A participant emits one
 
 ```sql
 SELECT
-    JSONExtractString(properties, 'journey')                    AS journey,
-    JSONExtractUInt(properties, 'journey_version')              AS journey_version,
-    JSONExtractString(properties, 'step_id')                    AS step_id,
-    uniqExact(JSONExtractString(properties, 'profile_id'))      AS participants
+    JSONExtractString(properties_json, 'journey')                    AS journey,
+    JSONExtractUInt(properties_json, 'journey_version')              AS journey_version,
+    JSONExtractString(properties_json, 'step_id')                    AS step_id,
+    uniqExact(JSONExtractString(properties_json, 'profile_id'))      AS participants
 FROM polaris.analytics_processed
 WHERE project_id = {project:String}
   AND environment = {environment:String}
@@ -466,9 +475,9 @@ Exits split by reason, and the split is the interesting part:
 
 ```sql
 SELECT
-    JSONExtractString(properties, 'journey')  AS journey,
-    JSONExtractString(properties, 'reason')   AS reason,
-    uniqExact(JSONExtractString(properties, 'profile_id')) AS participants
+    JSONExtractString(properties_json, 'journey')  AS journey,
+    JSONExtractString(properties_json, 'reason')   AS reason,
+    uniqExact(JSONExtractString(properties_json, 'profile_id')) AS participants
 FROM polaris.analytics_processed
 WHERE project_id = {project:String}
   AND environment = {environment:String}

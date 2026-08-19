@@ -102,14 +102,22 @@ export interface AdminMutations {
     reason: string,
     actor: AdminActor,
   ): Promise<MutationOutcome>;
+  /**
+   * `reason` is nullable on these two alone.
+   *
+   * A routine value edit carries no typed confirmation and no written
+   * justification — see `MutationRequest.reason`. The other mutations here
+   * are all ritual-gated, so a `string` on their signatures is the contract,
+   * not an oversight.
+   */
   setProjectConfig(
     input: SetProjectConfigInput,
-    reason: string,
+    reason: string | null,
     actor: AdminActor,
   ): Promise<MutationOutcome>;
   unsetProjectConfig(
     input: UnsetProjectConfigInput,
-    reason: string,
+    reason: string | null,
     actor: AdminActor,
   ): Promise<MutationOutcome>;
   invalidateProjectConfig(
@@ -128,7 +136,7 @@ export class MutationTargetMissing extends Error {
 }
 
 export function createKyselyAdminMutations(db: Kysely<Database>): AdminMutations {
-  const context = (actor: AdminActor, reason: string): AuditContext => ({
+  const context = (actor: AdminActor, reason: string | null): AuditContext => ({
     auditId: actor.auditId,
     // Idp-authenticated operators map to `declared`: `audit_records
     // .actor_source` is a CHECK-constrained enum with no `idp` member, and

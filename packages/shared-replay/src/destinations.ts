@@ -45,16 +45,34 @@
  * Topic families whose contents reach vendor destinations.
  *
  * Kept as a literal rather than derived from `@polaris/shared-transport` so
- * this package stays dependency-free — it is a pure planner, and the one
- * consumer of that fact is `scripts/`-free unit testing. The trade is that a
- * new destination-feeding family must be added here too; the test suite pins
- * the current set so the omission is loud.
+ * this package stays dependency-free — it is a pure planner. The trade is
+ * that a new destination-feeding family must be added here too.
+ *
+ * ## This was wrong from the M6 retirement until 2026-08-19
+ *
+ * It listed `analytics.events`, decommissioned by 126EPNIQ, and omitted BOTH
+ * families destinations actually read. `topicFamilyReachesDestinations`
+ * answered `false` for `resolved.events` — the spine every vendor consumes —
+ * so a replay targeting it recorded `reachesDestinations: false` on its audit
+ * row while reaching all five vendors. A safety signal that is confidently
+ * inverted is worse than an absent one.
+ *
+ * The old comment claimed "the test suite pins the current set so the
+ * omission is loud". It did pin the set — to the wrong answer, as a literal
+ * with no tie to what destinations declare, so it passed through the
+ * retirement unchanged. `destinations.test.ts` now reads the consumers'
+ * own `inputFamily` declarations, which is the only version of that promise
+ * that can keep it.
  */
 const DESTINATION_REACHING_FAMILIES: ReadonlySet<string> = new Set([
-  // Consumed by analytics-projector, which republishes to analytics.events.
+  // Replay's default target. It re-enters the spine at stage 1, so it
+  // reaches destinations transitively through identity and enrichment.
   "raw.events",
-  // Consumed directly by every destination consumer.
-  "analytics.events",
+  // The spine. Read directly by all five destination consumers.
+  "resolved.events",
+  // The profile plane. Read by braze and webhook-sink, which act on
+  // audience membership and journey steps.
+  "profile.events",
 ]);
 
 /**
