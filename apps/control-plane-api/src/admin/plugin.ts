@@ -71,6 +71,7 @@ import { renderKeyDetailPage, renderKeysPage } from "./pages/keys.js";
 import { renderOverviewPage } from "./pages/overview.js";
 import {
   ACTIVATION_ENVIRONMENTS,
+  parseProcessorTab,
   renderActivationDetailPage,
   renderProcessorsPage,
 } from "./pages/processors.js";
@@ -1520,10 +1521,18 @@ export function createAdminPlugin(deps: AdminPluginDeps): FastifyPluginAsync {
             runs,
             projects: projects.map((p) => p.project_id),
             environments: ACTIVATION_ENVIRONMENTS,
+            // `name` rather than `processor`, so the filter shares its
+            // parameter with the activation-detail link the table's own rows
+            // already build — clicking through and coming back keeps the
+            // filter instead of quietly widening it.
             filters: {
+              processor: queryString(request, "name"),
               project: queryString(request, "project"),
               environment: queryString(request, "environment"),
+              state: queryString(request, "state"),
+              status: queryString(request, "status"),
             },
+            tab: parseProcessorTab(queryString(request, "tab")),
           }),
         );
       });

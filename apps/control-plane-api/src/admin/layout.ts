@@ -603,11 +603,39 @@ td.wrap, th.wrap { white-space: normal; }
 .linkcard .d { color: var(--muted); font-size: 12px; }
 .provenance { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 22px;
               color: var(--muted); font-size: 12px; }
+/* The filter bar.
+
+   One recessed strip rather than loose controls on the page background: it
+   reads as a single instrument acting on the table below it, and it stops a
+   row of four selects from looking like a form the operator has to fill in
+   before anything will show. */
 form.filters {
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px;
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+  margin-bottom: 14px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
 }
-form.filters label { display: flex; flex-direction: column; gap: 4px;
-                     font-size: 12px; color: var(--muted); }
+form.filters label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.05em; font-weight: 600;
+}
+form.filters select, form.filters input { min-width: 170px; }
+/* Pushed to the far end, so the controls read left-to-right and the two
+   things that act on them are together and last. */
+.filter-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* A checkbox is one line, not a caption above a control. */
+form.filters label.filter-check {
+  flex-direction: row; align-items: center; gap: 7px;
+  text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500;
+  color: var(--text); align-self: center;
+}
+form.filters label.filter-check input { min-width: auto; }
+/* How much of the table the filter is hiding, said once above it. */
+.filter-count { margin: 0 0 10px; font-size: 12px; }
+/* Explanatory copy, held to a readable measure. A table wants the full 1400px
+   the layout allows; a paragraph explaining it does not — at that width the
+   eye loses the line it was on coming back from the right edge. */
+.prose { max-width: 92ch; }
 /* A mutation form is a gate, not a filter bar: one field per line, at a width
    that shows the whole confirmation string being typed, inside a card whose
    border says how far the danger extends. */

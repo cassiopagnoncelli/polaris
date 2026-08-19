@@ -26,10 +26,18 @@
 
 import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
 import { type Html, html } from "../html.js";
-import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
+import {
+  type AdminPageContext,
+  emptyRow,
+  envBadge,
+  mono,
+  page,
+  statusBadge,
+  tabStrip,
+} from "../layout.js";
 import type { ProcessorActivationRow, ProcessorRunRow } from "../queries.js";
 import { ADMIN_PREFIX } from "../session.js";
-import { filterForm, selectField, textField } from "./filters.js";
+import { filterForm, selectField } from "./filters.js";
 import { formatInstant } from "./format.js";
 
 /**
@@ -160,10 +168,54 @@ const NO_RUNS =
   "No processor has started since run recording landed. A row appears here " +
   "when a processor boots and reaches PostgreSQL.";
 
-/** Filter values the processors page reads from the query string. */
+/**
+ * Which of the two questions the page is answering.
+ *
+ * Intent and reality were stacked in one column, so reading "what is
+ * switched off" meant scrolling past a matrix that is versions x projects x
+ * environments — capped at 500 rows precisely because it gets that big. They
+ * are separate questions asked at separate times, which is what a tab is
+ * for. `activations` leads because it is the one an operator can act on.
+ */
+const PROCESSOR_TABS = ["activations", "runs"] as const;
+
+export type ProcessorTab = (typeof PROCESSOR_TABS)[number];
+
+const PROCESSOR_TAB_LABELS: Readonly<Record<ProcessorTab, string>> = {
+  activations: "Activations",
+  runs: "Recent runs",
+};
+
+/** Falls back rather than 404s — a tab is a display affordance, not a write. */
+export function parseProcessorTab(raw: string | undefined): ProcessorTab {
+  const candidate = (raw ?? "").trim();
+  return (PROCESSOR_TABS as readonly string[]).includes(candidate)
+    ? (candidate as ProcessorTab)
+    : "activations";
+}
+
+/** The state axis, as an operator would name it rather than as it is stored. */
+export const ACTIVATION_STATES = ["enabled", "disabled", "default"] as const;
+
+/** Statuses a run row can carry, for the runs filter. */
+export const RUN_STATUSES = ["running", "completed", "failed"] as const;
+
+/**
+ * Filter values the processors page reads from the query string.
+ *
+ * `processor` and `state` are the two that were missing, and they are the
+ * two an incident actually asks for: "what is switched off" and "show me
+ * this one processor". Without them the only way to answer either was to
+ * read 500 rows.
+ */
 export interface ProcessorFilterValues {
+  readonly processor: string;
   readonly project: string;
   readonly environment: string;
+  /** "", "enabled", "disabled", or "default". */
+  readonly state: string;
+  /** Runs tab only: "", "running", "completed", "failed". */
+  readonly status: string;
 }
 
 /**
@@ -179,10 +231,46 @@ export function applyActivationFilters(
   filters: ProcessorFilterValues,
 ): readonly ActivationCell[] {
   return cells.filter((cell) => {
+    if (filters.processor.length > 0 && cell.processor_name !== filters.processor) return false;
     if (filters.project.length > 0 && cell.project_id !== filters.project) return false;
     if (filters.environment.length > 0 && cell.environment !== filters.environment) return false;
+    // "enabled" means explicitly enabled, and excludes the default. An
+    // operator filtering for `enabled` is looking for decisions somebody
+    // made; folding the defaults in would return almost the whole matrix and
+    // answer a question nobody asked.
+    if (filters.state.length > 0) {
+      const wanted = filters.state === "default" ? "default_enabled" : filters.state;
+      if (cell.state !== wanted) return false;
+    }
     return true;
   });
+}
+
+/** The same, for the runs tab. */
+export function applyRunFilters(
+  runs: readonly ProcessorRunRow[],
+  filters: ProcessorFilterValues,
+): readonly ProcessorRunRow[] {
+  return runs.filter((run) => {
+    if (filters.processor.length > 0 && run.processor_name !== filters.processor) return false;
+    // A run's environment is nullable — a cross-project run records none.
+    // Filtering by environment must therefore drop it rather than match it,
+    // or "development" would silently include runs of unknown environment.
+    if (filters.environment.length > 0 && run.environment !== filters.environment) return false;
+    if (filters.status.length > 0 && run.status !== filters.status) return false;
+    return true;
+  });
+}
+
+/** Every processor name the control plane has seen, for the filter menu. */
+function knownProcessors(
+  activations: readonly ProcessorActivationRow[],
+  runs: readonly ProcessorRunRow[],
+): readonly string[] {
+  const names = new Set<string>();
+  for (const row of activations) names.add(row.processor_name);
+  for (const row of runs) names.add(row.processor_name);
+  return [...names].sort();
 }
 
 export function renderProcessorsPage(input: {
@@ -192,14 +280,81 @@ export function renderProcessorsPage(input: {
   projects: readonly string[];
   environments: readonly string[];
   filters: ProcessorFilterValues;
+  tab?: ProcessorTab | undefined;
 }): string {
-  const running = countRunningByProcessor(input.runs);
+  const tab = input.tab ?? "activations";
+  const base = `${ADMIN_PREFIX}/processors`;
+
   const allCells = buildActivationMatrix({
     activations: input.activations,
     runs: input.runs,
     projects: input.projects,
     environments: input.environments,
   });
+
+  // Counted over everything, never over what survived the filter: a tab
+  // badge that moves when you change a select is not telling you how much
+  // there is, and the disabled count in particular has to mean the same
+  // thing from either tab.
+  const disabled = allCells.filter((cell) => cell.state === "disabled").length;
+  const failed = input.runs.filter((run) => run.status === "failed").length;
+
+  const href = (target: ProcessorTab): string =>
+    target === "activations" ? base : `${base}?tab=${target}`;
+
+  const tabs = tabStrip({
+    label: "Processor views",
+    tabs: [
+      {
+        label: PROCESSOR_TAB_LABELS.activations,
+        href: href("activations"),
+        current: tab === "activations",
+        count: allCells.length,
+        alert: {
+          count: disabled,
+          label: `${disabled} ${disabled === 1 ? "combination is" : "combinations are"} explicitly disabled`,
+        },
+      },
+      {
+        label: PROCESSOR_TAB_LABELS.runs,
+        href: href("runs"),
+        current: tab === "runs",
+        count: input.runs.length,
+        alert: {
+          count: failed,
+          label: `${failed} ${failed === 1 ? "run" : "runs"} failed`,
+        },
+      },
+    ],
+  });
+
+  return page({
+    ctx: input.ctx,
+    title: tab === "activations" ? "Processors" : "Processors · Recent runs",
+    heading: "Processors",
+    lede: html`Operator intent, and what is actually running.`,
+    tabs,
+    body: tab === "runs" ? renderRunsTab(input, base) : renderActivationsTab(input, base, allCells),
+  });
+}
+
+/**
+ * Intent: every combination and the state somebody did or did not choose.
+ *
+ * The explanation of what the three states mean stays on this tab rather
+ * than above the strip. It is only true of this table, and a page-level
+ * paragraph that describes one of two tabs is read on the wrong one.
+ */
+function renderActivationsTab(
+  input: {
+    activations: readonly ProcessorActivationRow[];
+    runs: readonly ProcessorRunRow[];
+    filters: ProcessorFilterValues;
+  },
+  base: string,
+  allCells: readonly ActivationCell[],
+): Html {
+  const running = countRunningByProcessor(input.runs);
   const cells = applyActivationFilters(allCells, input.filters);
 
   // The matrix is versions x projects x environments, so it grows fast:
@@ -216,9 +371,12 @@ export function renderProcessorsPage(input: {
   const shown = ordered.slice(0, ACTIVATION_MATRIX_LIMIT);
   const omitted = ordered.length - shown.length;
 
-  const activationRows =
+  const rows =
     cells.length === 0
-      ? emptyRow(8, NO_ACTIVATIONS)
+      ? emptyRow(
+          8,
+          allCells.length === 0 ? NO_ACTIVATIONS : "No combination matches these filters.",
+        )
       : shown.map(
           (row) => html`<tr>
             <td>
@@ -234,10 +392,93 @@ export function renderProcessorsPage(input: {
           </tr>`,
         );
 
-  const runRows =
-    input.runs.length === 0
-      ? emptyRow(9, NO_RUNS)
-      : input.runs.map(
+  return html`
+    <p class="muted prose">
+      Every (processor, version, project, environment) combination has a state
+      here, whether or not anyone has decided one.
+      <strong>enabled (default)</strong> means no activation row exists — which
+      is RUNNING, because the gate only closes on an explicit disable. A
+      <strong>disabled</strong> row stops that processor from acting on that
+      project's events, within about ten seconds. <strong>Running</strong> is
+      the process itself: a disabled scope still shows as running, because the
+      process stays up and skips those events rather than exiting.
+    </p>
+
+    ${filterForm(base, [
+      selectField(
+        "name",
+        "Processor",
+        knownProcessors(input.activations, input.runs),
+        input.filters.processor,
+        "any processor",
+      ),
+      selectField(
+        "project",
+        "Project",
+        projectOptions(allCells),
+        input.filters.project,
+        "any project",
+      ),
+      selectField(
+        "environment",
+        "Environment",
+        ACTIVATION_ENVIRONMENTS,
+        input.filters.environment,
+        "any environment",
+      ),
+      selectField("state", "State", ACTIVATION_STATES, input.filters.state, "any state"),
+    ])}
+
+    ${
+      omitted > 0
+        ? html`<p class="notice">
+            Showing ${String(shown.length)} of ${String(ordered.length)}
+            combinations — ${String(omitted)} omitted. Every explicit decision
+            is shown; the omitted rows are all
+            <strong>enabled (default)</strong>. Narrow the filters above to see
+            them.
+          </p>`
+        : null
+    }
+    ${countLine(cells.length, allCells.length, "combination", "combinations")}
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Processor</th>
+            <th>Version</th>
+            <th>Project</th>
+            <th>Environment</th>
+            <th>State</th>
+            <th>Running</th>
+            <th>Changed</th>
+            <th>By</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/** Reality: what started, where, and how it went. */
+function renderRunsTab(
+  input: {
+    activations: readonly ProcessorActivationRow[];
+    runs: readonly ProcessorRunRow[];
+    filters: ProcessorFilterValues;
+  },
+  base: string,
+): Html {
+  const runs = applyRunFilters(input.runs, input.filters);
+
+  const rows =
+    runs.length === 0
+      ? emptyRow(9, input.runs.length === 0 ? NO_RUNS : "No run matches these filters.")
+      : runs.map(
           (row) => html`<tr>
             <td>${mono(row.run_id)}</td>
             <td>${mono(row.processor_name)}</td>
@@ -254,95 +495,85 @@ export function renderProcessorsPage(input: {
           </tr>`,
         );
 
-  return page({
-    ctx: input.ctx,
-    title: "Processors",
-    body: html`
-      <p class="muted">
-        Every (processor, version, project, environment) combination has a
-        state here, whether or not anyone has decided one.
-        <strong>enabled (default)</strong> means no activation row exists —
-        which is RUNNING, because the gate only closes on an explicit
-        disable.
-        A <strong>disabled</strong> row stops that processor from acting on
-        that project's events, within about ten seconds.
-        <strong>Running</strong> is the process itself: a
-        disabled scope still shows as running, because the process stays up
-        and skips those events rather than exiting.
-      </p>
+  return html`
+    <p class="muted prose">
+      What actually started, on which host, since when — written by each
+      processor's boot layer, not by an operator. A run stays
+      <em>running</em> while the process is up, whatever any activation says
+      about it.
+    </p>
 
-      <h2>Activations</h2>
-      ${filterForm(`${ADMIN_PREFIX}/processors`, [
-        textField("project", "Project", input.filters.project),
+    ${filterForm(
+      base,
+      [
+        selectField(
+          "name",
+          "Processor",
+          knownProcessors(input.activations, input.runs),
+          input.filters.processor,
+          "any processor",
+        ),
         selectField(
           "environment",
           "Environment",
           ACTIVATION_ENVIRONMENTS,
           input.filters.environment,
+          "any environment",
         ),
-      ])}
-      ${
-        omitted > 0
-          ? html`<p class="notice">
-              Showing ${String(shown.length)} of ${String(ordered.length)}
-              combinations — ${String(omitted)} omitted. Every explicit
-              decision is shown; the omitted rows are all
-              <strong>enabled (default)</strong>.
-            </p>`
-          : html``
-      }
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Processor</th>
-              <th>Version</th>
-              <th>Project</th>
-              <th>Environment</th>
-              <th>State</th>
-              <th>Running</th>
-              <th>Changed</th>
-              <th>By</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${activationRows}
-          </tbody>
-        </table>
-      </div>
+        selectField("status", "Status", RUN_STATUSES, input.filters.status, "any status"),
+      ],
+      { tab: "runs" },
+    )}
+    ${countLine(runs.length, input.runs.length, "run", "runs")}
 
-      <h2 style="margin-top:24px">Recent runs</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Run</th>
-              <th>Processor</th>
-              <th>Version</th>
-              <th>Environment</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Finished</th>
-              <th>Consumed / emitted / failed</th>
-              <th>Host</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${runRows}
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" style="margin-top:16px">
-        Per-run counters are running totals for that process, flushed every 15
-        seconds, so a <em>running</em> row can trail reality by about that
-        long. They are triage context beside a run, not a metrics surface —
-        throughput, lag, retry, and DLQ <em>rates</em> are in the Grafana
-        <em>polaris-processors</em> dashboard. Processor semantics live in
-        each processor's <code>processor.manifest.yaml</code>, not in the
-        database.
-      </p>
-    `,
-  });
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Processor</th>
+            <th>Version</th>
+            <th>Environment</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Finished</th>
+            <th>Consumed / emitted / failed</th>
+            <th>Host</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted prose">
+      Per-run counters are running totals for that process, flushed every 15
+      seconds, so a <em>running</em> row can trail reality by about that long.
+      They are triage context beside a run, not a metrics surface —
+      throughput, lag, retry, and DLQ <em>rates</em> are in the Grafana
+      <em>polaris-processors</em> dashboard. Processor semantics live in each
+      processor's <code>processor.manifest.yaml</code>, not in the database.
+    </p>
+  `;
+}
+
+/**
+ * "12 of 240" — rendered only when a filter is actually hiding something.
+ *
+ * A filtered table and an empty one look identical once the controls have
+ * scrolled off, and the difference matters: one means "nothing here", the
+ * other means "nothing here that you asked for".
+ */
+function countLine(shown: number, total: number, one: string, many: string): Html | null {
+  if (shown === total) return null;
+  return html`<p class="muted filter-count">
+    ${String(shown)} of ${String(total)} ${total === 1 ? one : many}
+  </p>`;
+}
+
+/** Projects that actually appear in the matrix, for the project menu. */
+function projectOptions(cells: readonly ActivationCell[]): readonly string[] {
+  return [...new Set(cells.map((cell) => cell.project_id))].sort();
 }
 
 /**

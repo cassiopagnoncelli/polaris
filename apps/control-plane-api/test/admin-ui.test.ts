@@ -793,11 +793,11 @@ describe("admin UI — processors page", () => {
     last_changed_by: "cli",
   };
 
-  async function fetchPage(overrides: Partial<AdminQueries>) {
+  async function fetchPage(overrides: Partial<AdminQueries>, query = "") {
     const app = await buildApp({ queries: makeQueries(overrides) });
     const res = await app.app.inject({
       method: "GET",
-      url: "/admin/processors",
+      url: `/admin/processors${query.length > 0 ? `?${query}` : ""}`,
       headers: { cookie: sessionCookie("admin-token") },
     });
     await app.app.close();
@@ -824,13 +824,24 @@ describe("admin UI — processors page", () => {
   });
 
   it("marks an activation as running when a run row is open for it", async () => {
+    // The Running column is on the Activations tab: it is the intent table
+    // telling you whether the process behind that intent is actually up.
     const res = await fetchPage({
       listProcessorActivations: async () => [ACTIVATION],
       listProcessorRuns: async () => [RUN],
     });
     expect(res.body).toContain("1 running");
-    expect(res.body).toContain("pod-7");
-    expect(res.body).toContain(RUN.run_id);
+
+    // The run itself — its id and the host it is on — is the other tab.
+    const runs = await fetchPage(
+      {
+        listProcessorActivations: async () => [ACTIVATION],
+        listProcessorRuns: async () => [RUN],
+      },
+      "tab=runs",
+    );
+    expect(runs.body).toContain("pod-7");
+    expect(runs.body).toContain(RUN.run_id);
   });
 
   it("counts only open runs as running", async () => {
@@ -855,8 +866,13 @@ describe("admin UI — processors page", () => {
     expect(res.body).toContain("(default)");
     // Still reachable, so the operator can turn it off from here.
     expect(res.body).toContain("/admin/processors/activation?name=analytics-projector");
-    // And the run itself is still listed.
-    expect(res.body).toContain(RUN.run_id);
+
+    // And the run itself is still listed, one tab over.
+    const runs = await fetchPage(
+      { listProcessorActivations: async () => [], listProcessorRuns: async () => [RUN] },
+      "tab=runs",
+    );
+    expect(runs.body).toContain(RUN.run_id);
   });
 
   it("distinguishes an explicit decision from the default", async () => {
@@ -919,6 +935,58 @@ describe("admin UI — processors page", () => {
     await app.app.close();
     return res;
   }
+
+  it("filters the matrix by state, which is the question an incident asks", async () => {
+    // "What is switched off" had no control at all: the only way to answer it
+    // was to read a table capped at 500 rows. `enabled` deliberately excludes
+    // the default — an operator filtering for it wants decisions somebody
+    // made, and folding the defaults in would return nearly the whole matrix.
+    const disabled = await fetchPage(
+      { listProcessorActivations: async () => [{ ...ACTIVATION, enabled_state: "disabled" }] },
+      "state=disabled",
+    );
+    expect(disabled.body).toContain("analytics-projector");
+    // One disabled row out of the whole (version x project x environment)
+    // matrix. Asserting the count line rather than the absence of
+    // "(default)": that string is also in the paragraph above the table,
+    // which explains what the state means and is not a row.
+    expect(disabled.body).toContain("1 of 3 combinations");
+
+    const explicit = await fetchPage(
+      { listProcessorActivations: async () => [{ ...ACTIVATION, enabled_state: "disabled" }] },
+      "state=enabled",
+    );
+    expect(explicit.body).toContain("No combination matches these filters.");
+  });
+
+  it("filters the matrix by processor name", async () => {
+    const res = await fetchPage(
+      { listProcessorActivations: async () => [ACTIVATION], listProcessorRuns: async () => [RUN] },
+      "name=nonexistent-processor",
+    );
+    expect(res.body).toContain("No combination matches these filters.");
+  });
+
+  it("filters runs by status, and says how many it is hiding", async () => {
+    const res = await fetchPage(
+      {
+        listProcessorActivations: async () => [ACTIVATION],
+        listProcessorRuns: async () => [RUN, { ...RUN, run_id: "run_2", status: "failed" }],
+      },
+      "tab=runs&status=failed",
+    );
+    expect(res.body).toContain("run_2");
+    expect(res.body).not.toContain(RUN.run_id);
+    expect(res.body).toContain("1 of 2 runs");
+  });
+
+  it("keeps the tab when a runs filter is submitted", async () => {
+    // A filter form replaces the whole query string, so the tab has to ride
+    // along as a hidden field or filtering throws the operator back to
+    // Activations — which is a filter nobody uses twice.
+    const res = await fetchPage({ listProcessorRuns: async () => [RUN] }, "tab=runs");
+    expect(res.body).toContain('<input type="hidden" name="tab" value="runs"');
+  });
 
   it("states what a disabled row actually does, and what a default means", async () => {
     const res = await fetchPage({ listProcessorActivations: async () => [ACTIVATION] });
