@@ -108,6 +108,20 @@ jobs:
       - name: Project-config schemas in sync, and additive-only
         run: pnpm config-schemas:check
 
+      # The meta-gate: break something each check is supposed to notice, run
+      # it, require a non-zero exit, restore. "A check nobody has watched fail
+      # is a check nobody knows works" -- and three of the checks in this
+      # repository once passed on the exact bug they were written for.
+      #
+      # It ran nowhere until now, which made it the same kind of artifact as
+      # the checks it is meant to police. Six seconds for thirteen gates.
+      #
+      # It refuses on a dirty tree because it restores with `git checkout`.
+      # That holds here: `--frozen-lockfile` cannot rewrite the lockfile and
+      # every build output is gitignored.
+      - name: Prove every gate can fail
+        run: pnpm verify:gates
+
   test:
     name: Tests (unit + contract + catalog)
     runs-on: ubuntu-latest

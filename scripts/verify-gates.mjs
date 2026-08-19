@@ -53,6 +53,15 @@ const DEAD_EXPORT_CANARY = `never${"Called"}CanaryXyz`;
 const ENV_READ_CANARY = `POLARIS_${"CANARY"}_XYZ`;
 const ENV_DOC_CANARY = `POLARIS_${"DRIFT"}_CANARY`;
 
+/**
+ * The retired path, assembled for the reason above — and this one caught
+ * itself. Written as a literal, `lint-retired-paths` correctly reported two
+ * violations in THIS file, so the gate went permanently red the moment its
+ * own entry was added. Same failure as the dead-export and env-doc canaries,
+ * one check later.
+ */
+const RETIRED_PATH_CANARY = `consumers${"/"}<vendor>/v<n>/mappers/`;
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -115,6 +124,18 @@ const GATES = [
       ),
     assertInjected: () =>
       read("catalog/traits/orders-30d.ts").includes("FROM polaris.analytics_raw"),
+  },
+  {
+    // Injected into a DOC rather than into source: the check scans both, and
+    // a doc is the surface it exists for — the ninety references it found
+    // were overwhelmingly prose, and the two in CLI help strings were the
+    // ones an operator actually followed.
+    name: "lint:retired-paths",
+    command: "node scripts/lint-retired-paths.mjs",
+    files: ["docs/architecture/00-overview.md"],
+    inject: () =>
+      append("docs/architecture/00-overview.md", `\nMappers live in ${RETIRED_PATH_CANARY}.\n`),
+    assertInjected: () => read("docs/architecture/00-overview.md").includes(RETIRED_PATH_CANARY),
   },
   {
     name: "lint:metric-names (dashboard)",
@@ -217,7 +238,24 @@ function main() {
 
   const blind = [];
   const unlanded = [];
+  const alreadyRed = [];
   for (const gate of GATES) {
+    // Green BEFORE the fault, or "fails as it should" means nothing.
+    //
+    // A gate that is already failing on a clean tree fails again with the
+    // fault injected, and this harness reported it verified. That is not
+    // hypothetical: adding `lint:retired-paths` to this roster made the
+    // harness itself carry a retired path as a literal canary, the gate went
+    // permanently red, and it still printed "fails as it should". The whole
+    // claim of this script is that a gate answers DIFFERENTLY with and
+    // without the fault, and only one of those two answers was being read.
+    try {
+      sh(gate.command);
+    } catch {
+      alreadyRed.push(gate.name);
+      console.log(`  ALREADY FAILING, not tested  ${gate.name}`);
+      continue;
+    }
     gate.inject();
     if (!gate.assertInjected()) {
       unlanded.push(gate.name);
@@ -235,6 +273,14 @@ function main() {
     console.log(`  ${failed ? "fails as it should" : "PASSED WITH THE FAULT"}  ${gate.name}`);
   }
 
+  if (alreadyRed.length > 0) {
+    console.error("\nverify-gates: these gates were red on a clean tree, so injecting a fault");
+    console.error("proves nothing about them:");
+    for (const name of alreadyRed) console.error(`  ${name}`);
+    console.error("Fix the gate first, then re-run.");
+    process.exitCode = 1;
+  }
+
   if (unlanded.length > 0) {
     console.error("\nverify-gates: an injection did not land, so these gates were not tested:");
     for (const name of unlanded) console.error(`  ${name}`);
@@ -247,9 +293,20 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  if (unlanded.length === 0) {
+  // Only claim the full roster when the full roster was actually tested. A
+  // run that skipped a gate — because its injection did not land, or because
+  // it was already red — printed the same success line as a clean run, which
+  // is the failure this script exists to refuse in the checks it polices.
+  const skipped = unlanded.length + alreadyRed.length;
+  if (skipped === 0) {
     console.log(`\nverify-gates: all ${String(GATES.length)} gates fail when they should.`);
+    return;
   }
+  console.error(
+    `\nverify-gates: ${String(GATES.length - skipped)} of ${String(GATES.length)} gates ` +
+      `tested; ${String(skipped)} skipped and proven nothing.`,
+  );
+  process.exitCode = 1;
 }
 
 main();
