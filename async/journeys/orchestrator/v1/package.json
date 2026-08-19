@@ -13,7 +13,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "POLARIS_SERVICE_NAME=journey-orchestrator POLARIS_HTTP_PORT=4023 tsx watch src/main.ts",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@polaris/audience-catalog": "workspace:*",
@@ -21,6 +23,11 @@
     "@polaris/shared-db": "workspace:*",
     "@polaris/shared-logger": "workspace:*",
     "kysely": "^0.29.0",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "@polaris/shared-config": "workspace:*",
+    "@polaris/shared-metrics": "workspace:*",
+    "@polaris/shared-processor": "workspace:*",
+    "@polaris/shared-service-bootstrap": "workspace:*",
+    "@polaris/shared-transport": "workspace:*"
   }
 }

@@ -25,8 +25,13 @@ inputs:
   # consumer is the transparency exemplar, so it reads the family that
   # carries the profile and enrichment blocks the identity and enrichment
   # stages wrote — a receiver pointed here sees what a vendor mapper sees.
-  # The other four vendors stay on analytics.events until MVKUP64R.
+  #
+  # Two families, for the same reason Braze reads two: the spine carries
+  # what customers DID, the profile plane carries what is now TRUE of them
+  # — audience membership and journey steps (UTHXL). An exemplar showing
+  # only half of what a destination receives would be a poor exemplar.
   - resolved.events
+  - profile.events
 
 outputs:
   # Webhook sinks do not emit canonical Polaris events back into the

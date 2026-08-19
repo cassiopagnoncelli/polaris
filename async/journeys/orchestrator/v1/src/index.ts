@@ -25,4 +25,21 @@ export {
   type JourneyRepository,
   type ParticipantRow,
 } from "./repository.js";
+export {
+  applyToRepository,
+  type HandleEventDeps,
+  type HandleEventResult,
+  handleEvent,
+  type IncomingEvent,
+  type OutgoingEffect,
+  PROCESSOR_NAME,
+  PROCESSOR_VERSION,
+  toOutgoing,
+  triggerMatches,
+} from "./runtime.js";
 export { definitionKey, type SweepInput, type SweepResult, sweep } from "./sweep.js";
+export { buildJourneyOrchestratorApp } from "./app.js";
+export {
+  type JourneyOrchestratorRuntimeConfig,
+  loadJourneyOrchestratorConfig,
+} from "./config.js";

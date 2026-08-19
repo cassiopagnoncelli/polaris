@@ -186,6 +186,14 @@ scrape_configs:
   # they are written down. `docs/development/observability.md` carries the
   # same table.
   # ---------------------------------------------------------------
+  - job_name: polaris-journey-orchestrator
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:4023"]
+        labels:
+          polaris_service: journey-orchestrator
+          polaris_component: processor
+
   - job_name: polaris-archiver
     metrics_path: /metrics
     static_configs:

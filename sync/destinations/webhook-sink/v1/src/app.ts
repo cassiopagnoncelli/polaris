@@ -19,7 +19,10 @@ import {
   buildDestinationHost,
   type DestinationHostOverrides,
 } from "@polaris/destination-host";
-import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/shared-transport";
+import {
+  STREAM_FAMILY_PROFILE_EVENTS,
+  STREAM_FAMILY_RESOLVED_EVENTS,
+} from "@polaris/shared-transport";
 
 import type { WebhookSinkRuntimeConfig } from "./config.js";
 import { createWebhookSinkDescriptor } from "./descriptor.js";
@@ -46,7 +49,13 @@ export async function buildWebhookSinkApp(options: BuildAppOptions): Promise<Bui
     projectConfigNamespace: PROJECT_CONFIG_NAMESPACE,
     // WE77L4R8: the transparency exemplar reads the spine's output, so a
     // receiver pointed here sees exactly what a vendor mapper sees.
-    inputFamily: STREAM_FAMILY_RESOLVED_EVENTS,
+    //
+    // Two families, for the same reason Braze reads two: the spine carries
+    // what customers DID, the profile plane carries what is now TRUE of
+    // them — audience membership and journey steps. An exemplar that showed
+    // only half of what a destination receives would be a poor exemplar,
+    // and journeys would have no destination to demonstrate against.
+    inputFamily: [STREAM_FAMILY_RESOLVED_EVENTS, STREAM_FAMILY_PROFILE_EVENTS],
     allowReplay: config.sink.allowReplay,
     consumerGroup: config.sink.consumerGroup,
     description:

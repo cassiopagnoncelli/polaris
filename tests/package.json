@@ -16,6 +16,8 @@
     "@polaris/shared-transport": "workspace:*",
     "@polaris/sync-enrichment-traits-v1": "workspace:*",
     "@polaris/sync-identity-resolver-v1": "workspace:*",
-    "kysely": "^0.29.0"
+    "kysely": "^0.29.0",
+    "@polaris/journey-catalog": "workspace:*",
+    "@polaris/processor-journey-orchestrator-v1": "workspace:*"
   }
 }

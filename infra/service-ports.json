@@ -35,7 +35,8 @@
     "ga4": 5002,
     "tiktok": 5003,
     "braze": 5004,
-    "clickhouse-sink": 5010
+    "clickhouse-sink": 5010,
+    "journey-orchestrator": 4023
   },
   "packageForService": {
     "ingester-api": "@polaris/ingester-api",
@@ -52,6 +53,7 @@
     "ga4": "@polaris/consumer-ga4-v1",
     "tiktok": "@polaris/consumer-tiktok-v1",
     "braze": "@polaris/consumer-braze-v1",
-    "clickhouse-sink": "@polaris/consumer-clickhouse-sink-v1"
+    "clickhouse-sink": "@polaris/consumer-clickhouse-sink-v1",
+    "journey-orchestrator": "@polaris/processor-journey-orchestrator-v1"
   }
 }

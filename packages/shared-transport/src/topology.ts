@@ -201,6 +201,9 @@ export const POLARIS_COMPONENTS = [
   // dropped, so the symptom is an empty DLQ, which reads as "nothing has
   // ever failed".
   "archiver",
+  // Journey orchestrator (UTHXL). Consumes resolved.events + profile.events
+  // and dead-letters like any consumer, so it needs its own retry/DLQ set.
+  "journey-orchestrator",
   "sessionizer",
   "attribution-engine",
   "clickhouse-sink",

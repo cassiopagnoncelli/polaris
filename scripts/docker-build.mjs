@@ -85,6 +85,11 @@ export const services = [
     image: "polaris/processor-archiver-v1",
   },
   {
+    name: "journey-orchestrator",
+    dockerfile: "async/journeys/orchestrator/v1/Dockerfile",
+    image: "polaris/processor-journey-orchestrator-v1",
+  },
+  {
     name: "clickhouse-sink",
     dockerfile: "async/warehouse/clickhouse-sink/v1/Dockerfile",
     image: "polaris/consumer-clickhouse-sink-v1",

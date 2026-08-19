@@ -66,19 +66,11 @@ export function buildJourneysSweepRunner(hooks: JourneysSweepHooks = {}) {
       throw new UsageError(`--limit must be an integer in [1, ${String(MAX_LIMIT)}]`);
     }
 
-    const run = hooks.runSweep;
-    if (run === undefined) {
-      // The command is wired to its runtime in the orchestrator's own
-      // bootstrap, which owns the producer that emits the effects. Refusing
-      // here rather than silently doing nothing keeps a crontab honest: a
-      // sweep that reported success while advancing nobody is exactly the
-      // shape of failure this repository keeps finding.
-      throw new UsageError(
-        "journeys sweep is not wired in this build: it needs the orchestrator's producer to " +
-          "emit the journey.* effects it produces. Run it through the orchestrator service.",
-      );
-    }
-
+    // Default: build the orchestrator with its runtime stopped and drive one
+    // sweep through it. The service owns the producer that publishes the
+    // effects, so borrowing it is what makes a cron invocation equivalent to
+    // the in-service loop rather than a second, differently-wired path.
+    const run = hooks.runSweep ?? defaultRunSweep;
     const summary = await run({ ctx, environment, limit });
 
     ctx.logger.info({ audit_action: "journeys.sweep", ...summary }, "journey sweep finished");
@@ -97,6 +89,60 @@ export function buildJourneysSweepRunner(hooks: JourneysSweepHooks = {}) {
     );
     return undefined;
   };
+}
+
+/**
+ * Drive one sweep through a non-consuming orchestrator instance.
+ *
+ * `startRuntime: false` and `sweepIntervalMs: 0`: this process subscribes
+ * to nothing and starts no timer. It connects a producer, claims the due
+ * participants, publishes their effects and exits — which is what a crontab
+ * wants, and it reuses the service's own publish path rather than a second
+ * copy of it that could drift.
+ */
+async function defaultRunSweep(input: {
+  readonly ctx: CommandContext;
+  readonly environment: string;
+  readonly limit: number;
+}): Promise<JourneysSweepSummary> {
+  const { buildJourneyOrchestratorApp, loadJourneyOrchestratorConfig } = await import(
+    "@polaris/processor-journey-orchestrator-v1"
+  );
+
+  // The orchestrator's config demands the same env every service does, and
+  // `serviceName` in the loader only labels errors — it does not supply
+  // `POLARIS_SERVICE_NAME`. A cron invocation is standing in FOR the
+  // service here, so it declares the same identity rather than inventing a
+  // second config path that could drift from the one the service uses.
+  process.env["POLARIS_SERVICE_NAME"] ??= "journey-orchestrator";
+  // The service port from infra/service-ports.json. This process starts no
+  // listener it needs —  — but the config schema wants
+  // a valid port, and borrowing a second one would put a number in a third
+  // place the port registry does not know about.
+  process.env["POLARIS_HTTP_PORT"] ??= "4023";
+
+  const config = loadJourneyOrchestratorConfig();
+  const app = await buildJourneyOrchestratorApp({
+    config,
+    startRuntime: false,
+    installShutdown: false,
+    sweepIntervalMs: 0,
+  });
+  try {
+    // `--env` is the DATA environment and is honoured here. It was being
+    // accepted and ignored, so a sweep read whichever environment the
+    // process happened to run in.
+    const result = await app.runSweepOnce({ limit: input.limit, environment: input.environment });
+    return {
+      environment: input.environment,
+      claimed: result.claimed,
+      advanced: result.advanced,
+      orphaned: result.orphaned,
+      emitted: result.emitted,
+    };
+  } finally {
+    await app.bootstrap.shutdown().catch(() => undefined);
+  }
 }
 
 export const journeysSweepCommand: CommandDefinition = {
