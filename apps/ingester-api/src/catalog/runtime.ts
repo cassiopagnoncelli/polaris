@@ -11,7 +11,7 @@ import {
  * Wrapper around the file-backed event catalog loader.
  *
  * The catalog is **file-backed** by design (`docs/instructions/claude.md`
- * "File-Heavy, DB-Light"): YAML metadata under `catalog/events/**` plus
+ * "File-Heavy, DB-Light"): YAML metadata under `definitions/events/**` plus
  * code-backed Zod schemas registered in `defaultSchemaBindings`. This
  * helper resolves the on-disk root once at startup and merges the two
  * pieces into a runtime `EventCatalog` the ingester handler queries on
@@ -22,12 +22,12 @@ import {
  * "Schema Governance"). Reloading would also race with in-flight events.
  */
 
-/** Resolve the default `catalog/events/` root for this repository layout. */
+/** Resolve the default `definitions/events/` root for this repository layout. */
 export function resolveDefaultCatalogRoot(): string {
   // `import.meta.url` points at this file under `apps/ingester-api/src/`.
   // The catalog root lives at the worktree root, four directories up.
   const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, "..", "..", "..", "..", "catalog", "events");
+  return resolve(here, "..", "..", "..", "..", "definitions", "events");
 }
 
 /**

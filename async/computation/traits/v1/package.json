@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris traits runner v1. Evaluates the definitions in catalog/traits/ against the sanctioned ClickHouse projections, diffs each computed value against the profile's current traits, and writes only what changed \u2014 bumping traits_version and emitting trait.computed / profile.updated on profile.events. No long-lived service: `polaris traits compute` is the entrypoint. Its description was sessionizer v2's, verbatim, until 2026-08-19.",
+  "description": "Polaris traits runner v1. Evaluates the definitions in definitions/traits/ against the sanctioned ClickHouse projections, diffs each computed value against the profile's current traits, and writes only what changed \u2014 bumping traits_version and emitting trait.computed / profile.updated on profile.events. No long-lived service: `polaris traits compute` is the entrypoint. Its description was sessionizer v2's, verbatim, until 2026-08-19.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

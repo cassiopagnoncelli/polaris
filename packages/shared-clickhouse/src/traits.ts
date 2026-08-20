@@ -7,7 +7,7 @@
  *
  * ## This is not an escape hatch
  *
- * The SQL is not operator input. It comes from `catalog/traits/`, which is
+ * The SQL is not operator input. It comes from `definitions/traits/`, which is
  * versioned code, and `scripts/lint-trait-sql.mjs` refuses any definition
  * reading a table outside the projection allowlist — `analytics_raw` and
  * `analytics_processed` in particular. So a definition cannot become a full
@@ -33,7 +33,7 @@ export interface TraitQueryRow {
 
 export interface TraitQueryReader {
   run(input: {
-    /** From `catalog/traits/`. Code, lint-constrained to projections. */
+    /** From `definitions/traits/`. Code, lint-constrained to projections. */
     readonly sql: string;
     readonly projectId: string;
     readonly environment: string;

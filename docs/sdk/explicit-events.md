@@ -58,7 +58,7 @@ For a Node service that renders pages, the Web SDK fires `page.viewed` from the 
 | `referrer` | `document.referrer`, or `null` when empty. |
 | `route` | The router's named route, if you have one. |
 
-Define the schema in `catalog/events/page/viewed.<version>.ts` and validate against it through the standard catalog flow.
+Define the schema in `definitions/events/page/viewed.<version>.ts` and validate against it through the standard catalog flow.
 
 ## What about UTM/campaign?
 

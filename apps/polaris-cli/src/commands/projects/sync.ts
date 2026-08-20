@@ -1,7 +1,7 @@
 /**
  * `polaris projects sync` — mutates: true.
  *
- * Materializes `catalog/projects/*.yaml` declarations into the `projects`
+ * Materializes `definitions/projects/*.yaml` declarations into the `projects`
  * PostgreSQL table. The planner is pure — it builds a diff first, then the
  * command either prints the diff (`--dry-run`) or applies it inside a single
  * transaction.
@@ -39,7 +39,7 @@ export const projectsSyncCommand: CommandDefinition = {
   register: (parent, deps) => {
     parent
       .command("sync")
-      .description("Materialize catalog/projects/*.yaml into PostgreSQL.")
+      .description("Materialize definitions/projects/*.yaml into PostgreSQL.")
       .option("--dry-run", "Show the planned diff without writing to PostgreSQL.")
       .option(
         "--catalog-root <path>",

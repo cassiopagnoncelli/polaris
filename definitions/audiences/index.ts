@@ -4,7 +4,7 @@
  * Every audience the platform computes. Adding one means adding a module
  * and a line here — a diff a reviewer can read, rather than a directory
  * scan whose contents depend on what happens to be on disk. Same contract
- * as `catalog/traits/index.ts` and `catalog/policy/index.ts`.
+ * as `definitions/traits/index.ts` and `definitions/policy/index.ts`.
  *
  * Definitions are code and deploy-time. What an audience MEANS is versioned
  * with the repository; only MEMBERSHIP — which profile is in it right now —

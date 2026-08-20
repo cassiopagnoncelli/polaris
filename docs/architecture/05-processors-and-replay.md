@@ -242,7 +242,7 @@ window.
 **The resolution: per-project semantic parameters are allowed, in the
 catalog, never in PostgreSQL.**
 
-`catalog/projects/<project_id>.yaml` already declares file-backed
+`definitions/projects/<project_id>.yaml` already declares file-backed
 semantics that `polaris projects sync` materialises into a database row
 — the file's own header says "semantic membership stays in this file".
 A per-project window belongs there for the same reason: it is versioned
@@ -251,7 +251,7 @@ reading the catalog at the same commit. A `processor_activations`-style
 row could not do any of that.
 
 ```yaml
-# catalog/projects/storefront.yaml
+# definitions/projects/storefront.yaml
 processors:
   attribution-engine:
     attribution_window_seconds: 2592000   # 30 days, narrower than the default

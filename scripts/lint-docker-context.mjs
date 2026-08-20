@@ -10,11 +10,14 @@
 // Because the two halves are edited a quarter apart by people solving
 // unrelated problems, and neither half is wrong on its own.
 //
-// `9a5da8d` (2026-05-14) pruned `catalog` from the context as a "local-only
-// ops file", which it was: a tree of YAML read by nothing that shipped.
-// `5d98d57` (2026-08-14) taught the identity and enrichment images to read
-// per-project overrides out of `catalog/projects/`, and added the COPY that
-// carries them in. The first commit is still a correct thing to have wanted.
+// `9a5da8d` (2026-05-14) pruned `definitions` from the context as a
+// "local-only ops file", which it was: a tree of YAML read by nothing that
+// shipped. `5d98d57` (2026-08-14) taught the identity and enrichment images
+// to read per-project overrides out of `definitions/projects/`, and added the
+// COPY that carries them in. (The directory answered to `catalog` for both of
+// those commits; `0DIPB` renamed it. The paths here are its current name,
+// because a check's examples that name a dead directory are the very thing
+// `lint-retired-paths` exists to refuse.) The first commit is still a correct thing to have wanted.
 // The second one is too. Together they produce two images that cannot build,
 // and nothing said so for six days, because nothing in CI builds an image.
 //
@@ -26,9 +29,9 @@
 //
 // Every `COPY`/`ADD` in every Dockerfile, resolved back to the build context:
 //
-//   1. DIRECT — `COPY catalog/projects /app/...`. The source is a context
+//   1. DIRECT — `COPY definitions/projects /app/...`. The source is a context
 //      path. Excluded means broken.
-//   2. THROUGH A STAGE — `COPY --from=builder /workspace/catalog/projects
+//   2. THROUGH A STAGE — `COPY --from=builder /workspace/definitions/projects
 //      /app/...`, where the builder did `WORKDIR /workspace` and `COPY . .`.
 //      The path is one indirection from the context and breaks identically.
 //      This is the shape the bug had, and a check that only understood the
@@ -169,8 +172,8 @@ function selfAndAncestors(path) {
  * Whether the build context excludes `path`, and which rule decided.
  *
  * Excluding a directory prunes everything beneath it, so a path is tested
- * along with each of its ancestors — `catalog/projects` is excluded by the
- * rule `catalog`. Last match wins, ancestors included, which is docker's
+ * along with each of its ancestors — `definitions/projects` is excluded by
+ * the rule `definitions`. Last match wins, ancestors included, which is docker's
  * `MatchesOrParentMatches`.
  */
 export function contextStatus(path, rules) {

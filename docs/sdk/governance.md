@@ -65,7 +65,7 @@ The platform applies a **two-tier code-backed policy** at ingestion:
 - **Reject list** — fields whose mere presence indicates a producer bug. The entire event is rejected with reason `forbidden_field_rejected`.
 - **Redact list** — fields where the producer can legitimately send the value but the raw form must not be stored. The field is replaced with `"[REDACTED:<reason>]"` and the event continues.
 
-The default principle is **default-capture, narrow-reject** — only `pii_card` and `pii_secret` rules block capture. Everything else passes through; projects in regulated environments may add stricter redaction rules in `catalog/policy/forbidden-fields.<project_id>.ts`.
+The default principle is **default-capture, narrow-reject** — only `pii_card` and `pii_secret` rules block capture. Everything else passes through; projects in regulated environments may add stricter redaction rules in `definitions/policy/forbidden-fields.<project_id>.ts`.
 
 ### What the SDK does and does not do
 
@@ -74,7 +74,7 @@ The default principle is **default-capture, narrow-reject** — only `pii_card` 
 - A producer that includes a reject-listed field gets the whole event back with `forbidden_field_rejected` (a permanent rejection — the SDK drops the event and does not retry).
 - A producer that includes a redact-listed field gets the event accepted, but downstream the field value is `"[REDACTED:<reason>]"`.
 
-This is intentional. Centralising the policy in `catalog/policy/forbidden-fields.ts` means SDK upgrades do not change rejection semantics. Producers have one source of truth.
+This is intentional. Centralising the policy in `definitions/policy/forbidden-fields.ts` means SDK upgrades do not change rejection semantics. Producers have one source of truth.
 
 ### Common reject-listed fields (platform defaults)
 

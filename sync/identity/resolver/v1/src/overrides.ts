@@ -2,7 +2,7 @@
  * Boot-time loader for per-project identity overrides.
  *
  * Reads the OPTIONAL `identity:` block from every
- * `catalog/projects/<project_id>.yaml` and returns the map that
+ * `definitions/projects/<project_id>.yaml` and returns the map that
  * `buildSyncIdentityApp` feeds into the policy resolver. This is the
  * production channel for the identifier denylist and the narrowed
  * semantic parameters — without it the safeguards exist as code with no
@@ -10,11 +10,11 @@
  *
  * Failure behaviour is asymmetric on purpose:
  *
- *   - a MISSING catalog directory is a warning, not an error. Local runs
- *     and tests boot from directories that carry no catalog, and the
+ *   - a MISSING `definitions/` directory is a warning, not an error. Local
+ *     runs and tests boot from directories that carry no definitions, and the
  *     correct policy there is manifest defaults for every project. The
  *     boot log states the override count either way, so a production
- *     image that lost its catalog is visible in one line.
+ *     image that lost its definitions is visible in one line.
  *   - a MALFORMED block fails the boot. The schema is `.strict()`
  *     (`@polaris/shared-policy`): a typo'd key must not become a
  *     safeguard that is silently not installed. Bounds are then checked
@@ -33,7 +33,7 @@ import {
 import { parse as parseYaml } from "yaml";
 
 export interface LoadOverridesOptions {
-  /** Directory containing `catalog/projects/`. */
+  /** Directory containing `definitions/projects/`. */
   readonly root: string;
   readonly logger: Logger;
 }
@@ -41,13 +41,13 @@ export interface LoadOverridesOptions {
 export function loadProjectIdentityOverrides(
   options: LoadOverridesOptions,
 ): ReadonlyMap<string, ProjectIdentityOverride> {
-  const projectsDir = join(options.root, "catalog", "projects");
+  const projectsDir = join(options.root, "definitions", "projects");
   const overrides = new Map<string, ProjectIdentityOverride>();
 
   if (!existsSync(projectsDir)) {
     options.logger.warn(
       { component: "sync-identity.overrides", projects_dir: projectsDir },
-      "no catalog/projects directory; every project runs manifest-default identity policy",
+      "no definitions/projects directory; every project runs manifest-default identity policy",
     );
     return overrides;
   }

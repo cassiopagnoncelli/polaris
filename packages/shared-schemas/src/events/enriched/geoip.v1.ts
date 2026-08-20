@@ -15,7 +15,7 @@ import { z } from "zod";
  * entry stays: a replay of archived `enriched.events` NDJSON validates the
  * bytes it reads back against this shape, and deleting it would make those
  * events unreadable rather than merely un-producible. See
- * `catalog/events/enriched/geoip.v1.yaml`.
+ * `definitions/events/enriched/geoip.v1.yaml`.
  *
  * The capability moved rather than ended — `sync/enrichment/geoip/v1/`
  * writes the same lookup onto the event's own `enrichment` block on

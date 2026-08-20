@@ -11,7 +11,7 @@
 # consumer can compute dwell time without keeping its own ledger.
 #
 # Note that an exit also fires when a trait the predicate reads goes
-# ABSENT. Per catalog/traits, absent means "not computed", not zero, so a
+# ABSENT. Per definitions/traits, absent means "not computed", not zero, so a
 # trait that fails to compute empties every audience built on it. That is
 # intended: an audience whose input is unknown has no defensible
 # membership, and holding the previous population would keep vendors

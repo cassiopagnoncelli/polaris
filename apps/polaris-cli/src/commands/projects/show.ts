@@ -25,7 +25,7 @@ export const projectsShowCommand: CommandDefinition = {
     const cmd = parent
       .command("show <project_id>")
       .description("Show one project from PostgreSQL (or the catalog with --from-catalog).")
-      .option("--from-catalog", "Read declaration from catalog/projects/ instead of PostgreSQL.")
+      .option("--from-catalog", "Read declaration from definitions/projects/ instead of PostgreSQL.")
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",
@@ -53,7 +53,7 @@ async function runProjectsShow(
     const catalog = loadCatalog({ root });
     const match = catalog.projects.find((p) => p.project_id === projectId);
     if (match === undefined) {
-      throw new UsageError(`project "${projectId}" is not declared under catalog/projects/`);
+      throw new UsageError(`project "${projectId}" is not declared under definitions/projects/`);
     }
     emit(ctx, "catalog", match);
     return;

@@ -2,12 +2,12 @@
  * Boot-time loader for per-project enrichment overrides.
  *
  * Reads the OPTIONAL `enrichment:` block from every
- * `catalog/projects/<project_id>.yaml`. Same contract, same failure
+ * `definitions/projects/<project_id>.yaml`. Same contract, same failure
  * asymmetry, and the same reasons as the identity stage's loader
  * (`sync/identity/resolver/v1/src/overrides.ts`):
  *
- *   - a MISSING catalog directory is a warning. Local runs and tests
- *     boot from directories that carry no catalog, and manifest defaults
+ *   - a MISSING `definitions/` directory is a warning. Local runs and tests
+ *     boot from directories that carry no definitions, and manifest defaults
  *     for every project is the right answer there.
  *   - a MALFORMED block fails the boot. The schema is `.strict()`, so a
  *     typo'd key cannot quietly become a limit nobody applied.
@@ -30,7 +30,7 @@ import {
 import { parse as parseYaml } from "yaml";
 
 export interface LoadOverridesOptions {
-  /** Directory containing `catalog/projects/`. */
+  /** Directory containing `definitions/projects/`. */
   readonly root: string;
   readonly logger: Logger;
 }
@@ -38,13 +38,13 @@ export interface LoadOverridesOptions {
 export function loadProjectEnrichmentOverrides(
   options: LoadOverridesOptions,
 ): ReadonlyMap<string, ProjectEnrichmentOverride> {
-  const projectsDir = join(options.root, "catalog", "projects");
+  const projectsDir = join(options.root, "definitions", "projects");
   const overrides = new Map<string, ProjectEnrichmentOverride>();
 
   if (!existsSync(projectsDir)) {
     options.logger.warn(
       { component: "sync-enrichment.overrides", projects_dir: projectsDir },
-      "no catalog/projects directory; every project runs manifest-default enrichment policy",
+      "no definitions/projects directory; every project runs manifest-default enrichment policy",
     );
     return overrides;
   }

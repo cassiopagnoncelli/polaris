@@ -18,7 +18,7 @@ function writeYaml(path: string, contents: string): void {
 
 function seedCatalog(root: string): void {
   writeYaml(
-    join(root, "catalog/projects/storefront.yaml"),
+    join(root, "definitions/projects/storefront.yaml"),
     [
       "project_id: storefront",
       "display_name: Storefront",
@@ -28,7 +28,7 @@ function seedCatalog(root: string): void {
     ].join("\n"),
   );
   writeYaml(
-    join(root, "catalog/projects/internal.yaml"),
+    join(root, "definitions/projects/internal.yaml"),
     [
       "project_id: internal",
       "display_name: Internal Tools",
@@ -37,7 +37,7 @@ function seedCatalog(root: string): void {
     ].join("\n"),
   );
   writeYaml(
-    join(root, "catalog/sources/storefront/storefront-web.yaml"),
+    join(root, "definitions/sources/storefront/storefront-web.yaml"),
     [
       "project_id: storefront",
       "source_id: storefront-web",
@@ -79,7 +79,7 @@ describe("loadCatalog", () => {
 
   it("defaults status to active and runtime to active when omitted", () => {
     writeYaml(
-      join(tmp, "catalog/projects/internal.yaml"),
+      join(tmp, "definitions/projects/internal.yaml"),
       [
         "project_id: internal",
         "display_name: Internal",
@@ -93,7 +93,7 @@ describe("loadCatalog", () => {
 
   it("rejects a project file whose filename does not match project_id", () => {
     writeYaml(
-      join(tmp, "catalog/projects/storefront.yaml"),
+      join(tmp, "definitions/projects/storefront.yaml"),
       [
         "project_id: not-matching",
         "display_name: Mismatch",
@@ -107,7 +107,7 @@ describe("loadCatalog", () => {
   it("rejects a source under the wrong project directory", () => {
     seedCatalog(tmp);
     writeYaml(
-      join(tmp, "catalog/sources/storefront/wrong-project.yaml"),
+      join(tmp, "definitions/sources/storefront/wrong-project.yaml"),
       [
         "project_id: internal",
         "source_id: wrong-project",
@@ -124,7 +124,7 @@ describe("loadCatalog", () => {
   it("rejects a source under an unknown project", () => {
     seedCatalog(tmp);
     writeYaml(
-      join(tmp, "catalog/sources/unknown-project/x.yaml"),
+      join(tmp, "definitions/sources/unknown-project/x.yaml"),
       [
         "project_id: unknown-project",
         "source_id: x",
@@ -141,7 +141,7 @@ describe("loadCatalog", () => {
   it("rejects unknown source_type values", () => {
     seedCatalog(tmp);
     writeYaml(
-      join(tmp, "catalog/sources/storefront/oddball.yaml"),
+      join(tmp, "definitions/sources/storefront/oddball.yaml"),
       [
         "project_id: storefront",
         "source_id: oddball",
@@ -158,7 +158,7 @@ describe("loadCatalog", () => {
   it("rejects duplicate environments in allowed_environments", () => {
     seedCatalog(tmp);
     writeYaml(
-      join(tmp, "catalog/sources/storefront/dup.yaml"),
+      join(tmp, "definitions/sources/storefront/dup.yaml"),
       [
         "project_id: storefront",
         "source_id: dup",
@@ -176,7 +176,7 @@ describe("loadCatalog", () => {
   it("rejects empty allowed_environments", () => {
     seedCatalog(tmp);
     writeYaml(
-      join(tmp, "catalog/sources/storefront/empty.yaml"),
+      join(tmp, "definitions/sources/storefront/empty.yaml"),
       [
         "project_id: storefront",
         "source_id: empty",
@@ -195,7 +195,7 @@ describe("resolveCatalogRoot", () => {
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), "polaris-root-"));
-    mkdirSync(join(tmp, "catalog"), { recursive: true });
+    mkdirSync(join(tmp, "definitions"), { recursive: true });
   });
 
   afterEach(() => {

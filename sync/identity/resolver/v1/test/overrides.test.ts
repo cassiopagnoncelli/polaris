@@ -4,8 +4,8 @@
  *
  *   - a declared `identity:` block reaches the policy map;
  *   - a project without one is absent (manifest defaults downstream);
- *   - a missing catalog directory degrades to defaults with a warning,
- *     because local runs boot from directories that carry no catalog;
+ *   - a missing `definitions/` directory degrades to defaults with a
+ *     warning, because local runs boot from directories that carry none;
  *   - a typo'd block fails the boot instead of silently not installing a
  *     safeguard.
  */
@@ -37,7 +37,7 @@ describe("identity override loader", () => {
     expect(overrides.has("bare")).toBe(false);
   });
 
-  it("returns an empty map when the catalog directory does not exist", () => {
+  it("returns an empty map when the definitions directory does not exist", () => {
     const overrides = loadProjectIdentityOverrides({
       root: join(HERE, "fixtures", "no-such-root"),
       logger: silentLogger,

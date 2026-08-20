@@ -9,7 +9,7 @@
  * defaults regardless of what its override file said.
  *
  * Registration is an explicit line here, not a directory scan — same
- * contract as `catalog/traits/index.ts`. Adding a project override means
+ * contract as `definitions/traits/index.ts`. Adding a project override means
  * adding a module and a line, a diff a reviewer can read, rather than
  * behaviour that depends on what happens to be on disk at boot.
  *

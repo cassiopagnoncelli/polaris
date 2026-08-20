@@ -11,7 +11,7 @@ import {
 /**
  * In-memory event catalog.
  *
- * The catalog reads YAML lifecycle metadata from `catalog/events/**` and
+ * The catalog reads YAML lifecycle metadata from `definitions/events/**` and
  * merges in Zod property schemas supplied programmatically through
  * {@link SchemaBinding}s. YAML is the source of truth for lifecycle
  * (`active`/`deprecated`, `sunset_at`) and human metadata; Zod schemas

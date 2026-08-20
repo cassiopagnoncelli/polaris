@@ -3,7 +3,7 @@
  *
  * Semantic parameters come from the manifest's declared defaults; a
  * project may NARROW them — and declare its identifier denylist — in the
- * `identity:` block of `catalog/projects/<id>.yaml`, but never widen
+ * `identity:` block of `definitions/projects/<id>.yaml`, but never widen
  * them past the manifest's bounds. The block's shape is pinned by
  * `@polaris/shared-policy` so the CLI's catalog validation and this
  * stage's boot loader (`overrides.ts`) cannot drift.

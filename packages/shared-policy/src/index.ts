@@ -17,13 +17,13 @@
  *     `polaris_ingest_redacted_pattern_total{project_id, environment, reason, pattern}`
  *
  * Project overrides live alongside the platform policy at
- * `catalog/policy/forbidden-fields.<project_id>.ts`. The merge logic in
+ * `definitions/policy/forbidden-fields.<project_id>.ts`. The merge logic in
  * this package enforces the documented downgrade rule: project overrides
  * may not weaken a platform reject to a redact without an explicit
  * `documentedExceptions` entry.
  *
  * The package also owns the per-project identity-override contract
- * (`identity.ts`): the `identity:` block of `catalog/projects/<id>.yaml`,
+ * (`identity.ts`): the `identity:` block of `definitions/projects/<id>.yaml`,
  * shared by the CLI's catalog validation and the identity stage's boot
  * loader so the two cannot drift.
  */

@@ -56,7 +56,7 @@ import { argMaxProjection, assertNoFinal, sumProjection } from "./internal/sql.j
  *   ReplacingMergeTree   events, profiles, merge_map      argMax by version
  *   SummingMergeTree     the three *_daily_* projections  sum
  *
- * The projection names match `READABLE_PROJECTIONS` in `catalog/traits`
+ * The projection names match `READABLE_PROJECTIONS` in `definitions/traits`
  * and `ALLOWED_TABLES` in `lint-trait-sql.mjs` — the same three tables a
  * computed trait may read, which is not a coincidence: they are the
  * tables that exist to be read by something other than the pipeline.

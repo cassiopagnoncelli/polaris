@@ -2,7 +2,7 @@
  * Polaris identity stage (sync/identity/resolver v1) binary entry point.
  *
  * Runs at container start (`node dist/main.js`). Loads runtime config,
- * loads the per-project identity overrides from `catalog/projects/`
+ * loads the per-project identity overrides from `definitions/projects/`
  * (the denylist and narrowed semantic parameters — see `overrides.ts`),
  * builds the Fastify shell + Kysely + transport consumer/producer +
  * streaming runtime via `buildSyncIdentityApp`, starts the HTTP

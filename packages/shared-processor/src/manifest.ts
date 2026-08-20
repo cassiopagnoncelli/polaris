@@ -171,7 +171,7 @@ export type ProcessorFixture = z.infer<typeof processorFixtureSchema>;
  * Per `docs/architecture/05-processors-and-replay.md`
  * § "Per-Project Semantic Parameters", these live in the manifest (never
  * `project_config`, never env) with a declared default and bounds. A
- * project may NARROW one in `catalog/projects/<id>.yaml`; it may never
+ * project may NARROW one in `definitions/projects/<id>.yaml`; it may never
  * widen it, and introducing the capability at all requires a new
  * processor version.
  *

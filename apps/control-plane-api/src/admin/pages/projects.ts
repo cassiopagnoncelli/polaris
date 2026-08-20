@@ -18,8 +18,8 @@
  * hiding a table does not hide whether it is empty; anything actually broken
  * behind a tab shows as a red count on it from every other tab.
  *
- * Neither page offers create or edit. `catalog/projects/*.yaml` and
- * `catalog/sources/**` are the source of truth — Postgres holds a
+ * Neither page offers create or edit. `definitions/projects/*.yaml` and
+ * `definitions/sources/**` are the source of truth — Postgres holds a
  * materialised mirror that `polaris projects sync` refreshes one way. A UI
  * that wrote either would fork the source of truth against git; a UI that ran
  * `sync` would apply whatever YAML happens to be baked into this container's
@@ -59,7 +59,7 @@ export function renderProjectsPage(input: {
 
   const rows =
     input.projects.length === 0
-      ? emptyRow(6, "No projects. Add one under catalog/projects/ and run `polaris projects sync`.")
+      ? emptyRow(6, "No projects. Add one under definitions/projects/ and run `polaris projects sync`.")
       : input.projects.map(
           (project) => html`<tr>
             <td>
@@ -349,7 +349,7 @@ function renderSourcesTab(sources: readonly SourceRow[]): Html {
   return html`
     <p class="muted">
       Where this project's events come from. Declared in
-      <code>catalog/sources/</code> and mirrored here by
+      <code>definitions/sources/</code> and mirrored here by
       <code>polaris projects sync</code> — this page reads that mirror and
       never writes it, so a source is added by merging the YAML, not from a
       browser.

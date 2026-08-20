@@ -17,7 +17,7 @@ version: v1
 owner: platform-data
 release_status: released
 description: |
-  Walks profiles through the versioned step graphs in `catalog/journeys/`.
+  Walks profiles through the versioned step graphs in `definitions/journeys/`.
 
   A journey is a graph of waits, branches, actions and exits. This service
   owns none of those semantics: `engine.ts` decides them in memory and is

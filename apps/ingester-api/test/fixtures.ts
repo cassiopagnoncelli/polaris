@@ -201,7 +201,7 @@ export class RecordingProducer {
  * `checkout.started` v1. Bindings come from `@polaris/shared-schemas`.
  *
  * Reusing the default schema bindings against synthetic YAML entries
- * keeps tests independent of the on-disk `catalog/events/**` tree —
+ * keeps tests independent of the on-disk `definitions/events/**` tree —
  * they only depend on the catalog *types* and the schema *bindings*.
  */
 export function buildTestCatalog(): EventCatalog {
@@ -242,7 +242,7 @@ export function buildTestCatalog(): EventCatalog {
   // event is registered — and until it is, every ingester test fails with
   // a catalog error unrelated to what it was testing. Deriving the
   // remainder keeps the original intent (tests depend on the catalog TYPES
-  // and the schema BINDINGS, never on the on-disk `catalog/events/**`
+  // and the schema BINDINGS, never on the on-disk `definitions/events/**`
   // tree) while making that whole class of breakage impossible.
   const covered = new Set(explicit.map((e) => `${e.name}@${e.schema_version}`));
   const derived: CatalogEntryFile[] = defaultSchemaBindings

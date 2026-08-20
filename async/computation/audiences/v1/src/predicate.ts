@@ -7,7 +7,7 @@
  *
  * ## Absent is not zero, and not false
  *
- * `catalog/traits/types.ts` is explicit: a profile with no value for a
+ * `definitions/traits/types.ts` is explicit: a profile with no value for a
  * trait has no value, and that differs from having the value zero. The
  * runner writes absence as a removal rather than a default for exactly
  * this reason.

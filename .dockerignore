@@ -70,20 +70,20 @@ scripts/smoke
 tests
 resources/maxmind
 
-# `catalog` is not on that list, and cannot go back on it.
+# `definitions` is not on that list, and cannot go back on it.
 #
-# It was, from `9a5da8d` until the commit that removed it, and the reason was
-# good at the time: the directory held declared YAML that no shipped code
-# read. It is source now, in two separate ways, and each one breaks a build
+# It was, from `9a5da8d` until the commit that removed it -- under its former
+# name `catalog`, which `0DIPB` retired -- and the reason was good at the
+# time: the directory held declared YAML that no shipped code read. It is source now, in two separate ways, and each one breaks a build
 # on its own.
 #
-#   - Five subdirectories are pnpm workspace packages -- `catalog/traits`,
-#     `catalog/policy`, `catalog/audiences`, `catalog/journeys`,
-#     `catalog/reverse-etl`. apps/ingester-api, apps/polaris-cli,
+#   - Five subdirectories are pnpm workspace packages -- `definitions/traits`,
+#     `definitions/policy`, `definitions/audiences`, `definitions/journeys`,
+#     `definitions/reverse-etl`. apps/ingester-api, apps/polaris-cli,
 #     async/journeys/orchestrator/v1 and packages/destination-host depend on
 #     them with `workspace:*`, so the builder cannot compile those images
 #     without the directory present.
-#   - `catalog/projects/<id>.yaml` carries the per-project identity and
+#   - `definitions/projects/<id>.yaml` carries the per-project identity and
 #     enrichment overrides -- the identifier denylist among them -- which
 #     sync/identity/resolver/v1 and sync/enrichment/runtime/v1 COPY out of
 #     the builder into the runtime image.

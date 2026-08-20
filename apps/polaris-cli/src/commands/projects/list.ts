@@ -3,7 +3,7 @@
  *
  * Renders the materialized `projects` table when PostgreSQL is reachable.
  * When the `--from-catalog` flag is passed (or no DB connection is configured)
- * the command falls back to reading `catalog/projects/*.yaml` directly so
+ * the command falls back to reading `definitions/projects/*.yaml` directly so
  * operators can inspect declarations on a fresh laptop before any sync has
  * happened.
  */
@@ -29,7 +29,7 @@ export const projectsListCommand: CommandDefinition = {
       .description(
         "List projects materialized in PostgreSQL (or in the catalog with --from-catalog).",
       )
-      .option("--from-catalog", "Read declarations from catalog/projects/ instead of PostgreSQL.")
+      .option("--from-catalog", "Read declarations from definitions/projects/ instead of PostgreSQL.")
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",

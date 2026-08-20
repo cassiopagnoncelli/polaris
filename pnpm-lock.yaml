@@ -28,7 +28,7 @@ importers:
         version: link:packages/shared-transport
       '@polaris/trait-catalog':
         specifier: workspace:*
-        version: link:catalog/traits
+        version: link:definitions/traits
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19
@@ -112,7 +112,7 @@ importers:
     dependencies:
       '@polaris/policy-catalog':
         specifier: workspace:*
-        version: link:../../catalog/policy
+        version: link:../../definitions/policy
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config
@@ -166,10 +166,10 @@ importers:
         version: 3.1110.0
       '@polaris/audience-catalog':
         specifier: workspace:*
-        version: link:../../catalog/audiences
+        version: link:../../definitions/audiences
       '@polaris/policy-catalog':
         specifier: workspace:*
-        version: link:../../catalog/policy
+        version: link:../../definitions/policy
       '@polaris/processor-audiences-v1':
         specifier: workspace:*
         version: link:../../async/computation/audiences/v1
@@ -187,7 +187,7 @@ importers:
         version: link:../../packages/project-config-schemas
       '@polaris/reverse-etl-catalog':
         specifier: workspace:*
-        version: link:../../catalog/reverse-etl
+        version: link:../../definitions/reverse-etl
       '@polaris/shared-archive':
         specifier: workspace:*
         version: link:../../packages/shared-archive
@@ -232,7 +232,7 @@ importers:
         version: link:../../packages/shared-transport
       '@polaris/trait-catalog':
         specifier: workspace:*
-        version: link:../../catalog/traits
+        version: link:../../definitions/traits
       commander:
         specifier: ^14.0.2
         version: 14.0.3
@@ -292,7 +292,7 @@ importers:
     dependencies:
       '@polaris/audience-catalog':
         specifier: workspace:*
-        version: link:../../../../catalog/audiences
+        version: link:../../../../definitions/audiences
 
   async/computation/sessionizer/v1:
     dependencies:
@@ -412,10 +412,10 @@ importers:
     dependencies:
       '@polaris/audience-catalog':
         specifier: workspace:*
-        version: link:../../../../catalog/audiences
+        version: link:../../../../definitions/audiences
       '@polaris/journey-catalog':
         specifier: workspace:*
-        version: link:../../../../catalog/journeys
+        version: link:../../../../definitions/journeys
       '@polaris/shared-config':
         specifier: workspace:*
         version: link:../../../../packages/shared-config
@@ -490,7 +490,7 @@ importers:
     dependencies:
       '@polaris/reverse-etl-catalog':
         specifier: workspace:*
-        version: link:../../../../catalog/reverse-etl
+        version: link:../../../../definitions/reverse-etl
 
   async/warehouse/archiver/v1:
     dependencies:
@@ -561,13 +561,13 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  catalog/audiences:
+  definitions/audiences:
     dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
-  catalog/journeys:
+  definitions/journeys:
     dependencies:
       '@polaris/audience-catalog':
         specifier: workspace:*
@@ -576,19 +576,19 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  catalog/policy:
+  definitions/policy:
     dependencies:
       '@polaris/shared-policy':
         specifier: workspace:*
         version: link:../../packages/shared-policy
 
-  catalog/reverse-etl:
+  definitions/reverse-etl:
     dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
 
-  catalog/traits:
+  definitions/traits:
     dependencies:
       zod:
         specifier: ^4.4.3
@@ -598,7 +598,7 @@ importers:
     dependencies:
       '@polaris/policy-catalog':
         specifier: workspace:*
-        version: link:../../catalog/policy
+        version: link:../../definitions/policy
       '@polaris/shared-db':
         specifier: workspace:*
         version: link:../shared-db
@@ -1246,7 +1246,7 @@ importers:
     dependencies:
       '@polaris/journey-catalog':
         specifier: workspace:*
-        version: link:../catalog/journeys
+        version: link:../definitions/journeys
       '@polaris/node-sdk':
         specifier: workspace:*
         version: link:../packages/node-sdk

@@ -49,7 +49,7 @@ ARG POLARIS_GIT_SHA="unknown"
 ARG POLARIS_BUILD_TIME="1970-01-01T00:00:00Z"
 
 LABEL org.opencontainers.image.title="polaris-processor-journey-orchestrator-v1" \
-      org.opencontainers.image.description="Polaris journey-orchestrator v1: walks profiles through the versioned step graphs in catalog/journeys, emitting journey.* onto the profile plane" \
+      org.opencontainers.image.description="Polaris journey-orchestrator v1: walks profiles through the versioned step graphs in definitions/journeys, emitting journey.* onto the profile plane" \
       org.opencontainers.image.vendor="Polaris" \
       org.opencontainers.image.licenses="UNLICENSED" \
       org.opencontainers.image.version="${POLARIS_BUILD_VERSION}" \

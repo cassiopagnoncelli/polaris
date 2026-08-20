@@ -8,7 +8,7 @@
  * (identifier denylist, per-kind cap, merge-rate breaker, trait size
  * guard) change EMITTED EVENTS, which makes them semantic parameters:
  * they live in `processor.manifest.yaml` with per-project overrides in
- * `catalog/projects/<id>.yaml`, never in env or `project_config`. An
+ * `definitions/projects/<id>.yaml`, never in env or `project_config`. An
  * operator must not be able to change identity semantics from a web form
  * — see docs/architecture/05-processors-and-replay.md
  * § "Per-Project Semantic Parameters".
@@ -40,7 +40,7 @@ export const STAGE_SERVICE_NAME = "sync-identity" as const;
  *
  * `CATALOG_ROOT` is a PATH, which is why it may live in env while the
  * values under it may not: it points at the directory holding
- * `catalog/projects/`, whose `identity:` blocks are the semantic input.
+ * `definitions/projects/`, whose `identity:` blocks are the semantic input.
  * The container image copies the catalog under the workdir, so "." is
  * right in production; `pnpm dev` overrides it to the repository root.
  */
@@ -58,7 +58,7 @@ export const syncIdentityEnvSchema = z
 
 export interface SyncIdentityConfig {
   readonly consumerGroup: string;
-  /** Directory containing `catalog/projects/`; see the schema docstring. */
+  /** Directory containing `definitions/projects/`; see the schema docstring. */
   readonly catalogRoot: string;
 }
 

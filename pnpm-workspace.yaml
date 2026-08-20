@@ -3,21 +3,9 @@ packages:
   - "packages/*"
   - "sync/*/*/*"
   - "async/*/*/*"
-  # Trait definitions are a package so the CLI and the runner import the
-  # same registry rather than each re-reading the directory.
-  - "catalog/traits"
-  # Same reason for the forbidden-field policy: the ingester's first pass
-  # and the destination's second pass must enforce the identical override
-  # set, so they import one registry instead of each discovering files.
-  - "catalog/policy"
-  # And for audiences: the CLI lists definitions, the runner evaluates
-  # them, and both must agree on what is registered.
-  - "catalog/audiences"
-  - "catalog/journeys"
-  - "catalog/reverse-etl"
   - "tests"
 
-  # ADR-0007 six-kind tree. Nothing matches these today; that is the point.
+  # ADR-0007 six-kind tree. Only `definitions/*` matches anything today.
   #
   # The restructure moves roughly two dozen packages, and a move that also
   # has to edit the workspace file is a move that collides with every other
@@ -30,8 +18,16 @@ packages:
   # the transition incremental rather than a single unreviewable commit: for
   # the length of programme T, `packages/shared-db` and
   # `libs/persistence/postgres` are equally valid locations. IJ4NN closes it
-  # by deleting the `packages/*` and `catalog/*` entries above once nothing
-  # is left there.
+  # by deleting the `packages/*` entry above once nothing is left there.
+  #
+  # `catalog/*` needed no such transition and got none: 0DIPB moved the whole
+  # directory in one card, so its five entries left with it rather than
+  # waiting for IJ4NN. `definitions/*` covers what they named, and their
+  # reasons are unchanged by the rename — traits, audiences, journeys and
+  # reverse-ETL are packages so the CLI and the runner import one registry
+  # instead of each re-reading the directory, and the forbidden-field policy
+  # is one so the ingester's first pass and the destination's second pass
+  # enforce an identical override set rather than each discovering files.
   #
   # A glob that matches a directory without a package.json is skipped, not an
   # error, so `libs/*` may name `libs/persistence` (a grouping directory) and
@@ -41,7 +37,7 @@ packages:
   - "libs/*/*" # libs/persistence/postgres, libs/identity/graph
   - "sdks/*" # sdks/web, sdks/node
   - "connectors/*/*/*" # connectors/destinations/braze/v1
-  - "definitions/*" # definitions/traits, definitions/policy
+  - "definitions/*" # definitions/{traits,policy,audiences,journeys,reverse-etl}
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only
   # links the prebuilt @esbuild/<platform> binary that pnpm already fetched as an

@@ -18,7 +18,7 @@
  *
  *   - filename matches `project_id` / `source_id`
  *   - source's parent directory equals the source's `project_id`
- *   - every source's `project_id` is declared in `catalog/projects/`
+ *   - every source's `project_id` is declared in `definitions/projects/`
  *   - no duplicate IDs
  *
  * The loader does NOT touch PostgreSQL — that's the sync command's job. Tests
@@ -38,21 +38,21 @@ import {
 } from "./types.js";
 
 export interface LoadCatalogOptions {
-  /** Repository root. The loader resolves `catalog/projects` / `catalog/sources` underneath. */
+  /** Repository root. The loader resolves `definitions/projects` / `definitions/sources` underneath. */
   readonly root: string;
 }
 
 /**
- * Read every YAML file under `<root>/catalog/projects/` and
- * `<root>/catalog/sources/<project_id>/`, validate them, and cross-check the
+ * Read every YAML file under `<root>/definitions/projects/` and
+ * `<root>/definitions/sources/<project_id>/`, validate them, and cross-check the
  * source -> project relationship.
  *
  * Throws `UsageError` (exit code 2) on any structural issue so the CLI surfaces
  * a clear, non-stack-trace message.
  */
 export function loadCatalog(options: LoadCatalogOptions): LoadedCatalog {
-  const projectsDir = join(options.root, "catalog", "projects");
-  const sourcesDir = join(options.root, "catalog", "sources");
+  const projectsDir = join(options.root, "definitions", "projects");
+  const sourcesDir = join(options.root, "definitions", "sources");
 
   const projects = loadProjects(projectsDir);
   const projectIndex = new Map<string, ProjectFile>();
@@ -122,7 +122,7 @@ function loadSources(
 
     if (!projectIndex.has(child)) {
       throw new UsageError(
-        `catalog source directory ${projectDir}: project "${child}" is not declared under catalog/projects/`,
+        `catalog source directory ${projectDir}: project "${child}" is not declared under definitions/projects/`,
       );
     }
 

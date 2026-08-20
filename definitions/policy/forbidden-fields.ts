@@ -27,8 +27,8 @@
  *
  * Projects in regulated environments add these as redactions through a
  * project-specific override at
- * `catalog/policy/forbidden-fields.<project_id>.ts`. The sample override
- * in `catalog/policy/forbidden-fields.checkout.ts` demonstrates the shape.
+ * `definitions/policy/forbidden-fields.<project_id>.ts`. The sample override
+ * in `definitions/policy/forbidden-fields.checkout.ts` demonstrates the shape.
  *
  * The actual rule tables live in `@polaris/shared-policy/PLATFORM_DEFAULT_POLICY`.
  * This file re-exports them so the catalog directory is the place a

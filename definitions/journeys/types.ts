@@ -94,7 +94,7 @@ const triggerEventSchema = z
     message:
       "journey.* events may never trigger a journey: an action emitting one could re-enter " +
       "its own journey, or a second journey whose action re-enters the first, and the pair " +
-      "would generate events forever. See catalog/journeys/types.ts.",
+      "would generate events forever. See definitions/journeys/types.ts.",
   });
 
 /**

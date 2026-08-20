@@ -45,7 +45,7 @@ decided and why; there is no open-questions section.
 
 | Mechanism | Location | Scope |
 |---|---|---|
-| YAML catalog | `catalog/projects/`, `catalog/sources/` | project, project+source |
+| YAML catalog | `definitions/projects/`, `definitions/sources/` | project, project+source |
 | `destinations` rows | Postgres + `secret_value` | project + env + vendor |
 | `processor_activations` rows | Postgres, absence = allowed, fails open | project + env + processor |
 | `topic_isolations` rows | Postgres, producer hot path | project |
@@ -950,7 +950,7 @@ acceptance criteria in the repo's existing card format.
 ## 14. Caveats
 
 **`forbidden-fields` should not move.**
-`catalog/policy/forbidden-fields.<project_id>.ts` is PII policy — a safety
+`definitions/policy/forbidden-fields.<project_id>.ts` is PII policy — a safety
 control, not a tuning knob. DB-editable means an operator can weaken PII
 protection from a web form with no code review. It stays in files. If it must
 move, it moves with a merge rule permitting only strengthening (adding

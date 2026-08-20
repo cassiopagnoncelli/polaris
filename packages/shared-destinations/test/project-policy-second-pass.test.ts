@@ -12,7 +12,7 @@
  * These tests drive `handleEvent` and assert on what the MAPPER receives,
  * because that is the last thing between the runtime and a vendor.
  *
- * The override here is a local fixture, not the real `catalog/policy`
+ * The override here is a local fixture, not the real `definitions/policy`
  * registry: this package deliberately does not depend on the catalog (the
  * host injects it), so the test proves the *plumbing* carries whatever
  * override it is handed.

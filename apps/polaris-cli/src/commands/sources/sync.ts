@@ -1,7 +1,7 @@
 /**
  * `polaris sources sync` — mutates: true.
  *
- * Diffs `catalog/sources/<project_id>/<source_id>.yaml` declarations against
+ * Diffs `definitions/sources/<project_id>/<source_id>.yaml` declarations against
  * the `sources` PostgreSQL table and either prints the plan (`--dry-run`) or
  * applies it inside a single transaction.
  *
@@ -33,7 +33,7 @@ export const sourcesSyncCommand: CommandDefinition = {
   register: (parent, deps) => {
     parent
       .command("sync")
-      .description("Materialize catalog/sources/**/*.yaml into PostgreSQL.")
+      .description("Materialize definitions/sources/**/*.yaml into PostgreSQL.")
       .option("--dry-run", "Show the planned diff without writing to PostgreSQL.")
       .option(
         "--catalog-root <path>",

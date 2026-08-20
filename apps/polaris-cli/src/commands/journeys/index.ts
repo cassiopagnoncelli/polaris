@@ -1,7 +1,7 @@
 /**
  * `polaris journeys` — the journey graphs and their participants.
  *
- * Definitions live in `catalog/journeys/` as code: what a journey MEANS is
+ * Definitions live in `definitions/journeys/` as code: what a journey MEANS is
  * versioned with the repository, the same rule that keeps trait, audience
  * and mapping semantics out of PostgreSQL. Only participation — where a
  * profile is in the graph right now — is runtime state.
@@ -16,7 +16,7 @@ export const journeysCommand: CommandDefinition = {
   register: (parent, deps) => {
     const group = parent
       .command("journeys")
-      .description("Operate the journeys declared in catalog/journeys/.");
+      .description("Operate the journeys declared in definitions/journeys/.");
     journeysSweepCommand.register(group, deps);
   },
 };

@@ -23,7 +23,7 @@
  * something that involves no waiting at all.
  *
  * The loop is bounded by the step count, because a definition whose graph
- * cycles without a wait would otherwise spin here. `catalog/journeys`
+ * cycles without a wait would otherwise spin here. `definitions/journeys`
  * refuses such a definition; this refuses to hang on one that reached it
  * anyway.
  */
@@ -72,7 +72,7 @@ export interface AdvanceResult {
 /**
  * A trigger event may never be `journey.*`.
  *
- * The second half of the loop guard. `catalog/journeys/types.ts` refuses
+ * The second half of the loop guard. `definitions/journeys/types.ts` refuses
  * such a definition, which protects everything in this repository; this
  * protects against an event reaching the orchestrator by a route the
  * loader never saw — a replay, a hand-published message, a definition

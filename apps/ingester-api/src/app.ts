@@ -139,7 +139,7 @@ export interface BuildIngesterAppOptions {
    * Map of project_id -> policy override. Populates the policy resolver.
    *
    * Defaults to `PROJECT_POLICY_OVERRIDES` from `@polaris/policy-catalog`,
-   * the deploy-time registry backed by `catalog/policy/forbidden-fields.*.ts`.
+   * the deploy-time registry backed by `definitions/policy/forbidden-fields.*.ts`.
    * A project absent from that registry runs platform defaults.
    *
    * Tests inject a narrower map; passing an empty one restores the
@@ -177,7 +177,7 @@ export interface BuildIngesterAppOptions {
  *     `@polaris/shared-service-bootstrap`).
  *   - Typed Kysely client over PostgreSQL (via `@polaris/shared-db`).
  *   - In-memory `ApiKeyCache` LRU/TTL + auth service + Fastify preHandler.
- *   - Event catalog (loaded from `catalog/events/**` once at startup).
+ *   - Event catalog (loaded from `definitions/events/**` once at startup).
  *   - Forbidden-field policy resolver (platform defaults plus optional
  *     per-project overrides).
  *   - RabbitMQ producer through `@polaris/shared-transport`.

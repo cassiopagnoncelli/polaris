@@ -35,7 +35,7 @@ endif
 #
 #   make api_key KEY_SOURCE=payments-api KEY_TYPE=backend
 #
-# They match catalog/sources/storefront/* — the sources `make seed`
+# They match definitions/sources/storefront/* — the sources `make seed`
 # materializes — so the no-argument form issues the web key
 # `blueprints/01-storefront` expects. That blueprint also produces backend
 # events, so it wants both: run the bare form and the KEY_SOURCE form above.
@@ -71,9 +71,9 @@ LOC_GIT_PATHS = \
 	':(glob)async/**/*.ts' \
 	':(glob)processors/**/*.ts' \
 	':(glob)consumers/**/*.ts' \
-	':(glob)catalog/**/*.ts' \
-	':(glob)catalog/**/*.yaml' \
-	':(glob)catalog/**/*.yml' \
+	':(glob)definitions/**/*.ts' \
+	':(glob)definitions/**/*.yaml' \
+	':(glob)definitions/**/*.yml' \
 	':(glob)sql/**/*.sql' \
 	':(glob)db/migrations/**/*.sql'
 

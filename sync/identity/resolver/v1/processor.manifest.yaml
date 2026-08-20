@@ -85,7 +85,7 @@ defaults:
 # These change EMITTED EVENTS, so they live here and not in
 # `project_config` — per docs/architecture/05-processors-and-replay.md
 # § "Per-Project Semantic Parameters", a project may narrow them via
-# `catalog/projects/<id>.yaml` but never widen them, and introducing the
+# `definitions/projects/<id>.yaml` but never widen them, and introducing the
 # capability at all is a new processor version.
 #
 # They exist because an identity graph without bounds has a known failure

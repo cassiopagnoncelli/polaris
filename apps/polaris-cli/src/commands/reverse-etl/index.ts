@@ -1,7 +1,7 @@
 /**
  * `polaris reverse-etl` — warehouse rows back into the platform.
  *
- * Runs only. Jobs are code in `catalog/reverse-etl/`, so there is no
+ * Runs only. Jobs are code in `definitions/reverse-etl/`, so there is no
  * create or edit verb here: what a job MEANS is versioned with the
  * repository, the same rule that keeps trait and audience definitions out
  * of PostgreSQL.
@@ -16,7 +16,7 @@ export const reverseEtlCommand: CommandDefinition = {
   register: (parent, deps) => {
     const group = parent
       .command("reverse-etl")
-      .description("Run the reverse-ETL jobs declared in catalog/reverse-etl/.");
+      .description("Run the reverse-ETL jobs declared in definitions/reverse-etl/.");
     reverseEtlRunCommand.register(group, deps);
   },
 };

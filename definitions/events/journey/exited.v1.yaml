@@ -6,7 +6,7 @@
 # emits one of these; if that could admit a profile to a journey, a
 # definition could enter a profile into itself — or into a second journey
 # whose action re-enters the first — and the pair would emit events as fast
-# as the spine carries them. `catalog/journeys/types.ts` refuses such a
+# as the spine carries them. `definitions/journeys/types.ts` refuses such a
 # definition and the orchestrator re-checks at runtime, because the loader
 # only protects definitions in this repository.
 name: journey.exited

@@ -47,7 +47,7 @@ export function resolveCatalogRoot(options: ResolveCatalogRootOptions = {}): str
     const parent = dirname(current);
     if (parent === current) {
       throw new UsageError(
-        `unable to locate a catalog/ directory from ${cwd}. Set POLARIS_CATALOG_ROOT or run the command from inside the repo.`,
+        `unable to locate a definitions/ directory from ${cwd}. Set POLARIS_CATALOG_ROOT or run the command from inside the repo.`,
       );
     }
     current = parent;
@@ -55,7 +55,7 @@ export function resolveCatalogRoot(options: ResolveCatalogRootOptions = {}): str
 }
 
 function hasCatalogDir(root: string): boolean {
-  const candidate = resolve(root, "catalog");
+  const candidate = resolve(root, "definitions");
   if (!existsSync(candidate)) return false;
   try {
     return statSync(candidate).isDirectory();

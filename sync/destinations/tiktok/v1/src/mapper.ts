@@ -121,7 +121,7 @@ export const checkoutStartedMapper: Mapper<TikTokEventPayload> = (
  * `payment.approved` → `Purchase`.
  *
  * Pulls `amount` / `currency` / `order_id` (the payments-API shape,
- * convention from `catalog/sources/storefront/payments-api.yaml`).
+ * convention from `definitions/sources/storefront/payments-api.yaml`).
  * v1 is conservative: when properties don't carry `amount_minor` +
  * `currency`, the properties block omits the `value` slot and TikTok
  * still accepts the event (it just can't compute ROAS for that row).

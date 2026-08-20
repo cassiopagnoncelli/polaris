@@ -2,7 +2,7 @@
  * journey-orchestrator v1 bootstrap.
  *
  * Consumes `resolved.events` and `profile.events`, walks participants
- * through the graphs in `catalog/journeys/`, and publishes `journey.*`
+ * through the graphs in `definitions/journeys/`, and publishes `journey.*`
  * back onto the profile plane. It holds no vendor credentials and reaches
  * no vendor: an action's event travels the ordinary destination path.
  *
@@ -299,7 +299,7 @@ export async function buildJourneyOrchestratorApp(options: BuildJourneyOrchestra
         title: "Polaris journey-orchestrator v1",
         version: config.service.serviceVersion,
         description:
-          "Walks profiles through the versioned step graphs in catalog/journeys/, emitting journey.* onto the profile plane. Makes no vendor calls. /health, /ready, /metrics only.",
+          "Walks profiles through the versioned step graphs in definitions/journeys/, emitting journey.* onto the profile plane. Makes no vendor calls. /health, /ready, /metrics only.",
       },
     },
     shutdownTasks,

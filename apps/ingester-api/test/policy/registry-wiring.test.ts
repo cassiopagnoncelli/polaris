@@ -9,7 +9,7 @@
  * `projectPolicies`, exactly as `server.ts` builds it, and the assertion
  * is on what actually reaches the producer.
  *
- * `catalog/policy/forbidden-fields.checkout.ts` is the sample override and
+ * `definitions/policy/forbidden-fields.checkout.ts` is the sample override and
  * `checkout` is the test fixture's project, so the deploy-time registry is
  * exercised end to end rather than through a hand-built fixture map.
  */
@@ -90,7 +90,7 @@ function publishedTitle(producer: RecordingProducer): unknown {
   return published?.properties?.title;
 }
 
-describe("ingester boot — project policy overrides load from catalog/policy", () => {
+describe("ingester boot — project policy overrides load from definitions/policy", () => {
   it("applies the checkout override to an event the platform defaults would carry in the clear", async () => {
     const producer = new RecordingProducer();
     const { app } = await buildApp("checkout", producer);

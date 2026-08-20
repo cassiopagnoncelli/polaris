@@ -4,7 +4,7 @@
  * Every job the platform can run. Adding one means adding a module and a
  * line here — a diff a reviewer can read, rather than a directory scan
  * whose contents depend on what happens to be on disk. Same contract as
- * `catalog/traits/index.ts` and `catalog/audiences/index.ts`.
+ * `definitions/traits/index.ts` and `definitions/audiences/index.ts`.
  *
  * Jobs are code and deploy-time. What a job MEANS is versioned with the
  * repository; only its schedule and enablement are runtime config.

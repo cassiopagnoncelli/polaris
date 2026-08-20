@@ -128,7 +128,7 @@ export interface BrazeEventProperties {
  * The one place the "narrow well-known slots" rule above is relaxed, and
  * deliberately confined to its own type rather than loosened on
  * {@link BrazeEventProperties}. An action step's payload is author-defined
- * — `catalog/journeys` decides what `message: "thank_you_repeat"` is, and
+ * — `definitions/journeys` decides what `message: "thank_you_repeat"` is, and
  * the orchestrator carries it through uninterpreted — so this event cannot
  * have a closed slot set the way `checkout.started` can.
  *

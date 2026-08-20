@@ -3,7 +3,7 @@
  *
  * Emits a JSON document containing every source row scoped to one
  * `(project_id, environment)` pair. Source declarations are file-backed
- * (`catalog/sources/<project_id>/<source_id>.yaml`) — this export reads the
+ * (`definitions/sources/<project_id>/<source_id>.yaml`) — this export reads the
  * materialized PostgreSQL rows so an operator can diff what's actually in
  * the runtime against what the catalog declares.
  *

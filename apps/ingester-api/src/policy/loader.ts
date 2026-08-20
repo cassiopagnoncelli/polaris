@@ -8,8 +8,8 @@ import {
  * Resolver for the merged forbidden-field policy per project.
  *
  * The platform defaults live in `@polaris/shared-policy/PLATFORM_DEFAULT_POLICY`
- * (re-exported by `catalog/policy/forbidden-fields.ts`). Project overrides
- * live in `catalog/policy/forbidden-fields.<project_id>.ts`. Per the docs
+ * (re-exported by `definitions/policy/forbidden-fields.ts`). Project overrides
+ * live in `definitions/policy/forbidden-fields.<project_id>.ts`. Per the docs
  * the override files are **file-backed**, not runtime mutable.
  *
  * To keep this package free of dynamic `import()` calls (which would couple

@@ -18,7 +18,7 @@ src/reason-codes.ts           ingester batch-response reason codes
 test/                         fixtures + Vitest suite
 ```
 
-The YAML files under the repo-root `catalog/events/**` carry lifecycle
+The YAML files under the repo-root `definitions/events/**` carry lifecycle
 metadata (`lifecycle: active | deprecated`, `sunset_at`) and human
 documentation. The Zod schemas in this package carry the semantic
 contract. The loader merges the two.
@@ -44,14 +44,14 @@ the catalog.
 
 1. Create `src/events/<domain>/<event>.v1.ts` exporting a Zod schema.
 2. Add a binding in `src/catalog/bindings.ts`.
-3. Add `catalog/events/<domain>/<event>.v1.yaml` with lifecycle metadata.
+3. Add `definitions/events/<domain>/<event>.v1.yaml` with lifecycle metadata.
 4. Add fixtures + tests under `test/`.
 
 ## Adding a new version of an existing event
 
 1. Create `src/events/<domain>/<event>.v<N>.ts`.
 2. Register the new binding in `src/catalog/bindings.ts`.
-3. Add `catalog/events/<domain>/<event>.v<N>.yaml` with
+3. Add `definitions/events/<domain>/<event>.v<N>.yaml` with
    `lifecycle: active`.
 4. Mark the previous YAML `lifecycle: deprecated` and set `sunset_at`.
 5. Update fixtures + tests.

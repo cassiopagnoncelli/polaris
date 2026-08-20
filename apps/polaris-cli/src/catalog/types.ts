@@ -2,7 +2,7 @@
  * Zod schemas + types for the file-backed projects/sources catalog.
  *
  * Polaris is file-heavy and database-light. Project and source declarations
- * live as YAML under `catalog/projects/` and `catalog/sources/<project_id>/`.
+ * live as YAML under `definitions/projects/` and `definitions/sources/<project_id>/`.
  * These schemas describe the on-disk shape; the `loader` module reads them
  * and the CLI commands either render them or materialize them into PostgreSQL
  * (via `polaris projects sync` / `polaris sources sync`).
@@ -66,7 +66,7 @@ export const idSchema = z
   });
 
 /**
- * Shape of `catalog/projects/<project_id>.yaml`.
+ * Shape of `definitions/projects/<project_id>.yaml`.
  */
 export const projectFileSchema = z
   .object({
@@ -89,7 +89,7 @@ export const projectFileSchema = z
 export type ProjectFile = z.infer<typeof projectFileSchema>;
 
 /**
- * Shape of `catalog/sources/<project_id>/<source_id>.yaml`.
+ * Shape of `definitions/sources/<project_id>/<source_id>.yaml`.
  */
 export const sourceFileSchema = z
   .object({

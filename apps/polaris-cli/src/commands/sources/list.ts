@@ -29,7 +29,7 @@ export const sourcesListCommand: CommandDefinition = {
         "List sources materialized in PostgreSQL (or in the catalog with --from-catalog).",
       )
       .option("--project <project_id>", "Filter results to one project.")
-      .option("--from-catalog", "Read declarations from catalog/sources/ instead of PostgreSQL.")
+      .option("--from-catalog", "Read declarations from definitions/sources/ instead of PostgreSQL.")
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",

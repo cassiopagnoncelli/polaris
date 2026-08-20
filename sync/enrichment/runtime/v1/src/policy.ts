@@ -4,7 +4,7 @@
  * One semantic parameter today: the ceiling on a traits snapshot the
  * spine will carry. It comes from the manifest's declared default, and a
  * project may NARROW it in the `enrichment:` block of
- * `catalog/projects/<id>.yaml` — never widen it past the manifest's
+ * `definitions/projects/<id>.yaml` — never widen it past the manifest's
  * bounds. The block's shape is pinned by `@polaris/shared-policy`, the
  * same schema the CLI validates catalog files against.
  *

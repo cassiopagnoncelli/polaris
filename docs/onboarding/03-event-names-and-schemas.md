@@ -2,7 +2,7 @@
 
 Polaris enforces **strict schema governance**. Every governed event must:
 
-1. Have a registered, lowercase dotted name in `catalog/events/`.
+1. Have a registered, lowercase dotted name in `definitions/events/`.
 2. Have a code-backed Zod schema in
    `packages/shared-schemas/src/events/`.
 3. Be registered with an owner, description, lifecycle, and
@@ -79,11 +79,11 @@ terms leaking into canonical events).
 Two files per event, in lockstep:
 
 ```text
-catalog/events/<domain>/<event>.v<n>.yaml
+definitions/events/<domain>/<event>.v<n>.yaml
 packages/shared-schemas/src/events/<domain>/<event>.v<n>.ts
 ```
 
-Real example — `catalog/events/checkout/started.v1.yaml`:
+Real example — `definitions/events/checkout/started.v1.yaml`:
 
 ```yaml
 # Catalog entry: checkout.started v1 (ACTIVE)
@@ -157,7 +157,7 @@ Conventions:
 ## Step 3.3 — Register it in the catalog
 
 ```yaml
-# catalog/events/checkout/started.v1.yaml
+# definitions/events/checkout/started.v1.yaml
 name: checkout.started
 schema_version: 1
 domain: checkout
@@ -220,7 +220,7 @@ Treat the namespace as a temporary scaffold, not a long-term home.
 
 ## Done when
 
-- `catalog/events/<domain>/<event>.v1.yaml` exists for every fact you
+- `definitions/events/<domain>/<event>.v1.yaml` exists for every fact you
   intend to emit.
 - `packages/shared-schemas/src/events/<domain>/<event>.v1.ts` exists and
   the export name matches the catalog's `schema_export`.

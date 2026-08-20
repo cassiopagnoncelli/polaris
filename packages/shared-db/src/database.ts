@@ -121,7 +121,7 @@ export interface ApiKeyTable {
 /**
  * `projects` table.
  *
- * Materialized from `catalog/projects/<project_id>.yaml`. Semantic membership
+ * Materialized from `definitions/projects/<project_id>.yaml`. Semantic membership
  * is file-backed; this row exists so PostgreSQL FK relationships (sources,
  * api_keys, audit records) can hang off a stable `project_id`.
  */
@@ -215,7 +215,7 @@ export interface ProjectConfigVersionsTable {
 /**
  * `sources` table.
  *
- * Materialized from `catalog/sources/<project_id>/<source_id>.yaml`. The
+ * Materialized from `definitions/sources/<project_id>/<source_id>.yaml`. The
  * ingester reads this row through an in-memory or Redis cache to resolve
  * `project_id + environment + source_id` against the active runtime state.
  */
@@ -914,13 +914,13 @@ export interface ProfileMergesTable {
  * needs to read, ClickHouse holds the unbounded record of what changed.
  *
  * Definitions never appear here — what an audience MEANS is code in
- * `catalog/audiences/`. A predicate column would make an audience's meaning
+ * `definitions/audiences/`. A predicate column would make an audience's meaning
  * editable without a deploy, which is what the file-heavy rule forbids.
  */
 /**
  * Where a profile is in a journey graph right now.
  *
- * The graph is code in `catalog/journeys/`; only this is runtime state.
+ * The graph is code in `definitions/journeys/`; only this is runtime state.
  * A participant walks the version it entered on to completion — see
  * `db/migrations/20260818000002_create_journey_participants.sql` for why
  * migrating live participants has no correct answer.
@@ -931,7 +931,7 @@ export interface JourneyParticipantsTable {
   project_id: string;
   /** Environment scope. Closed set: development | staging | production. */
   environment: string;
-  /** Catalog key from `catalog/journeys/`. */
+  /** Catalog key from `definitions/journeys/`. */
   journey: string;
   /** Graph version this participant walks to completion. Never revised. */
   journey_version: number;
@@ -952,7 +952,7 @@ export interface AudienceMembershipsTable {
   project_id: string;
   /** Environment scope. Closed set: development | staging | production. */
   environment: string;
-  /** Catalog key from `catalog/audiences/`. Stable by contract. */
+  /** Catalog key from `definitions/audiences/`. Stable by contract. */
   audience: string;
   /**
    * Definition version that last EVALUATED this row — not the version the

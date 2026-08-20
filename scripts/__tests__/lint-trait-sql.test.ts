@@ -128,7 +128,7 @@ describe("the allowlist mirrors the catalog", () => {
     // workspace package and a lint that needed it built would be a lint
     // that fails on a fresh checkout.
     const source = readFileSync(
-      resolve(__dirname, "..", "..", "catalog", "traits", "types.ts"),
+      resolve(__dirname, "..", "..", "definitions", "traits", "types.ts"),
       "utf8",
     );
     const block = /READABLE_PROJECTIONS = \[(.*?)\] as const;/s.exec(source)?.[1] ?? "";

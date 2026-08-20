@@ -22,7 +22,7 @@ import { z } from "zod";
  */
 export const audienceEnteredV1PropertiesSchema = z
   .object({
-    /** Catalog key from `catalog/audiences/`. */
+    /** Catalog key from `definitions/audiences/`. */
     audience: z.string().regex(/^[a-z][a-z0-9_]*$/),
     /** Definition version that evaluated this transition. */
     audience_version: z.number().int().positive(),

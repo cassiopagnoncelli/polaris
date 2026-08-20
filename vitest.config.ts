@@ -9,14 +9,13 @@ export default defineConfig({
       "packages/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "sync/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "async/**/*.{test,spec}.?(c|m)[jt]s?(x)",
-      // Catalog packages (`catalog/traits`, `catalog/policy`) are
-      // workspace members whose contents are enforcement inputs, not
-      // documentation — their registries carry tests like any package.
-      "catalog/**/*.{test,spec}.?(c|m)[jt]s?(x)",
-      // ADR-0007's six-kind roots. Nothing matches these today, exactly as in
-      // `pnpm-workspace.yaml`: both epochs are collected at once so that each
-      // move card is a pure `git mv`, and IJ4NN deletes the old lines once
-      // nothing is left behind them.
+      // ADR-0007's six-kind roots. `definitions/**` is live: 0DIPB moved
+      // `catalog/` under it, and those packages are workspace members whose
+      // contents are enforcement inputs rather than documentation, so their
+      // registries carry tests like any package. The other three still match
+      // nothing, exactly as in `pnpm-workspace.yaml`: both epochs are
+      // collected at once so that each move card is a pure `git mv`, and
+      // IJ4NN deletes the `packages/**` line once nothing is left behind it.
       //
       // A root missing from this list does not fail — the tests under it are
       // simply never collected, and a suite that runs nothing is the one
@@ -43,11 +42,10 @@ export default defineConfig({
         "packages/**/src/**",
         "sync/**/src/**",
         "async/**/src/**",
-        "catalog/*/*.ts",
         // The same six-kind roots, so a moved package keeps being measured as
-        // well as collected. `definitions/` inherits `catalog/`'s flat shape —
+        // well as collected. `definitions/` inherited `catalog/`'s flat shape —
         // a registry is `definitions/traits/*.ts`, not a `src/` tree — because
-        // 0DIPB renames the directory rather than restructuring it.
+        // 0DIPB renamed the directory rather than restructuring it.
         "libs/**/src/**",
         "sdks/**/src/**",
         "connectors/**/src/**",

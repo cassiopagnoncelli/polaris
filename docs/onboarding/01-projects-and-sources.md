@@ -13,7 +13,7 @@ truth.
 
 ## Who does this
 
-- **Team** drafts the `catalog/projects/` and `catalog/sources/` YAML in
+- **Team** drafts the `definitions/projects/` and `definitions/sources/` YAML in
   a PR. The schema reviewer signs off.
 - **Operator** merges the PR, then runs `polaris projects sync` and
   `polaris sources sync` against each target environment.
@@ -27,7 +27,7 @@ friction-free; production requires the operator.
 
 ## Step 1.1 — Declare the project
 
-Create `catalog/projects/<project_id>.yaml`. The shape:
+Create `definitions/projects/<project_id>.yaml`. The shape:
 
 ```yaml
 # Catalog entry: project `your_project`.
@@ -39,7 +39,7 @@ description: >-
 status: active
 ```
 
-Real example (`catalog/projects/storefront.yaml`):
+Real example (`definitions/projects/storefront.yaml`):
 
 ```yaml
 project_id: storefront
@@ -57,7 +57,7 @@ one `web` source (the browser) and one `backend` source (an API), but you can
 have as many as you need (mobile, webhook relays, ETL jobs, etc.).
 
 Each source goes at
-`catalog/sources/<project_id>/<source_id>.yaml`. The shape:
+`definitions/sources/<project_id>/<source_id>.yaml`. The shape:
 
 ```yaml
 project_id: your_project

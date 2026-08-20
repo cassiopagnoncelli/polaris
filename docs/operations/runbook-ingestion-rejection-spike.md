@@ -16,7 +16,7 @@ The ingester code lives at
 that drives forbidden-field rejections lives in
 [`packages/shared-policy/`](../../packages/shared-policy/) and the
 catalogue of forbidden patterns at
-[`catalog/policy/forbidden-fields.ts`](../../catalog/policy/forbidden-fields.ts).
+[`definitions/policy/forbidden-fields.ts`](../../definitions/policy/forbidden-fields.ts).
 The Prometheus rules that trigger this runbook live at
 [`infra/prometheus/rules/polaris.alerts.yml`](../../infra/prometheus/rules/polaris.alerts.yml).
 
@@ -120,7 +120,7 @@ polaris_ingest_redacted_pattern_total{
 Group by `pattern` in Prometheus / Grafana — the breakdown surfaces
 the specific forbidden pattern (e.g. `pii_card`, `pii_secret`). The
 catalogue of patterns is committed at
-[`catalog/policy/forbidden-fields.ts`](../../catalog/policy/forbidden-fields.ts).
+[`definitions/policy/forbidden-fields.ts`](../../definitions/policy/forbidden-fields.ts).
 
 ## Mitigations
 
@@ -142,7 +142,7 @@ catalogue of patterns is committed at
   manifest.
 - **Add a forbidden pattern.** When the spike surfaced a credential
   shape the policy catalogue missed, add the pattern in
-  `catalog/policy/forbidden-fields.ts` (security review required).
+  `definitions/policy/forbidden-fields.ts` (security review required).
 
 ## Escalation
 

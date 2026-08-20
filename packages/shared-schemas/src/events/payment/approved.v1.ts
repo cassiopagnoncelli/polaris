@@ -4,7 +4,7 @@ import { z } from "zod";
  * `payment.approved` v1 — ACTIVE.
  *
  * Emitted by a backend source (convention:
- * `catalog/sources/storefront/payments-api.yaml`) when a payment
+ * `definitions/sources/storefront/payments-api.yaml`) when a payment
  * authorisation succeeds. This is the revenue event every vendor consumer
  * maps to its purchase primitive — Meta `Purchase`, GA4 `purchase`,
  * TikTok `Purchase`, Braze `purchases`.

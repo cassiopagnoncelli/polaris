@@ -218,7 +218,7 @@ transaction as the mutation — see [Audit and Export](./audit-and-export.md).
 
 ### Seed a project + source
 
-The file-backed catalog at `catalog/projects/` and `catalog/sources/` is the
+The file-backed catalog at `definitions/projects/` and `definitions/sources/` is the
 source of truth for project and source declarations. The CLI materializes
 those declarations into PostgreSQL with two `sync` commands:
 
@@ -229,7 +229,7 @@ those declarations into PostgreSQL with two `sync` commands:
 ./polaris sources sync
 ```
 
-Removing a project from `catalog/projects/` is NOT a delete signal — the
+Removing a project from `definitions/projects/` is NOT a delete signal — the
 sync planner ignores absences so that FK references stay sound. Deletes are
 a separate workflow.
 
@@ -335,10 +335,10 @@ Polaris is **file-heavy, database-light**. Two halves:
 
 | Lives in files (semantic truth)                              | Lives in PostgreSQL (mutable runtime/control)              |
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Event schemas (`catalog/events/`, Zod in `packages/shared-schemas`) | API key hashes + metadata                                 |
-| Event registry / catalog (`catalog/events/*/*.yaml`)         | `projects` rows (materialized from `catalog/projects/`)    |
-| Forbidden-field policy (`catalog/policy/forbidden-fields.ts`) | `sources` rows (materialized from `catalog/sources/`)      |
-| Project + source declarations (`catalog/projects/`, `catalog/sources/`) | `destination_instances` rows                             |
+| Event schemas (`definitions/events/`, Zod in `packages/shared-schemas`) | API key hashes + metadata                                 |
+| Event registry / catalog (`definitions/events/*/*.yaml`)         | `projects` rows (materialized from `definitions/projects/`)    |
+| Forbidden-field policy (`definitions/policy/forbidden-fields.ts`) | `sources` rows (materialized from `definitions/sources/`)      |
+| Project + source declarations (`definitions/projects/`, `definitions/sources/`) | `destination_instances` rows                             |
 | Processor manifests + code (`{sync,async}/<stage>/<name>/<version>/`)       | `processor_activations` rows (runtime enable/disable)      |
 | Destination consumer mappings + manifests (`sync/destinations/<vendor>/<version>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
 | SQL DDL and migrations (`sql/`, `db/migrations/`)            | `audit_records`                                            |

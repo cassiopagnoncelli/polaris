@@ -108,7 +108,7 @@ export interface BuildAppOptions {
   readonly gate?: ProcessorActivationGate;
   /**
    * Per-project identity overrides, keyed by `project_id`. `main.ts`
-   * loads these from the `identity:` blocks of `catalog/projects/` via
+   * loads these from the `identity:` blocks of `definitions/projects/` via
    * `loadProjectIdentityOverrides`; tests pass a literal map. Absent
    * means every project uses manifest defaults. Entries are validated
    * EAGERLY here (`createPolicyResolver`), so an out-of-bounds override
@@ -248,7 +248,7 @@ export async function buildSyncIdentityApp(
 
   // ---- streaming runtime ----------------------------------------------
   // Identity policy is file-backed and deploy-time: semantic parameters
-  // from the manifest, narrowed per project in `catalog/projects/`, plus
+  // from the manifest, narrowed per project in `definitions/projects/`, plus
   // the identifier denylist. Passing an empty map means every project
   // runs on manifest defaults, which is the correct behaviour for a
   // project that has not declared identity bounds.

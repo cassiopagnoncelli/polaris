@@ -73,7 +73,7 @@ operator-facing one-liners.
 ### `polaris export sources --project <id> --env <env>`
 
 Exports the materialized `sources` rows for one (project, env). Source
-declarations are file-backed (`catalog/sources/<project>/<source>.yaml`);
+declarations are file-backed (`definitions/sources/<project>/<source>.yaml`);
 this export reads what's actually in PostgreSQL so you can diff runtime
 against catalog.
 

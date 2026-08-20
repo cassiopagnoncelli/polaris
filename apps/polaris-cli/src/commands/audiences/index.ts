@@ -1,7 +1,7 @@
 /**
  * `polaris audiences` — audience definitions and their membership.
  *
- * Definitions live in `catalog/audiences/` as code, not as rows: what an
+ * Definitions live in `definitions/audiences/` as code, not as rows: what an
  * audience MEANS is versioned with the repository, the same rule that
  * keeps trait semantics and mapping semantics out of PostgreSQL. Only
  * membership — which profile is in it right now — is runtime state.
@@ -19,7 +19,7 @@ export const audiencesCommand: CommandDefinition = {
   register: (parent, deps) => {
     const group = parent
       .command("audiences")
-      .description("Evaluate and inspect the audiences declared in catalog/audiences/.");
+      .description("Evaluate and inspect the audiences declared in definitions/audiences/.");
     audiencesComputeCommand.register(group, deps);
     audiencesShowCommand.register(group, deps);
   },

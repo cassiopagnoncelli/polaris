@@ -3,7 +3,7 @@
  *
  * A checked-in expected-output file would test my transcription of the SQL,
  * not the SQL. This seeds known rows into `event_daily_counts`, runs the
- * REAL definition from `catalog/traits/`, and asserts the exact
+ * REAL definition from `definitions/traits/`, and asserts the exact
  * `(profile_id, value)` output — including the boundaries, which is where a
  * window query goes wrong quietly:
  *

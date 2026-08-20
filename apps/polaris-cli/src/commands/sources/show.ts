@@ -29,7 +29,7 @@ export const sourcesShowCommand: CommandDefinition = {
       .command("show <source_id>")
       .description("Show one source from PostgreSQL (or the catalog with --from-catalog).")
       .option("--project <project_id>", "Narrow lookup to one project.")
-      .option("--from-catalog", "Read declarations from catalog/sources/ instead of PostgreSQL.")
+      .option("--from-catalog", "Read declarations from definitions/sources/ instead of PostgreSQL.")
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",
@@ -63,8 +63,8 @@ async function runSourcesShow(
     if (matches.length === 0) {
       throw new UsageError(
         args.project !== undefined
-          ? `source "${sourceId}" is not declared under catalog/sources/${args.project}/`
-          : `source "${sourceId}" is not declared under any catalog/sources/<project>/`,
+          ? `source "${sourceId}" is not declared under definitions/sources/${args.project}/`
+          : `source "${sourceId}" is not declared under any definitions/sources/<project>/`,
       );
     }
     emit(ctx, "catalog", matches.map(catalogToView));

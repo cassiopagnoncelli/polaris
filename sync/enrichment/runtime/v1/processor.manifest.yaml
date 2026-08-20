@@ -95,7 +95,7 @@ composes:
 #
 # Changes emitted events, so it lives here and not in `project_config` —
 # a project may narrow it via the `enrichment:` block of
-# `catalog/projects/<id>.yaml` but never widen it, and introducing the
+# `definitions/projects/<id>.yaml` but never widen it, and introducing the
 # capability at all is a new processor version.
 # ---------------------------------------------------------------------
 semantic_parameters:

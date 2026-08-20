@@ -3,7 +3,7 @@
  *
  * Same properties the identity stage's loader holds — a declared block
  * reaches the policy map, an absent one leaves the project on manifest
- * defaults, a missing catalog degrades with a warning, and a typo'd key
+ * defaults, a missing `definitions/` degrades with a warning, and a typo'd key
  * fails the boot rather than silently applying no limit.
  */
 
@@ -30,7 +30,7 @@ describe("enrichment override loader", () => {
     expect(overrides.has("bare")).toBe(false);
   });
 
-  it("returns an empty map when the catalog directory does not exist", () => {
+  it("returns an empty map when the definitions directory does not exist", () => {
     const overrides = loadProjectEnrichmentOverrides({
       root: join(HERE, "fixtures", "no-such-root"),
       logger: silentLogger,

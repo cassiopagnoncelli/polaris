@@ -67,7 +67,7 @@ COPY --from=builder --chown=polaris:polaris /deploy /app
 # Per-project enrichment overrides (`enrichment:` blocks — the narrowed
 # traits-snapshot guard) are read from here at boot; see src/overrides.ts.
 # `POLARIS_SYNC_ENRICHMENT_CATALOG_ROOT` defaults to ".", i.e. /app.
-COPY --from=builder --chown=polaris:polaris /workspace/catalog/projects /app/catalog/projects
+COPY --from=builder --chown=polaris:polaris /workspace/definitions/projects /app/definitions/projects
 
 # The MaxMind database is deliberately NOT baked into the image: it is
 # license-restricted, ~60 MB, and refreshed on its own weekly cadence

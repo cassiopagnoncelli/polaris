@@ -14,14 +14,14 @@ import { z } from "zod";
  * answerable long after the definition has moved on.
  *
  * Deliberately in the `journey.*` namespace, which
- * `catalog/journeys/types.ts` forbids as a trigger. Without that rule an
+ * `definitions/journeys/types.ts` forbids as a trigger. Without that rule an
  * event like this one could admit a profile to another journey whose
  * action emits another, and the pair would run as fast as the spine
  * carries messages.
  */
 export const journeyEnteredV1PropertiesSchema = z
   .object({
-    /** Catalog key from `catalog/journeys/`. */
+    /** Catalog key from `definitions/journeys/`. */
     journey: z.string().regex(/^[a-z][a-z0-9_]*$/),
     /** Graph version this participant will walk to completion. */
     journey_version: z.number().int().positive(),

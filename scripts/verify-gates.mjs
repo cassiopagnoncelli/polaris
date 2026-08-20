@@ -79,8 +79,13 @@ const CONFIG_KEY_CANARY = `unread_${"canary"}_key`;
  * Written as a literal, unlike the canaries above: `lint-docker-context`
  * reads `.dockerignore` and Dockerfiles and nothing else, so a mention in
  * this file cannot be mistaken for a use.
+ *
+ * The directory was called `catalog` when it broke them. It is the CURRENT
+ * name that has to go in here: the canary proves the gate by re-creating the
+ * fault, and excluding a directory no Dockerfile copies any more would prove
+ * the gate blind when it is merely being asked the wrong question.
  */
-const DOCKER_CONTEXT_CANARY = "catalog";
+const DOCKER_CONTEXT_CANARY = "definitions";
 
 /** A column no ClickHouse table has. Assembled, like every canary here. */
 const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
@@ -136,17 +141,17 @@ const GATES = [
   {
     name: "lint:trait-sql",
     command: "node scripts/lint-trait-sql.mjs",
-    files: ["catalog/traits/orders-30d.ts"],
+    files: ["definitions/traits/orders-30d.ts"],
     inject: () =>
       write(
-        "catalog/traits/orders-30d.ts",
-        read("catalog/traits/orders-30d.ts").replace(
+        "definitions/traits/orders-30d.ts",
+        read("definitions/traits/orders-30d.ts").replace(
           "FROM polaris.profile_event_daily_counts",
           "FROM polaris.analytics_raw",
         ),
       ),
     assertInjected: () =>
-      read("catalog/traits/orders-30d.ts").includes("FROM polaris.analytics_raw"),
+      read("definitions/traits/orders-30d.ts").includes("FROM polaris.analytics_raw"),
   },
   {
     // A declared key that nothing reads. Injected into the GENERATED artifact
@@ -278,8 +283,8 @@ const GATES = [
     // Injected into `.dockerignore`, not into a Dockerfile: the exclusion is
     // the half that moved. Re-adding the one word that made two images
     // unbuildable for six days is the exact fault, and `assertInjected` looks
-    // for a BARE `catalog` line because the file now explains the word at
-    // length in comments -- an `includes("catalog")` would hold before the
+    // for a BARE `definitions` line because the file now explains the word at
+    // length in comments -- an `includes("definitions")` would hold before the
     // injection and prove nothing.
     name: "lint:docker-context",
     command: "node scripts/lint-docker-context.mjs",
@@ -320,7 +325,7 @@ const SERVICE_GATES = [
     // table-name lint passed because the table name was right.
     name: "check:catalog-sql (needs ClickHouse)",
     command: "node scripts/check-catalog-sql.mjs --require-clickhouse",
-    files: ["catalog/traits/orders-30d.ts"],
+    files: ["definitions/traits/orders-30d.ts"],
     // A column added to the SELECT LIST, not a second SELECT. The first
     // attempt spliced `SELECT <canary> FROM ...` in front of the FROM, which
     // ClickHouse rejects as a syntax error at position 90 — so the gate went
@@ -329,13 +334,13 @@ const SERVICE_GATES = [
     // exists to replace, so the injection would have proven nothing about it.
     inject: () =>
       write(
-        "catalog/traits/orders-30d.ts",
-        read("catalog/traits/orders-30d.ts").replace(
+        "definitions/traits/orders-30d.ts",
+        read("definitions/traits/orders-30d.ts").replace(
           "        profile_id,",
           `        profile_id,\n        ${SQL_COLUMN_CANARY},`,
         ),
       ),
-    assertInjected: () => read("catalog/traits/orders-30d.ts").includes(SQL_COLUMN_CANARY),
+    assertInjected: () => read("definitions/traits/orders-30d.ts").includes(SQL_COLUMN_CANARY),
   },
 ];
 

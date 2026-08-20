@@ -187,7 +187,7 @@ groups:
 
             Find the offending value in `identity.merge_suspended` events,
             add it to the project's `identity.denylist` in
-            catalog/projects/<id>.yaml, then rebuild the affected profiles
+            definitions/projects/<id>.yaml, then rebuild the affected profiles
             — merges are derived state and repair is a rebuild under
             corrected policy, not an inverse operation.
           runbook_url: docs/operations/runbook-identity-merge-storm.md

@@ -17,7 +17,7 @@ import {
 import { checkoutStartedV1Fixture, pageViewedV1Fixture, pageViewedV2Fixture } from "./fixtures.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CATALOG_ROOT = resolve(__dirname, "..", "..", "..", "catalog", "events");
+const CATALOG_ROOT = resolve(__dirname, "..", "..", "..", "definitions", "events");
 const catalog = loadCatalogFromDir(CATALOG_ROOT, defaultSchemaBindings);
 
 /** Moment before page.viewed v1's sunset_at (2026-08-10T00:00:00Z). */

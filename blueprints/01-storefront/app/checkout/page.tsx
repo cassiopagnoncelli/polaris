@@ -10,7 +10,7 @@ export default function CheckoutPage() {
       <p className="muted">
         Navigating here already fired a second <code>page.viewed</code>. Everything below emits{" "}
         <code>checkout.started</code> v1, validated against{" "}
-        <code>catalog/events/checkout/started.v1.yaml</code>. The three differ only in who sends
+        <code>definitions/events/checkout/started.v1.yaml</code>. The three differ only in who sends
         them — and in <code>flow_variant</code>, which is how you tell them apart later.
       </p>
 

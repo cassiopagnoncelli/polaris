@@ -32,7 +32,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
 /** Where a variable may legitimately be read. */
-const SEARCH_DIRS = ["apps", "packages", "sync", "async", "catalog", "scripts", "infra", "db"];
+const SEARCH_DIRS = ["apps", "packages", "sync", "async", "definitions", "scripts", "infra", "db"];
 // Root files a variable can legitimately be read from.
 // matters: a script line like `POLARIS_SMOKE_DOCKER=1 vitest run` is a
 // real use, and omitting it reported that variable unread.

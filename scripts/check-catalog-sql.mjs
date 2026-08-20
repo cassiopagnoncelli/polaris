@@ -102,7 +102,7 @@ async function main() {
   const problems = [];
   let checked = 0;
   for (const dir of SCANNED_CATALOG_DIRS) {
-    for (const file of walk(join(ROOT, "catalog", dir))) {
+    for (const file of walk(join(ROOT, "definitions", dir))) {
       for (const sql of extractSql(readFileSync(file, "utf8"))) {
         checked += 1;
         const error = await explain(sql);

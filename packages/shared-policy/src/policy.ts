@@ -99,7 +99,7 @@ const DEFAULT_REDACT_NAMED_RULES: readonly NamedFieldRule[] = [
 
 /**
  * Platform-default forbidden-field policy. Exported through the package
- * index so the policy file at `catalog/policy/forbidden-fields.ts` can
+ * index so the policy file at `definitions/policy/forbidden-fields.ts` can
  * compose it with project overrides.
  */
 export const PLATFORM_DEFAULT_POLICY: ForbiddenFieldPolicy = Object.freeze({

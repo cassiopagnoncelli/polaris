@@ -57,7 +57,7 @@ import { z } from "zod";
 /** Namespace this component reads. One slice per component (plan §3.5). */
 export const PROJECT_CONFIG_NAMESPACE = "reverse_etl";
 
-/** Job keys, matching `ReverseEtlJob.key` in `catalog/reverse-etl`. */
+/** Job keys, matching `ReverseEtlJob.key` in `definitions/reverse-etl`. */
 const jobKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/u, {
   message: "a job key is lowercase alphanumerics and underscores, e.g. ltv_writeback",
 });

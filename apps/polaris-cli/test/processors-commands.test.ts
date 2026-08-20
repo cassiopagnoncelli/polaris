@@ -369,7 +369,7 @@ function setupTempProcessorsRoot(
   }
   // The catalog-root resolver walks up looking for `catalog/`; stub one in
   // so resolveCatalogRoot works without falling outside the temp dir.
-  mkdirSync(join(root, "catalog"), { recursive: true });
+  mkdirSync(join(root, "definitions"), { recursive: true });
   return root;
 }
 

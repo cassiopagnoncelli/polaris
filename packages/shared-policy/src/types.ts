@@ -3,7 +3,7 @@ import type { PolicyReasonCode } from "./reason-codes.js";
 /**
  * Public types for the forbidden-field policy.
  *
- * The policy is a code-backed file (`catalog/policy/forbidden-fields.ts`)
+ * The policy is a code-backed file (`definitions/policy/forbidden-fields.ts`)
  * that declares two lists:
  *
  *   - **reject list** — named fields whose mere presence rejects the event
@@ -16,7 +16,7 @@ import type { PolicyReasonCode } from "./reason-codes.js";
  * event before forwarding it downstream — the evaluator itself does not
  * mutate input.
  *
- * Project overrides live at `catalog/policy/forbidden-fields.<project_id>.ts`
+ * Project overrides live at `definitions/policy/forbidden-fields.<project_id>.ts`
  * and may only:
  *
  *   - add fields to either list

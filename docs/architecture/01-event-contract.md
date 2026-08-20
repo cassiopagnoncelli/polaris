@@ -187,8 +187,8 @@ The top-level envelope evolves separately from event `properties`. Envelope chan
 The event catalog is file-based and domain-folder organized:
 
 ```text
-catalog/events/payment/approved.yaml
-catalog/events/checkout/started.yaml
+definitions/events/payment/approved.yaml
+definitions/events/checkout/started.yaml
 packages/shared-schemas/src/events/payment/approved.v1.ts
 packages/shared-schemas/src/events/checkout/started.v1.ts
 ```
@@ -223,7 +223,7 @@ Rules:
 
 Hard sensitive-data prohibitions are enforced at ingestion through a two-tier code-backed policy.
 
-The policy lives in `catalog/policy/forbidden-fields.ts` and is the single source of truth. PostgreSQL must not redefine it. Per-project overrides are file-backed, not runtime mutable.
+The policy lives in `definitions/policy/forbidden-fields.ts` and is the single source of truth. PostgreSQL must not redefine it. Per-project overrides are file-backed, not runtime mutable.
 
 ### Principle: default-capture, narrow-reject
 
@@ -277,7 +277,7 @@ Note: IBAN, bank account numbers, raw `email`, raw `phone`, and similar PII fiel
 
 ### Project overrides
 
-Project override files at `catalog/policy/forbidden-fields.<project_id>.ts` may:
+Project override files at `definitions/policy/forbidden-fields.<project_id>.ts` may:
 
 - add fields to the reject list (for project-specific producer bugs)
 - add fields to the redact list (for project-specific regulatory or privacy policies, e.g., raw `email` or raw `phone` in a hashed-only project)

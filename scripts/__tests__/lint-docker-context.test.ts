@@ -2,16 +2,18 @@
  * `.dockerignore` and the Dockerfiles are two files holding one fact: what
  * the build context carries.
  *
- * They disagreed for six days. `catalog` was pruned from the context in May
- * as a local-only ops directory, which it was; in August the identity and
+ * They disagreed for six days. `definitions` was pruned from the context in
+ * May as a local-only ops directory, which it was; in August the identity and
  * enrichment images were taught to read per-project overrides out of
- * `catalog/projects/` and given the COPY that carries them in. Neither edit
- * is wrong on its own and neither author could see the other, so both images
- * were unbuildable from the moment the second one landed, and nothing said
- * so — no CI job builds an image.
+ * `definitions/projects/` and given the COPY that carries them in. Neither
+ * edit is wrong on its own and neither author could see the other, so both
+ * images were unbuildable from the moment the second one landed, and nothing
+ * said so — no CI job builds an image. (It answered to `catalog` throughout
+ * that episode; `0DIPB` renamed it. The fixtures below use the current name
+ * because they exercise the mechanism, not the incident.)
  *
  * The interesting case is the one that broke, and it is the indirect one:
- * `COPY --from=builder /workspace/catalog/projects`. The path is not a
+ * `COPY --from=builder /workspace/definitions/projects`. The path is not a
  * context path at all — it is a path in an earlier stage, which that stage
  * filled with `COPY . .`. A check that only understood a direct
  * `COPY <context-path>` would have called this repository clean while two
@@ -41,34 +43,34 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 describe("reading .dockerignore", () => {
   it("keeps rules in order and marks negations", () => {
-    const rules = parseDockerignore("# a comment\n\ncatalog\n!catalog/projects\n");
+    const rules = parseDockerignore("# a comment\n\ndefinitions\n!definitions/projects\n");
     expect(rules.map((r: { pattern: string }) => r.pattern)).toEqual([
-      "catalog",
-      "catalog/projects",
+      "definitions",
+      "definitions/projects",
     ]);
     expect(rules.map((r: { negated: boolean }) => r.negated)).toEqual([false, true]);
     expect(rules[0]?.line).toBe(3);
   });
 
   it("excludes what an excluded directory contains", () => {
-    // The bug in one assertion: nothing names `catalog/projects`, and
-    // `catalog/projects` is still not in the context.
-    const rules = parseDockerignore("catalog\n");
-    expect(contextStatus("catalog/projects", rules).excluded).toBe(true);
-    expect(contextStatus("catalog", rules).excluded).toBe(true);
+    // The bug in one assertion: nothing names `definitions/projects`, and
+    // `definitions/projects` is still not in the context.
+    const rules = parseDockerignore("definitions\n");
+    expect(contextStatus("definitions/projects", rules).excluded).toBe(true);
+    expect(contextStatus("definitions", rules).excluded).toBe(true);
     expect(contextStatus("packages", rules).excluded).toBe(false);
   });
 
   it("lets a later negation re-include a path under an exclusion", () => {
-    const rules = parseDockerignore("catalog\n!catalog/projects\n");
-    expect(contextStatus("catalog/projects", rules).excluded).toBe(false);
-    expect(contextStatus("catalog/events", rules).excluded).toBe(true);
+    const rules = parseDockerignore("definitions\n!definitions/projects\n");
+    expect(contextStatus("definitions/projects", rules).excluded).toBe(false);
+    expect(contextStatus("definitions/events", rules).excluded).toBe(true);
   });
 
   it("reports which rule decided, so a failure names the line to edit", () => {
-    const rules = parseDockerignore("docs\ncatalog\n");
-    expect(contextStatus("catalog/projects", rules).by?.pattern).toBe("catalog");
-    expect(contextStatus("catalog/projects", rules).by?.line).toBe(2);
+    const rules = parseDockerignore("docs\ndefinitions\n");
+    expect(contextStatus("definitions/projects", rules).by?.pattern).toBe("definitions");
+    expect(contextStatus("definitions/projects", rules).by?.line).toBe(2);
   });
 
   it("understands the wildcards docker understands", () => {
@@ -134,27 +136,27 @@ describe("scanning a tree", () => {
   it("traces a --from source back through the builder", () => {
     // The shape of the real bug: the COPY names a path in the BUILDER, and
     // the builder got it from the context it never received.
-    write(".dockerignore", "docs\ncatalog\nsql\n");
+    write(".dockerignore", "docs\ndefinitions\nsql\n");
     write(
       "sync/identity/resolver/v1/Dockerfile",
       "FROM node:22-alpine AS builder\nWORKDIR /workspace\nCOPY . .\n" +
         "FROM node:22-alpine AS runtime\nWORKDIR /app\n" +
         "COPY --from=builder /deploy /app\n" +
-        "COPY --from=builder --chown=polaris:polaris /workspace/catalog/projects /app/catalog/projects\n",
+        "COPY --from=builder --chown=polaris:polaris /workspace/definitions/projects /app/definitions/projects\n",
     );
     const problems = scan();
     expect(problems).toHaveLength(1);
-    expect(problems[0]?.contextPath).toBe("catalog/projects");
+    expect(problems[0]?.contextPath).toBe("definitions/projects");
     expect(problems[0]?.via).toBe("builder");
     expect(problems[0]?.line).toBe(7);
-    expect(problems[0]?.rule).toBe("catalog");
+    expect(problems[0]?.rule).toBe("definitions");
   });
 
   it("leaves a --from source the build produced alone", () => {
     // `/deploy` is written by `pnpm deploy`, not copied from the context.
     // Nothing about .dockerignore determines whether it exists, so a check
     // that flagged it would be reporting noise.
-    write(".dockerignore", "catalog\n");
+    write(".dockerignore", "definitions\n");
     write(
       "a/Dockerfile",
       "FROM node:22-alpine AS builder\nWORKDIR /workspace\nCOPY . .\nRUN pnpm deploy /deploy\n" +
@@ -164,17 +166,17 @@ describe("scanning a tree", () => {
   });
 
   it("accepts a path a negation re-includes", () => {
-    write(".dockerignore", "catalog\n!catalog/projects\n");
+    write(".dockerignore", "definitions\n!definitions/projects\n");
     write(
       "a/Dockerfile",
       "FROM node:22-alpine AS builder\nWORKDIR /workspace\nCOPY . .\n" +
-        "FROM node:22-alpine\nCOPY --from=builder /workspace/catalog/projects /app/catalog/projects\n",
+        "FROM node:22-alpine\nCOPY --from=builder /workspace/definitions/projects /app/definitions/projects\n",
     );
     expect(scan()).toEqual([]);
   });
 
   it("does not flag `COPY . .`, which is the context by definition", () => {
-    write(".dockerignore", "catalog\n");
+    write(".dockerignore", "definitions\n");
     write("a/Dockerfile", "FROM node:22-alpine\nWORKDIR /workspace\nCOPY . .\n");
     expect(scan()).toEqual([]);
   });
@@ -186,7 +188,7 @@ describe("scanning a tree", () => {
   });
 
   it("says nothing when there is no .dockerignore", () => {
-    write("a/Dockerfile", "FROM alpine\nCOPY catalog /app/catalog\n");
+    write("a/Dockerfile", "FROM alpine\nCOPY definitions /app/definitions\n");
     expect(scan()).toEqual([]);
   });
 });

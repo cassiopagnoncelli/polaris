@@ -1,7 +1,7 @@
 /**
  * `polaris traits` — computed-trait definitions and their runs.
  *
- * Definitions live in `catalog/traits/` as code, not as rows: what a trait
+ * Definitions live in `definitions/traits/` as code, not as rows: what a trait
  * MEANS is versioned with the repository, the same rule that keeps mapping
  * semantics out of PostgreSQL. This group is how an operator runs them.
  */
@@ -17,7 +17,7 @@ export const traitsCommand: CommandDefinition = {
   register: (parent, deps) => {
     const group = parent
       .command("traits")
-      .description("Compute the trait definitions declared in catalog/traits/.");
+      .description("Compute the trait definitions declared in definitions/traits/.");
     traitsComputeCommand.register(group, deps);
   },
 };

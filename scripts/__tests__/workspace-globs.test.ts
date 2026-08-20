@@ -24,16 +24,18 @@
  *   3. The root tsconfig excludes each new root, matching how it already
  *      treats `apps`, `packages`, `sync` and `async`.
  *
- * `catalog` is absent from that exclude list and is left that way: the root
+ * `catalog` was absent from that exclude list and was left that way: the root
  * config's `include` is a single file, so the list is documentary rather than
- * load-bearing, and 0DIPB retires the directory outright. `definitions` is
- * listed because that is where its contents are going.
+ * load-bearing, and 0DIPB has since retired the directory outright.
+ * `definitions` is listed because that is where its contents went.
  *
  * What this does NOT check is whether the rest of the tooling follows. It
- * does not: the root `vitest.config.ts` enumerates test roots and stops at
- * `catalog`, so a test under `libs/` would be silently skipped rather than
- * fail, and `lint-dead-exports.mjs` scans a hard-coded `packages`. Those are
- * recorded on the cards that move the code, per 2XH2V's scope.
+ * does not: `lint-dead-exports.mjs` scans a hard-coded `packages`, so a moved
+ * package's unused exports stop being reported rather than fail. That is
+ * recorded on the cards that move the code, per 2XH2V's scope. The root
+ * `vitest.config.ts` had the same gap — it enumerated test roots and stopped
+ * at `catalog` — and LP5OT closed it; `vitest-collection.test.ts` is now the
+ * standing check that it stays closed.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";

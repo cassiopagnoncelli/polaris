@@ -65,7 +65,7 @@ const PACKAGE_ROOTS = ["packages", "libs", "sdks"];
  * the platform disappears at once and the check reports it as dead.
  *
  * `catalog/` is absent, and that is a live gap rather than a decision: three
- * `shared-policy` symbols are called from `catalog/policy` and sit in the
+ * `shared-policy` symbols are called from `definitions/policy` and sit in the
  * baseline as dead because nothing looks there. Listing `definitions/` means
  * 0DIPB's rename is what surfaces them — as a "now have a caller" note on the
  * baseline it already regenerates, which is the card that should absorb it.

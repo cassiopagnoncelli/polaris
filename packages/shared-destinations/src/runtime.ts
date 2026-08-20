@@ -266,7 +266,7 @@ export interface DestinationConsumerOptions<Payload> {
    * while events were already in the retention window) is enforced here
    * before anything reaches a vendor.
    *
-   * The runtime does not read `catalog/policy` itself — a package that
+   * The runtime does not read `definitions/policy` itself — a package that
    * loaded the registry could not be tested against a fixture override.
    * The host injects it, which is where the deploy-time default lives.
    * Absent means platform defaults for every project.

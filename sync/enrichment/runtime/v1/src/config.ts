@@ -5,7 +5,7 @@
  * paths. The one semantic parameter this stage has (`max_traits_bytes`,
  * the ceiling on a stamped snapshot) is deliberately absent: it changes
  * emitted events, so it lives in `processor.manifest.yaml` with bounds
- * and is narrowed per project in `catalog/projects/<id>.yaml`, never in
+ * and is narrowed per project in `definitions/projects/<id>.yaml`, never in
  * env and never in `project_config`. See
  * `docs/architecture/05-processors-and-replay.md`
  * § "Per-Project Semantic Parameters".
@@ -65,7 +65,7 @@ export const syncEnrichmentEnvSchema = z
 
 export interface SyncEnrichmentConfig {
   readonly consumerGroup: string;
-  /** Directory containing `catalog/projects/`, for per-project narrowing. */
+  /** Directory containing `definitions/projects/`, for per-project narrowing. */
   readonly catalogRoot: string;
   /** MaxMind mmdb path. Absent means fail-open with no geo backend. */
   readonly geoipDbPath?: string;

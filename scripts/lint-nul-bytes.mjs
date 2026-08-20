@@ -50,7 +50,7 @@ const SCAN_DIRS = [
   "packages",
   "sync",
   "async",
-  "catalog",
+  "definitions",
   "scripts",
   "sql",
   "db",

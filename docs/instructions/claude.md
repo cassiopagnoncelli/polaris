@@ -207,7 +207,7 @@ Normal events must be registered and validated by code-backed Zod schemas. `expe
 
 ### Forbidden-field policy
 
-Two-tier code-backed policy in `catalog/policy/forbidden-fields.ts`. Default is **default-capture, narrow-reject**: only named-field `pii_card` and `pii_secret` rules block capture. Pattern-based detections (PAN-in-unexpected-field, AWS key shape, GitHub token shape, JWT shape, generic high-entropy) redact-with-metric — they replace the value and continue the event, emitting `polaris_ingest_redacted_pattern_total` so leaks are observable without dropping events on regex false positives.
+Two-tier code-backed policy in `definitions/policy/forbidden-fields.ts`. Default is **default-capture, narrow-reject**: only named-field `pii_card` and `pii_secret` rules block capture. Pattern-based detections (PAN-in-unexpected-field, AWS key shape, GitHub token shape, JWT shape, generic high-entropy) redact-with-metric — they replace the value and continue the event, emitting `polaris_ingest_redacted_pattern_total` so leaks are observable without dropping events on regex false positives.
 
 Reject list: event rejected with `forbidden_field_rejected`. Redact list: field value replaced with `"[REDACTED:<reason>]"` and the event continues. Reason codes are a closed set: `pii_card`, `pii_account`, `pii_secret`, `policy`, `length`, `pattern_match`. Project overrides may not downgrade platform rejects without a documented exception.
 
@@ -254,7 +254,7 @@ The ingester should:
 - authenticate API keys
 - resolve project/environment/source
 - validate envelopes and properties against the declared `schema_version`
-- enforce the two-tier forbidden-field policy (reject vs redact, from `catalog/policy/forbidden-fields.ts`) before any logging
+- enforce the two-tier forbidden-field policy (reject vs redact, from `definitions/policy/forbidden-fields.ts`) before any logging
 - perform 15-minute event ID dedupe as a retry-storm absorber (per-project override up to 24h is opt-in)
 - emit reason codes `unsupported_schema_version` and `schema_version_sunset` when applicable
 - publish valid events to RabbitMQ

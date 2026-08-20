@@ -65,7 +65,7 @@ export const AUDIENCE_OPERATORS = [
 ] as const;
 export type AudienceOperator = (typeof AUDIENCE_OPERATORS)[number];
 
-/** Trait keys look like trait keys — same rule as `catalog/traits`. */
+/** Trait keys look like trait keys — same rule as `definitions/traits`. */
 const traitKeySchema = z
   .string()
   .regex(/^[a-z][a-z0-9_]{1,62}[a-z0-9]$/, "trait key must be lower snake_case");

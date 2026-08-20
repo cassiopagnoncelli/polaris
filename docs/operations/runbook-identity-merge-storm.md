@@ -79,7 +79,7 @@ SETTINGS final = 1
 ## Stop the bleeding
 
 Add the value to the project's denylist in
-`catalog/projects/<project_id>.yaml`:
+`definitions/projects/<project_id>.yaml`:
 
 ```yaml
 identity:

@@ -24,8 +24,9 @@
 //
 // Two things, both stated as literal patterns rather than inferred:
 //
-//   1. RETIRED PATHS — `processors/<name>/...` and `consumers/<vendor>/...`
-//      as a repository location. Units live under `{sync,async}/<stage>/`.
+//   1. RETIRED PATHS — `processors/<name>/...`, `consumers/<vendor>/...` and
+//      `catalog/<kind>/` as a repository location. Units live under
+//      `{sync,async}/<stage>/`; declared content lives under `definitions/`.
 //   2. RETIRED MODEL — the fan-out prose. Processors no longer read
 //      `raw.events` in parallel and emit sibling derived events; the spine
 //      chains, and enrichment lands IN the envelope.
@@ -33,7 +34,7 @@
 // ## What it deliberately does not do
 //
 // It does not read English. A file may discuss the retired model as history
-// — `catalog/events/enriched/geoip.v1.yaml` explains what `enriched.events`
+// — `definitions/events/enriched/geoip.v1.yaml` explains what `enriched.events`
 // WAS, and the redesign plan records the before/after — and those are the
 // most useful pages on the subject. Such a file is listed in `HISTORICAL`
 // with its reason, which is the same shape as every other exception list
@@ -57,8 +58,8 @@ const SCAN_DIRS = [
   ".github",
   "apps",
   "async",
-  "catalog",
   "db",
+  "definitions",
   "docs",
   "infra",
   "packages",
@@ -122,6 +123,28 @@ export const RETIRED = [
     hint: "destinations live at `sync/destinations/<vendor>/<version>/` — mappers are `src/mapper.ts`",
   },
   {
+    // Anchored to the eight kind directories rather than to `catalog/` alone,
+    // and that is the whole design of this rule. Three modules are NAMED for
+    // the event-catalog concept and keep that name — `apps/ingester-api/src/
+    // catalog/`, `apps/polaris-cli/src/catalog/` and `packages/shared-schemas/
+    // src/catalog/`. The concept is not the directory, and a pattern matching
+    // `catalog/` on its own would fail every import of the three. None of them
+    // holds a directory named for one of the eight kinds, so the kind list
+    // does the anchoring by itself.
+    //
+    // The lookbehind refuses a word-ish prefix, so a future
+    // `packages/event-catalog/events/` is not a violation. A path separator
+    // is allowed through, so prose or a fixture quoting
+    // `/workspace/catalog/projects` — the builder path that left two images
+    // unbuildable for six days — is one. The Dockerfiles themselves are not
+    // scanned here: they carry no extension this check reads, and the
+    // exclusion/COPY pairing is `lint-docker-context`'s to police.
+    id: "catalog-dir",
+    pattern:
+      /(?<![\w.-])catalog\/(?:events|traits|audiences|journeys|policy|projects|sources|reverse-etl)(?![\w-])/,
+    hint: "declared content lives at `definitions/<kind>/` — e.g. `definitions/traits/`. `catalog` names a connector registry in the industry, and ADR-0007 reserves that role for `connectors/`",
+  },
+  {
     id: "fan-out-model",
     pattern: /[Pp]rocessors fan out from `?raw\.events`?/,
     hint: "the spine chains: raw.events -> sync/identity -> identified.events -> sync/enrichment -> resolved.events. Enrichment lands IN the envelope, not as a sibling event",
@@ -148,7 +171,7 @@ export const RETIRED = [
  */
 export const HISTORICAL = new Map([
   [
-    "catalog/events/enriched/geoip.v1.yaml",
+    "definitions/events/enriched/geoip.v1.yaml",
     "the tombstone for the retired event: explaining what it was is its whole job",
   ],
   [

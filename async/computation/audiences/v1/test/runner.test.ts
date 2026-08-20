@@ -212,7 +212,7 @@ describe("runAudiences — exits", () => {
   });
 
   it("exits everyone when the trait the predicate reads goes absent", async () => {
-    // Per catalog/traits, absent is "not computed", not zero — so a trait
+    // Per definitions/traits, absent is "not computed", not zero — so a trait
     // that fails to compute empties every audience built on it. Intended:
     // an audience whose input is unknown has no defensible membership.
     const log: string[] = [];

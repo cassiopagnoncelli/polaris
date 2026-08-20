@@ -92,7 +92,7 @@ export interface BuildAppOptions {
   readonly gate?: ProcessorActivationGate;
   /**
    * Per-project enrichment overrides, keyed by `project_id`. `main.ts`
-   * loads these from the `enrichment:` blocks of `catalog/projects/`.
+   * loads these from the `enrichment:` blocks of `definitions/projects/`.
    * Validated EAGERLY here, so an out-of-bounds override fails this
    * build call — and therefore the boot — rather than throwing per
    * message inside the consumer handler.

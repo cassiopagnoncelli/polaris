@@ -4,7 +4,8 @@
  * `pnpm-workspace.yaml` was opened to `libs/`, `sdks/`, `connectors/` and
  * `definitions/` by 2XH2V so that each ADR-0007 move is a pure `git mv`. The
  * root `vitest.config.ts` enumerates its roots separately, and stopped at
- * `catalog` — so the first `git mv` would have carried a package out of the
+ * `catalog` (since retired by 0DIPB) — so the first `git mv` would have
+ * carried a package out of the
  * only tree the runner looks at. Nothing would have gone red: the moved
  * package's tests would simply stop being collected, and a suite that runs
  * nothing reports success. That is the one failure mode a green gate cannot
@@ -42,7 +43,10 @@ const VITEST_BIN = join(ROOT, "node_modules", "vitest", "vitest.mjs");
  * The old-epoch entries are listed for the same reason the globs still are:
  * both are live until IJ4NN, which deletes them here and there together. A
  * failure in this suite the day a root is retired is the test asking whether
- * the retirement was meant, which is the only moment anyone can answer.
+ * the retirement was meant, which is the only moment anyone can answer. It
+ * asked once already: `catalog/policy` was seeded here until 0DIPB moved the
+ * directory to `definitions/`, and it came out with the glob it existed to
+ * prove — `definitions/traits` below is the same claim under the new name.
  *
  * The `.spec.mts` on the SDK is not decoration. The include pattern accepts
  * four extensions and two infixes, and a root added by copying only the
@@ -54,7 +58,6 @@ const MEMBERS: ReadonlyArray<{ readonly dir: string; readonly test: string }> = 
   { dir: "packages/shared-transport", test: "test/topology.test.ts" },
   { dir: "sync/identity/resolver/v1", test: "test/resolve.test.ts" },
   { dir: "async/computation/sessionizer/v1", test: "test/window.test.ts" },
-  { dir: "catalog/policy", test: "test/registry.test.ts" },
   // The epoch ADR-0007 opens, and what this card exists for.
   { dir: "libs/pipeline", test: "test/step.test.ts" },
   { dir: "libs/persistence/postgres", test: "test/pool.test.ts" },

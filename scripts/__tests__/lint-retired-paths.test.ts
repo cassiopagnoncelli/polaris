@@ -75,6 +75,39 @@ describe("scanning a tree", () => {
     expect(scan().map((p) => p.rule)).toContain("consumers-dir");
   });
 
+  it("finds a reintroduced catalog location", () => {
+    write("docs/x.md", "Trait registries live at `catalog/traits/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("catalog-dir");
+  });
+
+  it("finds a catalog location quoted as a builder path", () => {
+    // The shape the docker-context bug had. A rule that refused every
+    // `/`-prefixed match in order to protect the modules below would have
+    // called this clean.
+    write("docs/y.md", "The image runs `COPY --from=builder /workspace/catalog/projects`.\n");
+    expect(scan().map((p) => p.rule)).toContain("catalog-dir");
+  });
+
+  it("leaves the modules named for the event-catalog concept alone", () => {
+    // Why the rule names eight directories instead of `catalog/`. These
+    // three modules keep the name because it is the CONCEPT they implement,
+    // not the directory 0DIPB renamed, and a bare `catalog/` pattern would
+    // fail every import of them.
+    write(
+      "apps/polaris-cli/src/commands/projects/list.ts",
+      'import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";\n',
+    );
+    write("apps/ingester-api/src/app.ts", 'import { loadRuntimeCatalog } from "./catalog/runtime.js";\n');
+    write("packages/shared-schemas/src/index.ts", 'export * from "./catalog/index.js";\n');
+    expect(scan()).toEqual([]);
+  });
+
+  it("leaves a word-ish prefix alone, and the directory's new name", () => {
+    write("docs/ok-catalog.md", "A registry could live at `packages/event-catalog/events/`.\n");
+    write("docs/ok-defs.md", "Declared content lives at `definitions/traits/`.\n");
+    expect(scan()).toEqual([]);
+  });
+
   it("finds the fan-out sentence", () => {
     write("docs/z.md", "Processors fan out from `raw.events` rather than chaining.\n");
     expect(scan().map((p) => p.rule)).toContain("fan-out-model");

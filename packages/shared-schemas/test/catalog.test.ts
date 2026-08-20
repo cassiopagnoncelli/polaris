@@ -11,10 +11,10 @@ import {
 import { pageViewedV2PropertiesSchema } from "../src/events/page/viewed.v2.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CATALOG_ROOT = resolve(__dirname, "..", "..", "..", "catalog", "events");
+const CATALOG_ROOT = resolve(__dirname, "..", "..", "..", "definitions", "events");
 
 describe("loadCatalogYamlFromDir", () => {
-  it("loads every YAML entry under catalog/events/", () => {
+  it("loads every YAML entry under definitions/events/", () => {
     const entries = loadCatalogYamlFromDir(CATALOG_ROOT);
     const names = entries.map((entry) => `${entry.name}@${entry.schema_version}`).sort();
     // Worktree must ship at least page.viewed v1+v2 and checkout.started v1

@@ -4,7 +4,7 @@
  * Every journey the platform runs. Adding one means adding a module and a
  * line here — a diff a reviewer can read, rather than a directory scan
  * whose contents depend on what happens to be on disk. Same contract as
- * `catalog/audiences/index.ts` and `catalog/traits/index.ts`.
+ * `definitions/audiences/index.ts` and `definitions/traits/index.ts`.
  *
  * Definitions are code and deploy-time. What a journey MEANS is versioned
  * with the repository; only PARTICIPATION — where a profile is in the

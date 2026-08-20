@@ -82,9 +82,9 @@ where they overlap, plus a few of its own.
 | --- | --- | --- |
 | `POLARIS_ACCEPTANCE_TEST` | _(unset)_ | Set by `pnpm test:acceptance`. When `1`, the Vitest scenario runs; otherwise it skips. |
 | `POLARIS_INGESTER_URL` | `http://localhost:4000` | Where the Node SDK posts the event. |
-| `POLARIS_ACCEPTANCE_PROJECT_ID` | `storefront` | Project under test. Must exist in `catalog/projects/`. |
+| `POLARIS_ACCEPTANCE_PROJECT_ID` | `storefront` | Project under test. Must exist in `definitions/projects/`. |
 | `POLARIS_ACCEPTANCE_ENVIRONMENT` | `development` | Environment string stamped onto the API key, destination, and replay job. |
-| `POLARIS_ACCEPTANCE_SOURCE_ID` | `payments-api` | Source under test. Must exist in `catalog/sources/<project>/`. |
+| `POLARIS_ACCEPTANCE_SOURCE_ID` | `payments-api` | Source under test. Must exist in `definitions/sources/<project>/`. |
 | `POLARIS_ACCEPTANCE_SOURCE_TYPE` | `backend` | Source type the API key authenticates. |
 | `POLARIS_ACCEPTANCE_VENDOR` | `webhook` | Destination vendor. Only `webhook` is supported in this test because it is the only consumer that does not require a vendor sandbox. |
 | `POLARIS_ACCEPTANCE_INSTANCE_LABEL` | `acceptance-sink` | Stable label for the test destination. Idempotent on re-runs. |

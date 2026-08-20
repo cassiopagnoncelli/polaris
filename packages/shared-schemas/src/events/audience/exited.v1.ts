@@ -19,7 +19,7 @@ import { z } from "zod";
  * ## Absent traits cause exits, and that is intended
  *
  * A profile leaves when the predicate stops holding, which includes the
- * case where a trait it reads went absent. Per `catalog/traits/types.ts`
+ * case where a trait it reads went absent. Per `definitions/traits/types.ts`
  * an absent trait is "we do not know", not zero — so a trait that fails to
  * compute empties every audience built on it. That is the honest outcome:
  * an audience whose input is unknown has no defensible membership, and
@@ -28,7 +28,7 @@ import { z } from "zod";
  */
 export const audienceExitedV1PropertiesSchema = z
   .object({
-    /** Catalog key from `catalog/audiences/`. */
+    /** Catalog key from `definitions/audiences/`. */
     audience: z.string().regex(/^[a-z][a-z0-9_]*$/),
     /** Definition version that evaluated this transition. */
     audience_version: z.number().int().positive(),

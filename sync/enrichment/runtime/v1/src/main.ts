@@ -2,7 +2,7 @@
  * Polaris enrichment stage (sync/enrichment/runtime v1) entry point.
  *
  * Runs at container start (`node dist/main.js`). Loads runtime config,
- * loads the per-project enrichment overrides from `catalog/projects/`,
+ * loads the per-project enrichment overrides from `definitions/projects/`,
  * builds the service via `buildSyncEnrichmentApp`, and starts the HTTP
  * shell for `/health`, `/ready`, `/metrics` while the runtime drives
  * itself in the background.

@@ -51,10 +51,10 @@ function baseEnv(catalogRoot: string): NodeJS.ProcessEnv {
 }
 
 function seedSampleCatalog(root: string): void {
-  mkdirSync(join(root, "catalog/projects"), { recursive: true });
-  mkdirSync(join(root, "catalog/sources/storefront"), { recursive: true });
+  mkdirSync(join(root, "definitions/projects"), { recursive: true });
+  mkdirSync(join(root, "definitions/sources/storefront"), { recursive: true });
   writeFileSync(
-    join(root, "catalog/projects/storefront.yaml"),
+    join(root, "definitions/projects/storefront.yaml"),
     [
       "project_id: storefront",
       "display_name: Storefront",
@@ -65,7 +65,7 @@ function seedSampleCatalog(root: string): void {
     ].join("\n"),
   );
   writeFileSync(
-    join(root, "catalog/sources/storefront/storefront-web.yaml"),
+    join(root, "definitions/sources/storefront/storefront-web.yaml"),
     [
       "project_id: storefront",
       "source_id: storefront-web",
@@ -82,7 +82,7 @@ function seedSampleCatalog(root: string): void {
     ].join("\n"),
   );
   writeFileSync(
-    join(root, "catalog/sources/storefront/payments-api.yaml"),
+    join(root, "definitions/sources/storefront/payments-api.yaml"),
     [
       "project_id: storefront",
       "source_id: payments-api",

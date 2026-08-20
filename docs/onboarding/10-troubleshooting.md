@@ -17,7 +17,7 @@ the name does not exist in the catalog the running ingester picked up).
 **Diagnostic move.**
 
 1. Check the catalog has the file:
-   `catalog/events/<domain>/<event>.v<n>.yaml`. If it is missing, you
+   `definitions/events/<domain>/<event>.v<n>.yaml`. If it is missing, you
    forgot [Phase 3](./03-event-names-and-schemas.md).
 2. If the file exists, check that the running ingester has it. Schema
    registrations land via deploy, not at runtime. A merged-but-not-yet-deployed
@@ -182,7 +182,7 @@ etc. See [Event Contract / Forbidden-Field Policy](../architecture/01-event-cont
    `card_last4`, never `card_number_full` or `cvv`).
 3. If you believe the rejection is a false positive (a legitimately-named
    field shadowed by a platform default), open a PR against
-   `catalog/policy/forbidden-fields.<project_id>.ts` for a project-scoped
+   `definitions/policy/forbidden-fields.<project_id>.ts` for a project-scoped
    override. **Cannot downgrade platform rejects without a documented
    exception note** — see [Policy / Project overrides](../architecture/01-event-contract.md#project-overrides).
 

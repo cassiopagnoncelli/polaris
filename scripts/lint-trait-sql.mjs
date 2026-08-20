@@ -8,7 +8,7 @@
 // the shared cluster with identical blast radius. Audiences arrived after
 // this check did, and a definition source outside its scope would be a
 // hole in exactly the shape the check exists to close — the same way
-// `catalog/policy` sat outside the dead-export check.
+// `definitions/policy` sat outside the dead-export check.
 //
 // This is a lint rather than a runtime guard because the failure it
 // prevents happens at 03:00 on a cron, on a shared cluster, with nobody
@@ -87,7 +87,7 @@ export function tablesReferenced(sql) {
 /**
  * Event names the catalog registers.
  *
- * Read from `catalog/events/**.yaml` rather than a list here, so an event
+ * Read from `definitions/events/**.yaml` rather than a list here, so an event
  * added or retired moves this check with it. The ingester rejects anything
  * absent from the catalog as `unknown_event`, which is the contract this
  * borrows: if the platform will not accept the event, a definition
@@ -115,7 +115,7 @@ export function registeredEventNames(root) {
       else if (full.endsWith(".yaml") || full.endsWith(".yml")) files.push(full);
     }
   };
-  descend(join(root, "catalog", "events"));
+  descend(join(root, "definitions", "events"));
 
   for (const file of files) {
     // `name: checkout.started` at column zero. The catalog entries are
@@ -130,7 +130,7 @@ export function registeredEventNames(root) {
   // directory. That is how this was written the first time.
   if (names.size === 0) {
     throw new Error(
-      `trait-sql check: no registered events found under ${join(root, "catalog", "events")}. ` +
+      `trait-sql check: no registered events found under ${join(root, "definitions", "events")}. ` +
         "The check reads `name:` from the event YAML; if the catalog moved, move this with it.",
     );
   }
@@ -199,7 +199,7 @@ export function findTraitSqlProblems(contents, file, knownEvents) {
         reason:
           `filters on event \`${event}\`, which the catalog does not register. The ingester ` +
           "rejects it as `unknown_event`, so this definition counts a name nothing can emit. " +
-          "Use a registered event, or register this one under catalog/events/",
+          "Use a registered event, or register this one under definitions/events/",
       });
     }
   }
@@ -233,7 +233,7 @@ function main() {
   const root = process.env["POLARIS_TRAIT_ROOT"] ?? DEFAULT_ROOT;
   const files = [];
   for (const catalogDir of SCANNED_CATALOG_DIRS) {
-    files.push(...walk(join(root, "catalog", catalogDir)));
+    files.push(...walk(join(root, "definitions", catalogDir)));
   }
   const knownEvents = registeredEventNames(root);
   const problems = [];

@@ -2,7 +2,7 @@
  * Per-project override contracts for the spine stages.
  *
  * These are the shapes of the OPTIONAL `identity:` and `enrichment:`
- * blocks in `catalog/projects/<project_id>.yaml`. Two kinds of consumer
+ * blocks in `definitions/projects/<project_id>.yaml`. Two kinds of consumer
  * parse them and they must agree, which is why the schemas live here and
  * not in either:
  *
@@ -72,7 +72,7 @@ export type ProjectIdentityOverride = z.infer<typeof projectIdentityOverrideSche
 
 /**
  * Shape of the OPTIONAL `enrichment:` block in
- * `catalog/projects/<project_id>.yaml`.
+ * `definitions/projects/<project_id>.yaml`.
  *
  * Same contract as `identity:` above, one stage further down the spine:
  * file-backed, deploy-time, narrowing-only, validated eagerly at boot

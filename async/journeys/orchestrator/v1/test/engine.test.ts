@@ -31,7 +31,7 @@ describe("the loop guard, at runtime", () => {
     // The catalog refuses such a DEFINITION, which protects this
     // repository. This protects against an event arriving by a route the
     // loader never saw: a replay, a hand-published message, a definition
-    // source that is not catalog/journeys.
+    // source that is not definitions/journeys.
     expect(isForbiddenTrigger("journey.entered")).toBe(true);
     expect(isForbiddenTrigger("journey.step_advanced")).toBe(true);
     expect(isForbiddenTrigger("journey.exited")).toBe(true);
