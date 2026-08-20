@@ -43,10 +43,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
  * source textually.
  */
 function canonicalFamilies(): readonly string[] {
-  const source = readFileSync(
-    join(ROOT, "packages", "shared-transport", "src", "streams.ts"),
-    "utf8",
-  );
+  const source = readFileSync(join(ROOT, "libs", "bus", "src", "streams.ts"), "utf8");
   const literals = new Map<string, string>();
   for (const match of source.matchAll(/export const (STREAM_FAMILY_[A-Z_]+) = "([a-z.]+)"/g)) {
     literals.set(match[1] as string, match[2] as string);

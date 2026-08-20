@@ -8,7 +8,7 @@
 //   * The migration runner is a deployment-time concern, not a library.
 //     It does not belong inside a workspace package that has a build/typecheck
 //     boundary with its own dependency surface.
-//   * Direct @clickhouse/client imports outside packages/shared-clickhouse/
+//   * Direct @clickhouse/client imports outside libs/persistence/clickhouse/
 //     are LINT-BLOCKED by scripts/lint-clickhouse-imports.mjs (architecture
 //     decision in 07-clickhouse.md "Access Control"). The runner uses the
 //     ClickHouse HTTP /query interface with Node's native fetch, which is

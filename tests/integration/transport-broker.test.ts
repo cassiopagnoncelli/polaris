@@ -28,7 +28,7 @@
  * default `pnpm test` on every PR stays hermetic and Docker-free; the
  * integration workflow flips the var on after `docker compose up`.
  *
- * @see packages/shared-transport/src/consumer.ts
+ * @see libs/bus/src/consumer.ts
  * @see docs/architecture/03-rabbitmq-streams.md "Failure handling"
  */
 
@@ -244,7 +244,7 @@ describe.skipIf(!ENABLED)("transport driver against a live RabbitMQ", () => {
     // return" slot blaming the wrong publish). Live timing will not
     // reliably interleave a return against a concurrent confirm; verified
     // by mutation, this test passes on the broken build. The deterministic
-    // version lives in packages/shared-transport/test/producer.test.ts,
+    // version lives in libs/bus/test/producer.test.ts,
     // which holds the confirms open and releases them out of order.
     const good = publishEvent(producer, `${RUN}-good`, "cust-good");
     const bad = producer.publish({

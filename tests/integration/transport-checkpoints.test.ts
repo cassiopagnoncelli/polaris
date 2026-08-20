@@ -14,7 +14,7 @@
  * `pnpm test` on every PR stays hermetic; the integration workflow flips
  * the env var on after bringing up the compose stack.
  *
- * @see packages/shared-transport/src/checkpoints.ts
+ * @see libs/bus/src/checkpoints.ts
  * @see db/migrations/20260810000001_create_transport_checkpoints.sql
  */
 

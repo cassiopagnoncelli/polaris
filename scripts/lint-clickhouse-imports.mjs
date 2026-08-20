@@ -4,7 +4,7 @@
 // `@clickhouse/client` is the official ClickHouse JS client. Polaris policy
 // (docs/architecture/07-clickhouse.md "Access Control",
 //  docs/architecture/09-engineering-standards.md "ClickHouse Access")
-// is that **only** `packages/shared-clickhouse/` may import it. Every other
+// is that **only** `libs/persistence/clickhouse/` may import it. Every other
 // workspace package must go through that helper, which selects the
 // `polaris_service` or `polaris_operator` role and emits a metric on the
 // `operator.raw.query` escape hatch.
@@ -32,13 +32,31 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 
 // Workspace directories that contain runtime/CLI/test source. Aligned with
 // pnpm-workspace.yaml and the LOC_DIRS list in the Makefile.
-const SCAN_DIRS = ["apps", "packages", "libs", "sync", "async", "definitions", "scripts"];
+//
+// ADR-0007's destinations are listed alongside the old roots, both epochs at
+// once, for the same reason `pnpm-workspace.yaml` carries both: a move is then
+// a pure `git mv`. A root that matches nothing costs nothing, whereas a root
+// missing from this list turns the check OFF for everything under it without
+// failing — the driver helper moved to `libs/persistence/clickhouse` and every
+// other package's violations stopped being looked for.
+const SCAN_DIRS = [
+  "apps",
+  "packages",
+  "sync",
+  "async",
+  "definitions",
+  "scripts",
+  "libs",
+  "sdks",
+  "connectors",
+];
 
 // Path prefixes (relative to root) where the official client is *allowed*.
 // Anything else is a violation.
 const ALLOWED_PATH_PREFIXES = [
-  // The shared helper package.
-  ["packages", "shared-clickhouse"].join(sep),
+  // The shared helper package. ADR-0007 keeps the persistence drivers as
+  // separate packages precisely so this boundary survives the restructure.
+  ["libs", "persistence", "clickhouse"].join(sep),
 ];
 
 // File extensions we scan. Skips .json, .md, .yaml, .sql intentionally —
@@ -298,13 +316,13 @@ function main() {
 
   if (violations.length === 0) {
     console.log(
-      "[lint-clickhouse-imports] no violations. Only packages/shared-clickhouse/ imports @clickhouse/client.",
+      "[lint-clickhouse-imports] no violations. Only libs/persistence/clickhouse/ imports @clickhouse/client.",
     );
     return;
   }
 
   console.error(
-    `[lint-clickhouse-imports] ${violations.length} violation(s): @clickhouse/client may only be imported from packages/shared-clickhouse/.`,
+    `[lint-clickhouse-imports] ${violations.length} violation(s): @clickhouse/client may only be imported from libs/persistence/clickhouse/.`,
   );
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}`);

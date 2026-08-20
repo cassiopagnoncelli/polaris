@@ -11,7 +11,7 @@
 //     text, so changes to it cannot be read in review.
 //
 // Polaris hit this for real. `apps/control-plane-api/src/admin/pages/processors.ts`
-// and `packages/shared-processor/src/activation-gate.ts` each built a
+// and `libs/pipeline/src/activation-gate.ts` each built a
 // composite Map key with a NUL separator written as the byte itself; both
 // files were invisible to every `rg` search until someone noticed by accident.
 //
@@ -59,6 +59,13 @@ const SCAN_DIRS = [
   "tests",
   "agents",
   "bin",
+  // ADR-0007 destinations, listed beside the old roots. The success message
+  // claims the repository is clean, so every root the tree can hold code in
+  // has to be scanned for that claim to stay true.
+  "libs",
+  "sdks",
+  "connectors",
+  "definitions",
 ];
 
 // An allow-list, not a deny-list. Every extension here is text by definition,

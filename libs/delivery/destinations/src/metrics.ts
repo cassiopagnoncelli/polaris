@@ -26,7 +26,7 @@
  * `<name>_sum`, `<name>_count`; `histogram_quantile()` in Grafana works
  * on the bucket series directly.
  *
- * @see packages/shared-processor/src/metrics.ts (ProcessorMetrics)
+ * @see libs/pipeline/src/metrics.ts (ProcessorMetrics)
  * @see docs/architecture/08-observability-and-operations.md
  * @see docs/operations/slos.md
  */

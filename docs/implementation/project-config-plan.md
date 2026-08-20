@@ -958,13 +958,13 @@ forbidden fields), never removal.
 
 **`topic_isolations` should not move.** It changes stream topology rather than
 behaviour, is read on the producer hot path with its own cache
-(`packages/shared-transport/src/isolation-cache.ts`), and a stale read there
+(`libs/bus/src/isolation-cache.ts`), and a stale read there
 misroutes events rather than mistuning them. Different consistency
 requirement, different mechanism.
 
 **`processor_activations` folds in later, deliberately.** It is a genuine
 per-`(project, environment)` toggle and fits the model, but it fails *open* on
-DB error (`packages/shared-processor/src/activation-gate.ts:129-140`) while
+DB error (`libs/pipeline/src/activation-gate.ts:129-140`) while
 config resolution fails closed at startup. Merging them silently changes a
 gate's failure semantics, so it is a follow-up card with that change made
 explicit — not a quiet consequence of this work.
@@ -992,7 +992,7 @@ discovered during it.
 **The listener adds a connection per replica.** `LISTEN` cannot run on a pooled
 connection, so the store opens a dedicated raw `pg.Client` alongside the Kysely
 pool — `pg ^8.20.0` is already a direct dependency of
-`packages/shared-db`, so this adds no new package. At ~64 replicas it is 64
+`libs/persistence/postgres`, so this adds no new package. At ~64 replicas it is 64
 extra connections against `max_connections`: small, but it must be checked
 against deployed Postgres sizing before C2 ships, not after.
 
@@ -1008,7 +1008,7 @@ now exactly as expensive as any other, which is one row read on a cold miss.
 The environment enum is forked three ways and must be single-sourced before
 anything keys on `(project_id, environment)`:
 
-- `packages/shared-config/src/schemas/common.ts:11` — adds `local`
+- `libs/runtime/config/src/schemas/common.ts:11` — adds `local`
 - `libs/spec/src/envelope/primitives.ts:42` — adds `test`, omits `local`
 - six other definitions agree on `development | staging | production`
 

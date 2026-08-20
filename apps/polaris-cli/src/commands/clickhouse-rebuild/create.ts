@@ -28,7 +28,7 @@
  *
  * @see docs/architecture/07-clickhouse.md "Replay and Rebuild"
  * @see docs/development/clickhouse-rebuilds.md
- * @see packages/shared-clickhouse/src/rebuild/
+ * @see libs/persistence/clickhouse/src/rebuild/
  */
 import {
   type ClickhouseRebuildDriver,

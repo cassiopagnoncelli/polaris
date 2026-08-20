@@ -22,7 +22,7 @@
  *
  * `mutates: false`: bypasses the production gate from P6-007.
  *
- * @see packages/shared-clickhouse/src/rebuild/planner.ts
+ * @see libs/persistence/clickhouse/src/rebuild/planner.ts
  * @see docs/architecture/07-clickhouse.md "Replay and Rebuild"
  */
 import {

@@ -70,6 +70,15 @@ const SCAN_DIRS = [
   "sql",
   "sync",
   "tests",
+  // ADR-0007's destinations, listed beside the old roots the way
+  // `pnpm-workspace.yaml` carries both epochs. A root matching nothing is a
+  // no-op; a root missing here stops the check looking at everything under it,
+  // so a page that moved into `libs/` could reintroduce a retired path and
+  // still pass.
+  "libs",
+  "sdks",
+  "connectors",
+  "definitions",
 ];
 
 /** Files at the repository root that are read before anything else is. */
@@ -114,7 +123,60 @@ const SCANNED_EXT = new Set([
  * `hint` is the whole value of this check: a file that fails should not send
  * anybody to `git log` to find out what the path became.
  */
+/**
+ * Where ADR-0007 sent the platform libraries.
+ *
+ * The move is a directory move only — `@polaris/shared-db` still resolves,
+ * because pnpm resolves by package NAME and the names do not change until
+ * IJ4NN. What stops resolving is the PATH, and a path is what documentation,
+ * runbooks, dashboards and module headers point with. So the same argument
+ * that produced this file applies again: a sentence naming
+ * `packages/shared-db/` is now naming a directory that does not exist, and a
+ * reader cannot tell it from a current one.
+ *
+ * Keyed by old path so the hint can name the exact destination rather than
+ * telling everybody to go and read the ADR. The thirteen packages still under
+ * `packages/` are deliberately absent — they have not moved, and IJ4NN is the
+ * card that retires the location itself.
+ *
+ * What this cannot see: a path built from segments rather than written out,
+ * `join(ROOT, "packages", "shared-transport", "src", "streams.ts")`. Two script
+ * tests were exactly that and this rule was blind to both; the suite caught
+ * them by opening the file and failing on ENOENT. Widening the pattern to
+ * chase quoted segments would trade a class of false negatives for a class of
+ * false positives, so the division stands: prose and literal paths here, real
+ * reads in the tests that do them.
+ */
+const MOVED_LIBRARIES = new Map([
+  ["shared-transport", "libs/bus"],
+  ["shared-processor", "libs/pipeline"],
+  ["shared-db", "libs/persistence/postgres"],
+  ["shared-clickhouse", "libs/persistence/clickhouse"],
+  ["shared-control-plane-db", "libs/persistence/control-plane"],
+  ["shared-logger", "libs/observability/logger"],
+  ["shared-metrics", "libs/observability/metrics"],
+  ["shared-service-bootstrap", "libs/runtime/service-bootstrap"],
+  ["shared-config", "libs/runtime/config"],
+  ["shared-environments", "libs/runtime/environments"],
+  ["shared-secrets", "libs/runtime/secrets"],
+]);
+
+/**
+ * One rule per moved library, so the hint names the destination.
+ *
+ * The trailing `(?![\w-])` is what keeps `packages/shared-control-plane/`
+ * (which has NOT moved) from matching the `shared-control-plane-db` rule, and
+ * the leading `(?<![\w/.-])` keeps the rule anchored to a repository location
+ * rather than firing inside a longer path.
+ */
+const movedLibraryRules = [...MOVED_LIBRARIES].map(([name, destination]) => ({
+  id: `moved-library-${name}`,
+  pattern: new RegExp(`(?<![\\w/.-])packages/${name}(?![\\w-])`),
+  hint: `\`${name}\` moved to \`${destination}/\` (ADR-0007); the package NAME is unchanged, so imports of \`@polaris/${name}\` still resolve`,
+}));
+
 export const RETIRED = [
+  ...movedLibraryRules,
   {
     id: "processors-dir",
     pattern: /(?<![\w/.-])processors\/(?:<[a-z_]+>|[a-z][a-z0-9-]*)\//,

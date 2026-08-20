@@ -23,7 +23,7 @@ duplicating their content.
 | pnpm         | `10.30.0`           | Pinned in `packageManager`. Other versions are blocked at install. |
 | Docker       | recent (24+)        | Runs the four-service local stack (`docker compose up -d`).       |
 | `psql`       | recent              | The smoke seed step and ad-hoc DB inspection shell out to `psql`. Install via `brew install postgresql` or `apt-get install postgresql-client`. |
-| `dbmate`     | recent              | Applies PostgreSQL migrations. The `db:migrate` script invokes it from `packages/shared-db`. |
+| `dbmate`     | recent              | Applies PostgreSQL migrations. The `db:migrate` script invokes it from `libs/persistence/postgres`. |
 | Make         | optional            | Thin wrapper around `pnpm` + `docker compose`. See `make help`.    |
 
 Node and pnpm are also pinned at the top of each GitHub Actions workflow file
@@ -125,7 +125,7 @@ POLARIS_HTTP_PORT=8080 pnpm --filter @polaris/ingester-api run start
 
 Entry point: [`apps/ingester-api/src/server.ts`](../../apps/ingester-api/src/server.ts).
 Defaults: `POLARIS_HTTP_HOST=0.0.0.0`, `POLARIS_HTTP_PORT=3000` (from
-[`packages/shared-config`](../../packages/shared-config/)). The smoke runbook
+[`libs/runtime/config`](../../libs/runtime/config/)). The smoke runbook
 and CI workflow both expect the ingester on `8080`; the platform default
 of `3000` is fine for ad-hoc usage but you'll override it when you want to
 follow the smoke runbook step-by-step.
@@ -438,7 +438,7 @@ clickhouse-client \
 
 Services and CLI code never `import "@clickhouse/client"` directly — the
 workspace-wide lint blocks it. Always go through
-[`packages/shared-clickhouse`](../../packages/shared-clickhouse/), which
+[`libs/persistence/clickhouse`](../../libs/persistence/clickhouse/), which
 exposes a role-aware surface that mirrors the database grants.
 
 ```ts
@@ -586,7 +586,7 @@ checks but is NOT a substitute for `shared-clickhouse` in application code.
 | `dbmate: command not found`                                                | `pnpm install` did not link the `dbmate` binary, or you are running outside the workspace.                                | Run `pnpm install`, or call dbmate directly via `pnpm --filter @polaris/shared-db exec dbmate ...`.                        |
 | `pnpm db:migrate` reports `connection refused`                              | PostgreSQL container is not up, or `DATABASE_URL` points elsewhere.                                                       | `docker compose ps postgres` should show "healthy"; default `DATABASE_URL` is `postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable`. |
 | `pnpm clickhouse:bootstrap-local` fails with `Cannot find module`            | The script ships as `.mjs` but Node 22 still needs the workspace install first.                                           | Run `pnpm install` from the repo root.                                                                                     |
-| `pnpm lint` fails with `disallowed import "@clickhouse/client"`             | A file outside `packages/shared-clickhouse/` imported the official client.                                                | Route the access through `@polaris/shared-clickhouse` instead. See [CI / ClickHouse import-restriction check](./ci.md#clickhouse-import-restriction-check). |
+| `pnpm lint` fails with `disallowed import "@clickhouse/client"`             | A file outside `libs/persistence/clickhouse/` imported the official client.                                                | Route the access through `@polaris/shared-clickhouse` instead. See [CI / ClickHouse import-restriction check](./ci.md#clickhouse-import-restriction-check). |
 | `pnpm typecheck` succeeds but `pnpm test` fails with "Cannot find module"  | Stale `dist/` from a partial build, or a workspace package referenced before its `build` ran.                            | `pnpm build && pnpm test`. The CI `test` job also runs `pnpm build` first for this reason.                                  |
 | `pnpm openapi:check` fails after a Zod schema edit                          | The committed OpenAPI document drifted from the Zod sources.                                                              | `pnpm openapi` and commit the regenerated `docs/api/openapi.{yaml,json}`. See [API docs](../api/README.md).                |
 | `pnpm smoke:vertical-slice` reports `ECONNREFUSED` on `http://localhost:4000/v1/events` | The ingester is not running, or it bound to `3000` (the shared-config default) because it was started without its `dev` script. | `pnpm --filter @polaris/ingester-api run dev`, which sets `POLARIS_HTTP_PORT=4000` per `infra/service-ports.json`, or export `POLARIS_INGESTER_URL`. |

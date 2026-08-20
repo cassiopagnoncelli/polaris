@@ -11,7 +11,7 @@ Binding architecture references:
 - [Production Readiness](../architecture/11-production-readiness.md)
 
 The ClickHouse client shared package lives at
-[`packages/shared-clickhouse/`](../../packages/shared-clickhouse/).
+[`libs/persistence/clickhouse/`](../../libs/persistence/clickhouse/).
 The schema for `polaris.analytics_ingest_log` and the projection
 tables is documented at
 [`docs/architecture/07-clickhouse.md`](../architecture/07-clickhouse.md).
@@ -233,7 +233,7 @@ is cause #3.
 
 The shared ClickHouse client logs slow queries and insert errors
 with the query digest from `polaris_clickhouse_operator_raw_query_total`
-(see [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts)).
+(see [`libs/persistence/clickhouse/src/raw.ts`](../../libs/persistence/clickhouse/src/raw.ts)).
 
 ## Mitigations
 

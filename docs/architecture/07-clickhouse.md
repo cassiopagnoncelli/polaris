@@ -242,7 +242,7 @@ read as "no IPs observed" rather than "IPs are not on this table".
 "Stable event keys" is a requirement on the writer, not a property the engine
 supplies. Derived facts satisfy it because processors mint `event_id` as a
 UUIDv5 over `(processor_name, source_event_id, emission slot)` — see
-[`derived-id.ts`](../../packages/shared-processor/src/derived-id.ts) — so a
+[`derived-id.ts`](../../libs/pipeline/src/derived-id.ts) — so a
 redelivery reproduces the id and collapses. Rows written before that was true
 carry a random UUIDv7 per attempt and never collapse; normalising them is
 [Derived ID Normalisation](../operations/runbook-derived-id-normalisation.md).
@@ -338,7 +338,7 @@ Role definitions and grants live in `sql/clickhouse/roles/` and are applied as p
 
 ### Shared client package
 
-The `packages/shared-clickhouse/` workspace package is the only sanctioned in-process access path. It wraps the official `@clickhouse/client` package and exposes:
+The `libs/persistence/clickhouse/` workspace package is the only sanctioned in-process access path. It wraps the official `@clickhouse/client` package and exposes:
 
 - service-profile read methods scoped to projection tables and the ingest log
 - operator-profile methods including `argMax`-based reads against both raw-tier tables — `replay.argMaxByEventKey` / `replay.countDistinctEvents` for `analytics_raw`, and `replay.argMaxProcessedByEventKey` / `replay.countDistinctProcessedEvents` for `analytics_processed`. One set of builders serves both, parameterised by table and column list, so the dedupe pattern cannot drift between them.

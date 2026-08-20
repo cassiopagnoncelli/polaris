@@ -92,7 +92,12 @@ async function main() {
 }
 
 /**
- * Build `packages/*` so the services can import them.
+ * Build the shared libraries so the services can import them.
+ *
+ * `packages/*` and the ADR-0007 destinations `libs/*` / `libs/*/*` are all
+ * named: both epochs are live until IJ4NN, and a filter that misses a root
+ * leaves those packages with no dist behind their `@polaris/*` imports.
+ * Keep this in step with `build-packages` in the Makefile and with `bin/setup`.
  *
  * Workspace packages export `./dist/*` only, and the services run from source
  * under `tsx watch` — so without this the first import fails with a bare
@@ -102,7 +107,9 @@ async function main() {
  */
 function buildSharedPackages() {
   console.log("Building shared packages ...");
-  const result = spawnSync("pnpm", ["-r", "--filter", "./packages/*", "run", "build"], {
+  const filters = ["./packages/*", "./libs/*", "./libs/*/*"];
+  const args = ["-r", ...filters.flatMap((f) => ["--filter", f]), "run", "build"];
+  const result = spawnSync("pnpm", args, {
     cwd: REPO_ROOT,
     stdio: ["ignore", "inherit", "inherit"],
   });
@@ -110,7 +117,7 @@ function buildSharedPackages() {
     fail(`could not run pnpm: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    fail("`pnpm -r --filter ./packages/* run build` failed — fix the build, then rerun.");
+    fail(`\`pnpm ${args.join(" ")}\` failed — fix the build, then rerun.`);
   }
   console.log("");
 }

@@ -60,7 +60,7 @@ async/computation/attribution-engine/v1/
 ## Manifest schema
 
 The Zod source of truth is
-[`packages/shared-processor/src/manifest.ts`](../../packages/shared-processor/src/manifest.ts).
+[`libs/pipeline/src/manifest.ts`](../../libs/pipeline/src/manifest.ts).
 The schema rejects unknown top-level keys (`.strict()`) so typos fail
 loud at boot. The CLI carries a near-duplicate at
 `apps/polaris-cli/src/catalog/processors.ts`; a follow-up cross-cut will
@@ -288,7 +288,7 @@ It stays where it is. The golden pair lives separately under
 There are TWO test layers for manifests:
 
 1. **Shared schema test** —
-   `packages/shared-processor/test/manifest.test.ts` asserts the Zod
+   `libs/pipeline/test/manifest.test.ts` asserts the Zod
    schema accepts every documented field and rejects invalid shapes
    (mode outside the closed set, `release_status` outside the closed
    set, fixture entries with extra keys, etc.). It uses a temp-dir
@@ -345,7 +345,7 @@ catches "someone added a key the schema doesn't know about".
   the architectural contract this doc operationalises.
 - [Engineering Standards](../architecture/09-engineering-standards.md)
   § "Testing" — golden-fixture testing as a required test style.
-- [`packages/shared-processor/src/manifest.ts`](../../packages/shared-processor/src/manifest.ts) —
+- [`libs/pipeline/src/manifest.ts`](../../libs/pipeline/src/manifest.ts) —
   the Zod schema source of truth.
-- [`packages/shared-processor/test/manifest.test.ts`](../../packages/shared-processor/test/manifest.test.ts) —
+- [`libs/pipeline/test/manifest.test.ts`](../../libs/pipeline/test/manifest.test.ts) —
   the schema-validation tests.

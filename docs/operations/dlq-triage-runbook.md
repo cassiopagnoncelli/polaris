@@ -46,9 +46,9 @@ rows; the stream is the durable byte-identical buffer.
 When a processor (sync-identity-resolver, sync-enrichment-runtime, sessionizer,
 attribution-engine, merge-worker) fails permanently on a message,
 the shared runtime calls
-[`publishToDlq`](../../packages/shared-processor/src/dlq.ts) which
+[`publishToDlq`](../../libs/pipeline/src/dlq.ts) which
 delegates to
-[`republishToDlq`](../../packages/shared-transport/src/dlq.ts). The message
+[`republishToDlq`](../../libs/bus/src/dlq.ts). The message
 lands on `<processor_name>.dlq` with the failure metadata as headers
 (reason, error class, error message, source topic/partition/offset,
 attempt counter, failed-at timestamp). The original message bytes are
@@ -58,7 +58,7 @@ equality across topics.
 Processor DLQs **dual-write** as of 3L2HKMND: the broker publish to
 `<processor_name>.dlq` still happens (so existing topic consumers and
 runbooks stay unbroken) AND a row lands in the PostgreSQL
-[`processor_dlq_records`](../../packages/shared-processor/src/db/processor-dlq-records.ts)
+[`processor_dlq_records`](../../libs/pipeline/src/db/processor-dlq-records.ts)
 table. Each row carries the original message bytes (`payload`), the
 original headers (`headers`), the failing processor identity
 (`processor_name`, `processor_version`), classifier output
@@ -220,7 +220,7 @@ set of destination error classes lives in
 | `policy`        | Permanent (intentional drop)              | A defensive second-pass redaction rejected the event. `mark-resolved` with the policy violation referenced. |
 
 Processor DLQs use the same `error_class` vocabulary in headers; see
-[`packages/shared-processor/src/classify.ts`](../../packages/shared-processor/src/classify.ts)
+[`libs/pipeline/src/classify.ts`](../../libs/pipeline/src/classify.ts)
 for the processor-side classifier.
 
 ## 6. Retry safely

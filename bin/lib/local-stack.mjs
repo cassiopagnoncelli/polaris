@@ -52,7 +52,7 @@ const RUNNING_SERVICE_PATTERNS = [
 /**
  * Put the repo-root `.env.local` into the environment.
  *
- * Services cannot read it themselves: `packages/shared-config` resolves
+ * Services cannot read it themselves: `libs/runtime/config` resolves
  * `.env` files against `process.cwd()`, and a service started by pnpm runs
  * from its own package directory. The Makefile solves this for its targets
  * with `include .env.local`; this is the same trick for the two entry points

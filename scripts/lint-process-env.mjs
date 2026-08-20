@@ -41,8 +41,25 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
-/** Where service code lives. */
-const SCAN_DIRS = ["apps", "packages", "libs", "sync", "async"];
+/**
+ * Where service code lives.
+ *
+ * ADR-0007 destinations are listed beside the old roots, both epochs at once
+ * the way `pnpm-workspace.yaml` carries both, so each move card is a pure
+ * `git mv`. A root matching nothing is a no-op; a root MISSING here silently
+ * stops checking everything under it — the platform libraries moved to
+ * `libs/` would have left every direct `process.env` read in them unseen.
+ */
+const SCAN_DIRS = [
+  "apps",
+  "packages",
+  "sync",
+  "async",
+  "libs",
+  "sdks",
+  "connectors",
+  "definitions",
+];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
 const SOURCE_EXT = new Set([".ts", ".mts"]);
@@ -61,21 +78,21 @@ const SOURCE_EXT = new Set([".ts", ".mts"]);
 const ALLOW = new Map([
   // --- the sanctioned reader ---------------------------------------------
   [
-    "packages/shared-config/src/env.ts",
+    "libs/runtime/config/src/env.ts",
     "loadEnv itself — the one module allowed to touch process.env, by design",
   ],
   [
-    "packages/shared-config/src/loader.ts",
+    "libs/runtime/config/src/loader.ts",
     "resolves the .env cascade and the POLARIS_ENV that selects it, before any config exists",
   ],
 
   // --- bootstrap that runs before config is parsed -----------------------
   [
-    "packages/shared-logger/src/logger.ts",
+    "libs/observability/logger/src/logger.ts",
     "the logger is constructed before config parsing, so it cannot receive a parsed snapshot",
   ],
   [
-    "packages/shared-service-bootstrap/src/bootstrap/build-metadata.ts",
+    "libs/runtime/service-bootstrap/src/bootstrap/build-metadata.ts",
     "build stamps injected by the container build; read once at startup for /health",
   ],
   [

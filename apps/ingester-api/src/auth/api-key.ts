@@ -20,7 +20,7 @@
 
 /**
  * Header the ingester reads the API key from. Matches the redaction list in
- * `packages/shared-logger/src/redaction.ts` so the raw key never appears in
+ * `libs/observability/logger/src/redaction.ts` so the raw key never appears in
  * log lines, even when the request log is dumped at debug level.
  */
 export const API_KEY_HEADER = "x-polaris-api-key" as const;

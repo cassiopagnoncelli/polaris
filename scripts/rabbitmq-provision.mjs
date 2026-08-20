@@ -8,7 +8,7 @@
 // for a working environment, not a convenience — `make up` runs it, CI runs
 // it, and the acceptance suite runs it.
 //
-// What it declares (see packages/shared-transport/src/topology.ts, which is
+// What it declares (see libs/bus/src/topology.ts, which is
 // the single source of truth this script calls into):
 //
 //   - one super stream per canonical family: a direct exchange fronting N
@@ -98,7 +98,7 @@ export function buildPlan(options = {}) {
 
   // The SDK diagnostics stream is deliberately not declared: nothing
   // produces to it yet. See defaultSuperStreams() in
-  // packages/shared-transport/src/topology.ts.
+  // libs/bus/src/topology.ts.
   //
   // WHICH families exist comes from defaultSuperStreams(), not from a
   // list here. The previous version mapped over CANONICAL_STREAM_FAMILIES

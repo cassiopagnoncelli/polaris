@@ -40,7 +40,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SCRATCH = "packages/shared-transport/src/streams.ts";
+const SCRATCH = "libs/bus/src/streams.ts";
 
 /**
  * Canary names, assembled rather than written.

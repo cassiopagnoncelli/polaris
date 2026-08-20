@@ -3,7 +3,7 @@
 Per-service inventory of runtime environment variables, separated into
 required vs optional. The variable definitions and validation rules
 live in the Zod schemas at
-[`packages/shared-config/src/schemas/`](../../packages/shared-config/src/schemas/);
+[`libs/runtime/config/src/schemas/`](../../libs/runtime/config/src/schemas/);
 this page is operator-facing and reproduces the inventory for quick
 scanning. If the two ever drift, the schemas win and this page is fixed
 in the same PR.
@@ -25,7 +25,7 @@ These compose into every service.
 
 ### service (shared)
 
-[`packages/shared-config/src/schemas/service.ts`](../../packages/shared-config/src/schemas/service.ts)
+[`libs/runtime/config/src/schemas/service.ts`](../../libs/runtime/config/src/schemas/service.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ These compose into every service.
 
 ### http (shared, Fastify-backed services)
 
-[`packages/shared-config/src/schemas/http.ts`](../../packages/shared-config/src/schemas/http.ts)
+[`libs/runtime/config/src/schemas/http.ts`](../../libs/runtime/config/src/schemas/http.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ These compose into every service.
 
 ### postgres (shared, any service that hits PostgreSQL)
 
-[`packages/shared-config/src/schemas/postgres.ts`](../../packages/shared-config/src/schemas/postgres.ts)
+[`libs/runtime/config/src/schemas/postgres.ts`](../../libs/runtime/config/src/schemas/postgres.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ These compose into every service.
 
 ### redis (shared, ingester today)
 
-[`packages/shared-config/src/schemas/redis.ts`](../../packages/shared-config/src/schemas/redis.ts)
+[`libs/runtime/config/src/schemas/redis.ts`](../../libs/runtime/config/src/schemas/redis.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ These compose into every service.
 
 ### rabbitmq (shared, any service that produces or consumes events)
 
-[`packages/shared-config/src/schemas/rabbitmq.ts`](../../packages/shared-config/src/schemas/rabbitmq.ts)
+[`libs/runtime/config/src/schemas/rabbitmq.ts`](../../libs/runtime/config/src/schemas/rabbitmq.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ These compose into every service.
 
 ### clickhouse (shared, operator/CLI; future analytics services)
 
-[`packages/shared-config/src/schemas/clickhouse.ts`](../../packages/shared-config/src/schemas/clickhouse.ts)
+[`libs/runtime/config/src/schemas/clickhouse.ts`](../../libs/runtime/config/src/schemas/clickhouse.ts)
 
 | Variable | Status | Notes |
 | --- | --- | --- |

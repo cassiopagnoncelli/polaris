@@ -16,7 +16,7 @@ a schedule you choose.
 entirely a function of `event_id`: two rows collapse if and only if their ids
 match. Processors now derive that id as a UUIDv5 over
 `(processor_name, source_event_id, emission slot)` — see
-[`derived-id.ts`](../../packages/shared-processor/src/derived-id.ts) — so a
+[`derived-id.ts`](../../libs/pipeline/src/derived-id.ts) — so a
 redelivery or a replay of the same source event reproduces the same id and the
 engine collapses the duplicate.
 
@@ -220,7 +220,7 @@ state, and it is strictly better than a botched backfill.
 
 ## Related
 
-- [`derived-id.ts`](../../packages/shared-processor/src/derived-id.ts) — the derivation itself
+- [`derived-id.ts`](../../libs/pipeline/src/derived-id.ts) — the derivation itself
 - [`32_analytics_processed.sql`](../../sql/clickhouse/32_analytics_processed.sql) — engine, dedup key, and why they are what they are
 - [Replay stuck](runbook-replay-stuck.md) — when a replay job will not advance
 - [Processor version cutover](processor-version-cutover.md) — the other reason to reprocess a window

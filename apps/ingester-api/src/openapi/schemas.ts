@@ -187,7 +187,7 @@ const EXAMPLE_BATCH_RESPONSE_PARTIAL = {
 /**
  * RFC 7807 Problem Details body shape returned for request-level failures.
  *
- * Mirrors `packages/shared-service-bootstrap/src/problem/types.ts`. The
+ * Mirrors `libs/runtime/service-bootstrap/src/problem/types.ts`. The
  * Problem body is intentionally open (RFC 7807 §3.2 extension members) so
  * we describe required core fields and leave room for extensions via
  * `additionalProperties: true`.

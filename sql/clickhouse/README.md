@@ -122,7 +122,7 @@ The macro files live at
 - Read application data from projection tables, which already store
   deduped rows.
 - `FINAL` as a keyword is reserved for the `operator.raw.query`
-  escape hatch in `packages/shared-clickhouse/`. It must not appear
+  escape hatch in `libs/persistence/clickhouse/`. It must not appear
   in any MV, projection, or service-code SQL string.
 
 ## Roles
@@ -137,6 +137,6 @@ See [`roles/README.md`](./roles/README.md). The short version:
 
 Services authenticate as `polaris_service`. Replay/rebuild jobs and
 operator investigation use `polaris_operator`. Both go through
-[`packages/shared-clickhouse/`](../../docs/implementation/tasks/P0-010-shared-clickhouse-client.md);
+[`libs/persistence/clickhouse/`](../../docs/implementation/tasks/P0-010-shared-clickhouse-client.md);
 direct `@clickhouse/client` imports outside that package are blocked
 by a workspace import rule.

@@ -31,17 +31,26 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
-/** Where a variable may legitimately be read. */
+/**
+ * Where a variable may legitimately be read.
+ *
+ * Carries ADR-0007's destinations beside the old roots. This list is the one
+ * that manufactures FALSE positives when a root is missing: a variable read
+ * only from `libs/runtime/config` would be reported as documented-but-unused
+ * the moment that package moved out of `packages/`.
+ */
 const SEARCH_DIRS = [
   "apps",
   "packages",
-  "libs",
   "sync",
   "async",
   "definitions",
   "scripts",
   "infra",
   "db",
+  "libs",
+  "sdks",
+  "connectors",
 ];
 // Root files a variable can legitimately be read from.
 // matters: a script line like `POLARIS_SMOKE_DOCKER=1 vitest run` is a

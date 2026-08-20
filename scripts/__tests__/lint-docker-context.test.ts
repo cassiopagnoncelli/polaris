@@ -75,12 +75,12 @@ describe("reading .dockerignore", () => {
 
   it("understands the wildcards docker understands", () => {
     const rules = parseDockerignore("**/node_modules\n*.tsbuildinfo\n**/README.md\n");
-    expect(contextStatus("packages/shared-db/node_modules", rules).excluded).toBe(true);
+    expect(contextStatus("libs/persistence/postgres/node_modules", rules).excluded).toBe(true);
     expect(contextStatus("node_modules", rules).excluded).toBe(true);
     expect(contextStatus("tsconfig.tsbuildinfo", rules).excluded).toBe(true);
     expect(contextStatus("README.md", rules).excluded).toBe(true);
-    expect(contextStatus("packages/shared-db/README.md", rules).excluded).toBe(true);
-    expect(contextStatus("packages/shared-db/src/index.ts", rules).excluded).toBe(false);
+    expect(contextStatus("libs/persistence/postgres/README.md", rules).excluded).toBe(true);
+    expect(contextStatus("libs/persistence/postgres/src/index.ts", rules).excluded).toBe(false);
   });
 });
 

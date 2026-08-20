@@ -7,7 +7,7 @@ Binding architecture reference:
 [RabbitMQ Streams](../architecture/03-rabbitmq-streams.md).
 
 The declarations live in
-[`packages/shared-transport/src/topology.ts`](../../packages/shared-transport/src/topology.ts)
+[`libs/bus/src/topology.ts`](../../libs/bus/src/topology.ts)
 — one source of truth shared by services and by
 [`scripts/rabbitmq-provision.mjs`](../../scripts/rabbitmq-provision.mjs).
 

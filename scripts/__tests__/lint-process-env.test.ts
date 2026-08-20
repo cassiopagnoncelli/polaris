@@ -96,12 +96,12 @@ describe("findDirectEnvReads", () => {
 
   it("respects the ALLOW list by exact repo-relative path", () => {
     // shared-config/src/env.ts is loadEnv itself — the one sanctioned reader.
-    seed("packages/shared-config/src/env.ts", 'export const a = process.env["X"];');
+    seed("libs/runtime/config/src/env.ts", 'export const a = process.env["X"];');
     // A sibling in the same package is not covered by that entry.
-    seed("packages/shared-config/src/other.ts", 'export const b = process.env["Y"];');
+    seed("libs/runtime/config/src/other.ts", 'export const b = process.env["Y"];');
     const violations = findDirectEnvReads(root);
     expect(violations.map((violation) => violation.file)).toEqual([
-      "packages/shared-config/src/other.ts",
+      "libs/runtime/config/src/other.ts",
     ]);
   });
 

@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Polaris processors: per-processor consumed/emitted/failed/retry/DLQ rates and observed lag. Panels reference `polaris_processor_*` metrics defined in packages/shared-processor/src/metrics.ts. The $processor_name variable picks one of the live processors (sync-identity-resolver, sync-enrichment-runtime, sessionizer, attribution-engine, merge-worker).",
+  "description": "Polaris processors: per-processor consumed/emitted/failed/retry/DLQ rates and observed lag. Panels reference `polaris_processor_*` metrics defined in libs/pipeline/src/metrics.ts. The $processor_name variable picks one of the live processors (sync-identity-resolver, sync-enrichment-runtime, sessionizer, attribution-engine, merge-worker).",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -36,7 +36,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris Processors\n\nMetrics from `packages/shared-processor/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. Each processor gets an explicit job in `infra/prometheus/prometheus.yml`; new ones join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `sync-identity-resolver`, `sync-enrichment-runtime`, `sessionizer`, `attribution-engine`, `merge-worker`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels \u2014 feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `processor_dlq_records` table directly via the DLQ triage runbook (P10-006).",
+        "content": "# Polaris Processors\n\nMetrics from `libs/pipeline/src/metrics.ts`, exposed at each processor's `/metrics` endpoint. Each processor gets an explicit job in `infra/prometheus/prometheus.yml`; new ones join the same scrape pattern.\n\n**Per-processor row.** The template variable `$processor_name` selects one of `sync-identity-resolver`, `sync-enrichment-runtime`, `sessionizer`, `attribution-engine`, `merge-worker`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_processor_lag_seconds` and `polaris_processor_handler_duration_seconds` are histograms (CSH8YAL6); the p50/p99 panels at the bottom of the dashboard use them. The legacy `_ms_last` gauges are kept alongside during the transition for the `max` / `lastNotNull` panels \u2014 feel free to favour the histogram panels.\n\n**DLQ backlog.** DLQ growth is shown as a **rate**, not as the dead-letter table's total backlog. For a true backlog gauge, query the `processor_dlq_records` table directly via the DLQ triage runbook (P10-006).",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",

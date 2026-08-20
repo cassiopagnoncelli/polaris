@@ -49,7 +49,7 @@ Redpanda created a topic on first publish. RabbitMQ creates nothing:
 - consuming from a stream that does not exist **kills the channel**.
 
 Every stream, exchange, and queue is therefore declared explicitly by
-`packages/shared-transport/src/topology.ts`, which
+`libs/bus/src/topology.ts`, which
 `scripts/rabbitmq-provision.mjs` runs. `make up` and CI run it. A fresh
 environment without it does not work, and that is by design — a silent
 partial topology is worse than a loud missing one.
@@ -76,7 +76,7 @@ attribution.events
 `rejected.events` is declared alongside these but is deliberately NOT
 canonical: it supports no per-project isolation, so consumers subscribe to
 it bare. See `CANONICAL_STREAM_FAMILIES` in
-`packages/shared-transport/src/streams.ts`, which this list mirrors — and
+`libs/bus/src/streams.ts`, which this list mirrors — and
 which `topic_isolations`' CHECK constraint mirrors in turn.
 
 All projects flow through these shared families. Separation is provided by
@@ -144,7 +144,7 @@ What changed is who hashes it. Kafka's client library mapped key →
 partition internally. RabbitMQ super streams put that decision in the
 publisher's hands: the routing key *is* the partition index, and
 `partitionForKey` (32-bit FNV-1a, in
-`packages/shared-transport/src/partition-key.ts`) owns the mapping. Its
+`libs/bus/src/partition-key.ts`) owns the mapping. Its
 output is a wire contract — changing the hash mid-deploy breaks ordering
 exactly as changing a Kafka partitioner would.
 
@@ -385,7 +385,7 @@ diagnostics and `polaris diagnostics inspect` does not exist. Declaring
 it anyway would reserve disk and put a permanently-empty stream on every
 dashboard — and an always-idle stream teaches operators to ignore idle
 streams, which is the opposite of what the queue-depth panels are for.
-`diagnosticsSuperStream()` in `packages/shared-transport/src/topology.ts`
+`diagnosticsSuperStream()` in `libs/bus/src/topology.ts`
 builds the spec; add it to the provisioning call in the same change that
 ships a producer.
 

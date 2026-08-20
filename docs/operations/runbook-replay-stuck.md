@@ -12,9 +12,9 @@ Binding architecture references:
 The polaris-cli surface for replay lives at
 [`apps/polaris-cli/src/commands/replay/`](../../apps/polaris-cli/src/commands/replay/).
 The replay-job state model lives at
-[`packages/shared-control-plane-db/src/queries/replay-jobs.ts`](../../packages/shared-control-plane-db/src/queries/replay-jobs.ts)
+[`libs/persistence/control-plane/src/queries/replay-jobs.ts`](../../libs/persistence/control-plane/src/queries/replay-jobs.ts)
 and its writer alongside it in
-[`mutations/replay-jobs.ts`](../../packages/shared-control-plane-db/src/mutations/replay-jobs.ts);
+[`mutations/replay-jobs.ts`](../../libs/persistence/control-plane/src/mutations/replay-jobs.ts);
 statuses are `pending`, `planning`, `dry_run`, `running`, `paused`,
 `completed`, `failed`, `cancelled`. The Prometheus rule that triggers
 this runbook lives at

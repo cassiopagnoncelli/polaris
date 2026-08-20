@@ -42,7 +42,7 @@
 # Redaction posture:
 #
 #   Promtail does NOT redact. Redaction is owned by the application
-#   logger via `packages/shared-logger/src/redaction.ts`
+#   logger via `libs/observability/logger/src/redaction.ts`
 #   (`DEFAULT_REDACTION_PATHS`). Loki sees what the logger emits.
 #   Do not add Loki-side `replace` stages as a substitute for in-app
 #   redaction — they would be a silent second copy of the policy that
@@ -52,7 +52,7 @@
 #   docs/operations/logging.md                                  operator guide
 #   docs/architecture/08-observability-and-operations.md        logging posture
 #   docs/architecture/09-engineering-standards.md               pino + redaction
-#   packages/shared-logger/src/redaction.ts                     redaction list
+#   libs/observability/logger/src/redaction.ts                  redaction list
 
 server:
   http_listen_port: 9080

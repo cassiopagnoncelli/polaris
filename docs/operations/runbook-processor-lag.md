@@ -11,7 +11,7 @@ Binding architecture references:
 - [Observability and Operations](../architecture/08-observability-and-operations.md)
 
 The processor runtime emitting the lag metric lives at
-[`packages/shared-processor/`](../../packages/shared-processor/). The
+[`libs/pipeline/`](../../libs/pipeline/). The
 identity and enrichment spine stages that consume the
 shared topics live at
 [`sync/identity/resolver/`](../../sync/identity/resolver/) and

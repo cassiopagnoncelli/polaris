@@ -12,7 +12,7 @@
 #   * `polaris_ingest_*`      — apps/ingester-api/src/metrics/registry.ts
 #                               surfaced over /metrics. P10-002 wires the
 #                               Prometheus text-format exposition.
-#   * `polaris_processor_*`   — packages/shared-processor/src/metrics.ts
+#   * `polaris_processor_*`   — libs/pipeline/src/metrics.ts
 #                               surfaced over the per-processor /metrics
 #                               endpoint (sync-identity :4018 today).
 #   * `polaris_destination_*` — reserved for P9/P10-002 consumer metrics.
@@ -20,7 +20,7 @@
 # See:
 #   docs/architecture/08-observability-and-operations.md
 #   apps/ingester-api/src/metrics/registry.ts
-#   packages/shared-processor/src/metrics.ts
+#   libs/pipeline/src/metrics.ts
 
 global:
   scrape_interval: 15s

@@ -104,11 +104,11 @@ describe("findClickhouseImport", () => {
 describe("lintWorkspace", () => {
   it("returns no violations when only shared-clickhouse imports the client", () => {
     seedFile(
-      "packages/shared-clickhouse/src/client.ts",
+      "libs/persistence/clickhouse/src/client.ts",
       `import { createClient } from "@clickhouse/client";\nexport const make = createClient;\n`,
     );
     seedFile(
-      "packages/shared-config/src/schemas/clickhouse.ts",
+      "libs/runtime/config/src/schemas/clickhouse.ts",
       `// Comment naming @clickhouse/client.\nexport const x = 1;\n`,
     );
     seedFile(
@@ -122,7 +122,7 @@ describe("lintWorkspace", () => {
 
   it("flags a disallowed import from apps/", () => {
     seedFile(
-      "packages/shared-clickhouse/src/client.ts",
+      "libs/persistence/clickhouse/src/client.ts",
       `import { createClient } from "@clickhouse/client";\n`,
     );
     seedFile(

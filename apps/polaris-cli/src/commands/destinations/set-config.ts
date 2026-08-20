@@ -34,7 +34,7 @@
  * the typo invisible at write time. The operator sets it, believes the gate
  * is on, and every event keeps flowing.
  *
- * @see packages/shared-control-plane-db/src/mutations/destinations.ts
+ * @see libs/persistence/control-plane/src/mutations/destinations.ts
  * @see docs/implementation/project-config-plan.md §3.3
  */
 

@@ -122,7 +122,7 @@ Every image creates `polaris` (uid 1001, gid 1001) and runs as that user.
 `HEALTHCHECK` is installed on every long-running service and hits
 `http://127.0.0.1:${POLARIS_HTTP_PORT}/health` over loopback. `/health` is
 the shared bootstrap's liveness route (see
-`packages/shared-service-bootstrap/src/bootstrap/health.ts`). It returns
+`libs/runtime/service-bootstrap/src/bootstrap/health.ts`). It returns
 200 as long as the process is up, including build metadata
 (`service`, `version`, `git_sha`, `build_time`, `environment`).
 
@@ -207,7 +207,7 @@ to each service's `src/config.ts` for the exhaustive list:
 - `sync/destinations/<name>/v1/src/config.ts`
 
 The shared HTTP, Postgres, RabbitMQ, Redis, ClickHouse schemas live under
-`packages/shared-config/src/schemas/`. Every variable name is prefixed
+`libs/runtime/config/src/schemas/`. Every variable name is prefixed
 `POLARIS_*` so there is one obvious namespace to grep for.
 
 Each image sets `POLARIS_HTTP_PORT` to the service's canonical port (see

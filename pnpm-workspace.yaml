@@ -5,7 +5,8 @@ packages:
   - "async/*/*/*"
   - "tests"
 
-  # ADR-0007 six-kind tree. Only `definitions/*` matches anything today.
+  # ADR-0007 six-kind tree. `libs/*` and `definitions/*` match today; `sdks/*`
+  # and `connectors/*/*/*` still match nothing, which is the point.
   #
   # The restructure moves roughly two dozen packages, and a move that also
   # has to edit the workspace file is a move that collides with every other
@@ -16,8 +17,8 @@ packages:
   #
   # Both old and new globs are live at once, deliberately. That is what makes
   # the transition incremental rather than a single unreviewable commit: for
-  # the length of programme T, `packages/shared-db` and
-  # `libs/persistence/postgres` are equally valid locations. IJ4NN closes it
+  # the length of programme T, `packages/web-sdk` and `sdks/web` are equally
+  # valid locations for the packages that have yet to move. IJ4NN closes it
   # by deleting the `packages/*` entry above once nothing is left there.
   #
   # `catalog/*` needed no such transition and got none: 0DIPB moved the whole

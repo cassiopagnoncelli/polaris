@@ -24,9 +24,9 @@ The matching infrastructure surfaces live at:
   has no dependency on this file.
 
 The shared application logger that emits these lines lives at
-[`packages/shared-logger/`](../../packages/shared-logger/). Redaction
+[`libs/observability/logger/`](../../libs/observability/logger/). Redaction
 defaults live in
-[`packages/shared-logger/src/redaction.ts`](../../packages/shared-logger/src/redaction.ts).
+[`libs/observability/logger/src/redaction.ts`](../../libs/observability/logger/src/redaction.ts).
 
 ## Loki is optional
 
@@ -118,13 +118,13 @@ LogQL `| json` extraction:
 | `replay_job_id`, `destination_id`, `source_id` | High cardinality; queried by grep, not by stream.                       |
 
 The shared-logger reference for these standard fields is
-[`packages/shared-logger/src/types.ts`](../../packages/shared-logger/src/types.ts)
+[`libs/observability/logger/src/types.ts`](../../libs/observability/logger/src/types.ts)
 (`StandardLogFields`).
 
 ## Redaction posture
 
 Redaction lives in the application logger
-([`packages/shared-logger/src/redaction.ts`](../../packages/shared-logger/src/redaction.ts),
+([`libs/observability/logger/src/redaction.ts`](../../libs/observability/logger/src/redaction.ts),
 `DEFAULT_REDACTION_PATHS`). It covers passwords, authorization headers,
 cookies, tokens, card data, private keys, and raw event payloads.
 

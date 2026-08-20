@@ -5,7 +5,7 @@
  * tested with an in-memory fake. The repository is read-only at the ingester
  * — issuance, revocation, and rotation are P6-003 (lifecycle CLI) territory.
  *
- * @see packages/shared-db/src/database.ts ApiKeyTable
+ * @see libs/persistence/postgres/src/database.ts ApiKeyTable
  */
 
 import type { Database } from "@polaris/shared-db";

@@ -330,7 +330,7 @@ ingestion interface table
 
 ### Access model
 
-Services and CLI code never import `@clickhouse/client` directly. Always go through `packages/shared-clickhouse/`. The helper exposes two profiles:
+Services and CLI code never import `@clickhouse/client` directly. Always go through `libs/persistence/clickhouse/`. The helper exposes two profiles:
 
 - `service` profile authenticates as `polaris_service` (SELECT on projection tables and `analytics_ingest_log` only). Used by ingester, processors, consumers, future dashboard API, and CLI inspection commands.
 - `operator` profile authenticates as `polaris_operator` (broader access including `analytics_raw`). Used by replay/rebuild jobs and operator-issued investigation commands.

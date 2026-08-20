@@ -24,7 +24,7 @@
  *
  * See:
  *   - docs/architecture/05-processors-and-replay.md
- *   - packages/shared-processor/src/manifest.ts
+ *   - libs/pipeline/src/manifest.ts
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

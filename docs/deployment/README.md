@@ -21,7 +21,7 @@ cutover) live in [`docs/operations/`](../operations/).
 
 ```text
 runtime config   environment variables, validated by Zod schemas in
-                 packages/shared-config/src/schemas/. Service fails
+                 libs/runtime/config/src/schemas/. Service fails
                  fast on bad input. Documented in .env.example.
 
 semantic config  versioned code/files. Event catalog, mapping
@@ -61,7 +61,7 @@ one-line comment describing what it does and whether it is required.
 
 The single rule of thumb:
 
-- if it is in `packages/shared-config/src/schemas/`, it is shared infrastructure
+- if it is in `libs/runtime/config/src/schemas/`, it is shared infrastructure
   (every service reads it).
 - if it is in `apps/<service>/src/config.ts` or
   `{sync,async}/<stage>/<name>/v1/src/config.ts` or
@@ -81,7 +81,7 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml up
 
 Copy `.env.example` to `.env.local` and fill in values for the local
 stack. The shared-config loader will pick it up automatically (see
-`packages/shared-config/src/loader.ts` precedence rules).
+`libs/runtime/config/src/loader.ts` precedence rules).
 
 ## Production deployments
 

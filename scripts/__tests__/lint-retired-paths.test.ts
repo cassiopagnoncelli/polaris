@@ -159,6 +159,52 @@ describe("scanning a tree", () => {
     expect(scan()).toEqual([]);
   });
 
+  it("finds a platform library at the path ADR-0007 moved it off", () => {
+    write("docs/x.md", "The pool is configured in `packages/shared-db/src/database.ts`.\n");
+    expect(scan().map((p) => p.rule)).toContain("moved-library-shared-db");
+  });
+
+  it("names the destination, so nobody has to read the ADR to fix it", () => {
+    write("docs/x.md", "See `packages/shared-service-bootstrap/src/bootstrap/health.ts`.\n");
+    expect(scan()[0]?.hint).toContain("libs/runtime/service-bootstrap/");
+  });
+
+  it("leaves the package NAME alone, which the move did not change", () => {
+    // The whole point of the move: pnpm resolves by name, so every import
+    // still works. Only the PATH retired, and a rule that fired on the name
+    // would demand an edit to code that is correct.
+    write(
+      "apps/a/src/b.ts",
+      [
+        'import { pool } from "@polaris/shared-db";',
+        'import { bootstrap } from "@polaris/shared-service-bootstrap";',
+      ].join("\n"),
+    );
+    expect(scan()).toEqual([]);
+  });
+
+  it("leaves the packages that did NOT move alone", () => {
+    // `packages/shared-control-plane` is the sharp case: it is a live
+    // location and a prefix of `packages/shared-control-plane-db`, which is
+    // not. A rule anchored one character short would retire both.
+    write(
+      "docs/x.md",
+      [
+        "Handlers live in `packages/shared-control-plane/src/`.",
+        "Schemas live in `packages/shared-schemas/src/`.",
+      ].join("\n"),
+    );
+    expect(scan()).toEqual([]);
+  });
+
+  it("scans the tree the libraries moved INTO", () => {
+    // A root missing from SCAN_DIRS turns the check off for everything under
+    // it without failing, which is how a moved page could reintroduce a
+    // retired path and still pass.
+    write("libs/persistence/postgres/src/a.ts", "// see processors/<name>/v1/store.ts\n");
+    expect(scan().map((p) => p.rule)).toContain("processors-dir");
+  });
+
   it("does not scan generated or vendored output", () => {
     write("packages/a/dist/b.js", "// consumers/<vendor>/v<n>/mappers/\n");
     write("packages/a/node_modules/c/d.ts", "// processors/<name>/v1/\n");

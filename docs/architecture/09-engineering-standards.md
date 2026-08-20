@@ -159,7 +159,7 @@ Rules:
 
 - ClickHouse table definitions, ingestion interface tables, materialized views, and projections live as SQL files.
 - Do not use an ORM for ClickHouse.
-- Use `packages/shared-clickhouse/` (which wraps the official `@clickhouse/client`) when services or CLI code need to query ClickHouse.
+- Use `libs/persistence/clickhouse/` (which wraps the official `@clickhouse/client`) when services or CLI code need to query ClickHouse.
 - Direct imports of `@clickhouse/client` outside `shared-clickhouse` are blocked by a workspace import rule.
 - Services connect through the `polaris_service` role (SELECT on projection tables and `analytics_ingest_log` only). Operator workflows use the `polaris_operator` role.
 - `analytics_raw` reads happen only through the helper's `replay` namespace, which generates `argMax`-based SQL. The `operator.raw.query` escape hatch exists for genuinely ad-hoc operator SQL and emits a metric on every call.

@@ -19,7 +19,7 @@ See:
 ## Tooling
 
 - **Migration runner:** [dbmate](https://github.com/amacneil/dbmate) (installed
-  as a workspace devDependency in `packages/shared-db/`).
+  as a workspace devDependency in `libs/persistence/postgres/`).
 - **File format:** plain SQL. Each file has a `-- migrate:up` and
   `-- migrate:down` block.
 - **History table:** dbmate's default `schema_migrations`. No analog is

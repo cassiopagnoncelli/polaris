@@ -25,7 +25,7 @@ type PathItem = Record<string, unknown>;
  * `POST /v1/events` Problem responses. Each entry corresponds to a stable
  * Problem `code` documented in either:
  *
- *   - `packages/shared-service-bootstrap/src/problem/types.ts` (common
+ *   - `libs/runtime/service-bootstrap/src/problem/types.ts` (common
  *     codes such as `invalid_request`, `payload_too_large`)
  *   - `apps/ingester-api/src/auth/errors.ts` (`missing_api_key`,
  *     `invalid_api_key`, `auth_unavailable`)

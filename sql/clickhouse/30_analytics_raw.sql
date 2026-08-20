@@ -27,7 +27,7 @@
 --
 --   where stage_rank is 0 for the legacy `analytics.events` feed and 1
 --   for the spine's `resolved.events`. See
---   packages/shared-clickhouse/src/version.ts for the full rationale.
+--   libs/persistence/clickhouse/src/version.ts for the full rationale.
 --
 --   Three consequences, each deliberate:
 --     * during the M3 dual-run the same event arrives on both feeds with

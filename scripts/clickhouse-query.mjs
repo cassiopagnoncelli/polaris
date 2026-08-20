@@ -5,7 +5,7 @@
 // for the vertical-slice smoke test (P5-001), the local-stack runbook, and
 // for operators verifying that the schema applied cleanly. The script is
 // intentionally narrow — it is NOT a substitute for the typed
-// `packages/shared-clickhouse/` helper, which services and the CLI must
+// `libs/persistence/clickhouse/` helper, which services and the CLI must
 // continue to use.
 //
 // Why a plain script and not a CLI command:

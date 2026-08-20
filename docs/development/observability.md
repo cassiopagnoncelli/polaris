@@ -120,7 +120,7 @@ The local scrape config points at:
 | `prometheus` | `localhost:9090` | Prometheus itself (self-scrape). |
 | `polaris-ingester` | `host.docker.internal:4000/metrics` | `apps/ingester-api/src/metrics/registry.ts`. |
 | `polaris-control-plane-api` | `host.docker.internal:4001/metrics` | Operator-gate counters. |
-| `polaris-sync-identity` | `host.docker.internal:4018/metrics` | `packages/shared-processor/src/metrics.ts`. |
+| `polaris-sync-identity` | `host.docker.internal:4018/metrics` | `libs/pipeline/src/metrics.ts`. |
 | `polaris-sync-enrichment` | `host.docker.internal:4015/metrics` | Same. |
 | `polaris-sessionizer` | `host.docker.internal:4012/metrics` | Same. |
 | `polaris-sessionizer-v2` | `host.docker.internal:4017/metrics` | Same. |
@@ -161,7 +161,7 @@ curl -X POST http://localhost:9090/-/reload
 The `polaris_*` metrics themselves are currently held in tiny
 in-process registries
 (`apps/ingester-api/src/metrics/registry.ts`,
-`packages/shared-processor/src/metrics.ts`). The Prometheus
+`libs/pipeline/src/metrics.ts`). The Prometheus
 text-format exposition that surfaces them at `/metrics` is the job of
 `P10-002 Metrics Standardization`;
 until that lands, the scrape will succeed but return an empty

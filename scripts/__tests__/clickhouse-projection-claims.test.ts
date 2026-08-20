@@ -30,7 +30,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MV_DIR = join(ROOT, "sql", "clickhouse", "materialized-views");
 const PROJECTION_DIR = join(ROOT, "sql", "clickhouse", "projections");
 const GRANTS_FILE = join(ROOT, "sql", "clickhouse", "roles", "01_grants.sql");
-const SINK_SOURCE = join(ROOT, "packages", "shared-clickhouse", "src", "sink.ts");
+const SINK_SOURCE = join(ROOT, "libs", "persistence", "clickhouse", "src", "sink.ts");
 
 /**
  * The grants file with its `--` comments removed.

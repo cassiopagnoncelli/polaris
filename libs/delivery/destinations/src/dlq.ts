@@ -27,7 +27,7 @@
  * a resolved secret value; it only echoes the headers / value bytes from
  * the original message.
  *
- * @see packages/shared-transport/src/dlq.ts
+ * @see libs/bus/src/dlq.ts
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 

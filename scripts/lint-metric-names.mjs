@@ -59,8 +59,24 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Where metrics are emitted from. */
-const SOURCE_ROOTS = ["apps", "packages", "libs", "sync", "async"];
+/**
+ * Where metrics are emitted from.
+ *
+ * Carries ADR-0007's destinations beside the old roots, both epochs at once.
+ * A root matching nothing is a no-op; a root missing here would let a metric
+ * emitted from `libs/observability/metrics` go unmatched against the
+ * dashboards and rules that graph it.
+ */
+const SOURCE_ROOTS = [
+  "apps",
+  "packages",
+  "sync",
+  "async",
+  "libs",
+  "sdks",
+  "connectors",
+  "definitions",
+];
 /** Where metrics are referenced. */
 const DASHBOARD_DIR = path.join("infra", "grafana", "dashboards");
 const RULE_DIR = path.join("infra", "prometheus", "rules");

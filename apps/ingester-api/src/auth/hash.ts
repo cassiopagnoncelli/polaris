@@ -1,7 +1,7 @@
 /**
  * argon2id hash verification for API key authentication.
  *
- * API keys are stored as argon2id hashes (`packages/shared-db` `api_keys.hash`).
+ * API keys are stored as argon2id hashes (`libs/persistence/postgres` `api_keys.hash`).
  * The actual primitive lives in `@polaris/shared-secrets` so the ingester and
  * the polaris CLI lifecycle commands (P6-003) consume the same implementation
  * — there is exactly one argon2id integration in the workspace.
@@ -10,7 +10,7 @@
  * import surface does not change. Issuance lives entirely in the lifecycle
  * CLI; the ingester only ever calls verify on the hot path.
  *
- * @see packages/shared-secrets/src/hashing.ts
+ * @see libs/runtime/secrets/src/hashing.ts
  * @see docs/architecture/02-control-plane.md "API Keys"
  * @see docs/implementation/tasks/P6-003-api-key-lifecycle-cli.md
  */

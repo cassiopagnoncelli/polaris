@@ -48,7 +48,7 @@ roles/01_grants.sql
 ## How services and the CLI authenticate
 
 Services and CLI code MUST go through
-[`packages/shared-clickhouse/`](../../../docs/implementation/tasks/P0-010-shared-clickhouse-client.md).
+[`libs/persistence/clickhouse/`](../../../docs/implementation/tasks/P0-010-shared-clickhouse-client.md).
 A workspace-level import rule blocks direct
 `@clickhouse/client` imports outside that package, so the role
 binding is enforced both by the database (grants below) and by the
@@ -80,7 +80,7 @@ This DDL only defines and grants the roles themselves.
 3. Add a `GRANT ... SELECT ON polaris.<new_projection> TO polaris_service`
    line to [`01_grants.sql`](./01_grants.sql).
 4. Add a typed read method for the projection to
-   `packages/shared-clickhouse/src/projections/`.
+   `libs/persistence/clickhouse/src/projections/`.
 
 `polaris_operator` does not need a grant update because it holds
 `SELECT ON polaris.*`.

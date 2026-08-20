@@ -129,7 +129,7 @@ ENV NODE_ENV=production \
 EXPOSE ${SERVICE_PORT}
 
 # Healthcheck contract: `/health` is the shared bootstrap's liveness route
-# (packages/shared-service-bootstrap/src/bootstrap/health.ts). It is always
+# (libs/runtime/service-bootstrap/src/bootstrap/health.ts). It is always
 # 200 once the process is up, so a non-200 from this probe is a hard signal
 # the runtime crashed or wedged. Use `/ready` (separate route) for
 # dependency readiness; we do not wire it into HEALTHCHECK because failing

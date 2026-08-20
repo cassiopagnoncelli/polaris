@@ -57,7 +57,7 @@ describe("findNulBytes", () => {
 
 describe("lintWorkspace", () => {
   it("passes a clean tree", () => {
-    seedFile("packages/shared-processor/src/gate.ts", "export const k = 1;\n");
+    seedFile("libs/pipeline/src/gate.ts", "export const k = 1;\n");
     seedFile("docs/architecture/07-clickhouse.md", "# ClickHouse\n");
     expect(lintWorkspace(root)).toEqual([]);
   });
@@ -84,8 +84,8 @@ describe("lintWorkspace", () => {
   });
 
   it("ignores build output, so a compiled artefact cannot fail the build", () => {
-    seedFile("packages/shared-processor/dist/gate.js", `const k = "a${NUL}b";\n`);
-    seedFile("packages/shared-processor/node_modules/dep/index.js", `const k = "${NUL}";\n`);
+    seedFile("libs/pipeline/dist/gate.js", `const k = "a${NUL}b";\n`);
+    seedFile("libs/pipeline/node_modules/dep/index.js", `const k = "${NUL}";\n`);
     expect(lintWorkspace(root)).toEqual([]);
   });
 

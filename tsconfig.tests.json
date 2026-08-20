@@ -48,6 +48,11 @@
   // None of it failed a test. Vitest transpiles without checking types, so
   // a fixture drifts from its type in silence until the exact line runs.
   // ---------------------------------------------------------------
+  //
+  // `libs/` is listed at both depths `pnpm-workspace.yaml` promises, alongside
+  // `packages/` while both epochs are live (ADR-0007). A root missing here does
+  // not fail — the tests under it are simply never typechecked, which is the
+  // same silent narrowing the RATCHET note above is arguing against.
   "include": [
     "apps/*/test/**/*.ts",
     "packages/*/test/**/*.ts",
@@ -69,11 +74,11 @@
 
     "apps/ingester-api/test",
     "apps/polaris-cli/test",
-    "packages/shared-clickhouse/test",
-    "packages/shared-config/test",
-    "packages/shared-logger/test",
+    "libs/persistence/clickhouse/test",
+    "libs/runtime/config/test",
+    "libs/observability/logger/test",
     "libs/governance/test",
-    "packages/shared-service-bootstrap/test",
+    "libs/runtime/service-bootstrap/test",
     "packages/web-sdk/test",
     "async/computation/sessionizer/v1/test",
     "scripts/__tests__"

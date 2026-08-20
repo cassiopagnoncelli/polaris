@@ -28,10 +28,10 @@ Grafana lands at <http://localhost:3000> (admin/admin, local-only).
 |---|---|---|---|
 | [Polaris — Ingestion](#ingestion) | `polaris-ingestion` | Accept/reject rate, reject reason breakdown, dedupe, origin/rate-limit, redactions, deprecated schema usage | [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — RabbitMQ](#rabbitmq) | `polaris-rabbitmq` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
-| [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
-| [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, and the safeguard/degradation counters both stages fail open into | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+| [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
+| [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, and the safeguard/degradation counters both stages fail open into | [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
 | [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`libs/delivery/destinations/src/metrics.ts`](../../libs/delivery/destinations/src/metrics.ts) |
-| [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
+| [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`libs/persistence/clickhouse/src/raw.ts`](../../libs/persistence/clickhouse/src/raw.ts), [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
 
 The per-project topic-isolation dashboards from **P11-008**
 (`polaris-per-project-throughput`, `polaris-per-project-schema`,

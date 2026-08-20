@@ -72,7 +72,7 @@ Enforcement happens at two layers:
 1. **Database grants** — the `polaris_service` role lacks `SELECT` on
    `analytics_raw`. Queries that go through the helper at the wrong
    profile cannot read the raw table at all.
-2. **Workspace import rule** — only `packages/shared-clickhouse/` may
+2. **Workspace import rule** — only `libs/persistence/clickhouse/` may
    import `@clickhouse/client`. Any other workspace package that adds a
    static `import`, dynamic `import()`, or `require()` for that
    specifier fails the build.
@@ -94,7 +94,7 @@ and asserts the violation set. The test runs as part of `pnpm test` via
 To verify a violation is caught locally:
 
 ``bash
-# Drop a file outside packages/shared-clickhouse/ that imports the client...
+# Drop a file outside libs/persistence/clickhouse/ that imports the client...
 echo 'import "@clickhouse/client";' > apps/ingester-api/src/_oops.ts
 
 pnpm lint:clickhouse-imports
@@ -116,7 +116,7 @@ read code with, and both of them fail quietly:
   reviewable text, so changes to it cannot be read in review.
 
 This is not hypothetical. `apps/control-plane-api/src/admin/pages/processors.ts`
-and `packages/shared-processor/src/activation-gate.ts` each built a
+and `libs/pipeline/src/activation-gate.ts` each built a
 composite `Map` key with a NUL separator written as the byte itself, and
 both files were invisible to every `rg` search until it was noticed by
 accident.
@@ -139,13 +139,13 @@ To verify a violation is caught locally:
 
 ``bash
 # printf expands \0 into a real NUL byte.
-printf 'const k = "a\0b";\n' > packages/shared-db/src/_oops.ts
+printf 'const k = "a\0b";\n' > libs/persistence/postgres/src/_oops.ts
 
 pnpm lint:nul-bytes
 # => exits 1, prints file:line and the byte offset of each NUL
 
 # Clean up
-rm packages/shared-db/src/_oops.ts
+rm libs/persistence/postgres/src/_oops.ts
 ``
 
 ## The declared-but-unread project-config key check

@@ -76,7 +76,7 @@ MV under `sql/clickhouse/materialized-views/`. As of P7-005:
 | `profile_event_daily_counts` | `sql/clickhouse/projections/44_profile_event_daily_counts.sql` | SummingMergeTree |
 
 The canonical list of closed-set names lives in
-[`packages/shared-clickhouse/src/rebuild/projections.ts`](../../packages/shared-clickhouse/src/rebuild/projections.ts).
+[`libs/persistence/clickhouse/src/rebuild/projections.ts`](../../libs/persistence/clickhouse/src/rebuild/projections.ts).
 Adding a projection is a **four-step process**:
 
 1. Land the DDL under `sql/clickhouse/projections/`.
@@ -118,7 +118,7 @@ the exit-code message so `grep` is reliable in CI.
 `polaris clickhouse-rebuild create <projection> --reason "..."`
 (without `--dry-run`) persists a `pending` row + audit row and then
 hands the row to the executor (`executeClickhouseRebuild` in
-`packages/shared-clickhouse/src/rebuild/executor.ts`) which walks
+`libs/persistence/clickhouse/src/rebuild/executor.ts`) which walks
 the state machine to a terminal status:
 
 ```
@@ -139,7 +139,7 @@ The executor is pure orchestration over two injected adapters:
   error_class iff status='failed'" invariants on the row.
 
 - A **driver** (`createClickhouseRebuildDriver` in
-  `packages/shared-clickhouse/src/rebuild/driver.ts`) that wraps the
+  `libs/persistence/clickhouse/src/rebuild/driver.ts`) that wraps the
   operator escape hatch and issues, in order:
 
   1. `clearSlice` — `TRUNCATE TABLE` on a full-table rebuild, or
@@ -207,7 +207,7 @@ The `--dry-run` path (and `polaris clickhouse-rebuild plan`) also
 need the operator profile: the planner reads `system.parts` for the
 partition estimate through the same `raw.query` escape hatch. The
 adapter lives in
-[`packages/shared-clickhouse/src/rebuild/parts-reader.ts`](../../packages/shared-clickhouse/src/rebuild/parts-reader.ts);
+[`libs/persistence/clickhouse/src/rebuild/parts-reader.ts`](../../libs/persistence/clickhouse/src/rebuild/parts-reader.ts);
 the CLI wires it via the shared
 [`connectOperatorClickHouse`](../../apps/polaris-cli/src/clickhouse/connect.ts)
 helper that both `defaultDriver` and `defaultReadPartitions` use.

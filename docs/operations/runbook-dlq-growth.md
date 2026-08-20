@@ -14,7 +14,7 @@ Binding architecture references:
 - [Observability and Operations](../architecture/08-observability-and-operations.md)
 
 The shared processor runtime emitting the DLQ counter lives at
-[`packages/shared-processor/`](../../packages/shared-processor/); the
+[`libs/pipeline/`](../../libs/pipeline/); the
 destination runtime equivalent lives at
 [`libs/delivery/destinations/`](../../libs/delivery/destinations/).
 The destination DLQ schema and CLI surface are documented in

@@ -20,7 +20,7 @@
 --   identical to analytics_raw, so the same query patterns apply
 --   verbatim. Derived events carry deterministic event_ids — UUIDv5 over
 --   (processor_name, source_event_id, emission slot), see
---   packages/shared-processor/src/derived-id.ts — so a replay of the same
+--   libs/pipeline/src/derived-id.ts — so a replay of the same
 --   input reproduces the same id and this engine collapses the duplicate.
 --   That is what makes ReplacingMergeTree right here rather than an
 --   inherited default.

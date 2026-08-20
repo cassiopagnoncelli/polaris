@@ -14,7 +14,7 @@
  * operators get a queryable view for triage.
  *
  * @see docs/operations/dlq-triage-runbook.md
- * @see packages/shared-processor/src/db/processor-dlq-records.ts
+ * @see libs/pipeline/src/db/processor-dlq-records.ts
  */
 
 import type { CommandDefinition } from "../../../command.js";

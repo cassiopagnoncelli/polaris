@@ -1,0 +1,42 @@
+{
+  "name": "@polaris/shared-db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Polaris PostgreSQL access: typed Kysely client and dbmate migration toolchain.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/migrations up",
+    "db:rollback": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/migrations rollback",
+    "db:status": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/migrations status",
+    "db:create": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/migrations new"
+  },
+  "dependencies": {
+    "@polaris/shared-environments": "workspace:*",
+    "kysely": "^0.29.0",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "dbmate": "^2.33.0"
+  }
+}

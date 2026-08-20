@@ -517,7 +517,17 @@ async function install(destroyOnly) {
     "pnpm",
     process.env.CI ? ["install", "--frozen-lockfile"] : ["install"],
   );
-  await step("shared packages", "pnpm", ["-r", "--filter", "./packages/*", "run", "build"]);
+  await step("shared packages", "pnpm", [
+    "-r",
+    "--filter",
+    "./packages/*",
+    "--filter",
+    "./libs/*",
+    "--filter",
+    "./libs/*/*",
+    "run",
+    "build",
+  ]);
   if (!destroyOnly) {
     await step("polaris cli", "pnpm", ["--filter", "@polaris/polaris-cli", "run", "build"]);
   }

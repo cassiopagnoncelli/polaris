@@ -77,7 +77,7 @@ identity-resolver `2.1.0`).
 The shared helper `getBuildMetadata()` in
 `@polaris/shared-service-bootstrap` resolves the four fields from the
 above sources and is what every service should use; see
-`packages/shared-service-bootstrap/src/bootstrap/build-metadata.ts`.
+`libs/runtime/service-bootstrap/src/bootstrap/build-metadata.ts`.
 
 ## Where it shows up
 
@@ -206,4 +206,4 @@ When a behavioural change shows up in production:
 - `docs/architecture/09-engineering-standards.md` — "Versioning and Releases"
 - `infra/docker/build-args.md` — the three Dockerfile build args
 - `infra/docker/README.md` — image inventory and inspection commands
-- `packages/shared-service-bootstrap/src/bootstrap/build-metadata.ts` — helper source
+- `libs/runtime/service-bootstrap/src/bootstrap/build-metadata.ts` — helper source

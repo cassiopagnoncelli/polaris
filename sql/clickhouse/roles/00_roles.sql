@@ -30,7 +30,7 @@
 -- evolve on different cadences.
 --
 -- See sql/clickhouse/roles/README.md for the role model rationale
--- and the helper-package mapping (packages/shared-clickhouse/).
+-- and the helper-package mapping (libs/persistence/clickhouse/).
 
 CREATE ROLE IF NOT EXISTS polaris_service ON CLUSTER '{cluster}';
 CREATE ROLE IF NOT EXISTS polaris_operator ON CLUSTER '{cluster}';

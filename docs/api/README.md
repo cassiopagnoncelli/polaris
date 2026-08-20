@@ -28,7 +28,7 @@ The document is composed in this order:
 | `libs/spec/src/reason-codes.ts`       | Batch request/response shapes, per-event reason code enums.              |
 | `apps/ingester-api/src/openapi/paths.ts`            | Path operations, request/response examples, RFC 7807 error responses.    |
 | `apps/ingester-api/src/openapi/document.ts`         | Document assembly, info block, server list, tags.                        |
-| `packages/shared-service-bootstrap/src/problem/`    | Common Problem `code` values referenced by error examples.               |
+| `libs/runtime/service-bootstrap/src/problem/`       | Common Problem `code` values referenced by error examples.               |
 | `apps/ingester-api/src/auth/errors.ts`              | Auth-specific Problem codes (`missing_api_key`, `invalid_api_key`, ...). |
 
 ## Regenerating

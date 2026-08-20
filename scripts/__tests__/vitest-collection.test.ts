@@ -55,7 +55,7 @@ const VITEST_BIN = join(ROOT, "node_modules", "vitest", "vitest.mjs");
 const MEMBERS: ReadonlyArray<{ readonly dir: string; readonly test: string }> = [
   // The epoch that exists today.
   { dir: "apps/ingester-api", test: "test/handler.test.ts" },
-  { dir: "packages/shared-transport", test: "test/topology.test.ts" },
+  { dir: "packages/shared-schemas", test: "test/envelope.test.ts" },
   { dir: "sync/identity/resolver/v1", test: "test/resolve.test.ts" },
   { dir: "async/computation/sessionizer/v1", test: "test/window.test.ts" },
   // The epoch ADR-0007 opens, and what this card exists for.

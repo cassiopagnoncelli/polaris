@@ -13,7 +13,7 @@ Binding architecture references:
 The ingester publisher lives at
 [`apps/ingester-api/`](../../apps/ingester-api/). The shared transport
 client lives at
-[`packages/shared-transport/`](../../packages/shared-transport/). The
+[`libs/bus/`](../../libs/bus/). The
 Prometheus rule that triggers this runbook lives at
 [`infra/prometheus/rules/polaris.alerts.yml`](../../infra/prometheus/rules/polaris.alerts.yml).
 

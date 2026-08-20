@@ -269,7 +269,7 @@ export async function runVerticalSliceSmoke({
       "profile_id is empty — the event did not cross the identity stage. " +
         "Check that sync-identity is running and consuming raw.events.\n" +
         "  NOT an activation problem: the gate is open unless an explicit " +
-        "`disabled` row exists (packages/shared-processor/src/" +
+        "`disabled` row exists (libs/pipeline/src/" +
         "activation-gate.ts), so there is no row to go and create. This " +
         "message used to say the opposite, which would have sent you to " +
         "write rows that do nothing — and under the wrong name besides, " +
