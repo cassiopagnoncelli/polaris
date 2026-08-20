@@ -18,10 +18,11 @@
 // finished work. So this check asks the one question the type system cannot:
 // does anything actually CALL this?
 //
-// Scope: exported symbols in `packages/*/src`, which is where shared
-// mechanisms live. A symbol is live if any production file outside its own
-// package references it by name. Tests do not count — a helper exercised only
-// by its own unit test is precisely the thing this check exists to surface.
+// Scope: exported symbols under the roots where shared mechanisms live —
+// `packages/`, and the `libs/` and `sdks/` that ADR-0007 moves them into. A
+// symbol is live if any production file outside its own package references it
+// by name. Tests do not count — a helper exercised only by its own unit test is
+// precisely the thing this check exists to surface.
 //
 // Run it as:
 //
@@ -29,18 +30,57 @@
 //
 // Set POLARIS_DEAD_EXPORT_ROOT to scan a fixture tree (used by the unit test).
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
-/** Where shared mechanisms live. Apps and processors are leaves; skip them. */
-const PACKAGE_ROOT = "packages";
+/**
+ * Where shared mechanisms live. Apps and processors are leaves; skip them.
+ *
+ * Two epochs at once, the way `pnpm-workspace.yaml` carries both: ADR-0007
+ * sends `packages/*` into `libs/` (the platform and domain libraries) and
+ * `sdks/` (the published clients), and for the length of programme T a package
+ * may be in either place. IJ4NN drops `packages` once nothing is left there.
+ *
+ * `connectors/` and `definitions/` are deliberately absent. A root belongs here
+ * when a package this check already scans moves INTO it, and neither receives
+ * one: `definitions/` receives `catalog/`, which has never been scanned, and
+ * `connectors/` is built from scratch by P9J7X. Adding either would be new
+ * scanning surface arriving disguised as a rename — and for connectors it would
+ * report every one of them dead, since the delivery engine loads a vendor
+ * adapter by name rather than importing it.
+ */
+const PACKAGE_ROOTS = ["packages", "libs", "sdks"];
 
-/** Where a call site counts from. */
-const CONSUMER_DIRS = ["apps", "packages", "sync", "async", "scripts"];
+/**
+ * Where a call site counts from.
+ *
+ * Wider than the declaration roots on purpose: a reference only ever makes a
+ * symbol live, so a root missing here manufactures false deaths rather than
+ * hiding real ones. That is the direction a move breaks in — the day `libs/`
+ * holds the libraries and is not listed here, every cross-package call site in
+ * the platform disappears at once and the check reports it as dead.
+ *
+ * `catalog/` is absent, and that is a live gap rather than a decision: three
+ * `shared-policy` symbols are called from `catalog/policy` and sit in the
+ * baseline as dead because nothing looks there. Listing `definitions/` means
+ * 0DIPB's rename is what surfaces them — as a "now have a caller" note on the
+ * baseline it already regenerates, which is the card that should absorb it.
+ */
+const CONSUMER_DIRS = [
+  "apps",
+  "packages",
+  "sync",
+  "async",
+  "scripts",
+  "libs",
+  "sdks",
+  "connectors",
+  "definitions",
+];
 
 /**
  * Symbols that are deliberately unreferenced and must stay.
@@ -48,16 +88,28 @@ const CONSUMER_DIRS = ["apps", "packages", "sync", "async", "scripts"];
  * Keep this list SHORT and justified. An entry here is a promise that the
  * symbol is load-bearing despite having no caller; if you cannot write the
  * reason in one line, the honest move is to delete the symbol instead.
+ *
+ * Keys are paths, so every entry needs its ADR-0007 destination alongside it or
+ * the promise expires the moment the package moves — loudly, as a wave of newly
+ * dead exports on the move card. Both keys stay until IJ4NN.
  */
 const ALLOW = new Map([
   // Public SDK surface: consumed by applications outside this repository.
   ["packages/node-sdk", "published SDK surface"],
+  ["sdks/node", "published SDK surface"],
+  // `packages/browser-sdk` has never existed: the browser SDK is
+  // `packages/web-sdk`, which is NOT allow-listed and is scanned today. So this
+  // entry gets no `sdks/web` twin — writing one would allow-list a real package
+  // at the moment it moves, shrinking the check under cover of a `git mv`.
+  // ZXBDY owns the entry and resolves it with the SDK promotion.
   ["packages/browser-sdk", "published SDK surface"],
   // Generated or contract types re-exported for downstream typing.
   ["packages/shared-schemas", "event contract types are the public schema surface"],
+  ["libs/spec", "event contract types are the public schema surface"],
   // Generated schema surface, consumed by control-plane-api and `polaris
   // config validate` in later cards.
   ["packages/project-config-schemas", "generated schema artifacts land before their consumers"],
+  ["libs/tenancy/config-schemas", "generated schema artifacts land before their consumers"],
 ]);
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
@@ -120,20 +172,64 @@ function isBarrel(path) {
   return path.endsWith(`${sep}index.ts`);
 }
 
+const packageKeyCache = new Map();
+
+/**
+ * The package a file belongs to, as a repo-relative path.
+ *
+ * The first two path segments were exactly right while every package was
+ * `packages/<name>`. The six-kind tree has `libs/persistence/postgres` and
+ * `connectors/destinations/braze/v1`, where two segments name a GROUPING
+ * directory instead: every `libs/persistence/*` would collapse into one
+ * "package", so a call from the clickhouse driver into the postgres one would
+ * read as internal and its target would be reported dead — and no ALLOW entry
+ * for any of them could be written at all, since the key would name the group.
+ *
+ * So a package is the nearest ancestor holding a package.json, which is what
+ * pnpm means by one too. It settles the three-deep `sync` and `async` units on
+ * the way past, where two segments have always named a stage rather than a unit.
+ *
+ * The two-segment rule survives as the fallback for a tree with no package.json
+ * above the file at all — a fixture, or a checkout nobody has installed.
+ */
+function packageKeyFor(root, file) {
+  const stop = resolve(root);
+  const start = dirname(file);
+  const cached = packageKeyCache.get(start);
+  if (cached !== undefined) return cached;
+
+  let dir = start;
+  let key;
+  while (dir !== stop && dir.startsWith(stop + sep)) {
+    if (existsSync(join(dir, "package.json"))) {
+      key = relative(root, dir).split(sep).join("/");
+      break;
+    }
+    dir = dirname(dir);
+  }
+  key ??= relative(root, file).split(sep).slice(0, 2).join("/");
+  packageKeyCache.set(start, key);
+  return key;
+}
+
 export function findDeadExports(root = DEFAULT_ROOT) {
-  const packageDir = join(root, PACKAGE_ROOT);
+  packageKeyCache.clear();
   const declared = new Map(); // symbol -> { file, pkg }
 
-  for (const file of walk(packageDir)) {
-    if (isTestFile(file) || isBarrel(file)) continue;
-    const rel = relative(root, file);
-    const pkg = rel.split(sep).slice(0, 2).join("/");
-    if (ALLOW.has(pkg)) continue;
-    const source = readFileSync(file, "utf8");
-    for (const match of source.matchAll(DECLARATION)) {
-      const name = match[1];
-      if (name === undefined) continue;
-      if (!declared.has(name)) declared.set(name, { file: rel, pkg });
+  for (const packageRoot of PACKAGE_ROOTS) {
+    // A root with nothing in it yet reads as empty rather than as an error,
+    // which is what lets both epochs be listed before either has moved.
+    for (const file of walk(join(root, packageRoot))) {
+      if (isTestFile(file) || isBarrel(file)) continue;
+      const rel = relative(root, file);
+      const pkg = packageKeyFor(root, file);
+      if (ALLOW.has(pkg)) continue;
+      const source = readFileSync(file, "utf8");
+      for (const match of source.matchAll(DECLARATION)) {
+        const name = match[1];
+        if (name === undefined) continue;
+        if (!declared.has(name)) declared.set(name, { file: rel, pkg });
+      }
     }
   }
 
@@ -144,8 +240,7 @@ export function findDeadExports(root = DEFAULT_ROOT) {
   for (const dir of CONSUMER_DIRS) {
     for (const file of walk(join(root, dir), [], REFERENCE_EXT)) {
       if (isTestFile(file)) continue;
-      const rel = relative(root, file);
-      const pkg = rel.split(sep).slice(0, 2).join("/");
+      const pkg = packageKeyFor(root, file);
       const source = readFileSync(file, "utf8");
       for (const [name, origin] of declared) {
         if (referenced.has(name)) continue;
@@ -219,7 +314,8 @@ function main() {
     return;
   }
   console.error(
-    `dead-export check: ${fresh.length} newly exported symbol(s) in packages/*/src with no\n` +
+    `dead-export check: ${fresh.length} newly exported symbol(s) in ` +
+      `{${PACKAGE_ROOTS.join(",")}}/**/src with no\n` +
       "production call site. Either the wiring is missing or the code is dead — this repo has\n" +
       "shipped both, repeatedly, and neither is a type error or a test failure.\n",
   );

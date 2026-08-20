@@ -29,6 +29,10 @@ function seed(relPath: string, contents: string): void {
   writeFileSync(full, contents);
 }
 
+function seedPackage(dir: string, name: string): void {
+  seed(`${dir}/package.json`, `{ "name": "${name}" }\n`);
+}
+
 function names(): string[] {
   return findDeadExports(root).map((entry) => entry.name);
 }
@@ -126,6 +130,114 @@ describe("findDeadExports", () => {
     seed(
       "packages/node-sdk/src/public.ts",
       "export function publicApi(): number {\n  return 1;\n}\n",
+    );
+    expect(names()).toEqual([]);
+  });
+});
+
+/**
+ * ADR-0007 sends `packages/*` into `libs/` and `sdks/`, and the check has to
+ * survive that in both directions: it must still SEE the code once it sits
+ * under a new root, and it must still tell two packages apart once their paths
+ * are three segments deep instead of two.
+ *
+ * The second half is the sharper one, because it fails silently in the
+ * direction that looks green. `libs/persistence/postgres` and
+ * `libs/persistence/clickhouse` are two packages under one grouping directory;
+ * keyed on their first two segments they are the same package, so a call from
+ * one into the other reads as internal — and the check reports a symbol dead at
+ * the exact moment it acquires a caller.
+ *
+ * A package is therefore the nearest directory holding a package.json, which is
+ * what pnpm means by one. These fixtures place them, where the older ones above
+ * deliberately do not: two segments remains the fallback for a tree with no
+ * package.json at all, and both rules are load-bearing until IJ4NN.
+ */
+describe("findDeadExports under the six-kind tree", () => {
+  it("scans a library that has moved out of packages/", () => {
+    seedPackage("libs/pipeline", "@polaris/pipeline");
+    seed("libs/pipeline/src/step.ts", "export function neverCalled(): number {\n  return 1;\n}\n");
+    expect(names()).toEqual(["neverCalled"]);
+  });
+
+  it("scans the promoted SDKs, and allow-lists only the one that was", () => {
+    // `packages/node-sdk` is allow-listed today and `packages/web-sdk` is not,
+    // so ZXBDY's move must not change either verdict. `sdks/web` deliberately
+    // has no ALLOW entry: the stale `packages/browser-sdk` key names a
+    // directory that has never existed, and mirroring it into the new epoch
+    // would allow-list a scanned package under cover of a `git mv`.
+    seedPackage("sdks/node", "@polaris/node-sdk");
+    seed("sdks/node/src/public.ts", "export function publicApi(): number {\n  return 1;\n}\n");
+    seedPackage("sdks/web", "@polaris/web-sdk");
+    seed("sdks/web/src/browser.ts", "export function trackPage(): number {\n  return 1;\n}\n");
+    expect(names()).toEqual(["trackPage"]);
+  });
+
+  it("tells two packages under one grouping directory apart", () => {
+    seedPackage("libs/persistence/postgres", "@polaris/persistence-postgres");
+    seed(
+      "libs/persistence/postgres/src/pool.ts",
+      "export function acquirePool(): number {\n  return 1;\n}\n",
+    );
+    seedPackage("libs/persistence/clickhouse", "@polaris/persistence-clickhouse");
+    seed(
+      "libs/persistence/clickhouse/src/client.ts",
+      'import { acquirePool } from "@polaris/persistence-postgres";\nacquirePool();\n',
+    );
+    expect(names()).toEqual([]);
+  });
+
+  it("still counts a three-segment package's own calls as internal", () => {
+    // The converse of the case above, and the reason the fix is a better key
+    // rather than a looser comparison: dropping the same-package rule would
+    // satisfy that test and quietly retire the property it was written for.
+    seedPackage("libs/persistence/postgres", "@polaris/persistence-postgres");
+    seed(
+      "libs/persistence/postgres/src/pool.ts",
+      "export function acquirePool(): number {\n  return 1;\n}\n",
+    );
+    seed(
+      "libs/persistence/postgres/src/session.ts",
+      'import { acquirePool } from "./pool.js";\nacquirePool();\n',
+    );
+    expect(names()).toEqual(["acquirePool"]);
+  });
+
+  it("resolves an ALLOW key three segments deep", () => {
+    // Two-segment keying could not express this entry at all: the key it
+    // produced, `libs/tenancy`, names the grouping directory and would have
+    // allow-listed every package under it or none.
+    seedPackage("libs/tenancy/config-schemas", "@polaris/tenancy-config-schemas");
+    seed(
+      "libs/tenancy/config-schemas/src/generated.ts",
+      "export const projectConfigSchema = {};\n",
+    );
+    expect(names()).toEqual([]);
+  });
+
+  it("counts a call site under a root that declares nothing", () => {
+    // `connectors/` is a consumer root and not a declaration root; a vendor
+    // adapter reaching for a library symbol makes it live all the same.
+    seedPackage("libs/bus", "@polaris/bus");
+    seed("libs/bus/src/topology.ts", "export function declareStream(): number {\n  return 1;\n}\n");
+    seedPackage("connectors/destinations/braze/v1", "@polaris/connector-braze-v1");
+    seed(
+      "connectors/destinations/braze/v1/src/deliver.ts",
+      'import { declareStream } from "@polaris/bus";\ndeclareStream();\n',
+    );
+    expect(names()).toEqual([]);
+  });
+
+  it("does not report a connector's own exports, which the engine loads by name", () => {
+    // Nothing imports `deliver` — the delivery engine resolves it from the
+    // registry at runtime. Scanning `connectors/` for declarations would report
+    // every adapter in the tree dead, which is why it is not a declaration
+    // root; `definitions/` is absent for the milder reason that `catalog/`,
+    // the directory it receives, has never been scanned either.
+    seedPackage("connectors/destinations/braze/v1", "@polaris/connector-braze-v1");
+    seed(
+      "connectors/destinations/braze/v1/src/deliver.ts",
+      "export function deliver(): number {\n  return 1;\n}\n",
     );
     expect(names()).toEqual([]);
   });
