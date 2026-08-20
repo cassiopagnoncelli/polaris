@@ -32,7 +32,7 @@
   // their type has since gained, and `.mjs` script imports without
   // declarations. Fix a tree, delete its line. Do not add lines.
   //
-  // WE77L4R8 took six trees off the list — `packages/shared-destinations` and
+  // WE77L4R8 took six trees off the list — `libs/delivery/destinations` and
   // all five destination consumers — and what they were hiding is the case
   // for shrinking the rest:
   //
@@ -51,6 +51,11 @@
   "include": [
     "apps/*/test/**/*.ts",
     "packages/*/test/**/*.ts",
+    // ADR-0007 libraries, one and two segments deep (`libs/spec`,
+    // `libs/tenancy/control-plane`). Without these the moved suites are not
+    // reported missing — they are simply no longer type-checked.
+    "libs/*/test/**/*.ts",
+    "libs/*/*/test/**/*.ts",
     "sync/*/*/*/test/**/*.ts",
     "async/*/*/*/test/**/*.ts",
     "scripts/__tests__/**/*.ts"
@@ -67,7 +72,7 @@
     "packages/shared-clickhouse/test",
     "packages/shared-config/test",
     "packages/shared-logger/test",
-    "packages/shared-policy/test",
+    "libs/governance/test",
     "packages/shared-service-bootstrap/test",
     "packages/web-sdk/test",
     "async/computation/sessionizer/v1/test",

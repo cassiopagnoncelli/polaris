@@ -28,7 +28,7 @@ Polaris, not running it.
 |------|-------|--------|
 | 1. Declare a project + source in `catalog/` | team + operator | `definitions/projects/<id>.yaml`, `definitions/sources/<id>/<source>.yaml`, `polaris projects sync` and `polaris sources sync` applied |
 | 2. Operator issues your API keys | operator | one frontend key + one backend key returned by `polaris keys create`, handed to your team out-of-band |
-| 3. Pick event names and add schemas | team + schema reviewer | `definitions/events/<domain>/<event>.v1.yaml` + `packages/shared-schemas/src/events/<domain>/<event>.v1.ts` |
+| 3. Pick event names and add schemas | team + schema reviewer | `definitions/events/<domain>/<event>.v1.yaml` + `libs/spec/src/events/<domain>/<event>.v1.ts` |
 | 4. Install the Web SDK (if you have a browser surface) | team | `@polaris/web-sdk` initialized with your frontend key |
 | 5. Install the Node SDK (if you have a backend surface) | team | `@polaris/node-sdk` initialized with your backend key |
 | 6. Send your first event + verify ingestion | team | event visible in `polaris audit` / `polaris export audit` |

@@ -27,7 +27,7 @@
 # `sunset_at` in the past is what refuses new traffic (see
 # `EventCatalog.isSunset` — the ingester answers `schema_version_sunset`).
 # Deleting the entry outright would instead make the event UNKNOWN, and it
-# would take the Zod schema in `packages/shared-schemas/src/events/enriched/`
+# would take the Zod schema in `libs/spec/src/events/enriched/`
 # with it — the schema a replay of archived `enriched.events` NDJSON still
 # needs to validate what it reads back.
 #

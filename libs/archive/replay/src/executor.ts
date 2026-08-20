@@ -62,7 +62,7 @@
  *
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
- * @see packages/shared-destinations/src/replay-suppression.ts
+ * @see libs/delivery/destinations/src/replay-suppression.ts
  */
 
 import type { ReplayPlan, ReplayPlanChunk } from "./types.js";

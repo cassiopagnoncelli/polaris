@@ -338,7 +338,7 @@ export interface DestinationsTable {
    * <id> --reason <text>`, which writes an audit row in the same
    * transaction. The runtime consults this column alongside the
    * host-level `allowReplay` flag in
-   * `packages/shared-destinations/src/replay-suppression.ts`; replay
+   * `libs/delivery/destinations/src/replay-suppression.ts`; replay
    * traffic against an opted-out destination is suppressed with a
    * structured log line and a `polaris_destination_replay_suppressed_total`
    * metric increment.

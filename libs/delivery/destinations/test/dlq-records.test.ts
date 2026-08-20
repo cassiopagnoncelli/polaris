@@ -12,7 +12,7 @@
  *   - resolution_note is clamped to the schema's max length
  *   - dlq_id is allocated with the polaris_dlq_ prefix
  *
- * @see packages/shared-destinations/src/db/dlq-records.ts
+ * @see libs/delivery/destinations/src/db/dlq-records.ts
  * @see db/migrations/20260514000001_create_dlq_records.sql
  */
 

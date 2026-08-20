@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Polaris destination consumers v1: per-vendor delivery success/failure rates, failure breakdown by error_class, retry and DLQ counters, plus delivery duration and rate-limit wait gauges. Panels reference `polaris_destination_*` metrics defined in packages/shared-destinations/src/metrics.ts. The $vendor variable picks one of the five v1 consumers (webhook-sink, meta-capi, tiktok, ga4, braze).",
+  "description": "Polaris destination consumers v1: per-vendor delivery success/failure rates, failure breakdown by error_class, retry and DLQ counters, plus delivery duration and rate-limit wait gauges. Panels reference `polaris_destination_*` metrics defined in libs/delivery/destinations/src/metrics.ts. The $vendor variable picks one of the five v1 consumers (webhook-sink, meta-capi, tiktok, ga4, braze).",
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -36,7 +36,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris Destinations\n\nMetrics from `packages/shared-destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `packages/shared-destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_destination_delivery_duration_seconds` is a histogram (CSH8YAL6); the p50/p99 panel at the bottom of the dashboard uses it. The legacy `_ms_last` gauge is kept alongside during the transition for the `max` / `lastNotNull` panel.\n\n**DLQ backlog.** DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `dlq_records` table via the DLQ triage runbook (P10-006).",
+        "content": "# Polaris Destinations\n\nMetrics from `libs/delivery/destinations/src/metrics.ts`, exposed at each destination consumer's `/metrics` endpoint.\n\n**error_class closed set** (per `libs/delivery/destinations/src/db/delivery-records.ts`): `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy`. The failure breakdown panel splits by this label.\n\n**Per-vendor row.** The template variable `$vendor` selects one of `webhook-sink`, `meta-capi`, `tiktok`, `ga4`, `braze`. Pick `All` to see the fleet aggregate.\n\n**Latency.** `polaris_destination_delivery_duration_seconds` is a histogram (CSH8YAL6); the p50/p99 panel at the bottom of the dashboard uses it. The legacy `_ms_last` gauge is kept alongside during the transition for the `max` / `lastNotNull` panel.\n\n**DLQ backlog.** DLQ growth is shown as a **rate** here; for a true backlog gauge, query the `dlq_records` table via the DLQ triage runbook (P10-006).",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",

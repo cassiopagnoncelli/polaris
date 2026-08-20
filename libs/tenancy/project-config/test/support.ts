@@ -7,7 +7,7 @@
  * secrets removed that seam along with the network call behind it.
  *
  * No real PostgreSQL and no Docker — mirroring the stubbing approach in
- * `packages/shared-destinations/test/runtime-behaviors.test.ts`. The fake db
+ * `libs/delivery/destinations/test/runtime-behaviors.test.ts`. The fake db
  * counts queries, which is how the single-flight and "reads never touch the
  * database" behaviours are actually asserted rather than assumed.
  */

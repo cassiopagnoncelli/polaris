@@ -13,7 +13,7 @@ The CLI surface this runbook depends on lives at
 [`apps/polaris-cli/src/commands/deliveries/`](../../apps/polaris-cli/src/commands/deliveries/)
 and [`apps/polaris-cli/src/commands/dlq/`](../../apps/polaris-cli/src/commands/dlq/).
 The matching shared types live in
-[`packages/shared-destinations/src/db/`](../../packages/shared-destinations/src/db/).
+[`libs/delivery/destinations/src/db/`](../../libs/delivery/destinations/src/db/).
 The migration creating `dlq_records` is
 [`db/migrations/20260514000001_create_dlq_records.sql`](../../db/migrations/20260514000001_create_dlq_records.sql).
 

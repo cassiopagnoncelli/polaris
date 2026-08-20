@@ -11,7 +11,7 @@ Binding architecture references:
 - [Control Plane](../architecture/02-control-plane.md)
 
 The shared destination runtime emitting the failure counter lives at
-[`packages/shared-destinations/`](../../packages/shared-destinations/).
+[`libs/delivery/destinations/`](../../libs/delivery/destinations/).
 The CLI surface this runbook uses lives at
 [`apps/polaris-cli/src/commands/destinations/`](../../apps/polaris-cli/src/commands/destinations/)
 and [`apps/polaris-cli/src/commands/deliveries/`](../../apps/polaris-cli/src/commands/deliveries/).

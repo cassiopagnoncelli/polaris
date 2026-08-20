@@ -223,7 +223,7 @@ headers).
 
 Everything an instance needs already travels with that row: the runtime
 fetches a `DestinationInstance` per delivery through an existing TTL+LRU cache
-(`packages/shared-destinations/src/db/destination-instance.ts`, 60s default,
+(`libs/delivery/destinations/src/db/destination-instance.ts`, 60s default,
 freshness contract documented in its header), mutations already flow through
 audited CLI commands (`destinations create` / `update-ops`), and lifecycle
 comes free — config dies with the row, so there is no orphan problem and no
@@ -410,7 +410,7 @@ destination mutations.
 
 ## 4. Cache and invalidation
 
-New package `packages/shared-project-config`.
+New package `libs/tenancy/project-config`.
 
 ### 4.1 Transport: Postgres LISTEN/NOTIFY, not Redis
 
@@ -505,7 +505,7 @@ by a write to `project_config`, and a write bumps the version and fires
 secrets exactly as they cover every other key. A deadline on top would be a
 periodic refetch that cannot observe a change the version did not announce, so
 `SECRET_REFRESH_DEADLINE_MS` was removed rather than left as a no-op.
-`packages/shared-project-config/test/public-surface.test.ts` asserts its
+`libs/tenancy/project-config/test/public-surface.test.ts` asserts its
 absence, so re-adding one is a deliberate act with a test to change.
 
 ### 4.4 Write path
@@ -609,8 +609,8 @@ credential is worse than not sending. `config_incomplete` is a **skip**, not a
 DLQ — it is an operator omission, not a data error. It joins
 `no_active_destinations` as a label on
 `polaris_destination_events_skipped_total`
-(`packages/shared-destinations/src/runtime.ts:406`), *not* in
-`packages/shared-schemas/src/reason-codes.ts`, which is scoped to the
+(`libs/delivery/destinations/src/runtime.ts:406`), *not* in
+`libs/spec/src/reason-codes.ts`, which is scoped to the
 ingester's batch-response vocabulary.
 
 When the store is unreachable, every path serves the last-known cache
@@ -781,7 +781,7 @@ the mechanism this whole plan exists to replace.
 
 ## 8. Destination fan-out gains a project filter
 
-`packages/shared-destinations/src/runtime.ts:274` caches
+`libs/delivery/destinations/src/runtime.ts:274` caches
 `findActiveByVendor(vendor, environment)` and fans one envelope out to every
 active instance of that vendor in that environment. `project_id` rides the
 envelope and is stamped onto metrics, but is **not** a routing key — so an
@@ -1009,7 +1009,7 @@ The environment enum is forked three ways and must be single-sourced before
 anything keys on `(project_id, environment)`:
 
 - `packages/shared-config/src/schemas/common.ts:11` — adds `local`
-- `packages/shared-schemas/src/envelope/primitives.ts:42` — adds `test`, omits `local`
+- `libs/spec/src/envelope/primitives.ts:42` — adds `test`, omits `local`
 - six other definitions agree on `development | staging | production`
 
 Left alone this produces rows one service can write and another cannot read.

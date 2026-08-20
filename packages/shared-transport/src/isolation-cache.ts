@@ -8,7 +8,7 @@
  * dominate the latency profile.
  *
  * The cache mirrors the pattern established by
- * `packages/shared-destinations/src/db/destination-instance.ts` (the
+ * `libs/delivery/destinations/src/db/destination-instance.ts` (the
  * destination-instance cache) and `apps/ingester-api/src/auth/cache.ts`
  * (the api-key cache):
  *

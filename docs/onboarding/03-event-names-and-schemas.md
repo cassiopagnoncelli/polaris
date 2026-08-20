@@ -4,7 +4,7 @@ Polaris enforces **strict schema governance**. Every governed event must:
 
 1. Have a registered, lowercase dotted name in `definitions/events/`.
 2. Have a code-backed Zod schema in
-   `packages/shared-schemas/src/events/`.
+   `libs/spec/src/events/`.
 3. Be registered with an owner, description, lifecycle, and
    `schema_version` in the catalog entry.
 
@@ -80,7 +80,7 @@ Two files per event, in lockstep:
 
 ```text
 definitions/events/<domain>/<event>.v<n>.yaml
-packages/shared-schemas/src/events/<domain>/<event>.v<n>.ts
+libs/spec/src/events/<domain>/<event>.v<n>.ts
 ```
 
 Real example — `definitions/events/checkout/started.v1.yaml`:
@@ -101,7 +101,7 @@ schema_export: checkoutStartedV1PropertiesSchema
 ```
 
 The companion Zod schema sits at
-`packages/shared-schemas/src/events/checkout/started.v1.ts` and exports
+`libs/spec/src/events/checkout/started.v1.ts` and exports
 `checkoutStartedV1PropertiesSchema`. The ingester imports the schema by the
 `schema_module` + `schema_export` pair and validates every `properties`
 payload against it.
@@ -128,7 +128,7 @@ Each becomes one catalog YAML + one Zod schema file.
 ## Step 3.2 — Write the Zod schema
 
 ```ts
-// packages/shared-schemas/src/events/checkout/started.v1.ts
+// libs/spec/src/events/checkout/started.v1.ts
 import { z } from "zod";
 
 export const checkoutStartedV1PropertiesSchema = z.object({
@@ -222,7 +222,7 @@ Treat the namespace as a temporary scaffold, not a long-term home.
 
 - `definitions/events/<domain>/<event>.v1.yaml` exists for every fact you
   intend to emit.
-- `packages/shared-schemas/src/events/<domain>/<event>.v1.ts` exists and
+- `libs/spec/src/events/<domain>/<event>.v1.ts` exists and
   the export name matches the catalog's `schema_export`.
 - The PR is merged and the ingester running in your target environment
   has picked up the new schema (talk to your operator if you are unsure).

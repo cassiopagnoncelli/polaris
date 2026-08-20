@@ -80,7 +80,7 @@ resources/maxmind
 #   - Five subdirectories are pnpm workspace packages -- `definitions/traits`,
 #     `definitions/policy`, `definitions/audiences`, `definitions/journeys`,
 #     `definitions/reverse-etl`. apps/ingester-api, apps/polaris-cli,
-#     async/journeys/orchestrator/v1 and packages/destination-host depend on
+#     async/journeys/orchestrator/v1 and libs/delivery/host depend on
 #     them with `workspace:*`, so the builder cannot compile those images
 #     without the directory present.
 #   - `definitions/projects/<id>.yaml` carries the per-project identity and

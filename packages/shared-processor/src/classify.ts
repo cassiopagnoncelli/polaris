@@ -21,7 +21,7 @@
  * heavier processor (geoip enrich, identity resolution) can tune them
  * without forking the classifier.
  *
- * @see packages/shared-schemas/src/reason-codes.ts
+ * @see libs/spec/src/reason-codes.ts
  * @see packages/shared-transport/src/dlq.ts
  */
 

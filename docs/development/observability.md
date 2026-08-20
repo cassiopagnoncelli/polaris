@@ -128,7 +128,7 @@ The local scrape config points at:
 | `polaris-merge-worker` | `host.docker.internal:4021/metrics` | Same. |
 | `polaris-archiver` | `host.docker.internal:4022/metrics` | Same. |
 | `polaris-clickhouse-sink` | `host.docker.internal:5010/metrics` | `async/warehouse/clickhouse-sink/v1/src/metrics.ts`. |
-| `polaris-webhook-sink` | `host.docker.internal:5000/metrics` | `packages/shared-destinations/src/metrics.ts`. |
+| `polaris-webhook-sink` | `host.docker.internal:5000/metrics` | `libs/delivery/destinations/src/metrics.ts`. |
 | `polaris-meta-capi` | `host.docker.internal:5001/metrics` | Same. |
 | `polaris-ga4` | `host.docker.internal:5002/metrics` | Same. |
 | `polaris-tiktok` | `host.docker.internal:5003/metrics` | Same. |

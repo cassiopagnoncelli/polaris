@@ -8,7 +8,7 @@
  * operators can correlate logs.
  *
  * Per-event ingestion failures live inside the batch response body and use
- * a different shape — see `packages/shared-schemas/` for those reason codes.
+ * a different shape — see `libs/spec/` for those reason codes.
  */
 
 /**

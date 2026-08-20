@@ -14,7 +14,7 @@ Binding architecture references:
 The ingester code lives at
 [`apps/ingester-api/`](../../apps/ingester-api/). The policy guard
 that drives forbidden-field rejections lives in
-[`packages/shared-policy/`](../../packages/shared-policy/) and the
+[`libs/governance/`](../../libs/governance/) and the
 catalogue of forbidden patterns at
 [`definitions/policy/forbidden-fields.ts`](../../definitions/policy/forbidden-fields.ts).
 The Prometheus rules that trigger this runbook live at

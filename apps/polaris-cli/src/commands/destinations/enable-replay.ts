@@ -8,7 +8,7 @@
  * as the row UPDATE.
  *
  * The destination runtime
- * (`packages/shared-destinations/src/replay-suppression.ts`) consults
+ * (`libs/delivery/destinations/src/replay-suppression.ts`) consults
  * this column on every replayed message. Until an operator flips it on,
  * the destination's replay messages are suppressed: a structured INFO
  * log line lands, `polaris_destination_replay_suppressed_total`

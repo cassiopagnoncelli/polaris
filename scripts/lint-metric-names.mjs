@@ -60,7 +60,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Where metrics are emitted from. */
-const SOURCE_ROOTS = ["apps", "packages", "sync", "async"];
+const SOURCE_ROOTS = ["apps", "packages", "libs", "sync", "async"];
 /** Where metrics are referenced. */
 const DASHBOARD_DIR = path.join("infra", "grafana", "dashboards");
 const RULE_DIR = path.join("infra", "prometheus", "rules");

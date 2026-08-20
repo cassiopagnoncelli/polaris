@@ -161,15 +161,15 @@ const GATES = [
     // it is to verify.
     name: "lint:project-config-keys",
     command: "node scripts/lint-project-config-keys.mjs",
-    files: ["packages/project-config-schemas/schemas/ingest.project.schema.json"],
+    files: ["libs/tenancy/config-schemas/schemas/ingest.project.schema.json"],
     inject: () => {
-      const path = "packages/project-config-schemas/schemas/ingest.project.schema.json";
+      const path = "libs/tenancy/config-schemas/schemas/ingest.project.schema.json";
       const schema = JSON.parse(read(path));
       schema.properties[CONFIG_KEY_CANARY] = { type: "string" };
       write(path, `${JSON.stringify(schema, null, 2)}\n`);
     },
     assertInjected: () =>
-      read("packages/project-config-schemas/schemas/ingest.project.schema.json").includes(
+      read("libs/tenancy/config-schemas/schemas/ingest.project.schema.json").includes(
         CONFIG_KEY_CANARY,
       ),
   },

@@ -35,7 +35,7 @@
  *
  * `mutates: true`: routes through the P6-007 production gate.
  *
- * @see packages/shared-replay/src/executor.ts
+ * @see libs/archive/replay/src/executor.ts
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-003-processor-replay-executor.md
  */

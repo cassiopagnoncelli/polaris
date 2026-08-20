@@ -32,7 +32,7 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 
 // Workspace directories that contain runtime/CLI/test source. Aligned with
 // pnpm-workspace.yaml and the LOC_DIRS list in the Makefile.
-const SCAN_DIRS = ["apps", "packages", "sync", "async", "definitions", "scripts"];
+const SCAN_DIRS = ["apps", "packages", "libs", "sync", "async", "definitions", "scripts"];
 
 // Path prefixes (relative to root) where the official client is *allowed*.
 // Anything else is a violation.

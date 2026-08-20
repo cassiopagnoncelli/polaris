@@ -189,8 +189,8 @@ The event catalog is file-based and domain-folder organized:
 ```text
 definitions/events/payment/approved.yaml
 definitions/events/checkout/started.yaml
-packages/shared-schemas/src/events/payment/approved.v1.ts
-packages/shared-schemas/src/events/checkout/started.v1.ts
+libs/spec/src/events/payment/approved.v1.ts
+libs/spec/src/events/checkout/started.v1.ts
 ```
 
 Generated indexes may be used by the CLI and ingester, but the source of semantic truth remains in files/code.

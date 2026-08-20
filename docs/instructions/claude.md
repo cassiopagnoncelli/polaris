@@ -36,7 +36,7 @@ it.
 - Keep SDKs thin.
 - Keep raw events immutable.
 - Keep processors and consumers independent and versioned.
-- Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `packages/shared-destination-normalize/`.
+- Treat destination consumers as vendor adapters with three stages: normalize, map, deliver. Each stage is independently versioned. Shared normalization primitives live in `libs/delivery/normalize/`.
 - Feed ClickHouse through `async/warehouse/clickhouse-sink` from `resolved.events`.
 - Persist ingested rows before querying.
 - `analytics_raw` is never queried without explicit dedupe (`argMax(_version)`, `SETTINGS final = 1`, or `count(DISTINCT event_id)` shape).
@@ -294,7 +294,7 @@ metrics
 
 Destination consumers run a three-stage pipeline:
 
-1. **Normalize** — hash PII, lowercase/trim, format timestamps, currency units, map consent signals into vendor slots. Pure, stateless, no network. Composes from `packages/shared-destination-normalize/` plus consumer-specific rules.
+1. **Normalize** — hash PII, lowercase/trim, format timestamps, currency units, map consent signals into vendor slots. Pure, stateless, no network. Composes from `libs/delivery/normalize/` plus consumer-specific rules.
 2. **Map** — pure function from normalized intermediate to vendor payload. One mapper per (canonical event, consumer version). Mappers cannot read raw canonical PII; they only see the normalized intermediate.
 3. **Deliver** — the only stage that talks to the network. Owns auth, batching, rate limits, retries, DLQs, idempotency, vendor dedupe fields, delivery records.
 

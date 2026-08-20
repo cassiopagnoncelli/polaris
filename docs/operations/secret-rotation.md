@@ -12,8 +12,8 @@ Binding architecture references:
 Implementation:
 
 - [`db/migrations/20260813000004_plaintext_project_secrets.sql`](../../db/migrations/20260813000004_plaintext_project_secrets.sql)
-- [`packages/shared-control-plane/src/secret-masking.ts`](../../packages/shared-control-plane/src/secret-masking.ts)
-- [`packages/shared-project-config/src/secret-box.ts`](../../packages/shared-project-config/src/secret-box.ts)
+- [`libs/tenancy/control-plane/src/secret-masking.ts`](../../libs/tenancy/control-plane/src/secret-masking.ts)
+- [`libs/tenancy/project-config/src/secret-box.ts`](../../libs/tenancy/project-config/src/secret-box.ts)
 
 ## What changed, and why this runbook is now short
 

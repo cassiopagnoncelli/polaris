@@ -136,10 +136,10 @@ Three rules apply at deployment time:
    [`docs/architecture/09-engineering-standards.md`](../architecture/09-engineering-standards.md)
    "Logging"); masking at the data layer, so a credential never reaches a
    list view, export or audit snapshot to begin with
-   ([`packages/shared-control-plane/src/secret-masking.ts`](../../packages/shared-control-plane/src/secret-masking.ts));
+   ([`libs/tenancy/control-plane/src/secret-masking.ts`](../../libs/tenancy/control-plane/src/secret-masking.ts));
    and `Secret<T>` boxing at the point of use, whose `toString` / `toJSON`
    both yield `[redacted]`
-   ([`packages/shared-project-config/src/secret-box.ts`](../../packages/shared-project-config/src/secret-box.ts)).
+   ([`libs/tenancy/project-config/src/secret-box.ts`](../../libs/tenancy/project-config/src/secret-box.ts)).
 
 Operators set per-project credentials with `polaris destinations create
 --secret-value` and `polaris config set --secret`, and rotate them with

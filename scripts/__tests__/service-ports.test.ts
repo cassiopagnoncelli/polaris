@@ -69,7 +69,7 @@ function devScriptPorts(): Map<string, { port: number; serviceName: string; dir:
       }
     }
   };
-  for (const root of ["apps", "sync", "async", "packages"]) walk(root);
+  for (const root of ["apps", "sync", "async", "packages", "libs"]) walk(root);
   return found;
 }
 

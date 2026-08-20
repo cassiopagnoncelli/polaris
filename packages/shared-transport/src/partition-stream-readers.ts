@@ -61,7 +61,7 @@
  *     pass an in-memory fake.
  *
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
- * @see packages/shared-replay/src/executor.ts (downstream consumer)
+ * @see libs/archive/replay/src/executor.ts (downstream consumer)
  */
 
 import type { Channel } from "amqplib";

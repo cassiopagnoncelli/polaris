@@ -50,7 +50,7 @@ export const projectConfigSchema = z.object({
   /**
    * Routing gate configuration — WHICH events reach this destination.
    *
-   * Read by the SHARED destination runtime (`packages/shared-destinations`),
+   * Read by the SHARED destination runtime (`libs/delivery/destinations`),
    * not by this consumer: the gate runs inside `processOne`, ahead of
    * normalize, so it is decided before any vendor code is reached. Declared
    * here anyway because the namespace is what `polaris config set` validates

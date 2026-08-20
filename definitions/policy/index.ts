@@ -3,7 +3,7 @@
  *
  * Two enforcement points read this module and they must agree: the
  * ingester at intake (`apps/ingester-api`, first pass) and the
- * destination runtime at delivery (`packages/shared-destinations`, second
+ * destination runtime at delivery (`libs/delivery/destinations`, second
  * pass through `normalizeForDestination`). Before this file existed both
  * defaulted to an empty override map, so every project ran platform
  * defaults regardless of what its override file said.

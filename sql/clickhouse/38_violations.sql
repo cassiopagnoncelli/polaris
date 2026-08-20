@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS polaris.violations ON CLUSTER '{cluster}'
     violation_id        String,
     -- Wire-record version, so a reader can tell which shape it is looking
     -- at. Versioned independently of the event envelope; see
-    -- packages/shared-schemas/src/violation.ts.
+    -- libs/spec/src/violation.ts.
     violation_version   UInt16,
 
     -- From the API key tuple, never from the payload. A rejected event's
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS polaris.violations ON CLUSTER '{cluster}'
     paths               Array(String),
 
     -- JSON, with every policy redaction applied before it was published.
-    -- See packages/shared-policy/src/evaluator.ts (`buildViolationSample`).
+    -- See libs/governance/src/evaluator.ts (`buildViolationSample`).
     redacted_sample     String,
 
     received_at         DateTime64(3, 'UTC'),

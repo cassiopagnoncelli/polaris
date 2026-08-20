@@ -62,6 +62,9 @@ const SCAN_DIRS = [
   "definitions",
   "docs",
   "infra",
+  // ADR-0007 destination for the libraries `packages/` held. Absent, a moved
+  // page stops being scanned and its stale sentence survives the move.
+  "libs",
   "packages",
   "scripts",
   "sql",
@@ -175,7 +178,7 @@ export const HISTORICAL = new Map([
     "the tombstone for the retired event: explaining what it was is its whole job",
   ],
   [
-    "packages/shared-schemas/src/events/enriched/geoip.v1.ts",
+    "libs/spec/src/events/enriched/geoip.v1.ts",
     "the retired event's schema, kept so archived NDJSON stays replayable",
   ],
   [

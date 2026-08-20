@@ -50,7 +50,7 @@ pair.
 **Diagnostic move.**
 
 1. Open the matching schema file at
-   `packages/shared-schemas/src/events/<domain>/<event>.v<n>.ts`.
+   `libs/spec/src/events/<domain>/<event>.v<n>.ts`.
 2. Diff your producer call against the schema. The `detail.path` array
    names the field that failed; `detail.message` is the Zod failure
    message.

@@ -28,7 +28,7 @@
  *     reader's chunk-granular attach harmless.
  *
  * @see packages/shared-transport/src/partition-stream-readers.ts
- * @see packages/shared-replay/src/executor.ts
+ * @see libs/archive/replay/src/executor.ts
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  */
 

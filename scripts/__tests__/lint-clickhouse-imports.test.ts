@@ -147,15 +147,15 @@ describe("lintWorkspace", () => {
     expect(violations[0]?.file).toContain("sessionizer");
   });
 
-  it("flags a disallowed import from another packages/* package", () => {
+  it("flags a disallowed import from another library package", () => {
     seedFile(
-      "packages/shared-policy/src/sneaky.ts",
+      "libs/governance/src/sneaky.ts",
       `import "@clickhouse/client";\nexport const x = 1;\n`,
     );
 
     const violations = lintWorkspace(root);
     expect(violations).toHaveLength(1);
-    expect(violations[0]?.file).toContain("shared-policy");
+    expect(violations[0]?.file).toContain("governance");
   });
 
   it("does not flag comments that name the specifier inside an unauthorized package", () => {

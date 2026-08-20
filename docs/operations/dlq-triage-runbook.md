@@ -30,7 +30,7 @@ retries), it republishes the offending message to
 `<vendor>.<consumer_version>.dlq` (see
 [Retry and DLQ Topics](../architecture/03-rabbitmq-streams.md#retry-and-dlq-topics))
 AND writes a row to the PostgreSQL
-[`dlq_records`](../../packages/shared-destinations/src/db/dlq-records.ts)
+[`dlq_records`](../../libs/delivery/destinations/src/db/dlq-records.ts)
 table.
 
 The PostgreSQL row is the active triage queue. Each row carries the
@@ -205,7 +205,7 @@ DLQs: `polaris-retry-reason`, `polaris-retry-error-class`,
 Both destination and processor DLQs carry an `error_class` label that
 the responsible owner uses to decide retry vs permanent. The closed
 set of destination error classes lives in
-[`DELIVERY_RECORD_ERROR_CLASSES`](../../packages/shared-destinations/src/db/delivery-records.ts).
+[`DELIVERY_RECORD_ERROR_CLASSES`](../../libs/delivery/destinations/src/db/delivery-records.ts).
 
 | `error_class`   | Retryability                              | Operator action |
 |-----------------|-------------------------------------------|-----------------|
@@ -403,7 +403,7 @@ This is enforced at three layers:
    and no DLQ read path selects it.
 2. **Application.** The repository's `truncateSummary` helper bounds
    `vendor_response_summary` to 1 KB on insert. Tests in
-   `packages/shared-destinations/test/no-secret-shape.test.ts` assert
+   `libs/delivery/destinations/test/no-secret-shape.test.ts` assert
    the table surface stays secret-free.
 3. **Consumer-side defense.** Every consumer's deliverer redacts the
    resolved access token from the vendor response BEFORE writing it

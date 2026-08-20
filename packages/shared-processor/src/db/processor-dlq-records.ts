@@ -17,7 +17,7 @@
  * triage runbook read consistently across both DLQ surfaces.
  *
  * @see db/migrations/20260516000001_create_processor_dlq_records.sql
- * @see packages/shared-destinations/src/db/dlq-records.ts
+ * @see libs/delivery/destinations/src/db/dlq-records.ts
  */
 
 import type { Database } from "@polaris/shared-db";

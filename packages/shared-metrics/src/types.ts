@@ -4,7 +4,7 @@
  * Mirrors the `MetricSample` interface declared identically in
  * `apps/ingester-api/src/metrics/registry.ts`,
  * `packages/shared-processor/src/metrics.ts`, and
- * `packages/shared-destinations/src/metrics.ts`. Each registry owns its
+ * `libs/delivery/destinations/src/metrics.ts`. Each registry owns its
  * own copy so it doesn't take a runtime dep on this package; this
  * declaration is the canonical contract every registry implements.
  *

@@ -18,7 +18,7 @@
  * structural tests in `destinations-commands.test.ts` keep working.
  *
  * @see docs/architecture/06-destinations.md "Mapping Semantics"
- * @see packages/shared-control-plane/src/mapping-tokens.ts
+ * @see libs/tenancy/control-plane/src/mapping-tokens.ts
  * @see docs/implementation/tasks/P6-004-destination-instance-cli.md
  */
 import {

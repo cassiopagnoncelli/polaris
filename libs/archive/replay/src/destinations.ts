@@ -30,7 +30,7 @@
  *                                                   vendor APIs
  *
  * Destination consumers subscribe to `analytics.events`
- * (`packages/shared-destinations/src/runtime.ts`). `analytics-projector`
+ * (`libs/delivery/destinations/src/runtime.ts`). `analytics-projector`
  * reads `raw.events` and writes `analytics.events`
  * (`sync/legacy/analytics-projector/v1/src/runtime.ts`). So both families
  * reach vendors; the other derived families have no destination consumer.

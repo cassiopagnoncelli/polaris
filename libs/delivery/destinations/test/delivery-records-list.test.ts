@@ -6,7 +6,7 @@
  * adapter. The Kysely adapter shares the contract and is exercised in
  * integration tests against a live PostgreSQL.
  *
- * @see packages/shared-destinations/src/db/delivery-records.ts
+ * @see libs/delivery/destinations/src/db/delivery-records.ts
  */
 
 import { describe, expect, it } from "vitest";

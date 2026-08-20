@@ -59,7 +59,7 @@ identifiers without rebuilding the binding object at every call site.
 ## Redaction guarantees
 
 Logger redaction is the **second** line of defense after the ingester's
-forbidden-field policy (`packages/shared-policy/`). The policy evaluator
+forbidden-field policy (`libs/governance/`). The policy evaluator
 applies redact/reject before any log line is emitted; this package then
 prevents accidental leakage of well-known sensitive field names that may
 still appear inside log bindings.

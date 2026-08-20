@@ -11,7 +11,7 @@
  *   - the `application/problem+json` MIME constant (`PROBLEM_CONTENT_TYPE`)
  *
  * Per-event ingestion failures (per-event reason codes inside a batch
- * response) live in `packages/shared-schemas/` and are a separate contract.
+ * response) live in `libs/spec/` and are a separate contract.
  */
 
 export { isProblemError, ProblemError } from "./error.js";

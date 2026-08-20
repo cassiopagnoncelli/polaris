@@ -42,7 +42,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(__dirname, "..");
 
 /** Where service code lives. */
-const SCAN_DIRS = ["apps", "packages", "sync", "async"];
+const SCAN_DIRS = ["apps", "packages", "libs", "sync", "async"];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
 const SOURCE_EXT = new Set([".ts", ".mts"]);
@@ -79,7 +79,7 @@ const ALLOW = new Map([
     "build stamps injected by the container build; read once at startup for /health",
   ],
   [
-    "packages/shared-control-plane/src/resolver.ts",
+    "libs/tenancy/control-plane/src/resolver.ts",
     "reads POLARIS_TOKEN to resolve the operator actor, which precedes any config load",
   ],
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Compare packages/polaris-idp's vendored files against an upstream idp-js
+# Compare libs/auth's vendored files against an upstream idp-js
 # checkout, normalising both sides through Biome first.
 #
 # The vendored copies are upstream's source with Polaris's formatting applied
-# (see packages/polaris-idp/README.md "Keeping in sync"), so a raw `diff`
+# (see libs/auth/README.md "Keeping in sync"), so a raw `diff`
 # reports line-wrapping noise. This normalises both sides and reports only
 # real changes.
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 
 UPSTREAM="${1:-$HOME/src/idp-js}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENDOR="$REPO_ROOT/packages/polaris-idp/src"
+VENDOR="$REPO_ROOT/libs/auth/src"
 
 # Files taken verbatim from upstream (modulo formatting).
 FILES=(errors.ts passport.ts refresh-client.ts)

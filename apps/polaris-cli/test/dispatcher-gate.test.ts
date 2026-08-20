@@ -7,7 +7,7 @@
  * inside `program.ts` rather than calling the gate in isolation.
  *
  * The gate's matrix is covered by
- * `packages/shared-control-plane/test/gate.test.ts` (pure function).
+ * `libs/tenancy/control-plane/test/gate.test.ts` (pure function).
  * Here we prove the wiring:
  *
  *   - the dispatcher reads `--env` and `POLARIS_ENV` correctly,

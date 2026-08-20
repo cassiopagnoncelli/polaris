@@ -28,7 +28,7 @@
  *     failures are swallowed upstream, not surfaced here.
  *
  * @see db/migrations/20260512000009_create_operator_tokens.sql
- * @see packages/shared-control-plane/src/resolver.ts
+ * @see libs/tenancy/control-plane/src/resolver.ts
  */
 import type { Database } from "@polaris/shared-db";
 import type { ColumnType, Kysely } from "kysely";

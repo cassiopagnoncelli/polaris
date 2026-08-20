@@ -54,7 +54,7 @@ Every PR must pass these jobs in `ci.yml`:
   runs the workspace Vitest suite plus the repo-root `scripts/` test suite
   (see "ClickHouse import-restriction check" below). The workspace suite
   includes the event-catalog validation tests in
-  [`@polaris/shared-schemas`](../../packages/shared-schemas/test/catalog.test.ts),
+  [`@polaris/shared-schemas`](../../libs/spec/test/catalog.test.ts),
   so no dedicated catalog runner is needed.
 - **`migrations`** — applies every file in `db/migrations/` against a
   disposable PostgreSQL 17 service via `pnpm db:migrate`. dbmate does not

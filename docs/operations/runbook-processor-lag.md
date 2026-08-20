@@ -203,7 +203,7 @@ way the schema-validation gate at ingest didn't catch.
   direction. Making it real means threading a `ScopedIsolationLookup`
   and `StreamIsolationCache` through every producer and consumer, and
   giving the destination runtime the `isolatedProjects` option that
-  `packages/shared-destinations/src/runtime.ts` hardcodes to `[]`.
+  `libs/delivery/destinations/src/runtime.ts` hardcodes to `[]`.
   Until then this is a task to schedule, not a lever to pull.
 - **Tune the handler.** If `handler_duration_ms_last` is the binding
   constraint, the long-term fix is a code change to the processor

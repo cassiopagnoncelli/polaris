@@ -17,7 +17,7 @@
  * outage that prevents the touch must not produce noisy noise on every CLI
  * invocation.
  *
- * @see packages/shared-control-plane/src/resolver.ts
+ * @see libs/tenancy/control-plane/src/resolver.ts
  * @see apps/polaris-cli/src/db/operator-tokens.ts
  */
 import type {

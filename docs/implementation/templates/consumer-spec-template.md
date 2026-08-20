@@ -48,7 +48,7 @@ Repeat for every canonical event the consumer handles.
 
 ## Normalization rules
 
-Reference primitives from `packages/shared-destination-normalize/`. List any consumer-specific normalizations that are not in the shared package.
+Reference primitives from `libs/delivery/normalize/`. List any consumer-specific normalizations that are not in the shared package.
 
 Shared primitives used:
 

@@ -48,7 +48,7 @@ consumers/
 A shared normalization package owns vendor-agnostic primitives that several consumers need:
 
 ```text
-packages/shared-destination-normalize/
+libs/delivery/normalize/
   email.ts          lowercase + trim + sha256
   phone.ts          E.164 + sha256
   external-id.ts    trim + sha256

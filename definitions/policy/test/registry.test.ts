@@ -1,7 +1,7 @@
 /**
  * The policy registry is the single map both enforcement points load. Its
  * tests are about the REGISTRY, not about policy semantics — the rules
- * themselves are covered in `packages/shared-policy/test`.
+ * themselves are covered in `libs/governance/test`.
  *
  * What matters here:
  *

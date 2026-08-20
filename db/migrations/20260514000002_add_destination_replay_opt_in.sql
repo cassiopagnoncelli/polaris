@@ -11,7 +11,7 @@
 --     - External destination delivery during replay requires explicit opt-in.
 --
 --   P9-001 shipped the per-message replay-suppression module
---   (`packages/shared-destinations/src/replay-suppression.ts`) and the
+--   (`libs/delivery/destinations/src/replay-suppression.ts`) and the
 --   runtime-level `allowReplay` flag. That flag is per-host: when a host
 --   process is wired with `allowReplay: true`, every destination instance the
 --   host serves accepts replay traffic. The host-level dial is too coarse for
@@ -55,7 +55,7 @@
 -- @see docs/implementation/tasks/P7-004-destination-replay-guardrails.md
 -- @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
 -- @see docs/architecture/06-destinations.md "Delivery Model"
--- @see packages/shared-destinations/src/replay-suppression.ts
+-- @see libs/delivery/destinations/src/replay-suppression.ts
 
 ALTER TABLE destinations
   ADD COLUMN replay_opt_in        boolean     NOT NULL DEFAULT false,

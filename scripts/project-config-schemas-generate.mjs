@@ -10,13 +10,13 @@
  *
  * This script converts those Zod schemas (the source of truth, living in the
  * component's code) into checked-in JSON Schema artifacts under
- * `packages/project-config-schemas`, the generated surface the control plane
+ * `libs/tenancy/config-schemas`, the generated surface the control plane
  * (typed admin forms, `polaris config validate`) imports. The doctrine is the
  * `.env.example` header's line: "if it drifts, the schemas win."
  *
  * Usage:
  *
- *   pnpm config-schemas          # regenerate packages/project-config-schemas
+ *   pnpm config-schemas          # regenerate libs/tenancy/config-schemas
  *   pnpm config-schemas:check    # regenerate to memory and diff against disk
  *
  * Or, programmatically:
@@ -58,8 +58,8 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
 
 /** POSIX-style path of the generated package, used for git paths and logs. */
-const PACKAGE_REL = "packages/project-config-schemas";
-const PACKAGE_DIR = resolve(REPO_ROOT, "packages", "project-config-schemas");
+const PACKAGE_REL = "libs/tenancy/config-schemas";
+const PACKAGE_DIR = resolve(REPO_ROOT, "libs", "tenancy", "config-schemas");
 
 /**
  * Components that publish a project-config schema, in the shape
@@ -311,7 +311,7 @@ function buildIndexSource(entries) {
 /**
  * The pure core: turn `{ namespace, projectSchema, instanceSchema? }` entries
  * into the generated file map `{ relativePath: contents }`, relative to
- * `packages/project-config-schemas`. Deterministic by construction — object
+ * `libs/tenancy/config-schemas`. Deterministic by construction — object
  * keys are sorted and nothing reads the clock.
  */
 export function buildArtifacts(entries) {

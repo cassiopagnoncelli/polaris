@@ -73,7 +73,7 @@ const ALLOW = new Map([]);
  * The routing gate qualifies: it runs inside `processOne`, before the
  * consumer's mapper or deliverer is reached at all.
  */
-const SHARED_RUNTIME_READERS = new Map([["routing", "packages/shared-destinations/src/gate.ts"]]);
+const SHARED_RUNTIME_READERS = new Map([["routing", "libs/delivery/destinations/src/gate.ts"]]);
 
 function walk(dir, out = []) {
   let entries;
@@ -150,7 +150,7 @@ export function unreadKeys(keys, files, rootDir = DEFAULT_ROOT) {
 
 function main() {
   const root = process.env["POLARIS_PROJECT_CONFIG_ROOT"] ?? DEFAULT_ROOT;
-  const schemaDir = join(root, "packages", "project-config-schemas", "schemas");
+  const schemaDir = join(root, "libs", "tenancy", "config-schemas", "schemas");
 
   const violations = [];
   let checked = 0;

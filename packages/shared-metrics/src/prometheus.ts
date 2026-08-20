@@ -95,7 +95,7 @@ const HELP_TEXT: Readonly<Record<string, string>> = {
   polaris_processor_handler_duration_ms_last:
     "Most recently observed processor per-message handler duration in milliseconds.",
 
-  // -- destinations (packages/shared-destinations/src/metrics.ts) ----
+  // -- destinations (libs/delivery/destinations/src/metrics.ts) ----
   polaris_destination_events_consumed_total:
     "Count of analytics.events messages consumed by a Polaris destination consumer.",
   polaris_destination_events_delivered_total:

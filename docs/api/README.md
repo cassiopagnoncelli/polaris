@@ -9,7 +9,7 @@ docs/api/openapi.yaml   # source of truth for human review (committed)
 docs/api/openapi.json   # same document in JSON (committed, for tools that prefer it)
 ```
 
-Both files are **generated** from the Zod sources in [`packages/shared-schemas`](../../packages/shared-schemas/) and the Fastify routes in [`apps/ingester-api`](../../apps/ingester-api/). Do not edit them by hand — changes survive only one regeneration cycle. Edit the Zod sources or the OpenAPI assembly module (`apps/ingester-api/src/openapi/`) instead.
+Both files are **generated** from the Zod sources in [`libs/spec`](../../libs/spec/) and the Fastify routes in [`apps/ingester-api`](../../apps/ingester-api/). Do not edit them by hand — changes survive only one regeneration cycle. Edit the Zod sources or the OpenAPI assembly module (`apps/ingester-api/src/openapi/`) instead.
 
 ## What the doc covers
 
@@ -24,8 +24,8 @@ The document is composed in this order:
 
 | Source                                              | Contributes                                                              |
 | --------------------------------------------------- | ------------------------------------------------------------------------ |
-| `packages/shared-schemas/src/envelope/`             | Canonical envelope + producer envelope component schemas.                |
-| `packages/shared-schemas/src/reason-codes.ts`       | Batch request/response shapes, per-event reason code enums.              |
+| `libs/spec/src/envelope/`             | Canonical envelope + producer envelope component schemas.                |
+| `libs/spec/src/reason-codes.ts`       | Batch request/response shapes, per-event reason code enums.              |
 | `apps/ingester-api/src/openapi/paths.ts`            | Path operations, request/response examples, RFC 7807 error responses.    |
 | `apps/ingester-api/src/openapi/document.ts`         | Document assembly, info block, server list, tags.                        |
 | `packages/shared-service-bootstrap/src/problem/`    | Common Problem `code` values referenced by error examples.               |

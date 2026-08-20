@@ -30,7 +30,7 @@ Grafana lands at <http://localhost:3000> (admin/admin, local-only).
 | [Polaris — RabbitMQ](#rabbitmq) | `polaris-rabbitmq` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 | [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, and the safeguard/degradation counters both stages fail open into | [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
-| [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`packages/shared-destinations/src/metrics.ts`](../../packages/shared-destinations/src/metrics.ts) |
+| [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`libs/delivery/destinations/src/metrics.ts`](../../libs/delivery/destinations/src/metrics.ts) |
 | [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`packages/shared-clickhouse/src/raw.ts`](../../packages/shared-clickhouse/src/raw.ts), [`packages/shared-processor/src/metrics.ts`](../../packages/shared-processor/src/metrics.ts) |
 
 The per-project topic-isolation dashboards from **P11-008**
@@ -51,7 +51,7 @@ Panels and the metric each uses:
 |---|---|
 | Accept vs reject rate (5m) | `sum(rate(polaris_ingest_batch_accepted_total[5m]))`; `sum(rate(polaris_ingest_batch_rejected_total[5m]))` |
 | Reject ratio (15m) | `polaris_ingest_batch_rejected_total / (accepted + rejected)` over 15m |
-| Reject reason breakdown (5m) | `sum by (reason) (rate(polaris_ingest_batch_rejected_total[5m]))` — reason ∈ `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope`, `forbidden_field_rejected`, `duplicate`, `publish_failed`, `invalid_request` (from `packages/shared-schemas/src/reason-codes.ts`) |
+| Reject reason breakdown (5m) | `sum by (reason) (rate(polaris_ingest_batch_rejected_total[5m]))` — reason ∈ `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope`, `forbidden_field_rejected`, `duplicate`, `publish_failed`, `invalid_request` (from `libs/spec/src/reason-codes.ts`) |
 | Short-window dedupe (5m) | `polaris_ingest_dedupe_hit_total`, `polaris_ingest_dedupe_skipped_total` |
 | Edge controls (5m) | `polaris_ingest_origin_rejected_total`, `polaris_ingest_rate_limit_rejected_total`, `polaris_ingest_rate_limit_skipped_total` |
 | Pattern-based redactions (5m) | `sum by (pattern, reason) (rate(polaris_ingest_redacted_pattern_total[5m]))` |
@@ -180,7 +180,7 @@ Panels and the metric each uses:
 |---|---|
 | Delivery success rate per vendor (5m) | `sum by (vendor) (rate(polaris_destination_events_delivered_total[5m]))` |
 | Delivery success ratio per vendor (15m) | `delivered / (delivered + failed)` over 15m |
-| Failure breakdown by `error_class` (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_failed_total[5m]))` — `reason` ∈ `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy` (from `DELIVERY_RECORD_ERROR_CLASSES` in `packages/shared-destinations/src/db/delivery-records.ts`) |
+| Failure breakdown by `error_class` (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_failed_total[5m]))` — `reason` ∈ `consent`, `identity`, `mapping`, `auth`, `rate_limit`, `transient`, `permanent`, `timeout`, `policy` (from `DELIVERY_RECORD_ERROR_CLASSES` in `libs/delivery/destinations/src/db/delivery-records.ts`) |
 | Retry and DLQ rates per vendor (5m) | `polaris_destination_events_retry_total`, `polaris_destination_events_dlq_total` |
 | Drops by reason (5m) | `sum by (vendor, reason) (rate(polaris_destination_events_dropped_total[5m]))` |
 | Delivery duration (ms, last observed) | `max by (vendor) (polaris_destination_delivery_duration_ms_last)` |

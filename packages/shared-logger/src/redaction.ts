@@ -21,7 +21,7 @@
  *
  * Pattern-based detection (Luhn-valid PAN, AWS/GitHub token shapes, JWT shape,
  * generic high-entropy) lives in the forbidden-field policy evaluator
- * (`packages/shared-policy/`) and happens before any event is emitted to the
+ * (`libs/governance/`) and happens before any event is emitted to the
  * log. Logger redaction is the second line of defense for log lines that may
  * still contain a stray field name.
  *

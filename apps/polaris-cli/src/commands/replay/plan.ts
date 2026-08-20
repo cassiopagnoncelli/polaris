@@ -24,7 +24,7 @@
  * under `@polaris/shared-replay`. The `rejectReplayPlanArguments` gate
  * fires before any DB or planner work.
  *
- * @see packages/shared-replay/src/planner.ts
+ * @see libs/archive/replay/src/planner.ts
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */

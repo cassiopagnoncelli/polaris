@@ -16,7 +16,7 @@ Binding architecture references:
 The shared processor runtime emitting the DLQ counter lives at
 [`packages/shared-processor/`](../../packages/shared-processor/); the
 destination runtime equivalent lives at
-[`packages/shared-destinations/`](../../packages/shared-destinations/).
+[`libs/delivery/destinations/`](../../libs/delivery/destinations/).
 The destination DLQ schema and CLI surface are documented in
 [`destination-dlq-triage.md`](destination-dlq-triage.md); this
 runbook does NOT duplicate it — for destination-side DLQ details,

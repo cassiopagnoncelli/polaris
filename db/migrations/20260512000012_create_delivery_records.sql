@@ -37,7 +37,7 @@
 --     the closed sets the runtime emits. New variants land through a
 --     migration that widens both columns AND the typed
 --     `DeliveryRecordStatus` / `DeliveryRecordErrorClass` union types in
---     `packages/shared-destinations/src/db/delivery-records.ts`.
+--     `libs/delivery/destinations/src/db/delivery-records.ts`.
 --
 -- See:
 --   - docs/architecture/06-destinations.md "Delivery Model" / "Retry and DLQ Policy"
@@ -84,7 +84,7 @@ CREATE TABLE delivery_records (
 
   -- Closed-set outcome status. Mirrors the
   -- `DeliveryRecordStatus` union in
-  -- `packages/shared-destinations/src/db/delivery-records.ts`.
+  -- `libs/delivery/destinations/src/db/delivery-records.ts`.
   --
   --   accepted              successful 2xx-equivalent delivery
   --   dropped_consent       normalize stage gated on consent

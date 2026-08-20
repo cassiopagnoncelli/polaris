@@ -31,7 +31,7 @@
  *     omits it (`uuidv7()`).
  *
  * @see db/migrations/20260512000010_create_delivery_records.sql
- * @see packages/shared-destinations/src/runtime.ts
+ * @see libs/delivery/destinations/src/runtime.ts
  */
 
 import type { Database } from "@polaris/shared-db";

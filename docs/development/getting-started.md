@@ -335,7 +335,7 @@ Polaris is **file-heavy, database-light**. Two halves:
 
 | Lives in files (semantic truth)                              | Lives in PostgreSQL (mutable runtime/control)              |
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Event schemas (`definitions/events/`, Zod in `packages/shared-schemas`) | API key hashes + metadata                                 |
+| Event schemas (`definitions/events/`, Zod in `libs/spec`) | API key hashes + metadata                                 |
 | Event registry / catalog (`definitions/events/*/*.yaml`)         | `projects` rows (materialized from `definitions/projects/`)    |
 | Forbidden-field policy (`definitions/policy/forbidden-fields.ts`) | `sources` rows (materialized from `definitions/sources/`)      |
 | Project + source declarations (`definitions/projects/`, `definitions/sources/`) | `destination_instances` rows                             |

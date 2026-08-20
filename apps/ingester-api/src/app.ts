@@ -430,7 +430,7 @@ export async function buildIngesterApp(
     ...(options.readinessProbes !== undefined ? { readinessProbes: options.readinessProbes } : {}),
     openapi: {
       // Polaris ingester ships an OpenAPI 3.0 document derived from the
-      // Zod sources (`packages/shared-schemas`) and the Fastify routes
+      // Zod sources (`libs/spec`) and the Fastify routes
       // declared here. The default setup serves `/openapi.json`; tests
       // and embedding code may override with `NOOP_OPENAPI_SETUP`.
       setup: options.openApiSetup ?? defaultOpenApiSetup,

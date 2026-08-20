@@ -107,7 +107,7 @@ Replay Control Plane](../architecture/05-processors-and-replay.md).
 |---|---|---|
 | `track()` resolves but ingester `/metrics` shows zero accepts for your project | Check `onError` / `onDrop`; confirm `endpoint` and `apiKey` resolved at runtime. | Operator: confirm the API key is `status=active` and pointed at the right environment. |
 | Ingester returns `unknown_event` | The catalog does not register the name. Phase 3. | Schema reviewer. |
-| Ingester returns `invalid_properties` | Your producer schema does not match the registered Zod schema. | Diff your call against `packages/shared-schemas/src/events/<domain>/<event>.v<n>.ts`. |
+| Ingester returns `invalid_properties` | Your producer schema does not match the registered Zod schema. | Diff your call against `libs/spec/src/events/<domain>/<event>.v<n>.ts`. |
 | Ingester returns `forbidden_field_rejected` | Your producer sent a reject-listed field (e.g. `cvv`, `password`). | **Fix the producer.** This is a hard rule, not a configurable threshold. |
 | Events accepted but missing in analytics | Check DLQ; check processor lag dashboards. | DLQ runbook. |
 | Destination delivering 4xx | Vendor schema drift or stale cred. Inspect `delivery_records.vendor_response_summary`. | DLQ runbook. |

@@ -104,11 +104,11 @@ const ALLOW = new Map([
   // ZXBDY owns the entry and resolves it with the SDK promotion.
   ["packages/browser-sdk", "published SDK surface"],
   // Generated or contract types re-exported for downstream typing.
-  ["packages/shared-schemas", "event contract types are the public schema surface"],
+  ["libs/spec", "event contract types are the public schema surface"],
   ["libs/spec", "event contract types are the public schema surface"],
   // Generated schema surface, consumed by control-plane-api and `polaris
   // config validate` in later cards.
-  ["packages/project-config-schemas", "generated schema artifacts land before their consumers"],
+  ["libs/tenancy/config-schemas", "generated schema artifacts land before their consumers"],
   ["libs/tenancy/config-schemas", "generated schema artifacts land before their consumers"],
 ]);
 

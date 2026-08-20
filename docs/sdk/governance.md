@@ -32,7 +32,7 @@ If you send an unregistered version, the ingester returns `unsupported_schema_ve
 
 The catalog flow for evolving an event:
 
-1. Author the new version: `packages/shared-schemas/src/events/<domain>/<event>.v<N+1>.ts`.
+1. Author the new version: `libs/spec/src/events/<domain>/<event>.v<N+1>.ts`.
 2. Register it in the catalog with `lifecycle: active`.
 3. Mark the previous version `lifecycle: deprecated` with a `sunset_at` (default 90 days).
 4. Producers migrate during the deprecation window; the CLI and dashboards surface deprecated-version traffic.

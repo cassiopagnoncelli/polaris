@@ -2,7 +2,7 @@
  * Token verification against Idp.
  *
  * Ported from `haws/src/admin/idpAuth.ts`, minus the revocation subscriber
- * (see `packages/polaris-idp/README.md` for why Polaris does not carry it:
+ * (see `libs/auth/README.md` for why Polaris does not carry it:
  * it needs redis + amqplib for a window shorter than the 15-minute
  * access-token TTL, and this service has neither dependency).
  *

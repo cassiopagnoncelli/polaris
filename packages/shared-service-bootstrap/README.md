@@ -122,7 +122,7 @@ level for operator triage — the `detail` field is intentionally omitted
 so internal error messages never leak to clients.
 
 For per-event ingestion failures (per-event reason codes inside a batch
-response), see `packages/shared-schemas/`.
+response), see `libs/spec/`.
 
 ## Readiness probes
 
