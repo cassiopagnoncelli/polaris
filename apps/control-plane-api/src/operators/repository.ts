@@ -1,13 +1,13 @@
 /**
  * Kysely-backed adapter implementing
- * `OperatorTokenRepository` (`@polaris/shared-control-plane`) for the
+ * `OperatorTokenRepository` (`@polaris/tenancy-control-plane`) for the
  * control-plane API.
  *
  * The CLI ships an equivalent adapter in
  * `apps/polaris-cli/src/operators/repository.ts`; both implementations
  * conform to the same interface so the resolver does not branch on the
  * caller. Future cleanup (a P6-002+ refactor) will likely hoist the
- * helper into `@polaris/shared-control-plane` and remove the
+ * helper into `@polaris/tenancy-control-plane` and remove the
  * duplication. Until then, keeping the helper local to each app avoids
  * a cross-app import.
  *
@@ -16,19 +16,19 @@
  * because the resolver needs them to verify the supplied secret
  * tail; both stay strictly in the resolver's call frame.
  */
-import type { OperatorTokenRepository, OperatorTokenRow } from "@polaris/shared-control-plane";
+import type { OperatorTokenRepository, OperatorTokenRow } from "@polaris/tenancy-control-plane";
 import {
   OPERATOR_TOKEN_STATUSES,
   type OperatorTokenStatus,
   type OperatorTokensTable,
-} from "@polaris/shared-control-plane-db";
-import type { Database } from "@polaris/shared-db";
+} from "@polaris/persistence-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 export type { OperatorTokenStatus, OperatorTokensTable };
 /**
  * The `operator_tokens` table shape and its `declare module` augmentation
- * live in `@polaris/shared-control-plane-db`, which owns them for both this
+ * live in `@polaris/persistence-control-plane`, which owns them for both this
  * service and the CLI. They used to be declared here AND in the CLI: module
  * augmentation is additive, so TypeScript merged the two copies silently —
  * right up until someone edited one of them.

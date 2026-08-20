@@ -344,7 +344,7 @@ The `libs/persistence/clickhouse/` workspace package is the only sanctioned in-p
 - operator-profile methods including `argMax`-based reads against both raw-tier tables — `replay.argMaxByEventKey` / `replay.countDistinctEvents` for `analytics_raw`, and `replay.argMaxProcessedByEventKey` / `replay.countDistinctProcessedEvents` for `analytics_processed`. One set of builders serves both, parameterised by table and column list, so the dedupe pattern cannot drift between them.
 - an operator-only `raw.query` escape hatch that emits a metric and structured log line on every call, so escape-hatch usage is observable
 
-A workspace-level import rule prevents code outside `shared-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See `P0-010`.
+A workspace-level import rule prevents code outside `persistence-clickhouse` from importing the official client directly. Services and CLI code use the helper; the helper enforces the dedupe pattern by construction. See `P0-010`.
 
 ### Ad-hoc operator SQL
 

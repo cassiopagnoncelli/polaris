@@ -28,15 +28,15 @@
  *   - the `context` block is empty (the sessionizer does not see
  *     browser context),
  *   - `properties` is the per-event-name property payload (validated by
- *     the Zod schemas in `@polaris/shared-schemas/events/session/`).
+ *     the Zod schemas in `@polaris/spec/events/session/`).
  *
- * The processor stamp is delegated to `@polaris/shared-processor`'s
+ * The processor stamp is delegated to `@polaris/pipeline`'s
  * `stampProcessorMetadata` helper so every Polaris processor produces
  * the same dual-shape envelope (nested `processor` block + flat
  * `processor_name` / `processor_version`).
  */
 
-import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/shared-processor";
+import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/pipeline";
 import type { PrimaryIdentifierKind } from "./transform.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
 import type { RawEventEnvelope, RawEventIdentity } from "./types.js";
@@ -68,7 +68,7 @@ const EMPTY_CONTEXT = Object.freeze({
 
 /**
  * Property payload shapes per event name. Mirror the Zod schemas in
- * `@polaris/shared-schemas/events/session/`.
+ * `@polaris/spec/events/session/`.
  */
 export interface SessionStartedProperties {
   readonly session_id: string;

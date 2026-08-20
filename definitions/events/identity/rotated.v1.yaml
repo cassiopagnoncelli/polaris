@@ -17,5 +17,5 @@ description: >-
   reset().
 lifecycle: active
 since: "2026-05-12"
-schema_module: "@polaris/shared-schemas/events/identity/rotated.v1"
+schema_module: "@polaris/spec/events/identity/rotated.v1"
 schema_export: identityRotatedV1PropertiesSchema

@@ -19,7 +19,7 @@
  *     > phone_sha256 > anonymous_id
  *
  * The tail mirrors the partition-key picker rule from
- * `@polaris/shared-transport/buildRawEventsPartitionKey`; the two platform
+ * `@polaris/bus/buildRawEventsPartitionKey`; the two platform
  * identifiers at the head come from the envelope's profile block and are
  * absent until the identity stage has run.
  *

@@ -29,7 +29,7 @@
  * @see docs/implementation/tasks/P7-002-replay-planner-dry-run.md
  */
 
-import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/runtime-environments";
 
 /**
  * Subsystems that a replay job can target. Mirrors the closed set the CLI

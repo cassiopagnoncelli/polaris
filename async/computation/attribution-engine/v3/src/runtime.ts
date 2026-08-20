@@ -27,7 +27,7 @@
  *              `first_touch_assigned`, then `last_touch_assigned` in
  *              that order. Store opens a fresh chain record.
  *        - record consume / emit / failure counters on
- *          `@polaris/shared-processor`'s `ProcessorMetrics`,
+ *          `@polaris/pipeline`'s `ProcessorMetrics`,
  *        - on error: classify via the shared `classifyError`, increment
  *          the failed counter, and re-throw so KafkaJS surfaces the
  *          failure through its own retry path.
@@ -40,16 +40,16 @@
  * file.
  *
  * Topic strategy: `attribution.events` is already a canonical topic
- * family in `@polaris/shared-transport`, so the runtime publishes via the
+ * family in `@polaris/bus`, so the runtime publishes via the
  * producer's `publishEvent` helper (mirrors the identity-resolver
  * pattern).
  *
  * Caller-owned DLQ orchestration: the runtime does not auto-route to
  * DLQ. Hosts that want DLQ routing wrap the handler with `publishToDlq`
- * from `@polaris/shared-processor`.
+ * from `@polaris/pipeline`.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
@@ -60,7 +60,7 @@ import {
   type ProcessorMetricLabels,
   ProcessorMetrics,
   type ProcessorRetryClassification,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   buildRawEventsPartitionKey,
   consumerFamiliesFor,
@@ -73,7 +73,7 @@ import {
   sharedOnlyIsolationLookup,
   type TransportMessageContext,
   type TransportMessageHandler,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import {
   type AttributionEventEnvelope,

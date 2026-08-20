@@ -120,7 +120,7 @@ fixtures:
 ```
 
 Paths are relative to the manifest file. The fixture-validation helper
-in `@polaris/shared-processor` resolves them and asserts both files
+in `@polaris/pipeline` resolves them and asserts both files
 exist and parse as JSON; per-processor `manifest.test.ts` files run that
 helper. The processor's regular `transform.test.ts` / `emit.test.ts`
 files import the same fixtures and assert the transform produces the
@@ -296,7 +296,7 @@ There are TWO test layers for manifests:
 
 2. **Per-processor manifest test** —
    `{sync,async}/<stage>/<name>/v1/test/manifest.test.ts` loads the REAL on-disk
-   manifest via `@polaris/shared-processor`'s `loadProcessorManifest`,
+   manifest via `@polaris/pipeline`'s `loadProcessorManifest`,
    asserts the values specific to that processor (expected topic
    families, owner, state stores, semantic defaults, ...), and runs
    `validateProcessorFixtures` to confirm every fixture path the

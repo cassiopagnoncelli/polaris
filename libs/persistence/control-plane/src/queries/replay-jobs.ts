@@ -8,7 +8,7 @@
  * partition strategy, chunking rules, or transform overrides because those
  * are not stored here.
  *
- * The typed `ReplayJobsTable` interface extends `@polaris/shared-db`'s
+ * The typed `ReplayJobsTable` interface extends `@polaris/persistence-postgres`'s
  * `Database` interface through module augmentation (the `declare module`
  * below) — the same pattern `audit-records.ts` (P6-006) and
  * `operator-tokens.ts` (P6-007) use. This keeps the migration SQL the
@@ -38,7 +38,7 @@
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-001-replay-job-model-cli.md
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 
 /**
@@ -155,7 +155,7 @@ export interface ReplayJobsTable {
   error_message: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     replay_jobs: ReplayJobsTable;
   }

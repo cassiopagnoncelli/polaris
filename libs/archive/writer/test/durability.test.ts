@@ -7,7 +7,7 @@
  * what is in object storage, so whatever a crash discards is redelivered.
  */
 
-import type { Checkpoint, CheckpointStore } from "@polaris/shared-transport";
+import type { Checkpoint, CheckpointStore } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 import {
   ArchiveBatcher,

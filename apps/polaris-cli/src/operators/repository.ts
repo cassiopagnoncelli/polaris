@@ -1,10 +1,10 @@
 /**
  * Kysely-backed adapter that implements the {@link OperatorTokenRepository}
- * contract from `@polaris/shared-control-plane`.
+ * contract from `@polaris/tenancy-control-plane`.
  *
  * The resolver does not know about Kysely; it accepts an interface so the
  * future control-plane API can wire it to an HTTP-backed implementation
- * without touching `@polaris/shared-control-plane`. This file is the
+ * without touching `@polaris/tenancy-control-plane`. This file is the
  * concrete implementation the CLI uses.
  *
  * The hash column is fetched via `findOperatorTokenAuthRowById` (the
@@ -23,8 +23,8 @@
 import type {
   OperatorTokenRepository,
   OperatorTokenRow as ResolverOperatorTokenRow,
-} from "@polaris/shared-control-plane";
-import type { Database } from "@polaris/shared-db";
+} from "@polaris/tenancy-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import { findOperatorTokenAuthRowById, touchOperatorTokenLastUsedAt } from "../db/index.js";

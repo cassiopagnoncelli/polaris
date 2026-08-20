@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-destination-normalize` — vendor-agnostic normalization
+ * `@polaris/delivery-normalize` — vendor-agnostic normalization
  * primitives shared by every Polaris destination consumer.
  *
  * Per `docs/architecture/06-destinations.md`, every destination consumer

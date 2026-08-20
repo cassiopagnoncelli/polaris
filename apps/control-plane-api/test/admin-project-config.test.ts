@@ -8,7 +8,7 @@
  * suite; asserting on markup here would pin the stylesheet, not the contract.
  */
 
-import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
+import type { ProjectConfigRow } from "@polaris/persistence-control-plane";
 import { describe, expect, it } from "vitest";
 import {
   buildEffectiveView,

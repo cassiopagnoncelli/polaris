@@ -14,8 +14,8 @@
  * `5282a0f` — production passes `ctx.env`, tests pass a synthetic
  * env object, no module-level `process.env` lookup at any call site.
  */
-import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/shared-clickhouse";
-import { clickhouseEnvSchema } from "@polaris/shared-config";
+import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/persistence-clickhouse";
+import { clickhouseEnvSchema } from "@polaris/runtime-config";
 
 import { ConfigError } from "../errors.js";
 

@@ -35,7 +35,7 @@
 
 /**
  * Canonical consent shape from the envelope. Mirrors
- * `@polaris/shared-schemas`'s `consentSchema` so the helper does not have
+ * `@polaris/spec`'s `consentSchema` so the helper does not have
  * to import the Zod schema at runtime.
  */
 export interface EnvelopeConsent {

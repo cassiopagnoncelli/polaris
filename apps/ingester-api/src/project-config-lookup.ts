@@ -17,14 +17,14 @@
  * window is degraded but recoverable — the asymmetry is not close.
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
-import type { Logger } from "@polaris/shared-logger";
+import type { Database } from "@polaris/persistence-postgres";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
+import type { Logger } from "@polaris/observability-logger";
 import type {
   ProjectConfigKey,
   ProjectConfigSnapshot,
   ProjectConfigStore,
-} from "@polaris/shared-project-config";
+} from "@polaris/tenancy-project-config";
 import type { Kysely } from "kysely";
 import {
   type IngestProjectConfig,

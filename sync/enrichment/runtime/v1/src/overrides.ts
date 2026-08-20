@@ -22,11 +22,11 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   type ProjectEnrichmentOverride,
   projectEnrichmentOverrideSchema,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import { parse as parseYaml } from "yaml";
 
 export interface LoadOverridesOptions {

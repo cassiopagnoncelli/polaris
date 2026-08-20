@@ -13,7 +13,7 @@
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 
-import { createKyselyDlqRecordRepository, type DlqRecord } from "@polaris/shared-destinations";
+import { createKyselyDlqRecordRepository, type DlqRecord } from "@polaris/delivery-destinations";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

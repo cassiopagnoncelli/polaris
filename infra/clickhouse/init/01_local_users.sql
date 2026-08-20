@@ -17,7 +17,7 @@
 -- Passwords:
 --   The local passwords are deliberately weak and equal to the user
 --   name. They are NOT secrets — they exist so that
---   `@polaris/shared-clickhouse` can connect with a non-default profile in
+--   `@polaris/persistence-clickhouse` can connect with a non-default profile in
 --   local/dev. Anything stronger would force a per-developer secret-sharing
 --   step that defeats the "pnpm setup just works" promise.
 --

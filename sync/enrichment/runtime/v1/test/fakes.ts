@@ -8,7 +8,7 @@
  * key, verified against the real schema by the R1A migration probes.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import type { ProfileReader, ProfileSnapshot } from "@polaris/sync-enrichment-traits-v1";
 
 /**

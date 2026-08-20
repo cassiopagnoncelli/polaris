@@ -17,9 +17,9 @@ import {
   listProjectConfig,
   type ProjectConfigRow,
   setProjectConfigValueWithAudit,
-} from "@polaris/shared-control-plane-db";
-import type { Database } from "@polaris/shared-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
+} from "@polaris/persistence-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
 import type { Kysely } from "kysely";
 
 export interface SeedScope {

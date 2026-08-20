@@ -54,5 +54,5 @@ notes: >-
   is the `enrichment` block on `resolved.events`, not `enriched.geoip` v2.
   The entry is retained so archived events remain replayable against their
   original schema.
-schema_module: "@polaris/shared-schemas/events/enriched/geoip.v1"
+schema_module: "@polaris/spec/events/enriched/geoip.v1"
 schema_export: enrichedGeoipV1PropertiesSchema

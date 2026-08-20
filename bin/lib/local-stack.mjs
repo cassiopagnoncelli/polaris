@@ -64,7 +64,7 @@ const RUNNING_SERVICE_PATTERNS = [
  * different databases than the `make setup` that includes it.
  *
  * `process.loadEnvFile` leaves variables that are already exported alone,
- * which matches how `shared-config` merges the same file — real environment
+ * which matches how `runtime-config` merges the same file — real environment
  * wins, the file fills the gaps.
  *
  * @throws {Error} if the file exists but cannot be parsed.

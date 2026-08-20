@@ -4,7 +4,7 @@ This page documents the controlled rebuild workflow for Polaris's
 analytical ClickHouse projections. The shipping commands live in the
 `polaris` CLI under `polaris clickhouse-rebuild`; rebuild jobs land
 in the `clickhouse_rebuild_jobs` PostgreSQL table; the dry-run
-planner lives in `@polaris/shared-clickhouse/rebuild`.
+planner lives in `@polaris/persistence-clickhouse/rebuild`.
 
 ## Why this is a planned workflow
 

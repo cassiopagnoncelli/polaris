@@ -3,7 +3,7 @@
  *
  * Shows one row of `processor_runs`: the process behind a derived event's
  * `processor.run_id`. Rows are written by the processors themselves at boot
- * through `@polaris/shared-processor`'s `openProcessorRun`; this command
+ * through `@polaris/pipeline`'s `openProcessorRun`; this command
  * only reads them.
  *
  * Scope note: this is the RUN, not the processor. Inputs, outputs, mode, and

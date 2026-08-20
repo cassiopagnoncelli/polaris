@@ -24,7 +24,7 @@
  * Vendor dedupe: Braze does NOT provide a generic event dedupe key —
  * its REST contract accepts and re-records duplicate `events[]` entries
  * with the same `(external_id, name, time)` tuple. Polaris-side
- * delivery-key idempotency in `@polaris/shared-destinations` is the
+ * delivery-key idempotency in `@polaris/delivery-destinations` is the
  * canonical guard against double-delivery; see `sync/destinations/braze/v1/SPEC.md`
  * "Known divergences from canonical" for the full discussion. The
  * mapper still emits the canonical `event_id` as `dedupe_key` on the
@@ -33,9 +33,9 @@
  * makes no use of the field.
  */
 
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
-import { hasAppContext, minorToMajor } from "@polaris/shared-destination-normalize";
-import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
+import { hasAppContext, minorToMajor } from "@polaris/delivery-normalize";
+import type { Mapper, MapperContext, MapperResult } from "@polaris/delivery-destinations";
 
 import type {
   BrazeAttributeObject,

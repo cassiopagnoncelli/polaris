@@ -4,7 +4,7 @@
  * @see docs/implementation/project-config-plan.md §3.5
  */
 
-import type { PolarisEnvironment } from "@polaris/shared-environments";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
 
 /** The scope a component reads: one namespace within one project+environment. */
 export interface ProjectConfigKey {

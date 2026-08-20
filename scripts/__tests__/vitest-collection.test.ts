@@ -53,12 +53,13 @@ const VITEST_BIN = join(ROOT, "node_modules", "vitest", "vitest.mjs");
  * `.test.ts` half of it would pass every other assertion here.
  */
 const MEMBERS: ReadonlyArray<{ readonly dir: string; readonly test: string }> = [
-  // The epoch that exists today.
+  // The roots that predate ADR-0007 and were not touched by it.
   { dir: "apps/ingester-api", test: "test/handler.test.ts" },
-  { dir: "packages/shared-schemas", test: "test/envelope.test.ts" },
   { dir: "sync/identity/resolver/v1", test: "test/resolve.test.ts" },
   { dir: "async/computation/sessionizer/v1", test: "test/window.test.ts" },
-  // The epoch ADR-0007 opens, and what this card exists for.
+  // The roots ADR-0007 added. A `packages/shared-schemas` member sat above
+  // for the length of the transition, when the old flat root and the new ones
+  // were collected at once; IJ4NN emptied it and the entry went with it.
   { dir: "libs/pipeline", test: "test/step.test.ts" },
   { dir: "libs/persistence/postgres", test: "test/pool.test.ts" },
   { dir: "sdks/web", test: "test/client.spec.mts" },
@@ -133,7 +134,7 @@ afterAll(() => {
 });
 
 describe("root vitest config", () => {
-  it("collects a package under every root, old epoch and new", () => {
+  it("collects a package under every root", () => {
     const uncollected = MEMBERS.filter(
       ({ dir, test }) => !collected.includes(`${dir}/${test}`),
     ).map(({ dir }) => dir);

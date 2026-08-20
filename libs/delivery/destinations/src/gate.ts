@@ -48,7 +48,7 @@ import {
   type EnvelopeConsent,
   evaluateConsent,
   type RequiredConsent,
-} from "@polaris/shared-destination-normalize";
+} from "@polaris/delivery-normalize";
 
 /**
  * Envelope roots a filter may address.

@@ -1,9 +1,9 @@
 /**
- * `@polaris/shared-transport` — Polaris's event transport port and its
+ * `@polaris/bus` — Polaris's event transport port and its
  * RabbitMQ driver.
  *
  * Polaris services talk to the broker exclusively through this package.
- * Unlike its predecessor (`@polaris/shared-kafka`, which re-exported
+ * Unlike its predecessor (`shared-kafka`, which re-exported
  * KafkaJS types and handed out `.raw`), **no driver type crosses this
  * boundary**. A service handles a `TransportMessagePayload`; it never sees
  * an amqplib `ConsumeMessage`. That is what makes the transport a
@@ -25,14 +25,14 @@
  * Typical service wiring:
  *
  * ```ts
- * import { loadConfig, rabbitmqEnvSchema, composeConfigSchema } from "@polaris/shared-config";
- * import { createLogger } from "@polaris/shared-logger";
+ * import { loadConfig, rabbitmqEnvSchema, composeConfigSchema } from "@polaris/runtime-config";
+ * import { createLogger } from "@polaris/observability-logger";
  * import {
  *   createTransportConnection,
  *   createPolarisProducer,
  *   STREAM_FAMILY_RAW_EVENTS,
  *   staticIsolationLookup,
- * } from "@polaris/shared-transport";
+ * } from "@polaris/bus";
  *
  * const config = loadConfig({
  *   serviceName: "ingester-api",
@@ -63,9 +63,9 @@
 // Re-exported so provisioning tooling parses partition widths with the
 // exact function the running services use. Width is a wire contract:
 // publisher and broker disagreeing about it breaks per-identity ordering
-// silently. Owned by shared-config (which defines the env schema); surfaced
+// silently. Owned by runtime-config (which defines the env schema); surfaced
 // here because transport consumers are who care about it.
-export { parsePartitionOverrides } from "@polaris/shared-config";
+export { parsePartitionOverrides } from "@polaris/runtime-config";
 export {
   type Checkpoint,
   type CheckpointStore,

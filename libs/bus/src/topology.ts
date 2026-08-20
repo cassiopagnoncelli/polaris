@@ -19,8 +19,8 @@
  * @see docs/architecture/03-rabbitmq-streams.md
  */
 
-import { partitionsForFamily, type RabbitmqConfig } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import { partitionsForFamily, type RabbitmqConfig } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import type { Channel } from "amqplib";
 import type { TransportConnection } from "./connection.js";
 import {

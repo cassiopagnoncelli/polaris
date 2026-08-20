@@ -35,7 +35,7 @@ import type {
   ClickhouseRebuildStore,
   ClickhouseRebuildStoreStatus,
   PartsSummary,
-} from "@polaris/shared-clickhouse/rebuild";
+} from "@polaris/persistence-clickhouse/rebuild";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -102,7 +102,7 @@ describe("findClickhouseImport", () => {
 });
 
 describe("lintWorkspace", () => {
-  it("returns no violations when only shared-clickhouse imports the client", () => {
+  it("returns no violations when only persistence-clickhouse imports the client", () => {
     seedFile(
       "libs/persistence/clickhouse/src/client.ts",
       `import { createClient } from "@clickhouse/client";\nexport const make = createClient;\n`,
@@ -113,7 +113,7 @@ describe("lintWorkspace", () => {
     );
     seedFile(
       "apps/ingester-api/src/clickhouse.ts",
-      `import { something } from "@polaris/shared-clickhouse";\nexport const y = something;\n`,
+      `import { something } from "@polaris/persistence-clickhouse";\nexport const y = something;\n`,
     );
 
     const violations = lintWorkspace(root);
@@ -161,7 +161,7 @@ describe("lintWorkspace", () => {
   it("does not flag comments that name the specifier inside an unauthorized package", () => {
     seedFile(
       "apps/control-plane-api/src/notes.ts",
-      `/**\n * We go through @polaris/shared-clickhouse, never @clickhouse/client.\n */\nexport const ok = true;\n`,
+      `/**\n * We go through @polaris/persistence-clickhouse, never @clickhouse/client.\n */\nexport const ok = true;\n`,
     );
 
     const violations = lintWorkspace(root);

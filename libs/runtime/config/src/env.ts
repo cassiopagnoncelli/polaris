@@ -5,7 +5,7 @@ import { parse as parseDotenv } from "dotenv";
 /**
  * Read-only view of an environment variable bag.
  *
- * The shared-config package never reaches into `process.env` outside of this
+ * The runtime-config package never reaches into `process.env` outside of this
  * module. Every loader receives an `EnvSource` so callers can swap in fake
  * environments for tests without monkey-patching globals.
  */

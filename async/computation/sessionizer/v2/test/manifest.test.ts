@@ -9,7 +9,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadProcessorManifest, validateProcessorFixtures } from "@polaris/shared-processor";
+import { loadProcessorManifest, validateProcessorFixtures } from "@polaris/pipeline";
 import { describe, expect, it } from "vitest";
 
 const __filename = fileURLToPath(import.meta.url);

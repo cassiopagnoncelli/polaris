@@ -26,7 +26,7 @@
  * means the operator re-runs and gets the same result.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely, Transaction } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

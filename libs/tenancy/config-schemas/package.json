@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/project-config-schemas",
+  "name": "@polaris/tenancy-config-schemas",
   "version": "0.0.0",
   "private": true,
   "description": "Generated JSON Schema artifacts for per-component project configuration. Produced by `pnpm config-schemas` from each participating component's exported Zod schemas; consumed by the control plane (typed admin forms, `polaris config validate`). Only package.json and tsconfig.json are hand-written — everything else is generated.",

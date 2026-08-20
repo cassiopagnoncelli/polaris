@@ -8,7 +8,7 @@
  * strings.
  */
 
-import type { ConsumerIdentity } from "@polaris/shared-destinations";
+import type { ConsumerIdentity } from "@polaris/delivery-destinations";
 
 export const CONSUMER_VENDOR = "tiktok" as const;
 /**

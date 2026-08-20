@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-control-plane` — control-plane primitives shared between
+ * `@polaris/tenancy-control-plane` — control-plane primitives shared between
  * the `polaris` CLI (today) and the future `apps/control-plane-api/`
  * service.
  *

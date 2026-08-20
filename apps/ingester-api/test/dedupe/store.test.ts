@@ -1,4 +1,4 @@
-import { createLogger } from "@polaris/shared-logger";
+import { createLogger } from "@polaris/observability-logger";
 import { describe, expect, it, vi } from "vitest";
 
 import {

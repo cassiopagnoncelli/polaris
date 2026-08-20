@@ -31,7 +31,7 @@
  * Processor runs:
  *
  *   `runs list` / `runs show` read `processor_runs`, which each processor
- *   writes at boot through `@polaris/shared-processor`'s `openProcessorRun`.
+ *   writes at boot through `@polaris/pipeline`'s `openProcessorRun`.
  *   Activations say what SHOULD run; runs say what DID.
  *
  * @see docs/architecture/05-processors-and-replay.md

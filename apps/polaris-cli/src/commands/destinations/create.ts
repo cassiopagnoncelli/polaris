@@ -29,8 +29,8 @@
  * `mutates: true` so the P6-007 production gate picks this command up
  * automatically.
  */
-import type { DestinationMode, DestinationRetryPolicy } from "@polaris/shared-db";
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import type { DestinationMode, DestinationRetryPolicy } from "@polaris/persistence-postgres";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {

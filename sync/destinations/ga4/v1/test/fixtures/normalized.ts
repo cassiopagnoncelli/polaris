@@ -3,19 +3,19 @@
  *
  * Builds a realistic `NormalizedEvent` + `MapperContext` +
  * `DelivererContext` without reaching into
- * `@polaris/shared-destination-normalize`'s actual normalizer — the
+ * `@polaris/delivery-normalize`'s actual normalizer — the
  * consumer's mapper accepts whatever shape arrives in
  * `MapperContext.normalized`, so structural-typing a frozen literal is
  * sufficient and faster than running the full normalize pipeline per
  * test.
  */
 
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
 import type {
   DelivererContext,
   DestinationInstance,
   MapperContext,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 
 import type { Ga4EventPayload } from "../../src/types.js";
 

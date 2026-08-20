@@ -30,13 +30,13 @@
  * `definitions/policy/forbidden-fields.<project_id>.ts`. The sample override
  * in `definitions/policy/forbidden-fields.checkout.ts` demonstrates the shape.
  *
- * The actual rule tables live in `@polaris/shared-policy/PLATFORM_DEFAULT_POLICY`.
+ * The actual rule tables live in `@polaris/governance/PLATFORM_DEFAULT_POLICY`.
  * This file re-exports them so the catalog directory is the place a
  * reviewer looks for the policy and so future per-edition platform
  * tweaks land here without changing the package surface.
  */
 
-import { type ForbiddenFieldPolicy, PLATFORM_DEFAULT_POLICY } from "@polaris/shared-policy";
+import { type ForbiddenFieldPolicy, PLATFORM_DEFAULT_POLICY } from "@polaris/governance";
 
 /**
  * Platform-default forbidden-field policy. The ingester loads this file

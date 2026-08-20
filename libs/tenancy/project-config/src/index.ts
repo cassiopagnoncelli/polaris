@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-project-config` — the read side of per-`(project,
+ * `@polaris/tenancy-project-config` — the read side of per-`(project,
  * environment)` configuration.
  *
  * Components receive their own namespace slice and nothing else: meta-capi

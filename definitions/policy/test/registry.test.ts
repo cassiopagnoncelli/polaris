@@ -19,7 +19,7 @@ import {
   POLICY_REASON_POLICY,
   PolicyMergeError,
   type ProjectPolicyOverride,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import { describe, expect, it } from "vitest";
 
 import { checkoutOverride, PROJECT_POLICY_OVERRIDES } from "../index.js";

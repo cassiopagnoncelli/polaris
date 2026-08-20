@@ -94,20 +94,20 @@ async function main() {
 /**
  * Build the shared libraries so the services can import them.
  *
- * `packages/*` and the ADR-0007 destinations `libs/*` / `libs/*/*` are all
+ * The ADR-0007 library roots `libs/*`, `libs/*/*` and `sdks/*` are all
  * named: both epochs are live until IJ4NN, and a filter that misses a root
  * leaves those packages with no dist behind their `@polaris/*` imports.
  * Keep this in step with `build-packages` in the Makefile and with `bin/setup`.
  *
  * Workspace packages export `./dist/*` only, and the services run from source
  * under `tsx watch` — so without this the first import fails with a bare
- * MODULE_NOT_FOUND naming a `@polaris/shared-*` path. `tsc --incremental`
+ * MODULE_NOT_FOUND naming a `@polaris/*` path. `tsc --incremental`
  * makes the no-op case a few seconds, which is cheap enough to pay on every
  * start rather than leave as a step someone can forget.
  */
 function buildSharedPackages() {
   console.log("Building shared packages ...");
-  const filters = ["./packages/*", "./libs/*", "./libs/*/*"];
+  const filters = ["./libs/*", "./libs/*/*", "./sdks/*"];
   const args = ["-r", ...filters.flatMap((f) => ["--filter", f]), "run", "build"];
   const result = spawnSync("pnpm", args, {
     cwd: REPO_ROOT,

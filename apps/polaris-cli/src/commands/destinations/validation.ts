@@ -10,7 +10,7 @@
  * This module enforces that contract before any value reaches the DB
  * repository, for the CLI's flag surface.
  *
- * The token list itself moved to `@polaris/shared-control-plane` when
+ * The token list itself moved to `@polaris/tenancy-control-plane` when
  * `destinations.config` and `project_config.value` landed: those are `jsonb`,
  * so the rule now has to be enforced on the KEYS of a bag at the database
  * layer too, and the database layer cannot import from `apps/`. It is
@@ -24,12 +24,12 @@
 import {
   FORBIDDEN_MAPPING_FLAG_TOKENS,
   normaliseMappingToken,
-} from "@polaris/shared-control-plane";
+} from "@polaris/tenancy-control-plane";
 import { UsageError } from "../../errors.js";
 
 export { FORBIDDEN_MAPPING_FLAG_TOKENS };
 
-/** @deprecated Use `normaliseMappingToken` from `@polaris/shared-control-plane`. */
+/** @deprecated Use `normaliseMappingToken` from `@polaris/tenancy-control-plane`. */
 const normaliseFlagName = normaliseMappingToken;
 
 /**

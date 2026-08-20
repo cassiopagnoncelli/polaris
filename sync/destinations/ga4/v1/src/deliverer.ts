@@ -72,7 +72,7 @@
  * synthesizes a stable `client_id` from the canonical `delivery_key`.
  */
 
-import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
+import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/delivery-destinations";
 
 import { parseGa4ProjectConfig } from "./project-config.js";
 import type { Ga4EventPayload, Ga4RequestBody, ResolvedGa4Secret } from "./types.js";

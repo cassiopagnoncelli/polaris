@@ -56,7 +56,7 @@ describe("public surface (`import * as pkg`)", () => {
     expect(actualRuntime).toEqual(expectedSorted);
   });
 
-  it("does not re-export shared-policy or shared-schemas internals", () => {
+  it("does not re-export governance or spec internals", () => {
     // Spot-check a handful of names that would indicate accidental
     // `export *` re-exports from upstream packages.
     const forbidden = [

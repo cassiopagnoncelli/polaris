@@ -109,7 +109,7 @@ exchange  raw.events                    (direct, durable)
 
 This layout is byte-for-byte what `rabbitmq-streams add_super_stream`
 produces, so the management CLI, the native stream protocol client, and
-`@polaris/shared-transport` all agree on names.
+`@polaris/bus` all agree on names.
 
 Width is config (`POLARIS_RABBITMQ_PARTITIONS`, with per-family overrides
 in `POLARIS_RABBITMQ_PARTITION_OVERRIDES`). Defaults: the three SPINE
@@ -267,7 +267,7 @@ KafkaJS's "throw and the batch is retried"; `basic.nack` with requeue is
 not meaningful on a stream, where nothing is ever removed.
 
 Components that want retry/DLQ routing instead of redelivery catch the
-error themselves and call the helpers in `@polaris/shared-transport/dlq`.
+error themselves and call the helpers in `@polaris/bus/dlq`.
 
 Two properties of the rewind are easy to get wrong and are worth stating
 explicitly, because both were bugs before they were features:

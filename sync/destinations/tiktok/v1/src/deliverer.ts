@@ -49,7 +49,7 @@
  * (`event_source: app`) is deferred until a future minor version.
  */
 
-import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
+import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/delivery-destinations";
 
 import { TIKTOK_EVENTS_API_VERSION } from "./descriptor-identity.js";
 import { parseTikTokProjectConfig } from "./project-config.js";

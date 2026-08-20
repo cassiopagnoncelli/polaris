@@ -3,7 +3,7 @@
  *
  * Renders the deterministic dry-run plan for a replay job. The CLI reads
  * the operator-issued declaration out of `replay_jobs`, hands it to the
- * planner in `@polaris/shared-replay`, and prints the resulting
+ * planner in `@polaris/archive-replay`, and prints the resulting
  * {@link ReplayPlan}. No DB writes; no RabbitMQ reads.
  *
  * The plan output is the contract the future replay executor (P7-003)
@@ -21,7 +21,7 @@
  * Architectural rule baked in: the CLI MUST NOT accept any flag that
  * resembles planner semantics (partition strategy, chunking rules,
  * transform overrides, topic routing). Those live in versioned code
- * under `@polaris/shared-replay`. The `rejectReplayPlanArguments` gate
+ * under `@polaris/archive-replay`. The `rejectReplayPlanArguments` gate
  * fires before any DB or planner work.
  *
  * @see libs/archive/replay/src/planner.ts
@@ -36,7 +36,7 @@ import {
   type ReplayPlan,
   ReplayPlanError,
   renderPlanHuman,
-} from "@polaris/shared-replay";
+} from "@polaris/archive-replay";
 import type { Command } from "commander";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, findReplayJobById, type ReplayJobRow } from "../../db/index.js";

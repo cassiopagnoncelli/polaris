@@ -13,7 +13,7 @@
  * absence no longer carries the guarantee on its own. What replaces it is a
  * check on KEYS at every write path — which is why this list had to leave
  * `apps/polaris-cli/` (where the database layer cannot import it) and live
- * here, reachable from both the CLI and `@polaris/shared-control-plane-db`.
+ * here, reachable from both the CLI and `@polaris/persistence-control-plane`.
  *
  * @see docs/implementation/project-config-plan.md §2
  * @see db/postgres/migrations/20260813000002_add_destinations_config.sql

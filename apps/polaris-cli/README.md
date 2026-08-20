@@ -13,7 +13,7 @@ This package (P6-001) ships only the **shell**:
 - config loading (`POLARIS_API_URL` + `POLARIS_TOKEN`, optional
   `~/.polaris/config.toml`)
 - profile resolution (`--profile`, `POLARIS_PROFILE`)
-- logger wiring through `@polaris/shared-logger`
+- logger wiring through `@polaris/observability-logger`
 - output streams (`human` and `json`) with stable exit codes
 - the `polaris version` command
 - a typed `CommandDefinition` surface that future tasks (P6-002+) plug into

@@ -12,8 +12,8 @@
  * the request path in the first place.
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
+import type { Database } from "@polaris/persistence-postgres";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
 import type { Kysely } from "kysely";
 import { ProjectConfigAssemblyError } from "./errors.js";
 import { isSecret, Secret } from "./secret-box.js";

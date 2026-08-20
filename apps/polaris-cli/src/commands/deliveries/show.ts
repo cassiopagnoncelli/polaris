@@ -12,7 +12,7 @@
 import {
   createKyselyDeliveryRecordRepository,
   type DeliveryRecord,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

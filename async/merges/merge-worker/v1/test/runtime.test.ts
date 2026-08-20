@@ -7,8 +7,8 @@
  * `profile.created` and `profile.updated` — does not make this worker throw.
  */
 
-import { ProcessorMetrics } from "@polaris/shared-processor";
-import type { TransportMessagePayload } from "@polaris/shared-transport";
+import { ProcessorMetrics } from "@polaris/pipeline";
+import type { TransportMessagePayload } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import type { ExistingChain, MergeMapRow } from "../src/merge-map.js";

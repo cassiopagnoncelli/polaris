@@ -2,7 +2,7 @@
  * `polaris replay execute <replay_job_id> [--target-topic <name>]
  *   [--dry-run-emit]` — mutating.
  *
- * Picks up a replay-job row, derives its plan via `@polaris/shared-replay`,
+ * Picks up a replay-job row, derives its plan via `@polaris/archive-replay`,
  * and runs the executor against an injected source/producer/store. The
  * default executor is wired against the real transport: a stream
  * range-reader per partition and a confirmed producer for the
@@ -44,7 +44,7 @@ import {
   loadConfigWithDefaults,
   partitionsForFamily,
   rabbitmqEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import {
   DEFAULT_RETENTION_DAYS,
   type ExecuteReplayOutcome,
@@ -59,14 +59,14 @@ import {
   type ReplayPlan,
   ReplayPlanError,
   topicFamilyReachesDestinations,
-} from "@polaris/shared-replay";
+} from "@polaris/archive-replay";
 import {
   createAmqpStreamRangeDriver,
   createPolarisProducer,
   createTransportConnection,
   type PolarisProducer,
   STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -166,7 +166,7 @@ export const replayExecuteCommand: CommandDefinition = {
       .description(
         [
           "Execute a replay job. Reads the row, derives the deterministic plan via",
-          "@polaris/shared-replay, and runs the executor against an injected source",
+          "@polaris/archive-replay, and runs the executor against an injected source",
           "and producer. The row's status transitions pending|planning -> running ->",
           "completed (or failed). The executor stamps the polaris-replay headers on",
           "every republished event so destinations apply the P7-004 guardrails.",

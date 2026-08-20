@@ -149,7 +149,7 @@ jobs:
         run: pnpm build
 
       # Covers unit tests, contract/schema tests, the event-catalog validation
-      # suite in @polaris/shared-schemas, plus the repo-root scripts tests
+      # suite in @polaris/spec, plus the repo-root scripts tests
       # (lint-clickhouse-imports). See package.json `test` script.
       - name: Test (workspace + scripts)
         run: pnpm test
@@ -192,7 +192,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # dbmate has no dry-run mode. We validate by applying every migration
-      # against a disposable Postgres service. The shared-db package owns the
+      # against a disposable Postgres service. The persistence-postgres package owns the
       # dbmate binary; running `pnpm db:migrate` from the repo root applies
       # files in `db/postgres/migrations/`.
       - name: Apply migrations (db:migrate)

@@ -44,7 +44,7 @@ import {
   planClickhouseRebuild,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
-} from "@polaris/shared-clickhouse/rebuild";
+} from "@polaris/persistence-clickhouse/rebuild";
 import { v7 as uuidv7 } from "uuid";
 import { connectOperatorClickHouse } from "../../clickhouse/connect.js";
 import type { CommandContext, CommandDefinition, CommandResult } from "../../command.js";
@@ -112,7 +112,7 @@ export interface ClickhouseRebuildCreateHooks {
   /**
    * Adapter that reads `system.parts` for the planner. Injected for
    * tests; in production the runner falls back to
-   * `defaultReadPartitions(ctx.env)`, which wraps the shared-clickhouse
+   * `defaultReadPartitions(ctx.env)`, which wraps the persistence-clickhouse
    * operator client's `raw.query` escape hatch in a handle whose
    * `close()` releases the connection.
    *

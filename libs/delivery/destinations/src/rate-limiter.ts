@@ -31,7 +31,7 @@
  * `rate-limiter-redis.ts` shipped and makes RPS GLOBAL: a counter per
  * `(destination_id, environment, second)` that every replica increments,
  * so `max_rps` is the number the vendor sees no matter how many replicas
- * run. `destination-host` wires it through `createDestinationSharedState`.
+ * run. `delivery-host` wires it through `createDestinationSharedState`.
  *
  * Concurrency stays here, per-process, deliberately: `max_concurrency`
  * bounds one process's in-flight sockets and event loop, and a distributed

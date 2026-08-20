@@ -2,11 +2,11 @@
  * Build the Polaris ingester OpenAPI 3.0 document.
  *
  * The document is *derived* from:
- *   - Zod schemas in `@polaris/shared-schemas` (envelope, batch req/res,
+ *   - Zod schemas in `@polaris/spec` (envelope, batch req/res,
  *     reason codes) via `z.toJSONSchema(..., { target: "openapi-3.0" })`
  *   - Fastify routes registered on the ingester (`POST /v1/events`,
  *     `/health`, `/ready`, `/metrics`)
- *   - Stable Problem codes from `@polaris/shared-service-bootstrap` and
+ *   - Stable Problem codes from `@polaris/runtime-service-bootstrap` and
  *     the ingester's own auth module
  *
  * Avoid hand-writing parallel shapes here — if the Zod schema changes, the

@@ -1,4 +1,4 @@
-# @polaris/shared-logger
+# @polaris/observability-logger
 
 Pino-based structured logger for Polaris services. Polaris services depend on
 this package and never import `pino` directly so the upstream version,
@@ -21,7 +21,7 @@ redaction defaults, and standard log-field shape stay coordinated.
 ## Quick start
 
 ```ts
-import { createLogger, withRequest, withProcessor } from "@polaris/shared-logger";
+import { createLogger, withRequest, withProcessor } from "@polaris/observability-logger";
 
 const log = createLogger({
   service: "ingester-api",
@@ -113,10 +113,10 @@ Logs include stable identifiers where applicable:
 
 ## Scripts
 
-- `pnpm --filter @polaris/shared-logger build` — emit `dist/`
-- `pnpm --filter @polaris/shared-logger typecheck` — strict TypeScript
-- `pnpm --filter @polaris/shared-logger lint` — Biome
-- `pnpm --filter @polaris/shared-logger test` — Vitest
+- `pnpm --filter @polaris/observability-logger build` — emit `dist/`
+- `pnpm --filter @polaris/observability-logger typecheck` — strict TypeScript
+- `pnpm --filter @polaris/observability-logger lint` — Biome
+- `pnpm --filter @polaris/observability-logger test` — Vitest
 
 ## References
 

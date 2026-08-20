@@ -71,7 +71,7 @@ If `currency`, `amount`/`amount_minor`, or a derivable `product_id` is missing t
 
 ## Normalization rules
 
-The shared `@polaris/shared-destination-normalize` package handles:
+The shared `@polaris/delivery-normalize` package handles:
 
 ```text
 email       passthrough (no hashing — Braze REST consumes raw)
@@ -100,7 +100,7 @@ Braze-specific rules (in `src/mapper.ts`):
 
 **Braze does NOT provide a generic vendor-side event dedupe key.** Its REST contract accepts and re-records duplicate `events[]` entries with the same `(external_id, name, time)` tuple — the same `purchases[]` entry with the same tuple is recorded twice as two separate purchases, doubling reported revenue. This is the "known divergences from canonical" the manifest references.
 
-The canonical guard against double-delivery is **Polaris-side delivery-key idempotency** in `@polaris/shared-destinations`:
+The canonical guard against double-delivery is **Polaris-side delivery-key idempotency** in `@polaris/delivery-destinations`:
 
 - The destination runtime computes a stable `delivery_key` per `(destination_id, event_id, consumer_version)` tuple.
 - Before invoking the deliverer, the runtime checks the `delivery_records` table for an already-accepted row keyed on the same `delivery_key`. An existing `accepted` row short-circuits to `dropped_idempotency` without re-invoking the deliverer.
@@ -184,7 +184,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 
 ## Known divergences from canonical
 
-- **Braze REST does NOT provide a generic vendor-side event dedupe key.** Its REST contract accepts and re-records duplicate `events[]` / `purchases[]` entries with the same `(external_id, name, time)` tuple. The Polaris-side delivery-key idempotency in `@polaris/shared-destinations` is the canonical guard against double-delivery. This is the most important divergence the manifest references; tests assert delivery-record idempotency end-to-end.
+- **Braze REST does NOT provide a generic vendor-side event dedupe key.** Its REST contract accepts and re-records duplicate `events[]` / `purchases[]` entries with the same `(external_id, name, time)` tuple. The Polaris-side delivery-key idempotency in `@polaris/delivery-destinations` is the canonical guard against double-delivery. This is the most important divergence the manifest references; tests assert delivery-record idempotency end-to-end.
 - **Braze consumes RAW email/phone**, not sha256-hashed values. Polaris envelopes carry raw email/phone in `identity.email` / `identity.phone`; the shared normalize layer preserves them when `identityHashing` is off (which it is for this consumer). Meta CAPI and TikTok both require sha256-hashed identifiers — Braze is the divergent member of the trio.
 - **Braze's `time` slot is ISO 8601, not Unix seconds.** Meta CAPI and TikTok both want seconds; Braze's REST API accepts the ISO string directly so the mapper passes `occurred_at` through unchanged.
 - **Braze's `price` is decimal, not minor units.** Mirrors TikTok / Meta — the mapper applies `minorToMajor(amount, currency)` with the ISO 4217 exponent. Zero-decimal currencies (JPY, KRW) pass through unchanged.

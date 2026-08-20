@@ -3,7 +3,7 @@ import {
   type BatchRejectedResult,
   type BatchResponse,
   batchResponseSchema,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 import { z } from "zod";
 
 import type { AuthenticatedRequestContext } from "../auth/api-key.js";

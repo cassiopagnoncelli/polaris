@@ -43,7 +43,7 @@ import {
   REVERSE_ETL_JOBS,
   type ReverseEtlRow,
 } from "@polaris/reverse-etl-catalog";
-import { deriveEventId } from "@polaris/shared-processor";
+import { deriveEventId } from "@polaris/pipeline";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 

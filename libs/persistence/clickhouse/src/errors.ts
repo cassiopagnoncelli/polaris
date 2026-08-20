@@ -1,5 +1,5 @@
 /**
- * Typed error classes for @polaris/shared-clickhouse.
+ * Typed error classes for @polaris/persistence-clickhouse.
  *
  * Errors are intentionally narrow so callers (services, CLI) can branch on
  * them in their RFC 7807 problem-details mappers without doing string
@@ -100,6 +100,6 @@ export class ClickHouseInvariantError extends ClickHouseError {
   public override readonly code = "clickhouse_invariant_violated" as const;
 
   public constructor(message: string) {
-    super(`shared-clickhouse invariant violated: ${message}`);
+    super(`persistence-clickhouse invariant violated: ${message}`);
   }
 }

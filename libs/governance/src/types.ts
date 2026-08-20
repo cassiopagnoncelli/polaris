@@ -125,7 +125,7 @@ export interface ForbiddenFieldPolicy {
  * The override file is expected to default-export this shape, e.g.:
  *
  * ```ts
- * import type { ProjectPolicyOverride } from "@polaris/shared-policy";
+ * import type { ProjectPolicyOverride } from "@polaris/governance";
  * const override: ProjectPolicyOverride = { project_id: "checkout", ... };
  * export default override;
  * ```
@@ -215,7 +215,7 @@ export type PolicyDecision = AcceptDecision | RejectDecision;
 
 /**
  * Minimal subset of the canonical envelope the evaluator needs. The
- * envelope schema in `@polaris/shared-schemas` declares the authoritative
+ * envelope schema in `@polaris/spec` declares the authoritative
  * shape; here we accept any object-shaped event so the evaluator can run
  * before envelope validation completes.
  */

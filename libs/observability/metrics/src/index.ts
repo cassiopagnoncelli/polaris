@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-metrics` — Prometheus exposition for Polaris's in-process
+ * `@polaris/observability-metrics` — Prometheus exposition for Polaris's in-process
  * metric registries.
  *
  * The three subsystem registries (`IngestMetrics`, `ProcessorMetrics`,

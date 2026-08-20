@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-clickhouse/rebuild` — ClickHouse rebuild planner.
+ * `@polaris/persistence-clickhouse/rebuild` — ClickHouse rebuild planner.
  *
  * Pure-function module that produces a dry-run plan for a controlled
  * rebuild of one analytical projection. Consumed by:

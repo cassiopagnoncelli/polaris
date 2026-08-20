@@ -32,7 +32,7 @@
  */
 
 import type { JourneyDefinition } from "@polaris/journey-catalog";
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import { v7 as uuidv7 } from "uuid";
 import type { ProfileSnapshot } from "./engine.js";
 import {

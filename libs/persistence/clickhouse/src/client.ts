@@ -141,7 +141,7 @@ export function createClickHouseClient(input: CreateClickHouseClientInput): Clic
 
 /**
  * Variant for callers who have already parsed config (e.g. through the
- * `@polaris/shared-config` loader). Skips the Zod parse but still applies
+ * `@polaris/runtime-config` loader). Skips the Zod parse but still applies
  * the role assertion.
  */
 export function createClickHouseClientFromConfig(
@@ -163,7 +163,7 @@ function buildClient(options: ClickHouseClientOptions): ClickHouseClient {
   }
 
   const logger = options.logger?.child({
-    package: "@polaris/shared-clickhouse",
+    package: "@polaris/persistence-clickhouse",
     role: config.role,
     application: config.application,
   });

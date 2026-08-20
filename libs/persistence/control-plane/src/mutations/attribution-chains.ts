@@ -29,7 +29,7 @@
  * @see docs/operations/backup-and-retention.md "Attribution chain retention"
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import type { AuditEnvironment } from "../queries/audit-records.js";
 import { type AuditContext, type MutationOutcome, withAudit } from "./audited.js";

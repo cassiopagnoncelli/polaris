@@ -29,16 +29,16 @@
  * `buildViolationSample` applies every policy rule — reject, redact-named
  * and pattern — before anything is serialised, which `evaluate` alone
  * cannot do because it short-circuits on the first reject. See
- * `@polaris/shared-policy/violation-sample.ts`; that module's tests are
+ * `@polaris/governance/violation-sample.ts`; that module's tests are
  * the PII acceptance criterion.
  */
 
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
-import { buildViolationSample, serialiseViolationSample } from "@polaris/shared-policy";
-import type { BatchRejectedResult } from "@polaris/shared-schemas";
-import { VIOLATION_RECORD_VERSION, type ViolationRecord } from "@polaris/shared-schemas";
-import type { PolarisProducer } from "@polaris/shared-transport";
-import { STREAM_FAMILY_REJECTED_EVENTS } from "@polaris/shared-transport";
+import type { ProjectPolicyOverride } from "@polaris/governance";
+import { buildViolationSample, serialiseViolationSample } from "@polaris/governance";
+import type { BatchRejectedResult } from "@polaris/spec";
+import { VIOLATION_RECORD_VERSION, type ViolationRecord } from "@polaris/spec";
+import type { PolarisProducer } from "@polaris/bus";
+import { STREAM_FAMILY_REJECTED_EVENTS } from "@polaris/bus";
 import { v7 as uuidv7 } from "uuid";
 
 /** One rejection, with the payload that caused it. */

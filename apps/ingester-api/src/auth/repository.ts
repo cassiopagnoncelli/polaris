@@ -1,14 +1,14 @@
 /**
  * `api_keys` lookup repository.
  *
- * Thin abstraction over `@polaris/shared-db` so the auth layer can be unit
+ * Thin abstraction over `@polaris/persistence-postgres` so the auth layer can be unit
  * tested with an in-memory fake. The repository is read-only at the ingester
  * — issuance, revocation, and rotation are P6-003 (lifecycle CLI) territory.
  *
  * @see libs/persistence/postgres/src/database.ts ApiKeyTable
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**

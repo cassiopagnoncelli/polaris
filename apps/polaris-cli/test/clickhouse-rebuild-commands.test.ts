@@ -9,7 +9,7 @@
  *   - the command-id strings are stable,
  *   - the closed-set status / projection constants stay aligned with
  *     the migration,
- *   - the closed-set registry in shared-clickhouse/rebuild matches
+ *   - the closed-set registry in persistence-clickhouse/rebuild matches
  *     the on-disk SQL files (each registered projection has a real
  *     DDL file).
  *
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import {
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   REBUILDABLE_CLICKHOUSE_PROJECTIONS,
-} from "@polaris/shared-clickhouse/rebuild";
+} from "@polaris/persistence-clickhouse/rebuild";
 import { describe, expect, it } from "vitest";
 
 import {

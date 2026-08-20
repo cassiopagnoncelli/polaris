@@ -16,5 +16,5 @@ description: >-
   accepting merges pending operator review.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/identity/merge_suspended.v1"
+schema_module: "@polaris/spec/events/identity/merge_suspended.v1"
 schema_export: identityMergeSuspendedV1PropertiesSchema

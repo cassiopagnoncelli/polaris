@@ -18,9 +18,9 @@
  * override it is handed.
  */
 
-import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
-import type { Logger } from "@polaris/shared-logger";
-import { POLICY_REASON_POLICY, type ProjectPolicyOverride } from "@polaris/shared-policy";
+import type { NormalizableEnvelope } from "@polaris/delivery-normalize";
+import type { Logger } from "@polaris/observability-logger";
+import { POLICY_REASON_POLICY, type ProjectPolicyOverride } from "@polaris/governance";
 import { describe, expect, it } from "vitest";
 
 import {

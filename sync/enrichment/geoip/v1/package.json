@@ -24,7 +24,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@polaris/shared-logger": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
     "mmdb-lib": "^3.0.3"
   }
 }

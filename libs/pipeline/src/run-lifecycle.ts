@@ -46,9 +46,9 @@
  * @see db/postgres/migrations/20260512000008_create_processor_runs.sql
  */
 
-import type { Database } from "@polaris/shared-db";
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
-import type { Logger } from "@polaris/shared-logger";
+import type { Database } from "@polaris/persistence-postgres";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
+import type { Logger } from "@polaris/observability-logger";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 

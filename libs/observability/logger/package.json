@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-logger",
+  "name": "@polaris/observability-logger",
   "version": "0.0.0",
   "private": true,
   "description": "Shared Pino-based structured logger for Polaris services with baked-in secret/PII redaction and standard context helpers.",

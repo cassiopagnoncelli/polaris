@@ -17,5 +17,5 @@ description: >-
   Records that a profile was admitted to a journey, naming the graph version it will walk to completion.
 lifecycle: active
 since: "2026-08-18"
-schema_module: "@polaris/shared-schemas/events/journey/entered.v1"
+schema_module: "@polaris/spec/events/journey/entered.v1"
 schema_export: journeyEnteredV1PropertiesSchema

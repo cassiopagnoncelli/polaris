@@ -37,7 +37,7 @@ import {
   rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 /** Service name surfaced in logs, metrics, and the connection name. */
@@ -123,7 +123,7 @@ export function clickhouseSinkConfigSchema() {
  *
  * Takes no `processEnv`. It used to accept one defaulting to `process.env`,
  * which meant this module read the environment directly — bypassing
- * `@polaris/shared-config` as the single sanctioned reader for no benefit,
+ * `@polaris/runtime-config` as the single sanctioned reader for no benefit,
  * since every caller used the default. `loadConfigWithDefaults` reads the
  * environment and applies the `.env` cascade itself, which is the whole point
  * of routing through it.

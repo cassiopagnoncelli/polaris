@@ -13,7 +13,7 @@
  * about SQL.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql, type Transaction } from "kysely";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 

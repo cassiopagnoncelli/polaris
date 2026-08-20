@@ -13,13 +13,13 @@
  *
  *   - `audit_records`, `operator_tokens`, `replay_jobs`,
  *     `clickhouse_rebuild_jobs`, `source_allowed_origins` are typed by
- *     `@polaris/shared-control-plane-db`, which owns the OPERATOR surface.
+ *     `@polaris/persistence-control-plane`, which owns the OPERATOR surface.
  *     That package exists so an audit row can only be written through a
  *     function that also writes the thing being audited — a table exposed
  *     here would let any holder of a `Kysely<Database>` insert one
  *     directly, which is exactly the guarantee the package is for.
  *   - `delivery_records`, `dlq_records`, `processor_dlq_records` are typed
- *     by the packages that own them (`shared-destinations`,
+ *     by the packages that own them (`delivery-destinations`,
  *     `shared-processor`). They are per-subsystem operational logs, and a
  *     service that does not deliver has no business querying them.
  *   - `schema_migrations` is dbmate's own bookkeeping. Typing it would
@@ -36,7 +36,7 @@
  * @see libs/persistence/postgres/README.md "Extending the schema"
  */
 
-import type { PolarisEnvironment } from "@polaris/shared-environments";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
 import type { ColumnType, Generated } from "kysely";
 
 /**
@@ -465,7 +465,7 @@ export interface ProcessorActivationsTable {
  *   - `running` -> `cancelled` (operator-issued stop)
  *
  * Terminal states are immutable in the runtime helpers — see
- * `@polaris/shared-processor`'s `InvalidRunTransitionError`.
+ * `@polaris/pipeline`'s `InvalidRunTransitionError`.
  */
 export type ProcessorRunStatus = "running" | "completed" | "failed" | "cancelled";
 
@@ -696,7 +696,7 @@ export interface IdentityLinksTable {
  * topic to a dedicated topic when one of the documented isolation
  * triggers fires. The move is operational, not structural: producer and
  * consumer code continues to reference the logical topic family and
- * consults the resolver in `@polaris/shared-transport` for the concrete
+ * consults the resolver in `@polaris/bus` for the concrete
  * topic. This table is the persistent backing store the resolver reads.
  *
  * One row per activation event. `deactivated_at` is NULL while the
@@ -794,7 +794,7 @@ export interface TransportCheckpointsTable {
 // Declared as an interface (not a type alias) so future tasks can extend it
 // via declaration merging from their own packages, e.g.
 //
-//   declare module "@polaris/shared-db" {
+//   declare module "@polaris/persistence-postgres" {
 //     interface Database { audit_records: AuditRecordsTable }
 //   }
 //

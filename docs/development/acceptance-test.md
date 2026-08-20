@@ -103,7 +103,7 @@ unit test:
 > calls hit the real ingester, ClickHouse queries go through the
 > documented HTTP endpoint. No internal helpers, no fakes, no mocks.
 
-If you find yourself reaching into a `packages/*/src/` file directly,
+If you find yourself reaching into a `libs/*/src/` file directly,
 or constructing an envelope by hand instead of via the SDK, that step
 no longer counts as acceptance — it's a unit test in a release-gate
 costume.

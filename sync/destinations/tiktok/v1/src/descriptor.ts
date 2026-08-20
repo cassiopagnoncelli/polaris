@@ -22,8 +22,8 @@
 import type {
   IdentityHashingOptions,
   RequiredConsent,
-} from "@polaris/shared-destination-normalize";
-import type { DestinationDescriptor, MapperMap } from "@polaris/shared-destinations";
+} from "@polaris/delivery-normalize";
+import type { DestinationDescriptor, MapperMap } from "@polaris/delivery-destinations";
 
 import { type BuildDelivererOptions, buildTikTokDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";

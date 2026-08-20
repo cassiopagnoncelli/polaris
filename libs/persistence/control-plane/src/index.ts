@@ -1,5 +1,5 @@
 /**
- * @polaris/shared-control-plane-db — control-plane data access shared by the
+ * @polaris/persistence-control-plane — control-plane data access shared by the
  * `polaris` CLI and the control-plane API.
  *
  * ## What this package is for

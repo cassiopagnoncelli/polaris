@@ -12,7 +12,7 @@
  * test that would only pass against a looser store fails here too.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 
 import type { ProfileRepository, ResolutionResult, ResolveInput } from "../src/repository.js";
 

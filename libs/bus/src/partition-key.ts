@@ -29,7 +29,7 @@
  * Minimal envelope shape required to compute the default partition key.
  *
  * The shape mirrors the canonical envelope but is declared structurally so
- * the helper does not need to import `@polaris/shared-schemas` (this package
+ * the helper does not need to import `@polaris/spec` (this package
  * stays pure and is consumed by SDK-adjacent code paths).
  */
 export interface PartitionKeyInput {

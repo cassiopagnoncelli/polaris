@@ -32,7 +32,7 @@
  * `POST /v1/events` flow. The allow-list is per-source-per-environment.
  */
 
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AuthenticatedRequestContext } from "../auth/index.js";

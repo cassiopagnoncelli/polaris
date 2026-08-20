@@ -19,7 +19,7 @@
  * snapshots, delivery records, DLQ payloads, log lines — sees {@link SECRET_MASK}.
  *
  * This is the coarse, structural half of the story. The fine-grained half is
- * `Secret<T>` in `@polaris/shared-project-config`, which boxes a value the
+ * `Secret<T>` in `@polaris/tenancy-project-config`, which boxes a value the
  * runtime is actually going to use so that it still cannot be stringified by
  * accident. The two are complementary: masking stops the value reaching a
  * caller at all, boxing protects the value once a caller legitimately holds it.
@@ -30,7 +30,7 @@
 /**
  * What a masked secret reads as.
  *
- * Matches `Secret.toString()` in `@polaris/shared-project-config` so operators
+ * Matches `Secret.toString()` in `@polaris/tenancy-project-config` so operators
  * see one spelling everywhere, and so a grep for a leaked credential in logs
  * has a single negative control to search for.
  */

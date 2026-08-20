@@ -90,6 +90,18 @@ const DOCKER_CONTEXT_CANARY = "definitions";
 /** A column no ClickHouse table has. Assembled, like every canary here. */
 const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
 
+/**
+ * The prefix ADR-0007 retired, assembled like the rest.
+ *
+ * `lint-package-name-congruence` reads `name` out of package.json and nothing
+ * else, so a literal here could not be mistaken for a use — but `git grep
+ * "@polaris/shared-"` is IJ4NN's acceptance criterion, and a literal would put
+ * a permanent hit in `scripts/`. Assembling it keeps the criterion answerable
+ * by the command the card names, which is the whole point of writing it as a
+ * grep.
+ */
+const PACKAGE_NAME_CANARY = `@polaris/${"shared"}-governance`;
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -204,6 +216,27 @@ const GATES = [
     inject: () =>
       append("docs/architecture/00-overview.md", `\nMappers live in ${RETIRED_PATH_CANARY}.\n`),
     assertInjected: () => read("docs/architecture/00-overview.md").includes(RETIRED_PATH_CANARY),
+  },
+  {
+    // Injected by renaming a real package rather than by adding a fixture
+    // one: the check derives what a package MUST be called from where it
+    // sits, so a fixture would have to be planted at a real path anyway, and
+    // renaming in place is the fault as it actually occurs -- somebody
+    // reaches for a name at the moment they create the package.
+    //
+    // `libs/governance` is the sharpest choice available. It is the package
+    // ADR-0007 names first when it explains what the prefix had come to
+    // mean: `shared-policy` was one of four different architectural layers
+    // wearing one badge.
+    name: "lint:package-name-congruence",
+    command: "node scripts/lint-package-name-congruence.mjs",
+    files: ["libs/governance/package.json"],
+    inject: () => {
+      const file = "libs/governance/package.json";
+      write(file, read(file).replace('"@polaris/governance"', `"${PACKAGE_NAME_CANARY}"`));
+    },
+    assertInjected: () =>
+      read("libs/governance/package.json").includes(PACKAGE_NAME_CANARY),
   },
   {
     name: "lint:metric-names (dashboard)",

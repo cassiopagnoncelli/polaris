@@ -12,7 +12,7 @@
  *   - The repository surface NEVER accepts mapping fields. There is no
  *     `field_map`, `event_map`, `target_field`, or any other column that
  *     would let a write path stash mapping semantics into PostgreSQL. The
- *     typed schema in `@polaris/shared-db` enforces this at compile time,
+ *     typed schema in `@polaris/persistence-postgres` enforces this at compile time,
  *     and the CLI's argument validation rejects mapping-shaped flags before
  *     ever reaching this module.
  *
@@ -31,7 +31,7 @@
  *     paths — not "is dropped later", does not leave. It is write-only through
  *     this module: `insertDestination` and `updateDestinationSecret` set it,
  *     and nothing here reads it back. The delivery runtime's own reader in
- *     `@polaris/shared-destinations` is the single consumer.
+ *     `@polaris/delivery-destinations` is the single consumer.
  *
  * @see db/postgres/migrations/20260512000005_create_destinations.sql
  * @see db/postgres/migrations/20260813000004_plaintext_project_secrets.sql
@@ -42,7 +42,7 @@ import type {
   DestinationMode,
   DestinationRetryPolicy,
   DestinationStatus,
-} from "@polaris/shared-db";
+} from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**
@@ -210,7 +210,7 @@ export async function findDestinationById(
  * A destination credential is WRITE-ONLY through every Polaris surface: set by
  * `destinations create`, replaced by `destinations rotate-secret`, and read
  * back by exactly one consumer — the delivery runtime, through its own narrow
- * reader in `@polaris/shared-destinations`. No CLI verb, page or export can
+ * reader in `@polaris/delivery-destinations`. No CLI verb, page or export can
  * print it.
  *
  * The same rule `api_keys.hash` follows, and for the same reason: nothing an

@@ -13,7 +13,7 @@
  * {@link ClickhouseRebuildDriver}. Production wires a driver around
  * the operator-profile ClickHouse client; tests pass a synthetic
  * driver. This mirrors the orchestrator-with-injected-adapters shape
- * that the replay executor in `@polaris/shared-replay` uses.
+ * that the replay executor in `@polaris/archive-replay` uses.
  *
  * The {@link ClickhouseRebuildStore} contract receives the lifecycle
  * transitions — `markRunning`, `markCompleted`, `markFailed`. It is

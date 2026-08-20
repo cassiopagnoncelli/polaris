@@ -38,8 +38,8 @@
  * @see docs/implementation/project-config-plan.md §3.3
  */
 
-import { assertNoMappingSemantics } from "@polaris/shared-control-plane";
-import { parseRoutingGateConfig, ROUTING_GATE_CONFIG_KEY } from "@polaris/shared-destinations";
+import { assertNoMappingSemantics } from "@polaris/tenancy-control-plane";
+import { parseRoutingGateConfig, ROUTING_GATE_CONFIG_KEY } from "@polaris/delivery-destinations";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

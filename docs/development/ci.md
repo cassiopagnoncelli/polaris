@@ -54,7 +54,7 @@ Every PR must pass these jobs in `ci.yml`:
   runs the workspace Vitest suite plus the repo-root `scripts/` test suite
   (see "ClickHouse import-restriction check" below). The workspace suite
   includes the event-catalog validation tests in
-  [`@polaris/shared-schemas`](../../libs/spec/test/catalog.test.ts),
+  [`@polaris/spec`](../../libs/spec/test/catalog.test.ts),
   so no dedicated catalog runner is needed.
 - **`migrations`** — applies every file in `db/postgres/migrations/` against a
   disposable PostgreSQL 17 service via `pnpm db:migrate`. dbmate does not
@@ -79,8 +79,8 @@ Enforcement happens at two layers:
 
 The import rule is implemented in
 [`scripts/lint-clickhouse-imports.mjs`](../../scripts/lint-clickhouse-imports.mjs).
-It walks `apps/`, `packages/`, `processors/`, `consumers/`, `catalog/`,
-and `scripts/`, classifies each file's characters as code vs. comment
+It walks `apps/`, `libs/`, `sdks/`, `connectors/`, `sync/`, `async/`,
+`definitions/` and `scripts/`, classifies each file's characters as code vs. comment
 vs. string literal, and flags only real imports — comments that name
 the package and prose in string literals do not trigger violations.
 
@@ -128,8 +128,8 @@ string at runtime and leaves the file as plain text.
 
 The check is implemented in
 [`scripts/lint-nul-bytes.mjs`](../../scripts/lint-nul-bytes.mjs). It walks
-`apps/`, `packages/`, `sync/`, `async/`, `definitions/`, `scripts/`, `db/`,
-`docs/`, `tests/`, `agents/` and `bin/`, scanning an **allow-list** of text
+`apps/`, `libs/`, `sdks/`, `connectors/`, `sync/`, `async/`, `definitions/`,
+`scripts/`, `db/`, `docs/`, `tests/`, `agents/` and `bin/`, scanning an **allow-list** of text
 extensions — so a genuinely binary file committed to the tree can never
 fail the build. It is wired into the root `pnpm lint`, and
 [`scripts/__tests__/lint-nul-bytes.test.ts`](../../scripts/__tests__/lint-nul-bytes.test.ts)

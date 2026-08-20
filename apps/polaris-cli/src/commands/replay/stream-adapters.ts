@@ -1,6 +1,6 @@
 /**
  * Replay execute adapters that wire the executor's source/producer
- * contracts to the real `@polaris/shared-transport` reader / producer.
+ * contracts to the real `@polaris/bus` reader / producer.
  *
  * ## What the RabbitMQ move deleted
  *
@@ -37,14 +37,14 @@ import type {
   ReplayExecutorSource,
   ReplayProduceRecord,
   ReplaySourceEvent,
-} from "@polaris/shared-replay";
+} from "@polaris/archive-replay";
 import {
   type PolarisProducer,
   partitionStreamNames,
   readStreamRange,
   type StreamRangeDriver,
   type StreamRangeEvent,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 export interface BuildStreamReplaySourceOptions {
   /** Concrete super-stream family (post-isolation resolution). */

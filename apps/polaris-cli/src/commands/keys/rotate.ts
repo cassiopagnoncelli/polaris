@@ -13,7 +13,7 @@
  *
  *   1. SELECT the existing row. Reject if missing.
  *   2. Generate fresh material (`<id>.<secret>`).
- *   3. argon2id-hash the new secret through `@polaris/shared-secrets`.
+ *   3. argon2id-hash the new secret through `@polaris/runtime-secrets`.
  *   4. In one transaction: INSERT the new row + UPDATE the old to revoked
  *      + INSERT two audit rows (one `keys.rotate.issue` for the new row,
  *      one `keys.rotate.revoke` for the old row). All four writes go in
@@ -24,7 +24,7 @@
  *
  * @see docs/architecture/02-control-plane.md "Rotation policy"
  */
-import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

@@ -29,7 +29,7 @@
  * in the package rather than once per consumer.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import { type DestinationDedupe, InMemoryDestinationDedupe } from "./dedupe.js";
 import { createRedisDestinationDedupe, type DestinationDedupeRedisClient } from "./dedupe-redis.js";
 import { DestinationRateLimiter, type DestinationRateLimiterLike } from "./rate-limiter.js";

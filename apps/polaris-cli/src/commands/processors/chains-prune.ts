@@ -7,7 +7,7 @@
  * row for the operation.
  *
  * The safety argument lives in the mutation
- * (`@polaris/shared-control-plane-db`'s `pruneAttributionChainsWithAudit`)
+ * (`@polaris/persistence-control-plane`'s `pruneAttributionChainsWithAudit`)
  * rather than here, so a scheduled job or the control-plane API inherits
  * it. The short version: attribution-engine v2 resets a chain after a
  * 90-day inactivity gap, so a row idle longer than that can never be read
@@ -19,8 +19,8 @@
  * `mutates: true`, so P6-007 gates it against production-without-token.
  */
 
-import { type ActorSource, enforceProductionMutationGate } from "@polaris/shared-control-plane";
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { type ActorSource, enforceProductionMutationGate } from "@polaris/tenancy-control-plane";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

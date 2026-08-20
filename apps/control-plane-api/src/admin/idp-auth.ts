@@ -34,7 +34,7 @@ import {
   RevokedTokenError,
   VerificationError,
   Verifier,
-} from "@polaris/idp";
+} from "@polaris/auth";
 
 import type { AdminIdpConfig } from "./config.js";
 

@@ -60,7 +60,7 @@ Raw token (shown ONCE — store it now; the platform keeps only the hash):
 
 Polaris stores only the **argon2id hash** of the secret (see
 `apps/polaris-cli/src/commands/keys/create.ts` and
-`@polaris/shared-secrets`). If your team loses the token, the operator must
+`@polaris/runtime-secrets`). If your team loses the token, the operator must
 revoke and reissue — there is no recovery.
 
 ## Step 2.2 — Operator issues the backend key

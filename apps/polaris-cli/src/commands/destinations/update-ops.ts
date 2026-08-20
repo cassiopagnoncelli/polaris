@@ -23,7 +23,7 @@
  *
  * `mutates: true` — P6-007 gates this in production.
  */
-import type { DestinationRetryPolicy } from "@polaris/shared-db";
+import type { DestinationRetryPolicy } from "@polaris/persistence-postgres";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

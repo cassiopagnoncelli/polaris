@@ -16,7 +16,7 @@
  *   serviceEnvSchema,
  *   postgresEnvSchema,
  *   rabbitmqEnvSchema,
- * } from "@polaris/shared-config";
+ * } from "@polaris/runtime-config";
  *
  * const schema = z
  *   .object({

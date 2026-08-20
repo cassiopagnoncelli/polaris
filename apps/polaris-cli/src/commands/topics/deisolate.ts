@@ -29,12 +29,12 @@
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
   isCanonicalStreamFamily,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {

@@ -5,7 +5,7 @@
  * stubbed so no live Idp, signing key, or Postgres is needed:
  * `adminQueries`, `idpAuth`, and `idpClient`.
  *
- * Passports are constructed directly rather than signed — `@polaris/idp`'s
+ * Passports are constructed directly rather than signed — `@polaris/auth`'s
  * own `contract.test.ts` covers real signature verification, so re-doing it
  * here would test jose twice and the guard's logic once.
  *
@@ -16,7 +16,7 @@
  * cookie-authenticated path.
  */
 
-import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/idp";
+import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/auth";
 import { describe, expect, it, vi } from "vitest";
 import type { AdminConfig } from "../src/admin/config.js";
 import { AdminIdentityCodec } from "../src/admin/identity.js";

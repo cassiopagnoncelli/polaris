@@ -10,8 +10,8 @@
  * one. A page load plus its stylesheet is enough to hit that.
  */
 
-import type { RefreshResult } from "@polaris/idp";
-import { RefreshError } from "@polaris/idp";
+import type { RefreshResult } from "@polaris/auth";
+import { RefreshError } from "@polaris/auth";
 import { describe, expect, it, vi } from "vitest";
 
 import { wrapSingleFlight } from "../src/admin/refresh.js";

@@ -50,7 +50,7 @@
  * resolved key.
  */
 
-import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
+import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/delivery-destinations";
 
 import { parseBrazeProjectConfig } from "./project-config.js";
 import type { BrazePayload, ResolvedBrazeSecret } from "./types.js";

@@ -21,7 +21,7 @@
  * @see db/postgres/migrations/20260810000001_create_transport_checkpoints.sql
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { parsePartitionStreamName } from "./streams.js";
 

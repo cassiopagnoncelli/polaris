@@ -77,7 +77,7 @@ Promtail uses Docker service discovery, filtered to the
 container started by `docker-compose.yml` and
 `docker-compose.observability.yml`:
 
-- Polaris services that emit Pino JSON via `@polaris/shared-logger`
+- Polaris services that emit Pino JSON via `@polaris/observability-logger`
   (ingester, processors, consumers, control-plane).
 - Infrastructure containers that emit plaintext (`rabbitmq`,
   `postgres`, `redis`, `clickhouse`).
@@ -117,7 +117,7 @@ LogQL `| json` extraction:
 | `processor_name`, `processor_version`, `consumer_name`, `consumer_version` | Bounded but not needed for stream-level routing; cheaper as line content.   |
 | `replay_job_id`, `destination_id`, `source_id` | High cardinality; queried by grep, not by stream.                       |
 
-The shared-logger reference for these standard fields is
+The observability-logger reference for these standard fields is
 [`libs/observability/logger/src/types.ts`](../../libs/observability/logger/src/types.ts)
 (`StandardLogFields`).
 

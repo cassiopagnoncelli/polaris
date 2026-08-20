@@ -8,7 +8,7 @@
  *     what an operator has switched ON. Intent.
  *   - `processor_runs` — what actually started, on which host, since when.
  *     Reality, written by each processor's boot layer through
- *     `@polaris/shared-processor`'s `openProcessorRun`.
+ *     `@polaris/pipeline`'s `openProcessorRun`.
  *
  * The two disagreeing is the interesting case. A `disabled` row now stops the
  * named processor for that (project, environment) within seconds — the
@@ -24,7 +24,7 @@
  * triage, not a metrics surface.
  */
 
-import { POLARIS_ENVIRONMENTS, rowEnvironmentFor } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS, rowEnvironmentFor } from "@polaris/runtime-environments";
 import { type Html, html } from "../html.js";
 import {
   type AdminPageContext,
@@ -58,7 +58,7 @@ const NO_ACTIVATIONS =
  *
  * `default_enabled` is the case this table exists to stop hiding. The
  * runtime gate lets an event through unless an explicit `disabled` row
- * says otherwise (see `@polaris/shared-processor`'s activation gate), so
+ * says otherwise (see `@polaris/pipeline`'s activation gate), so
  * a combination with no row is RUNNING. The previous version of this page
  * listed only the rows that existed and explained the rule in a footnote,
  * which left the operator to infer the state of everything absent —

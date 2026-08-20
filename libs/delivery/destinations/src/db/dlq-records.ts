@@ -6,7 +6,7 @@
  * module:
  *
  *   1. Mirrors the SQL schema as a `DlqRecordsTable` interface.
- *   2. Extends `@polaris/shared-db`'s `Database` interface via module
+ *   2. Extends `@polaris/persistence-postgres`'s `Database` interface via module
  *      augmentation so any `Kysely<Database>` instance in the runtime
  *      gets `db.selectFrom("dlq_records")` typed automatically.
  *   3. Exposes a small `DlqRecordRepository` contract with an in-memory
@@ -35,7 +35,7 @@
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -65,7 +65,7 @@ export const DLQ_RESOLUTION_NOTE_MAX_LENGTH = 1024;
 /**
  * Typed mirror of the `dlq_records` table.
  *
- * Extends `@polaris/shared-db`'s `Database` interface via module
+ * Extends `@polaris/persistence-postgres`'s `Database` interface via module
  * augmentation so any `Kysely<Database>` instance in the runtime gets
  * `db.selectFrom("dlq_records")` typed automatically.
  */
@@ -106,7 +106,7 @@ export interface DlqRecordsTable {
   resolution_note: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     dlq_records: DlqRecordsTable;
   }

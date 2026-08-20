@@ -3,7 +3,7 @@
  *
  * A row records one processor process: which version started, where, when,
  * and how it ended. Writes belong to the processors themselves through
- * `@polaris/shared-processor`'s `openProcessorRun` — the control plane reads
+ * `@polaris/pipeline`'s `openProcessorRun` — the control plane reads
  * runs, it never creates them, which is the whole distinction between this
  * table and `processor_activations`:
  *
@@ -18,7 +18,7 @@
  * @see db/postgres/migrations/20260512000008_create_processor_runs.sql
  * @see libs/pipeline/src/run-lifecycle.ts
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**

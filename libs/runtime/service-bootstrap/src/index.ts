@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-service-bootstrap` — thin Fastify service bootstrap.
+ * `@polaris/runtime-service-bootstrap` — thin Fastify service bootstrap.
  *
  * Polaris services (ingester, control-plane API, future dashboard API) use
  * this package to standardise:
@@ -12,8 +12,8 @@
  *   - OpenAPI integration hook for Fastify + Zod route schemas
  *   - graceful shutdown handlers for SIGTERM/SIGINT
  *
- * The bootstrap composes `@polaris/shared-config` for runtime config and
- * `@polaris/shared-logger` for Pino logging. Services should never import
+ * The bootstrap composes `@polaris/runtime-config` for runtime config and
+ * `@polaris/observability-logger` for Pino logging. Services should never import
  * `fastify` or `pino` directly — pull them in transitively through this
  * package so platform-wide changes (logger redaction, request ID shape,
  * Problem code catalog) ship through a single release.

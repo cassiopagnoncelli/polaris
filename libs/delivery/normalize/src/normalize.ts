@@ -50,7 +50,7 @@ import {
   evaluate,
   type ProjectPolicyOverride,
   type RedactionAction,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 
 import {
   type ConsentEvaluation,
@@ -101,7 +101,7 @@ export const DROP_REASONS: readonly DropReason[] = [
 /**
  * Envelope shape consumed by the normalizer. Declared structurally so the
  * package does not have to import the heavy Zod schemas. Matches the
- * `Envelope` type in `@polaris/shared-schemas` field-for-field; additional
+ * `Envelope` type in `@polaris/spec` field-for-field; additional
  * fields are tolerated (vendors that need `processor.*` stamps pass them
  * through unchanged).
  *
@@ -140,7 +140,7 @@ export interface NormalizableEnvelope {
   readonly enrichment?: EnvelopeEnrichment | null | undefined;
 }
 
-/** Mirrors `profileBlockSchema` in `@polaris/shared-schemas`. */
+/** Mirrors `profileBlockSchema` in `@polaris/spec`. */
 export interface EnvelopeProfile {
   readonly profile_id: string;
   readonly canonical_customer_id: string | null;
@@ -153,7 +153,7 @@ export interface EnvelopeProfile {
   readonly traits_version?: number | undefined;
 }
 
-/** Mirrors `enrichmentBlockSchema` in `@polaris/shared-schemas`. */
+/** Mirrors `enrichmentBlockSchema` in `@polaris/spec`. */
 export interface EnvelopeEnrichment {
   readonly geo?: {
     readonly country: string | null;
@@ -296,7 +296,7 @@ export function normalizeForDestination(
     return { kind: "drop", reason: "invalid_envelope", detail: invalid };
   }
 
-  // 2. Second-pass redaction. Runs the same `@polaris/shared-policy`
+  // 2. Second-pass redaction. Runs the same `@polaris/governance`
   // evaluator the ingester used; project overrides may have tightened
   // the policy between intake and delivery. The redactor is read-only on
   // the input; we clone the envelope subtree we hand downstream.
@@ -452,7 +452,7 @@ function applyHashedTrait(
  *
  * `redactions` is always populated on the `redacted` path (possibly
  * empty). The consumer runtime forwards the entries to
- * `@polaris/shared-policy`'s `emitRedactionMetric` so pattern-based
+ * `@polaris/governance`'s `emitRedactionMetric` so pattern-based
  * redactions emit `polaris_ingest_redacted_pattern_total` with the same
  * label set ingestion uses. The redaction actions never carry the raw
  * pre-redaction value — the evaluator only retains the path, reason,

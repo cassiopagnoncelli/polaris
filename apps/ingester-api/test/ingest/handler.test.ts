@@ -1,9 +1,9 @@
-import { createLogger } from "@polaris/shared-logger";
+import { createLogger } from "@polaris/observability-logger";
 import {
   POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
   POLICY_REASON_PII_CARD,
   POLICY_REASON_PII_SECRET,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
@@ -13,7 +13,7 @@ import {
   SCHEMA_REASON_INVALID_PROPERTIES,
   SCHEMA_REASON_SUNSET,
   SCHEMA_REASON_UNSUPPORTED_VERSION,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthenticatedRequestContext } from "../../src/auth/index.js";

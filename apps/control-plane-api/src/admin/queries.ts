@@ -17,9 +17,9 @@
  *     read out of the database at all, matching what the CLI's repository
  *     layer already does. `admin-ui.test.ts` asserts the literal hash string
  *     is absent from the rendered page.
- *   - **Tables outside `@polaris/shared-db`'s `Database` are read through a
+ *   - **Tables outside `@polaris/persistence-postgres`'s `Database` are read through a
  *     typed `sql` template**, not a module augmentation. `dlq_records` is
- *     declared by `@polaris/shared-destinations`, and depending on that
+ *     declared by `@polaris/delivery-destinations`, and depending on that
  *     package here would drag the whole destination-delivery stack into a
  *     service that has no business holding it — while re-declaring the table
  *     locally would create a second augmentation that silently breaks the
@@ -30,8 +30,8 @@ import {
   type AuditEnvironment,
   listProjectConfig,
   type ProjectConfigRow,
-} from "@polaris/shared-control-plane-db";
-import type { Database } from "@polaris/shared-db";
+} from "@polaris/persistence-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
 // ---- row shapes ---------------------------------------------------------
@@ -100,7 +100,7 @@ export interface ProcessorActivationRow {
 /**
  * A row of `processor_runs` — what actually ran, as opposed to what an
  * operator activated. Written by each processor's boot layer through
- * `@polaris/shared-processor`'s `openProcessorRun`.
+ * `@polaris/pipeline`'s `openProcessorRun`.
  */
 export interface ProcessorRunRow {
   readonly run_id: string;

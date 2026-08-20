@@ -20,7 +20,7 @@
  * ## What it may carry
  *
  * Reason code, field paths, and a sample with every policy redaction
- * applied (`buildViolationSample` in `@polaris/shared-policy`). Paths are
+ * applied (`buildViolationSample` in `@polaris/governance`). Paths are
  * dotted strings — the same discipline the batch response follows, and
  * what makes "which projects still send `cvv`?" answerable without the
  * quarantine becoming a second copy of the data it exists to keep out.

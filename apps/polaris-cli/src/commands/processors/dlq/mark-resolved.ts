@@ -17,7 +17,7 @@
 import {
   createKyselyProcessorDlqRecordRepository,
   type MarkResolvedOutcome,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../../command.js";

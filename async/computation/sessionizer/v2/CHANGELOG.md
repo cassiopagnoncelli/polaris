@@ -91,7 +91,7 @@ the schema convergence plan and the semantic-immutability rule.
   `session.ended` on the next observed event — `ended_at` is anchored
   to `last_seen_at + inactivity_seconds` so the timeline is stable
   across replays.
-- Errors are routed through `@polaris/shared-processor`'s
+- Errors are routed through `@polaris/pipeline`'s
   `classifyError`: decode failures and missing-envelope-field errors
   are classified as non-retryable. KafkaJS retries handle transient
   failures.

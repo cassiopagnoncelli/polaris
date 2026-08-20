@@ -1,4 +1,4 @@
-import type { BatchRejectedResult } from "@polaris/shared-schemas";
+import type { BatchRejectedResult } from "@polaris/spec";
 /**
  * Default HTTPS POST transport for `@polaris/node-sdk`.
  *

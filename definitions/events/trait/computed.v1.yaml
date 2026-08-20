@@ -19,5 +19,5 @@ description: >-
   profiles it computed, how many changed, and how long the query took.
 lifecycle: active
 since: "2026-08-15"
-schema_module: "@polaris/shared-schemas/events/trait/computed.v1"
+schema_module: "@polaris/spec/events/trait/computed.v1"
 schema_export: traitComputedV1PropertiesSchema

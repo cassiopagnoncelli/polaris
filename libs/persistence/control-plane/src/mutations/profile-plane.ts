@@ -45,7 +45,7 @@
  * design, not an oversight this mutation should paper over.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditContext, MutationOutcome } from "./audited.js";

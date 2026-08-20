@@ -11,18 +11,18 @@
  * `mutates: true`: routes through the P6-007 production gate.
  */
 
-import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/runtime-config";
 import {
   createKyselyProcessorDlqRecordRepository,
   type MarkResolvedOutcome,
   type ProcessorDlqRecord,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   createPolarisProducer,
   createTransportConnection,
   type PolarisProducer,
   redeliverQueueName,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../../command.js";

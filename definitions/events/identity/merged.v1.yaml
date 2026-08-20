@@ -17,5 +17,5 @@ description: >-
   onto a single identifier due to an authoritative overlap observation.
 lifecycle: active
 since: "2026-05-12"
-schema_module: "@polaris/shared-schemas/events/identity/merged.v1"
+schema_module: "@polaris/spec/events/identity/merged.v1"
 schema_export: identityMergedV1PropertiesSchema

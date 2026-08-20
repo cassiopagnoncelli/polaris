@@ -59,7 +59,7 @@ groups:
       # Per-project forbidden-field rejection ratio over 5 minutes.
       # The ingester emits `reason="forbidden_field_present"` when the
       # policy guard rejects a batch (see
-      # apps/ingester-api + @polaris/shared-policy).
+      # apps/ingester-api + @polaris/governance).
       - record: polaris:ingest_forbidden_field_rejection_ratio:rate5m
         expr: |
           sum by (project_id, environment) (

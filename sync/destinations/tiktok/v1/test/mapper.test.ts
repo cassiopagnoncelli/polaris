@@ -16,7 +16,7 @@
  * @see sync/destinations/tiktok/v1/src/mapper.ts
  */
 
-import { sha256Hex } from "@polaris/shared-destination-normalize";
+import { sha256Hex } from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -25,14 +25,14 @@
   "dependencies": {
     "@polaris/audience-catalog": "workspace:*",
     "@polaris/journey-catalog": "workspace:*",
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^13.0.0",
-    "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-metrics": "workspace:*",
-    "@polaris/shared-processor": "workspace:*",
-    "@polaris/shared-service-bootstrap": "workspace:*",
-    "@polaris/shared-transport": "workspace:*"
+    "@polaris/runtime-config": "workspace:*",
+    "@polaris/observability-metrics": "workspace:*",
+    "@polaris/pipeline": "workspace:*",
+    "@polaris/runtime-service-bootstrap": "workspace:*",
+    "@polaris/bus": "workspace:*"
   }
 }

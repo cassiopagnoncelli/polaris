@@ -175,7 +175,7 @@ function ensureFamily(family: string): asserts family is CanonicalStreamFamily {
   if (!isCanonicalStreamFamily(family)) {
     throw new Error(
       `stream-family resolver: "${family}" is not a canonical Polaris stream family. ` +
-        "Use one of the STREAM_FAMILY_* constants exported from @polaris/shared-transport.",
+        "Use one of the STREAM_FAMILY_* constants exported from @polaris/bus.",
     );
   }
 }

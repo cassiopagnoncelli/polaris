@@ -2,15 +2,15 @@
  * In-process counter registry for the control-plane API.
  *
  * Shape mirrors `apps/ingester-api/src/metrics/registry.ts`. The
- * `getSamples` output is consumed by `@polaris/shared-metrics`'s
+ * `getSamples` output is consumed by `@polaris/observability-metrics`'s
  * `toPrometheusText` serializer at scrape time.
  */
 import {
   METRIC_OPERATOR_GATE_DENIED_TOTAL,
   type OperatorGateDenialLabels,
   type OperatorGateMetricsSink,
-} from "@polaris/shared-control-plane";
-import type { MetricSample } from "@polaris/shared-metrics";
+} from "@polaris/tenancy-control-plane";
+import type { MetricSample } from "@polaris/observability-metrics";
 
 export class ControlPlaneMetrics implements OperatorGateMetricsSink {
   private readonly counters = new Map<string, MetricSample>();

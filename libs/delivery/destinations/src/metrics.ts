@@ -1,7 +1,7 @@
 /**
  * In-process destination consumer metrics.
  *
- * Mirrors the `ProcessorMetrics` pattern in `@polaris/shared-processor`:
+ * Mirrors the `ProcessorMetrics` pattern in `@polaris/pipeline`:
  * a tiny in-memory counter/gauge/histogram registry that:
  *
  *   - gives the destination runtime a deterministic sink for unit tests,
@@ -148,7 +148,7 @@ export interface DestinationMetricLabels {
   readonly environment?: string | undefined;
   /**
    * Logical RabbitMQ topic family this metric scopes to. See
-   * `CANONICAL_STREAM_FAMILIES` in `@polaris/shared-transport`. Required on
+   * `CANONICAL_STREAM_FAMILIES` in `@polaris/bus`. Required on
    * per-message emissions; optional on aggregate metrics (rate-limit
    * wait, replay suppression) that are not partition-scoped.
    */

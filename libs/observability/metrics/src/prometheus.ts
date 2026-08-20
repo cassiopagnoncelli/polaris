@@ -121,7 +121,7 @@ const HELP_TEXT: Readonly<Record<string, string>> = {
 
 /**
  * Stable header for `/metrics` responses. Mirrors the value
- * `PROMETHEUS_CONTENT_TYPE` from `@polaris/shared-service-bootstrap`; we
+ * `PROMETHEUS_CONTENT_TYPE` from `@polaris/runtime-service-bootstrap`; we
  * re-declare it here so the serializer's tests can assert on the literal
  * without taking a dep on the bootstrap package.
  */

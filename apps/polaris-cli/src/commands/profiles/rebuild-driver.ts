@@ -31,7 +31,7 @@
  * checkpoints and chunking rather than inventing weaker ones.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditActorSource, ProcessorActivationRow } from "../../db/index.js";

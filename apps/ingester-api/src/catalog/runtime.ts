@@ -5,7 +5,7 @@ import {
   defaultSchemaBindings,
   type EventCatalog,
   loadCatalogFromDir,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 
 /**
  * Wrapper around the file-backed event catalog loader.
@@ -34,7 +34,7 @@ export function resolveDefaultCatalogRoot(): string {
  * Load the runtime catalog. Throws on startup if the YAML or the bindings
  * are inconsistent — services must allow the throw to crash the process.
  *
- * The default `bindings` come from `@polaris/shared-schemas`. Tests may
+ * The default `bindings` come from `@polaris/spec`. Tests may
  * pass a custom set when validating against fixture events.
  */
 export function loadRuntimeCatalog(

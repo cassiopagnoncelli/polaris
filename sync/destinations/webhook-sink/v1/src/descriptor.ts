@@ -29,8 +29,8 @@
 import type {
   IdentityHashingOptions,
   RequiredConsent,
-} from "@polaris/shared-destination-normalize";
-import type { DestinationDescriptor, Mapper, MapperMap } from "@polaris/shared-destinations";
+} from "@polaris/delivery-normalize";
+import type { DestinationDescriptor, Mapper, MapperMap } from "@polaris/delivery-destinations";
 
 import { type BuildDelivererOptions, buildWebhookDeliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";

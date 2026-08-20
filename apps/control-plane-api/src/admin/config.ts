@@ -27,7 +27,7 @@ import {
   durationMsSchema,
   nonEmptyStringSchema,
   positiveIntSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 import { PLATFORM_ROLE_RANK, type PlatformRoleName } from "./platform-role.js";

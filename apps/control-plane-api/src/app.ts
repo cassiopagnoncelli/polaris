@@ -29,17 +29,17 @@
  * `./operators/repository.ts`.
  */
 
-import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
+import type { OperatorTokenRepository } from "@polaris/tenancy-control-plane";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
 import {
   type BootstrappedService,
   bootstrapService,
   type OpenApiSetup,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import type { Kysely } from "kysely";
 import type { AdminMutations } from "./admin/actions/mutations.js";
 import type { IdpAuth } from "./admin/idp-auth.js";

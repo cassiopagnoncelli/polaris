@@ -9,7 +9,7 @@
  * the task card for the deferred CLI surface).
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AllowedOriginsRepository, AllowedOriginsResult, OriginLookupInput } from "./types.js";

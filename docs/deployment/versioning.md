@@ -31,7 +31,8 @@ version is what `delivery_records.consumer_version`,
 fields record. It is what an operator pins when configuring a destination
 instance or scheduling a replay job.
 
-Internal `packages/` use a separate axis — pnpm-workspace semver on the
+Internal libraries under `libs/` and `sdks/` use a separate axis —
+pnpm-workspace semver on the
 package `version` field. Bumping a shared package never forces a
 processor/consumer directory bump.
 
@@ -75,7 +76,7 @@ versions (e.g. `2026-q2-r1` covers ingester `1.4.0` + meta-capi `0.7.2` +
 identity-resolver `2.1.0`).
 
 The shared helper `getBuildMetadata()` in
-`@polaris/shared-service-bootstrap` resolves the four fields from the
+`@polaris/runtime-service-bootstrap` resolves the four fields from the
 above sources and is what every service should use; see
 `libs/runtime/service-bootstrap/src/bootstrap/build-metadata.ts`.
 

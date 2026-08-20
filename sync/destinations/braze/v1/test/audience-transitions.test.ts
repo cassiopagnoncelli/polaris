@@ -20,7 +20,7 @@
 import {
   type NormalizableEnvelope,
   normalizeForDestination,
-} from "@polaris/shared-destination-normalize";
+} from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import { createBrazeDescriptor } from "../src/descriptor.js";

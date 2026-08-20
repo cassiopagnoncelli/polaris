@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-environments",
+  "name": "@polaris/runtime-environments",
   "version": "0.0.0",
   "private": true,
   "description": "Polaris environment vocabularies: the closed set of row/data environments and the wider deployment set that POLARIS_ENV ranges over. The single definition every other package re-exports.",

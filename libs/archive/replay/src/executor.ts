@@ -73,7 +73,7 @@ import type { ReplayPlan, ReplayPlanChunk } from "./types.js";
 
 /**
  * Header name the replay tooling stamps on every republished event.
- * Mirrors `POLARIS_HEADER_REPLAY` in `@polaris/shared-destinations`;
+ * Mirrors `POLARIS_HEADER_REPLAY` in `@polaris/delivery-destinations`;
  * duplicated here so the executor module stays standalone (no transitive
  * dependency on the destinations package).
  */
@@ -183,7 +183,7 @@ export interface ReplaySourceEvent {
  *
  *   - in tests: return a pre-loaded array,
  *   - in production: read the chunk's offset range from RabbitMQ via
- *     `@polaris/shared-transport`.
+ *     `@polaris/bus`.
  *
  * The adapter is expected to honor the chunk bounds — events whose
  * `occurred_at` falls outside `[from, to]` MUST be filtered out by the
@@ -342,7 +342,7 @@ export interface ReplayMarkFailedInput extends ReplayClockStamp {
 
 /**
  * Minimal logger surface so the executor can emit structured progress
- * lines without depending on `@polaris/shared-logger`. Production
+ * lines without depending on `@polaris/observability-logger`. Production
  * callers wire a real `pino` instance; tests pass an array sink to
  * assert the lines fired.
  */

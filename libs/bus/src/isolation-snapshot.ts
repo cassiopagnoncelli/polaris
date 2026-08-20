@@ -51,8 +51,8 @@
  * exposes the age so a caller can alert on it.
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { Logger } from "@polaris/shared-logger";
+import type { Database } from "@polaris/persistence-postgres";
+import type { Logger } from "@polaris/observability-logger";
 import type { Kysely } from "kysely";
 
 import type { SyncIsolationLookup } from "./stream-family.js";
@@ -189,8 +189,8 @@ function createIsolationSnapshot(options: CreateIsolationSnapshotOptions): Isola
 /**
  * Kysely-backed reader over `topic_isolations`.
  *
- * Lives here rather than in `@polaris/shared-control-plane-db` because
- * `shared-transport` already depends on `@polaris/shared-db` and `kysely`,
+ * Lives here rather than in `@polaris/persistence-control-plane` because
+ * `shared-transport` already depends on `@polaris/persistence-postgres` and `kysely`,
  * so this costs no new dependency — while the reverse would put `amqplib`
  * in the tree of every control-plane consumer, including services that
  * deliberately speak to no broker.

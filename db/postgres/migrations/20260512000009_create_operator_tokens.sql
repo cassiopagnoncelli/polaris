@@ -42,7 +42,7 @@
 --     per token row is NOT enforced — an operator may legitimately hold
 --     multiple active tokens (e.g. during a manual overlap rotation).
 --
---   - `hash` is the argon2id PHC string produced by `@polaris/shared-secrets`.
+--   - `hash` is the argon2id PHC string produced by `@polaris/runtime-secrets`.
 --     Plaintext is NEVER stored. `hash_algorithm` is explicit so a future
 --     parameter bump can land without rewriting history.
 --

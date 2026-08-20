@@ -130,7 +130,7 @@ export type StampedEnvelope<E extends CanonicalEnvelopeInput> = E & {
  *     so this function silently deleted them; two callers had each worked
  *     around it locally and a third lost data because it had not.
  *
- *   - The helper does not import `@polaris/shared-schemas`. Processors that
+ *   - The helper does not import `@polaris/spec`. Processors that
  *     need stricter envelope validation should run the inbound payload
  *     through the canonical envelope Zod schema before calling this helper.
  *     The platform's envelope validator (the ingester) is authoritative;

@@ -17,7 +17,7 @@ matter here:
 
 1. **`analytics_raw` is never queried without explicit dedupe.** Use the
    `argMax(col, _version)` pattern (the operator role does this through
-   `@polaris/shared-clickhouse` helpers).
+   `@polaris/persistence-clickhouse` helpers).
 2. **Projection tables are the normal read path.** They are pre-deduped
    and partitioned for the access patterns the platform supports.
 
@@ -62,12 +62,12 @@ live in [Getting Started / Querying ClickHouse](../development/getting-started.m
 ## Step 7.2 — Confirm your event via the shared client
 
 In-process code (services, CLI commands you write, dashboards) **must**
-go through `@polaris/shared-clickhouse`. The workspace-wide lint blocks
+go through `@polaris/persistence-clickhouse`. The workspace-wide lint blocks
 `import "@clickhouse/client"` directly because the helper enforces dedupe
 and the role-aware grant model.
 
 ```ts
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
 
 const service = createClickHouseClient({
   url: "http://localhost:8123",

@@ -5,7 +5,7 @@
  * canonical envelopes. The package keeps the serialization layer thin:
  * encode/decode plus a typed error so callers can decide whether to retry,
  * DLQ, or drop. We do not silently coerce missing fields here — schema
- * validation is the responsibility of `@polaris/shared-schemas`.
+ * validation is the responsibility of `@polaris/spec`.
  *
  * Buffer is used directly because the transport driver accepts `string | Buffer` for
  * message values; Buffer is the canonical wire shape.
@@ -43,7 +43,7 @@ export function encodeEvent(event: unknown): Buffer {
 
 /**
  * Decode a wire payload to a JSON value. The runtime shape is `unknown`
- * because schema validation lives in `@polaris/shared-schemas`.
+ * because schema validation lives in `@polaris/spec`.
  *
  * Accepts `Buffer`, `string`, or `null` (the transport driver uses null for tombstones).
  * A null/empty payload returns `null` so callers can branch on tombstones.

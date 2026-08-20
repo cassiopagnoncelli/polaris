@@ -8,7 +8,7 @@
  *   polaris processors runs show <run_id>
  *
  * Both are read-only and render rows from `processor_runs`, which each
- * processor writes at boot through `@polaris/shared-processor`'s
+ * processor writes at boot through `@polaris/pipeline`'s
  * `openProcessorRun`.
  */
 import type { CommandDefinition } from "../../command.js";

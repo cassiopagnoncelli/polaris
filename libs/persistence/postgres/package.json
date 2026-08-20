@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-db",
+  "name": "@polaris/persistence-postgres",
   "version": "0.0.0",
   "private": true,
   "description": "Polaris PostgreSQL access: typed Kysely client and dbmate migration toolchain.",
@@ -31,7 +31,7 @@
     "db:create": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/postgres/migrations new"
   },
   "dependencies": {
-    "@polaris/shared-environments": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
     "kysely": "^0.29.0",
     "pg": "^8.20.0"
   },

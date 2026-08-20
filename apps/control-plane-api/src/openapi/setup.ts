@@ -13,6 +13,6 @@
  * extension is a copy-paste from the ingester rather than a fresh
  * design.
  */
-import { NOOP_OPENAPI_SETUP, type OpenApiSetup } from "@polaris/shared-service-bootstrap";
+import { NOOP_OPENAPI_SETUP, type OpenApiSetup } from "@polaris/runtime-service-bootstrap";
 
 export const controlPlaneOpenApiSetup: OpenApiSetup = NOOP_OPENAPI_SETUP;

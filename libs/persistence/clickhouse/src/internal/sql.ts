@@ -88,7 +88,7 @@ export function assertNoFinal(sql: string, role: string): string {
   // catch accidental rewrites; ClickHouse SQL is case-insensitive for keywords.
   if (/\bfinal\b/i.test(sql)) {
     throw new ClickHouseInvariantError(
-      `Internal SQL for ${role} contains FINAL keyword. shared-clickhouse internal methods must not use FINAL; use argMax(_, _version) instead.`,
+      `Internal SQL for ${role} contains FINAL keyword. persistence-clickhouse internal methods must not use FINAL; use argMax(_, _version) instead.`,
     );
   }
   return sql;

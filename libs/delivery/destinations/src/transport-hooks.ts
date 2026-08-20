@@ -11,7 +11,7 @@
  *   - `consumer.rewound` -> `incrementRetry`. The consumer re-reads from its
  *     checkpoint, so every message after that point is redelivered — which IS
  *     the platform's retry mechanism, not an approximation of one. Nothing
- *     else in `@polaris/shared-destinations` calls `incrementRetry`, so
+ *     else in `@polaris/delivery-destinations` calls `incrementRetry`, so
  *     `polaris_destination_events_retry_total` was a metric that existed and
  *     was never written.
  *
@@ -24,14 +24,14 @@
  * Everything reaches the log regardless; only the metric side is selective.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   composeHooks,
   createTransportLogHooks,
   type TransportHookEvent,
   type TransportHookPayload,
   type TransportHooks,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import type { DestinationMetrics } from "./metrics.js";
 

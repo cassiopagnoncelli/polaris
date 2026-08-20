@@ -36,8 +36,8 @@
  * redelivery is the right answer.
  */
 
-import type { Logger } from "@polaris/shared-logger";
-import { buildProfilePartitionKey, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/shared-transport";
+import type { Logger } from "@polaris/observability-logger";
+import { buildProfilePartitionKey, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 import { enrichGeo, type IPLookup } from "@polaris/sync-enrichment-geoip-v1";
 import { enrichTraits, type ProfileReader } from "@polaris/sync-enrichment-traits-v1";
 
@@ -233,7 +233,7 @@ import {
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   type SyncIsolationLookup,
   type TransportMessageHandler,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 export interface EnrichmentStageRuntime {
   start(): Promise<void>;

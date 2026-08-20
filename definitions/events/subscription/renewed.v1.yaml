@@ -13,5 +13,5 @@ description: >-
   minor currency units and the subscription's stable identifier.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/subscription/renewed.v1"
+schema_module: "@polaris/spec/events/subscription/renewed.v1"
 schema_export: subscriptionRenewedV1PropertiesSchema

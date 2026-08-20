@@ -1,4 +1,4 @@
-# @polaris/shared-db
+# @polaris/persistence-postgres
 
 Typed PostgreSQL access for Polaris services and CLI commands, plus the
 dbmate migration toolchain.
@@ -34,7 +34,7 @@ This is the split the architecture docs require — see
 ## Usage
 
 ```ts
-import { createDb, closeDb } from "@polaris/shared-db";
+import { createDb, closeDb } from "@polaris/persistence-postgres";
 
 const db = createDb({
   connectionString: process.env.DATABASE_URL!,
@@ -59,7 +59,7 @@ timeouts, custom error handling, shared pool reuse), pass a pre-built
 
 ```ts
 import { Pool } from "pg";
-import { createDb } from "@polaris/shared-db";
+import { createDb } from "@polaris/persistence-postgres";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
@@ -82,7 +82,7 @@ When a future task lands a migration that creates a new table:
    columns and nullability. Use idiomatic Kysely column types
    (`Generated<T>`, `ColumnType<T, I, U>`) where the value differs at
    select/insert/update boundaries.
-3. Run `pnpm --filter @polaris/shared-db build` to confirm the types
+3. Run `pnpm --filter @polaris/persistence-postgres build` to confirm the types
    compile.
 
 Schema drift between SQL and the `Database` interface is a bug. If you

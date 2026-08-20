@@ -17,5 +17,5 @@ description: >-
   Records that a participation ended, with the reason a funnel projection groups by.
 lifecycle: active
 since: "2026-08-18"
-schema_module: "@polaris/shared-schemas/events/journey/exited.v1"
+schema_module: "@polaris/spec/events/journey/exited.v1"
 schema_export: journeyExitedV1PropertiesSchema

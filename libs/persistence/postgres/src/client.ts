@@ -14,7 +14,7 @@
  *   - migrations (those run through dbmate; see `db/README.md`)
  *   - retries (callers wrap their own queries; Kysely is the SQL layer)
  *   - observability (services attach their own loggers/metrics via Pino
- *     and Prometheus hooks once shared-logger / shared-config / metrics
+ *     and Prometheus hooks once observability-logger / runtime-config / metrics
  *     packages land)
  */
 
@@ -29,7 +29,7 @@ export type { Database };
  * Options accepted by {@link createDb}. Either `connectionString` or a
  * fully populated `pool` must be provided. When both are absent, the
  * factory throws — defaults are the caller's responsibility (via
- * `shared-config`, env vars, or explicit wiring), not this package's.
+ * `runtime-config`, env vars, or explicit wiring), not this package's.
  */
 export type CreateDbOptions = {
   /**
@@ -51,9 +51,9 @@ export type CreateDbOptions = {
    */
   maxConnections?: number;
   /**
-   * Typed PostgreSQL config, as produced by `@polaris/shared-config`'s
+   * Typed PostgreSQL config, as produced by `@polaris/runtime-config`'s
    * `postgresEnvSchema`. Declared structurally so this package keeps no
-   * dependency on `shared-config`.
+   * dependency on `runtime-config`.
    *
    * This exists because every service that talks to PostgreSQL was
    * hand-assembling the same connection string from the same config
@@ -65,7 +65,7 @@ export type CreateDbOptions = {
 };
 
 /**
- * Structural mirror of `@polaris/shared-config`'s `PostgresConfig`.
+ * Structural mirror of `@polaris/runtime-config`'s `PostgresConfig`.
  */
 export interface PostgresConnectionConfig {
   readonly host: string;
@@ -125,7 +125,7 @@ function resolvePool(options: CreateDbOptions): pg.Pool {
     (options.postgres !== undefined ? postgresConnectionString(options.postgres) : undefined);
   if (!connectionString) {
     throw new Error(
-      "@polaris/shared-db: createDb requires one of `pool`, `connectionString`, or `postgres`.",
+      "@polaris/persistence-postgres: createDb requires one of `pool`, `connectionString`, or `postgres`.",
     );
   }
   const config: pg.PoolConfig = { connectionString };

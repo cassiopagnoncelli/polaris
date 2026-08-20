@@ -12,7 +12,7 @@
  * recording who made the claim.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

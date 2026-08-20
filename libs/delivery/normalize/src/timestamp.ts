@@ -23,7 +23,7 @@
  * the input is not a valid date string the JavaScript runtime can parse,
  * or when the parsed value is not finite.
  *
- * The envelope schema in `@polaris/shared-schemas` already validates the
+ * The envelope schema in `@polaris/spec` already validates the
  * ISO shape at the ingester boundary, so callers in production rarely see
  * the throw — it is defensive for replay/test paths where an upstream
  * stage may produce a malformed value.

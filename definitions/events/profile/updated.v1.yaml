@@ -18,5 +18,5 @@ description: >-
   version, and the keys set or removed.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/profile/updated.v1"
+schema_module: "@polaris/spec/events/profile/updated.v1"
 schema_export: profileUpdatedV1PropertiesSchema

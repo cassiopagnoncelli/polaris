@@ -12,5 +12,5 @@ since: "2026-02-15"
 notes: >-
   v1 remains in the catalog until its sunset_at so historical events stay
   replayable.
-schema_module: "@polaris/shared-schemas/events/page/viewed.v2"
+schema_module: "@polaris/spec/events/page/viewed.v2"
 schema_export: pageViewedV2PropertiesSchema

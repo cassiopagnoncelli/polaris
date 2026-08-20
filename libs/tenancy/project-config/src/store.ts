@@ -19,9 +19,9 @@
  * @see docs/implementation/project-config-plan.md §4
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
-import type { Logger } from "@polaris/shared-logger";
+import type { Database } from "@polaris/persistence-postgres";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
+import type { Logger } from "@polaris/observability-logger";
 import type { Kysely } from "kysely";
 import { assembleSnapshot, readVersions, scopeKey, snapshotKey } from "./assemble.js";
 import {

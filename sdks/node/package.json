@@ -38,7 +38,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/spec": "workspace:*",
     "uuid": "^14.0.0"
   }
 }

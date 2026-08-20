@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-secrets` — the workspace's argon2id hashing primitive.
+ * `@polaris/runtime-secrets` — the workspace's argon2id hashing primitive.
  *
  * Both the ingester (which verifies API keys on every request) and the polaris
  * CLI (which issues keys and operator tokens) consume {@link hashSecret} /
@@ -27,10 +27,10 @@
  * What survived the change is the HANDLING discipline, which never depended on
  * where a secret came from:
  *
- *   - `Secret<T>` in `@polaris/shared-project-config` boxes a value a consumer
+ *   - `Secret<T>` in `@polaris/tenancy-project-config` boxes a value a consumer
  *     legitimately holds, so it cannot be stringified into a log line, a DLQ
  *     payload or a delivery record by accident;
- *   - `maskIfSecret` in `@polaris/shared-control-plane` keeps stored secrets
+ *   - `maskIfSecret` in `@polaris/tenancy-control-plane` keeps stored secrets
  *     out of list views, exports and audit snapshots in the first place.
  *
  * @see docs/architecture/02-control-plane.md "Secrets"

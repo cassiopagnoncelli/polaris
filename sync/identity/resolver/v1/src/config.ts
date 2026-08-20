@@ -2,7 +2,7 @@
  * Runtime configuration for the identity stage.
  *
  * Follows the established processor pattern: a small Zod schema composing
- * shared-config blocks with a per-service block.
+ * runtime-config blocks with a per-service block.
  *
  * What is NOT here is as deliberate as what is. The merge safeguards
  * (identifier denylist, per-kind cap, merge-rate breaker, trait size
@@ -26,7 +26,7 @@ import {
   rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 /** Default service name surfaced when `POLARIS_SERVICE_NAME` is omitted. */

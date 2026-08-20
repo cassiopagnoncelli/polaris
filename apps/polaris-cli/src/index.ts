@@ -8,7 +8,7 @@
  *   - config loading (env vars + optional ~/.polaris/config.toml profiles)
  *   - bearer-token resolution via the env var the active profile points at —
  *     tokens are NEVER stored in the config file or anywhere on disk
- *   - logger wiring through `@polaris/shared-logger` (stderr-only, baked-in
+ *   - logger wiring through `@polaris/observability-logger` (stderr-only, baked-in
  *     secret redaction)
  *   - output streams and `human` / `json` rendering
  *   - the `polaris version` built-in command

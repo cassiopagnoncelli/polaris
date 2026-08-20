@@ -1,7 +1,7 @@
 /**
  * Service bootstrap for clickhouse-sink v1.
  *
- *   1. Structured logger from `@polaris/shared-logger`.
+ *   1. Structured logger from `@polaris/observability-logger`.
  *   2. PostgreSQL Kysely client — checkpoints only. The sink writes no
  *      control-plane state; it needs Postgres solely because RabbitMQ
  *      streams consumed over AMQP have no server-side offset store.
@@ -19,17 +19,17 @@
  * @see async/warehouse/clickhouse-sink/v1/src/runtime.ts
  */
 
-import { type AnalyticsSinkWriter, createAnalyticsSinkWriter } from "@polaris/shared-clickhouse";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
+import { type AnalyticsSinkWriter, createAnalyticsSinkWriter } from "@polaris/persistence-clickhouse";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   type CheckpointStore,
   createPolarisConsumer,
@@ -45,7 +45,7 @@ import {
   STREAM_FAMILY_RESOLVED_EVENTS,
   startIsolationSnapshot,
   type TransportConnection,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 
 import { type ClickhouseSinkRuntimeConfig, SINK_COMPONENT, SINK_SERVICE_NAME } from "./config.js";

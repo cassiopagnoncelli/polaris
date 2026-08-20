@@ -18,5 +18,5 @@ description: >-
   into the profile store by the identity stage; last-write-wins per key.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/user/identified.v1"
+schema_module: "@polaris/spec/events/user/identified.v1"
 schema_export: userIdentifiedV1PropertiesSchema

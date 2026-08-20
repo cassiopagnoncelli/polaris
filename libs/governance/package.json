@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-policy",
+  "name": "@polaris/governance",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -38,8 +38,8 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
+    "@polaris/spec": "workspace:*",
     "zod": "^4.4.3"
   }
 }

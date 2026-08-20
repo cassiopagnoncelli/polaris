@@ -8,7 +8,7 @@
  * — that this stage cannot write to the profile store.
  */
 
-import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
+import { sharedOnlyIsolationLookup } from "@polaris/bus";
 import { InMemoryIPLookup, NoOpIPLookup } from "@polaris/sync-enrichment-geoip-v1";
 import { describe, expect, it } from "vitest";
 

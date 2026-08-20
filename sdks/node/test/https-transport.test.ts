@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { batchRejectedResultSchema } from "@polaris/shared-schemas";
+import { batchRejectedResultSchema } from "@polaris/spec";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HttpsTransport, TransportError } from "../src/transport/https.js";

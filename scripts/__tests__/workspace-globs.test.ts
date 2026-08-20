@@ -1,41 +1,42 @@
 /**
  * The six-kind tree must be reachable before anything moves into it.
  *
- * ADR-0007 restructures roughly two dozen packages out of `packages/` and
- * `catalog/` into `libs/`, `sdks/`, `connectors/` and `definitions/`. The
- * moves are split across six cards in one group, and every one of them is a
- * `git mv`. If a move also had to edit `pnpm-workspace.yaml`, then all six
- * would edit the same three lines of the same file and collide on the group
- * branch — the conflict would be in build configuration rather than in code,
- * which is the worst place to resolve one under time pressure.
+ * ADR-0007 restructured roughly two dozen packages into `libs/`, `sdks/`,
+ * `connectors/` and `definitions/`. The moves were split across six cards in
+ * one group, and every one of them was a `git mv`. If a move had also had to
+ * edit `pnpm-workspace.yaml`, all six would have edited the same three lines
+ * of the same file and collided on the group branch — the conflict would be
+ * in build configuration rather than in code, which is the worst place to
+ * resolve one under time pressure.
  *
- * So the destinations are declared once, ahead of the moves, and this test is
+ * So the destinations were declared once, ahead of the moves, and this test is
  * the standing claim that they still are. It asserts three things:
  *
- *   1. Every package.json on disk is claimed by a glob. This is what keeps
- *      the dual-glob transition open: deleting `packages/*` before the last
- *      package has left fails here rather than at the next `pnpm install`,
- *      where the symptom is an unresolvable `workspace:*` dependency several
- *      layers from the cause.
- *   2. Every destination path the T0 move cards name is ALREADY claimed. The
- *      list below is the migration plan, restated as an assertion — the point
- *      is not that the glob file contains certain strings, it is that these
- *      specific paths resolve the moment a directory appears there.
+ *   1. Every package.json on disk is claimed by a glob. This is what held the
+ *      dual-glob transition open, and what made closing it safe: dropping the
+ *      old root before the last package had left would have failed here
+ *      rather than at the next `pnpm install`, where the symptom is an
+ *      unresolvable `workspace:*` dependency several layers from the cause.
+ *   2. Every destination path the T0 move cards name is claimed. The list
+ *      below is the migration plan, restated as an assertion — the point is
+ *      not that the glob file contains certain strings, it is that these
+ *      specific paths resolve. IJ4NN kept it after the transition closed,
+ *      because it is now the only place in the repository that records where
+ *      each of the twenty-four packages went.
  *   3. The root tsconfig excludes each new root, matching how it already
- *      treats `apps`, `packages`, `sync` and `async`.
+ *      treats `apps`, `sync` and `async`.
  *
  * `catalog` was absent from that exclude list and was left that way: the root
  * config's `include` is a single file, so the list is documentary rather than
  * load-bearing, and 0DIPB has since retired the directory outright.
  * `definitions` is listed because that is where its contents went.
  *
- * What this does NOT check is whether the rest of the tooling follows. It
- * does not: `lint-dead-exports.mjs` scans a hard-coded `packages`, so a moved
- * package's unused exports stop being reported rather than fail. That is
- * recorded on the cards that move the code, per 2XH2V's scope. The root
- * `vitest.config.ts` had the same gap — it enumerated test roots and stopped
- * at `catalog` — and LP5OT closed it; `vitest-collection.test.ts` is now the
- * standing check that it stays closed.
+ * What this does NOT check is whether the rest of the tooling follows. It did
+ * not, twice, and both are closed now: `lint-dead-exports.mjs` scanned a
+ * hard-coded root until IJ4NN settled it on `libs` and `sdks`, and the root
+ * `vitest.config.ts` enumerated test roots and stopped at `catalog` until
+ * LP5OT — `vitest-collection.test.ts` is the standing check that it stays
+ * closed.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -186,8 +187,10 @@ describe("pnpm workspace globs", () => {
 
   it("finds the workspace", () => {
     // Guards the guard: an empty glob list or an empty package list would
-    // pass every assertion below by vacuum.
-    expect(workspaceGlobs.length).toBeGreaterThanOrEqual(10);
+    // pass every assertion below by vacuum. The floor was 10 while the old
+    // flat root was still globbed; IJ4NN closed the transition and there are
+    // 9. A floor is not a count — it moves only when a glob legitimately goes.
+    expect(workspaceGlobs.length).toBeGreaterThanOrEqual(9);
     expect(packageDirs().length).toBeGreaterThanOrEqual(40);
   });
 
@@ -196,7 +199,7 @@ describe("pnpm workspace globs", () => {
     expect(orphans).toEqual([]);
   });
 
-  it("already claims every planned T0 destination", () => {
+  it("claims every T0 destination", () => {
     const unreachable: string[] = [];
     for (const { card, paths } of PLANNED_DESTINATIONS) {
       for (const path of paths) {

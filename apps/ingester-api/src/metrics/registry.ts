@@ -1,7 +1,7 @@
 import {
   type PatternRedactionMetricIncrement,
   POLARIS_INGEST_REDACTED_PATTERN_TOTAL,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 
 /**
  * In-process counter registry used by the ingester.
@@ -11,7 +11,7 @@ import {
  * not yet exist in v1. Until that package lands, the ingester keeps a
  * tiny in-memory registry so:
  *
- *   - the redaction metric helper from `@polaris/shared-policy` has a
+ *   - the redaction metric helper from `@polaris/governance` has a
  *     concrete sink to increment,
  *   - tests can assert metric emission deterministically,
  *   - the future migration to Prometheus is a swap of the `incrementCounter`

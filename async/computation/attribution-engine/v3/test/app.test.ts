@@ -10,12 +10,12 @@
  * the run repository is the in-memory adapter.
  */
 
-import { InMemoryProcessorRunRepository, type ProcessorRunHandle } from "@polaris/shared-processor";
+import { InMemoryProcessorRunRepository, type ProcessorRunHandle } from "@polaris/pipeline";
 import type {
   PolarisConsumer,
   PolarisProducer,
   PublishEventInput,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildAttributionEngineApp } from "../src/app.js";

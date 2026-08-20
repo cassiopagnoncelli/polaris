@@ -18,7 +18,7 @@
  */
 
 import type { CommandContext, OutputStreams, PackageMeta } from "@polaris/polaris-cli";
-import type { DeliveryRecord, DlqRecord } from "@polaris/shared-destinations";
+import type { DeliveryRecord, DlqRecord } from "@polaris/delivery-destinations";
 import { describe, expect, it } from "vitest";
 
 import { buildDeliveriesListRunner } from "../src/commands/deliveries/list.js";

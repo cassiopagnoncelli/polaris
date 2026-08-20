@@ -36,7 +36,7 @@ The migration that owns the persistent state is
 Polaris references logical **topic families** in code (`raw.events`,
 `identified.events`, `resolved.events`, `profile.events`,
 `identity.events`, `session.events`, `attribution.events`). The resolver
-in `@polaris/shared-transport` returns:
+in `@polaris/bus` returns:
 
 - the shared family topic (e.g. `raw.events`) for projects on the
   shared default;
@@ -146,7 +146,7 @@ triple) returns a typed usage error.
 
 Within one resolver-cache TTL window (default 60s), every Polaris
 service that imports
-`@polaris/shared-transport`'s `StreamIsolationCache` starts producing to
+`@polaris/bus`'s `StreamIsolationCache` starts producing to
 the dedicated topic. Verify on the throughput dashboard:
 
 - `polaris_ingest_batch_accepted_total{topic_family="raw.events", concrete_topic="raw.events.storefront", project_id="storefront"}` should start climbing;
@@ -163,7 +163,7 @@ dashboard:
 
 ### 6. Restart consumers (cold migration) OR rely on dynamic subscribe
 
-Consumers built on `@polaris/shared-transport`'s
+Consumers built on `@polaris/bus`'s
 `consumerFamiliesFor(family, isolatedProjectIds)` helper already read
 the union (`family` + dedicated families). For consumers that read
 `family` alone, a rolling restart picks up the new one.

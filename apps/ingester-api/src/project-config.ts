@@ -2,7 +2,7 @@
  * The ingester's per-`(project, environment)` configuration contract.
  *
  * This module is the source of truth the C3 generator reads to produce
- * `@polaris/project-config-schemas`; the admin UI's typed form and
+ * `@polaris/tenancy-config-schemas`; the admin UI's typed form and
  * `polaris config validate` both work from that artifact. Adding a key here
  * and regenerating is the whole opt-in.
  *
@@ -21,7 +21,7 @@
  * @see docs/implementation/project-config-plan.md §3.1
  */
 
-import { positiveIntSchema } from "@polaris/shared-config";
+import { positiveIntSchema } from "@polaris/runtime-config";
 import { z } from "zod";
 
 /** Namespace this component reads. One slice per component (plan §3.5). */

@@ -2,9 +2,9 @@
  * The project-config write path against a real PostgreSQL.
  *
  * The unit suites on both sides of this contract are thorough and neither can
- * prove it holds. `@polaris/shared-project-config` fakes its notification
+ * prove it holds. `@polaris/tenancy-project-config` fakes its notification
  * transport, so its tests assert the store reacts correctly to a message it
- * was handed; `@polaris/shared-control-plane-db` asserts the mutation opens
+ * was handed; `@polaris/persistence-control-plane` asserts the mutation opens
  * one transaction and refuses bad input. Nothing in either suite runs
  * `pg_notify` through an actual `LISTEN` connection, which is where the two
  * halves either agree or silently do not — a payload field renamed on one side,
@@ -19,7 +19,7 @@
  * Skips unless `POLARIS_INTEGRATION=1`, matching the rest of this directory.
  */
 
-import { SECRET_MASK } from "@polaris/shared-control-plane";
+import { SECRET_MASK } from "@polaris/tenancy-control-plane";
 import {
   invalidateProjectConfigWithAudit,
   listProjectConfig,
@@ -28,15 +28,15 @@ import {
   revealProjectConfigSecret,
   setProjectConfigValueWithAudit,
   unsetProjectConfigValueWithAudit,
-} from "@polaris/shared-control-plane-db";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+} from "@polaris/persistence-control-plane";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import {
   createPgListenerTransport,
   createProjectConfigStore,
   isSecret,
   type ProjectConfigStore,
   type Secret,
-} from "@polaris/shared-project-config";
+} from "@polaris/tenancy-project-config";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanupProjectConfig } from "../helpers/project-config.js";

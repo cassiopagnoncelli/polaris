@@ -43,7 +43,7 @@
  * is treated by the runtime as a transient programmer bug.
  */
 
-import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
+import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/delivery-destinations";
 
 import { META_GRAPH_API_VERSION } from "./descriptor-identity.js";
 import { parseMetaCapiProjectConfig } from "./project-config.js";

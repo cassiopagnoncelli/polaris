@@ -7,7 +7,7 @@
  *   `polaris_ot_<uuidv7>.<base64url(32B)>`
  *
  * The shape is parsed back into `(operator_token_id, raw_secret)` by
- * `@polaris/shared-control-plane`'s `parseOperatorToken` — this generator
+ * `@polaris/tenancy-control-plane`'s `parseOperatorToken` — this generator
  * and that parser share the prefix/separator constants from the shared
  * package so a future format change happens in one place.
  *
@@ -22,7 +22,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { formatOperatorToken, OPERATOR_TOKEN_ID_PREFIX } from "@polaris/shared-control-plane";
+import { formatOperatorToken, OPERATOR_TOKEN_ID_PREFIX } from "@polaris/tenancy-control-plane";
 import { v7 as uuidv7 } from "uuid";
 
 /** Number of bytes pulled from CSPRNG for the secret tail. 32 = 256 bits. */

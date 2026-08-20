@@ -15,7 +15,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { describe, expect, it } from "vitest";
 
@@ -191,7 +191,7 @@ describe("withAudit", () => {
 describe("DLQ resolution guard", () => {
   it("uses the same resolved_at IS NULL guard as the runtime repository", async () => {
     // Two implementations write this column: the runtime repository in
-    // shared-destinations (read-modify-write, returns the record) and the
+    // delivery-destinations (read-modify-write, returns the record) and the
     // audited mutation here (guarded UPDATE, returns applied). Both are
     // guarded identically, which is what makes having both safe — a second
     // resolve matches nothing either way. This pins the guard text so a

@@ -27,15 +27,15 @@
  *     context),
  *   - `properties` is the per-event-name property payload (validated
  *     by the Zod schemas in
- *     `@polaris/shared-schemas/events/attribution/`).
+ *     `@polaris/spec/events/attribution/`).
  *
- * The processor stamp is delegated to `@polaris/shared-processor`'s
+ * The processor stamp is delegated to `@polaris/pipeline`'s
  * `stampProcessorMetadata` helper so every Polaris processor produces
  * the same dual-shape envelope (nested `processor` block + flat
  * `processor_name` / `processor_version`).
  */
 
-import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/shared-processor";
+import { type ProcessorStamp, stampProcessorMetadata } from "@polaris/pipeline";
 import type { CampaignTuple, PrimaryIdentifierKind } from "./transform.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, type PROCESSOR_VERSION } from "./transform.js";
 import type { AnalyticsEventEnvelope, AttributionEventIdentity } from "./types.js";
@@ -70,7 +70,7 @@ const EMPTY_CONTEXT = Object.freeze({
 
 /**
  * Property payload shapes per event name. Mirror the Zod schemas in
- * `@polaris/shared-schemas/events/attribution/`.
+ * `@polaris/spec/events/attribution/`.
  */
 export interface TouchpointCapturedProperties {
   readonly touchpoint_id: string;

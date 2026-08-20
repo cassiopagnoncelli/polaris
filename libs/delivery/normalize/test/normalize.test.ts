@@ -179,7 +179,7 @@ describe("applySecondPassRedactions", () => {
 
   it("redacts a JWT-shaped value in properties and returns a clone", () => {
     // A JWT-shaped value in `properties` (outside identity.*) triggers
-    // the JWT pattern detector in `@polaris/shared-policy`.
+    // the JWT pattern detector in `@polaris/governance`.
     const jwtShape =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
     const envelope = buildEnvelope({
@@ -228,7 +228,7 @@ describe("applySecondPassRedactions", () => {
     // boundary must be observable through the shared metric. This test
     // asserts the labels emitted by `emitRedactionMetric` for the
     // returned action set carry no raw value.
-    const { emitAllRedactionMetrics } = await import("@polaris/shared-policy");
+    const { emitAllRedactionMetrics } = await import("@polaris/governance");
     const jwtShape =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
     const envelope = buildEnvelope({

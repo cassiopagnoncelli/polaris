@@ -50,7 +50,7 @@
  * synchronous default in that path is the always-available memory queue.
  */
 
-import type { Envelope } from "@polaris/shared-schemas";
+import type { Envelope } from "@polaris/spec";
 import { IdentityManager } from "./identity/manager.js";
 import { newEventId as defaultEventId } from "./internal/ids.js";
 import { type FlushCallback, LifecycleController } from "./internal/lifecycle.js";

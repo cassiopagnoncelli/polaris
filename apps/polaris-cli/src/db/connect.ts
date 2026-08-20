@@ -3,7 +3,7 @@
  *
  * The CLI is normally a thin HTTP client over `apps/control-plane-api/`, but
  * every v1 command lands ahead of the API service and reads or writes
- * PostgreSQL directly through `@polaris/shared-db` — the catalog syncs, the
+ * PostgreSQL directly through `@polaris/persistence-postgres` — the catalog syncs, the
  * activation toggles, and the read-only inspection commands alike.
  *
  * When the control-plane API arrives, these commands will be re-pointed at
@@ -22,7 +22,7 @@
  * No URL is provided => `ConfigError` (exit code 3), matching the rest of
  * the CLI's config-failure path.
  */
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { ConfigError } from "../errors.js";
 

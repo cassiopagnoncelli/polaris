@@ -29,9 +29,9 @@
  * carries app-source slots.
  */
 
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
-import { hasAppContext, minorToMajor, sha256Hex } from "@polaris/shared-destination-normalize";
-import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
+import { hasAppContext, minorToMajor, sha256Hex } from "@polaris/delivery-normalize";
+import type { Mapper, MapperContext, MapperResult } from "@polaris/delivery-destinations";
 
 import type {
   TikTokEventContent,

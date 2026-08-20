@@ -9,7 +9,7 @@
  * transaction never opened".
  */
 
-import { MappingSemanticsError, SECRET_MASK } from "@polaris/shared-control-plane";
+import { MappingSemanticsError, SECRET_MASK } from "@polaris/tenancy-control-plane";
 import { describe, expect, it } from "vitest";
 import type { AuditContext } from "../src/mutations/audited.js";
 import {

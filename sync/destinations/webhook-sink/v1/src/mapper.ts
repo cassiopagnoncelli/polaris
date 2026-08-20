@@ -19,7 +19,7 @@
  * the descriptor uses via a Proxy.
  */
 
-import type { Mapper, MapperContext, MapperResult } from "@polaris/shared-destinations";
+import type { Mapper, MapperContext, MapperResult } from "@polaris/delivery-destinations";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import type { WebhookPayload } from "./types.js";
 

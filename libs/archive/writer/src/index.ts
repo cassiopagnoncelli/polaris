@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-archive` — the raw.events archive.
+ * `@polaris/archive-writer` — the raw.events archive.
  *
  * Everything that knows the archive's shape lives here: the object
  * layout, the batching and durability watermark the archiver writes

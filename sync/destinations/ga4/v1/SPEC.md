@@ -96,7 +96,7 @@ GA4 has no recommended event for recurring billing — v1 emits a snake_case cus
 
 ## Normalization rules
 
-The shared `@polaris/shared-destination-normalize` package handles:
+The shared `@polaris/delivery-normalize` package handles:
 
 ```text
 timestamp   isoToEpochMs        (returned alongside ISO string)

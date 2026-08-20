@@ -2,7 +2,7 @@
  * Production-mutation gate as a Fastify preHandler.
  *
  * Wraps `enforceProductionMutationGate` from
- * `@polaris/shared-control-plane` (the same gate the CLI dispatcher
+ * `@polaris/tenancy-control-plane` (the same gate the CLI dispatcher
  * runs) and translates the refusal into an RFC 7807 Problem with
  * `code='production_requires_authenticated_actor'` and HTTP 403.
  *
@@ -23,8 +23,8 @@ import {
   type OperatorGateMetricsSink,
   PRODUCTION_GATE_DENIED_REASON,
   ProductionMutationRefusedError,
-} from "@polaris/shared-control-plane";
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+} from "@polaris/tenancy-control-plane";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 export interface MutationGateOptions {

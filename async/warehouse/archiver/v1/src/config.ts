@@ -2,7 +2,7 @@
  * archiver v1 configuration.
  *
  * The bucket coordinates are configuration; the layout inside it is not
- * (see `@polaris/shared-archive`'s `layout.ts`). An operator picks where
+ * (see `@polaris/archive-writer`'s `layout.ts`). An operator picks where
  * the archive lives and how large its objects get. Nobody picks what an
  * object is CALLED, because the replay source derives keys from the same
  * module the writer does, and a per-deployment layout would mean an
@@ -32,7 +32,7 @@ import {
   rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 export const PROCESSOR_SERVICE_NAME = "archiver" as const;

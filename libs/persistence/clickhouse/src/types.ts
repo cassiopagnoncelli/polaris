@@ -1,12 +1,12 @@
 /**
- * Public type surface for @polaris/shared-clickhouse.
+ * Public type surface for @polaris/persistence-clickhouse.
  *
  * These types are intentionally narrow. They describe just enough of the
  * Pino logger and the metrics recorder for this package to compose with the
  * rest of the workspace without taking a hard dependency on a particular
  * Pino/Prometheus client version.
  *
- * Once `@polaris/shared-logger` (P0-004) and the metrics convention
+ * Once `@polaris/observability-logger` (P0-004) and the metrics convention
  * (P10-002) land, those packages will satisfy these interfaces. Until then,
  * services can pass any logger/metrics object that conforms to the shape.
  */

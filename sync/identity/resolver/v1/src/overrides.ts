@@ -16,7 +16,7 @@
  *     boot log states the override count either way, so a production
  *     image that lost its definitions is visible in one line.
  *   - a MALFORMED block fails the boot. The schema is `.strict()`
- *     (`@polaris/shared-policy`): a typo'd key must not become a
+ *     (`@polaris/governance`): a typo'd key must not become a
  *     safeguard that is silently not installed. Bounds are then checked
  *     eagerly by `createPolicyResolver`, so an out-of-range value also
  *     dies at boot instead of poisoning the project's feed at runtime.
@@ -25,11 +25,11 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   type ProjectIdentityOverride,
   projectIdentityOverrideSchema,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import { parse as parseYaml } from "yaml";
 
 export interface LoadOverridesOptions {

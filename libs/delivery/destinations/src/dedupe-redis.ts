@@ -38,7 +38,7 @@
  * it visible rather than silent.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 
 import type { DedupeClaim, DestinationDedupe } from "./dedupe.js";
 

@@ -41,8 +41,8 @@
  * @see db/postgres/migrations/20260512000006_create_processor_activations.sql
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { Logger } from "@polaris/shared-logger";
+import type { Database } from "@polaris/persistence-postgres";
+import type { Logger } from "@polaris/observability-logger";
 import type { Kysely } from "kysely";
 
 import type { ProcessorIdentity } from "./identity.js";

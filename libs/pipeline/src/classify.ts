@@ -11,7 +11,7 @@
  * (KafkaJS errors, schema-validation errors, our own `EventDeserializationError`,
  * generic `Error`) and returns a small structured verdict that callers can
  * route on. The verdict's `reason` field uses the canonical reason-code set
- * from `@polaris/shared-schemas` where it overlaps with ingestion (e.g.
+ * from `@polaris/spec` where it overlaps with ingestion (e.g.
  * `invalid_envelope`, `publish_failed`) and a small processor-specific
  * vocabulary for cases ingestion does not name (network errors, decode
  * failures).
@@ -33,7 +33,7 @@ import {
   SCHEMA_REASON_SUNSET,
   SCHEMA_REASON_UNKNOWN_EVENT,
   SCHEMA_REASON_UNSUPPORTED_VERSION,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 
 /**
  * Reason vocabulary used by the classifier. The values are intentionally
@@ -41,7 +41,7 @@ import {
  * dashboards can pivot on them without consulting per-processor docs.
  *
  * The first five values are reused verbatim from
- * `@polaris/shared-schemas`'s schema-reason-code set. The remaining values
+ * `@polaris/spec`'s schema-reason-code set. The remaining values
  * are processor-flow specific and have no ingestion analogue.
  */
 export const PROCESSOR_RETRY_REASONS = [

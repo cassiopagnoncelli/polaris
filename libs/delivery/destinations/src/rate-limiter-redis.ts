@@ -40,7 +40,7 @@
  * yesterday's behaviour rather than halting delivery for every destination.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 
 import type { DestinationInstance } from "./db/destination-instance.js";
 import {

@@ -17,5 +17,5 @@ description: >-
   in minor currency units and the merchant order reference.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/payment/approved.v1"
+schema_module: "@polaris/spec/events/payment/approved.v1"
 schema_export: paymentApprovedV1PropertiesSchema

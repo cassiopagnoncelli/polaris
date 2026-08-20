@@ -5,7 +5,7 @@
  * `(project_id, environment, source_id, source_type)` tuple. Steps:
  *
  *   1. Generate a 32-byte CSPRNG secret and a `polaris_ak_<uuidv7>` public id.
- *   2. argon2id-hash the secret through `@polaris/shared-secrets`.
+ *   2. argon2id-hash the secret through `@polaris/runtime-secrets`.
  *   3. INSERT the row with `status='active'` AND the audit row in one
  *      transaction.
  *   4. Print the on-wire token (`<id>.<secret>`) on stdout EXACTLY ONCE.
@@ -18,8 +18,8 @@
  * automatically.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
-import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
+import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {

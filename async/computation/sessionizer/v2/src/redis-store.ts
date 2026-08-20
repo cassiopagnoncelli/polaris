@@ -27,8 +27,8 @@
  * @see async/computation/sessionizer/v1/src/store.ts for the TTL-vs-event-time note
  */
 
-import type { RedisConfig } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import type { RedisConfig } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import type { RedisOptions } from "ioredis";
 
 import type { SessionStore } from "./store.js";

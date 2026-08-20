@@ -40,7 +40,7 @@ function names(): string[] {
 describe("findDeadExports", () => {
   it("reports an exported function nothing calls", () => {
     seed(
-      "packages/shared-thing/src/helper.ts",
+      "libs/thing/src/helper.ts",
       "export function neverCalled(): number {\n  return 1;\n}\n",
     );
     expect(names()).toEqual(["neverCalled"]);
@@ -48,12 +48,12 @@ describe("findDeadExports", () => {
 
   it("does not report a symbol a production file in another package uses", () => {
     seed(
-      "packages/shared-thing/src/helper.ts",
+      "libs/thing/src/helper.ts",
       "export function isCalled(): number {\n  return 1;\n}\n",
     );
     seed(
       "apps/some-api/src/app.ts",
-      'import { isCalled } from "@polaris/shared-thing";\nisCalled();\n',
+      'import { isCalled } from "@polaris/thing";\nisCalled();\n',
     );
     expect(names()).toEqual([]);
   });
@@ -66,12 +66,12 @@ describe("findDeadExports", () => {
     // dead, so the baseline carried eight symbols whose caller the check
     // simply could not see.
     seed(
-      "packages/shared-thing/src/topology.ts",
+      "libs/thing/src/topology.ts",
       "export function declareSuperStream(): number {\n  return 1;\n}\n",
     );
     seed(
       "scripts/provision.mjs",
-      'import { declareSuperStream } from "@polaris/shared-thing";\ndeclareSuperStream();\n',
+      'import { declareSuperStream } from "@polaris/thing";\ndeclareSuperStream();\n',
     );
     expect(names()).toEqual([]);
   });
@@ -80,11 +80,11 @@ describe("findDeadExports", () => {
     // The exact shape of every mechanism this check was written for: a unit
     // test proves the helper works, and no production code ever calls it.
     seed(
-      "packages/shared-thing/src/helper.ts",
+      "libs/thing/src/helper.ts",
       "export function onlyTested(): number {\n  return 1;\n}\n",
     );
     seed(
-      "packages/shared-thing/test/helper.test.ts",
+      "libs/thing/test/helper.test.ts",
       "import { onlyTested } from '../src/helper.js';\nonlyTested();\n",
     );
     expect(names()).toEqual(["onlyTested"]);
@@ -95,22 +95,22 @@ describe("findDeadExports", () => {
     // needs the symbol — that is how a whole subsystem stays internally
     // consistent and externally dead.
     seed(
-      "packages/shared-thing/src/helper.ts",
+      "libs/thing/src/helper.ts",
       "export function internalOnly(): number {\n  return 1;\n}\n",
     );
     seed(
-      "packages/shared-thing/src/other.ts",
+      "libs/thing/src/other.ts",
       'import { internalOnly } from "./helper.js";\ninternalOnly();\n',
     );
     expect(names()).toEqual(["internalOnly"]);
   });
 
   it("ignores barrel re-exports, which are plumbing rather than declarations", () => {
-    seed("packages/shared-thing/src/index.ts", 'export { thing } from "./helper.js";\n');
-    seed("packages/shared-thing/src/helper.ts", "export const thing = 1;\n");
+    seed("libs/thing/src/index.ts", 'export { thing } from "./helper.js";\n');
+    seed("libs/thing/src/helper.ts", "export const thing = 1;\n");
     seed(
       "apps/some-api/src/app.ts",
-      'import { thing } from "@polaris/shared-thing";\nconsole.log(thing);\n',
+      'import { thing } from "@polaris/thing";\nconsole.log(thing);\n',
     );
     expect(names()).toEqual([]);
   });
@@ -120,7 +120,7 @@ describe("findDeadExports", () => {
     // shape. An exported FUNCTION nothing calls is missing wiring or dead
     // code, which is the thing worth failing a build over.
     seed(
-      "packages/shared-thing/src/types.ts",
+      "libs/thing/src/types.ts",
       "export interface UnusedShape {\n  readonly a: string;\n}\nexport type Alias = string;\n",
     );
     expect(names()).toEqual([]);
@@ -128,7 +128,7 @@ describe("findDeadExports", () => {
 
   it("skips allow-listed packages such as the published SDKs", () => {
     seed(
-      "packages/node-sdk/src/public.ts",
+      "sdks/node/src/public.ts",
       "export function publicApi(): number {\n  return 1;\n}\n",
     );
     expect(names()).toEqual([]);
@@ -136,10 +136,10 @@ describe("findDeadExports", () => {
 });
 
 /**
- * ADR-0007 sends `packages/*` into `libs/` and `sdks/`, and the check has to
- * survive that in both directions: it must still SEE the code once it sits
- * under a new root, and it must still tell two packages apart once their paths
- * are three segments deep instead of two.
+ * ADR-0007 sent the flat library root into `libs/` and `sdks/`, and the check
+ * had to survive that in both directions: it must still SEE the code once it
+ * sits under a new root, and it must still tell two packages apart once their
+ * paths are three segments deep instead of two.
  *
  * The second half is the sharper one, because it fails silently in the
  * direction that looks green. `libs/persistence/postgres` and
@@ -151,19 +151,19 @@ describe("findDeadExports", () => {
  * A package is therefore the nearest directory holding a package.json, which is
  * what pnpm means by one. These fixtures place them, where the older ones above
  * deliberately do not: two segments remains the fallback for a tree with no
- * package.json at all, and both rules are load-bearing until IJ4NN.
+ * package.json at all, and both rules stay load-bearing.
  */
 describe("findDeadExports under the six-kind tree", () => {
-  it("scans a library that has moved out of packages/", () => {
+  it("scans a library at its six-kind path", () => {
     seedPackage("libs/pipeline", "@polaris/pipeline");
     seed("libs/pipeline/src/step.ts", "export function neverCalled(): number {\n  return 1;\n}\n");
     expect(names()).toEqual(["neverCalled"]);
   });
 
   it("scans the promoted SDKs, and allow-lists only the one that was", () => {
-    // `packages/node-sdk` was allow-listed and `packages/web-sdk` was not, and
+    // `sdks/node` was allow-listed and `sdks/web` was not, and
     // ZXBDY's move changed neither verdict. `sdks/web` deliberately has no ALLOW
-    // entry: the stale `packages/browser-sdk` key named a directory that never
+    // entry: the stale `browser-sdk` key named a directory that never
     // existed, so mirroring it into the new epoch would have allow-listed a
     // scanned package under cover of a `git mv`. The key was deleted instead.
     seedPackage("sdks/node", "@polaris/node-sdk");

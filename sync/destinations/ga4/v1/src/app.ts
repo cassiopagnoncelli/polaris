@@ -4,7 +4,7 @@
  * Config and descriptor. Everything else — Postgres, the AMQP connection,
  * checkpoints, the DLQ producer, the instance cache, the project-config
  * store, the Redis-backed dedupe and rate limiter, shutdown ordering and the
- * Fastify shell — is `@polaris/destination-host`.
+ * Fastify shell — is `@polaris/delivery-host`.
  *
  * This file was ~413 lines and differed from the other four consumers by
  * about a dozen after substituting the vendor name. Those were not twelve
@@ -16,8 +16,8 @@ import {
   type BuiltDestinationHost,
   buildDestinationHost,
   type DestinationHostOverrides,
-} from "@polaris/destination-host";
-import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/shared-transport";
+} from "@polaris/delivery-host";
+import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { Ga4RuntimeConfig } from "./config.js";
 import { createGa4Descriptor } from "./descriptor.js";

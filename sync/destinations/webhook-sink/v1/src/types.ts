@@ -5,7 +5,7 @@
  * consumes it. The runtime never inspects the payload contents.
  */
 
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
 
 /**
  * Vendor-side payload shape — what we actually POST as the request body.
@@ -35,7 +35,7 @@ export interface WebhookPayload {
       readonly deliverer_version: string;
     };
   };
-  /** The full normalized event from `@polaris/shared-destination-normalize`. */
+  /** The full normalized event from `@polaris/delivery-normalize`. */
   readonly event: NormalizedEvent;
 }
 

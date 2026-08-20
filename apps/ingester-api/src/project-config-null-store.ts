@@ -23,7 +23,7 @@ import type {
   ProjectConfigKey,
   ProjectConfigSnapshot,
   ProjectConfigStore,
-} from "@polaris/shared-project-config";
+} from "@polaris/tenancy-project-config";
 
 export function nullProjectConfigStore(): ProjectConfigStore {
   const empty = (key: ProjectConfigKey): ProjectConfigSnapshot => ({

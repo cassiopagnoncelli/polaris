@@ -38,10 +38,10 @@
  * is what keeps it shedding.
  */
 
-import type { DestinationRetryPolicy } from "@polaris/shared-db";
-import { RETRY_BACKOFF_TIERS_MS } from "@polaris/shared-transport";
+import type { DestinationRetryPolicy } from "@polaris/persistence-postgres";
+import { RETRY_BACKOFF_TIERS_MS } from "@polaris/bus";
 
-// `DestinationRetryPolicy` comes from `@polaris/shared-db`, which mirrors the
+// `DestinationRetryPolicy` comes from `@polaris/persistence-postgres`, which mirrors the
 // `destinations_retry_policy_allowed` CHECK constraint. Redeclaring the union
 // here would be a second copy of a closed set the database already owns, and
 // the two would drift the first time a policy was added.

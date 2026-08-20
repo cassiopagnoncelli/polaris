@@ -10,7 +10,7 @@
  * Two rules baked into this group:
  *
  *   1. **The CLI holds no SQL.** Every mutation delegates to a `*WithAudit`
- *      function in `@polaris/shared-control-plane-db`, which owns the single
+ *      function in `@polaris/persistence-control-plane`, which owns the single
  *      transaction carrying the value write, the version bump, the
  *      `pg_notify`, and the audit row. The admin UI will call the same
  *      functions; two surfaces that could disagree means one is wrong.

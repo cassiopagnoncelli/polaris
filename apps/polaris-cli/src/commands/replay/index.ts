@@ -16,7 +16,7 @@
  *
  *   The CLI MUST NOT define replay PLAN semantics. Plans (partitioning,
  *   chunking, transform overrides, topic routing) live in versioned code
- *   under the planner package `@polaris/shared-replay` (P7-002). Every
+ *   under the planner package `@polaris/archive-replay` (P7-002). Every
  *   mutating command here runs `rejectReplayPlanArguments` against the
  *   parsed args before any DB work, so flags like `--partition-strategy`
  *   or `--transform-override` are refused with a usage error and never
@@ -69,7 +69,7 @@ export const replayCommand: CommandDefinition = {
     const group = parent
       .command("replay")
       .description(
-        "Manage replay jobs. PostgreSQL stores runtime state only; replay plans live in versioned code under @polaris/shared-replay (P7-002).",
+        "Manage replay jobs. PostgreSQL stores runtime state only; replay plans live in versioned code under @polaris/archive-replay (P7-002).",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

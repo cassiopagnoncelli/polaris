@@ -27,7 +27,7 @@
 --
 --   - **Closed-set environment and topic-family.** Matching the same set
 --     used by `audit_records.environment` and the
---     `CANONICAL_TOPIC_FAMILIES` constant in `@polaris/shared-kafka`.
+--     `CANONICAL_TOPIC_FAMILIES` constant in `shared-kafka`.
 --     Widening the set requires widening the CHECK in the same change
 --     that exports a new constant.
 --

@@ -7,7 +7,7 @@
  * producer-supplied fields like `context.page.url` plus whatever identity and
  * context the event was born with.
  *
- * Note that "just run it through @polaris/shared-policy first" would not fix
+ * Note that "just run it through @polaris/governance first" would not fix
  * that: the ingester already applies `evaluate()` + `applyRedactions()`
  * *before* publishing, so a DLQ payload is the post-redaction envelope.
  * Re-running the same evaluator finds nothing by construction, and the

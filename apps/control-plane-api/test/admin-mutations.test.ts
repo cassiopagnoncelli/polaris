@@ -15,9 +15,9 @@
  *   - a no-op transition writes NO audit row
  */
 
-import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/idp";
-import { SECRET_MASK } from "@polaris/shared-control-plane";
-import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
+import { Passport, PLATFORM_ROLE_CLAIM, type PlatformRole } from "@polaris/auth";
+import { SECRET_MASK } from "@polaris/tenancy-control-plane";
+import type { ProjectConfigRow } from "@polaris/persistence-control-plane";
 import { describe, expect, it, vi } from "vitest";
 import type { AdminMutations, MutationOutcome } from "../src/admin/actions/mutations.js";
 import type { AdminConfig } from "../src/admin/config.js";

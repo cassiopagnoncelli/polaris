@@ -1,11 +1,11 @@
-import { createLogger, type Logger } from "@polaris/shared-logger";
+import { createLogger, type Logger } from "@polaris/observability-logger";
 import type { CliLogLevel } from "./config.js";
 import type { PackageMeta } from "./package-meta.js";
 
 /**
  * Build the CLI's root logger.
  *
- * The CLI shares `@polaris/shared-logger` with services so log lines come out
+ * The CLI shares `@polaris/observability-logger` with services so log lines come out
  * of the same redaction list. Logs go to stderr so command output on stdout
  * stays clean and pipeable.
  *

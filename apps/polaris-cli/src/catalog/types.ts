@@ -16,11 +16,11 @@ import {
   POLARIS_ENVIRONMENTS,
   type PolarisEnvironment,
   polarisEnvironmentSchema,
-} from "@polaris/shared-environments";
+} from "@polaris/runtime-environments";
 import {
   projectEnrichmentOverrideSchema,
   projectIdentityOverrideSchema,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import { z } from "zod";
 
 /**
@@ -78,7 +78,7 @@ export const projectFileSchema = z
     /**
      * Optional identity-stage overrides (identifier denylist, narrowed
      * semantic parameters). Shape shared with the identity stage's boot
-     * loader via `@polaris/shared-policy`. Deliberately NOT materialized
+     * loader via `@polaris/governance`. Deliberately NOT materialized
      * by `projects sync`: semantic parameters never enter PostgreSQL.
      */
     identity: projectIdentityOverrideSchema.optional(),

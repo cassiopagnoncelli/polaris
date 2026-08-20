@@ -80,7 +80,7 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml up
 ```
 
 Copy `.env.example` to `.env.local` and fill in values for the local
-stack. The shared-config loader will pick it up automatically (see
+stack. The runtime-config loader will pick it up automatically (see
 `libs/runtime/config/src/loader.ts` precedence rules).
 
 ## Production deployments

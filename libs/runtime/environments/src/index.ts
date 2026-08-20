@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-environments` — the environment vocabularies, defined once.
+ * `@polaris/runtime-environments` — the environment vocabularies, defined once.
  *
  * Polaris has two environment sets and they are not the same set. Conflating
  * them is what this package exists to prevent:
@@ -14,7 +14,7 @@
  *
  * `local` must never reach a row environment column; `test` is not an
  * environment at all. Before this package existed the set was written out
- * independently in eight places and two disagreed — `shared-config` added
+ * independently in eight places and two disagreed — `runtime-config` added
  * `local` (correctly, for `POLARIS_ENV`) and `shared-schemas` added `test`
  * (a bug: no environment-checked table accepts it, so such an envelope failed
  * every downstream CHECK).

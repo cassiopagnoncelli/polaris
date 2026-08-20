@@ -44,7 +44,7 @@
 /**
  * Topic families whose contents reach vendor destinations.
  *
- * Kept as a literal rather than derived from `@polaris/shared-transport` so
+ * Kept as a literal rather than derived from `@polaris/bus` so
  * this package stays dependency-free — it is a pure planner. The trade is
  * that a new destination-feeding family must be added here too.
  *

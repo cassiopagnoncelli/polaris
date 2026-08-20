@@ -1,4 +1,4 @@
-import { polarisEnvironmentSchema } from "@polaris/shared-environments";
+import { polarisEnvironmentSchema } from "@polaris/runtime-environments";
 import { z } from "zod";
 
 /**

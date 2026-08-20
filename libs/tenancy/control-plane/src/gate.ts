@@ -14,7 +14,7 @@
  * That's the entire gate. No risk tiers, no per-command lookup table, no
  * separately maintained list of "dangerous" command strings.
  *
- * The gate lives in `@polaris/shared-control-plane` (not in
+ * The gate lives in `@polaris/tenancy-control-plane` (not in
  * `apps/polaris-cli`) so the future control-plane API can reuse the same
  * logic without a refactor. P6-000 (the control-plane API shell) will
  * import `enforceProductionMutationGate` and `resolveActor` from this
@@ -28,7 +28,7 @@
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"
  * @see docs/architecture/11-production-readiness.md "Control-Plane Permissions"
  */
-import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/runtime-environments";
 import type { ActorSource, ResolvedActor } from "./actor.js";
 import type { OperatorGateMetricsSink } from "./metrics.js";
 

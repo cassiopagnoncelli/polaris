@@ -13,7 +13,7 @@
  * `mutates: false`.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { SourceRow } from "../../catalog/sync.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, fetchSourcesByProject } from "../../db/index.js";

@@ -5,10 +5,10 @@
  * re-derive an analytical projection. PostgreSQL holds the row
  * (runtime state + audit trail); the planner that turns the row into
  * a deterministic dry-run plan lives in
- * `@polaris/shared-clickhouse/rebuild`.
+ * `@polaris/persistence-clickhouse/rebuild`.
  *
  * The typed `ClickhouseRebuildJobsTable` interface extends
- * `@polaris/shared-db`'s `Database` interface through module
+ * `@polaris/persistence-postgres`'s `Database` interface through module
  * augmentation — the same pattern `replay-jobs.ts` (P7-001) and
  * `topic-isolations.ts` (P11-008) use. This keeps the migration SQL
  * the schema source-of-truth while letting this task extend the
@@ -39,7 +39,7 @@
  * @see libs/persistence/clickhouse/src/rebuild/
  * @see docs/development/clickhouse-rebuilds.md
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 
 /**
@@ -137,7 +137,7 @@ export interface ClickhouseRebuildJobsTable {
   completed_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     clickhouse_rebuild_jobs: ClickhouseRebuildJobsTable;
   }
@@ -286,7 +286,7 @@ export async function listClickhouseRebuildJobs(
  *
  * Returns the row's status after the attempted update (matching the
  * `ClickhouseRebuildStore.markRunning` contract in
- * `@polaris/shared-clickhouse/rebuild`), or `null` when the row no
+ * `@polaris/persistence-clickhouse/rebuild`), or `null` when the row no
  * longer exists.
  */
 export async function markClickhouseRebuildJobRunning(

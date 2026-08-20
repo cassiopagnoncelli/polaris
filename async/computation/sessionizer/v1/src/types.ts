@@ -2,7 +2,7 @@
  * Local type declarations for sessionizer v1.
  *
  * The processor reads the canonical envelope structurally — it does NOT
- * re-validate the inbound payload through `@polaris/shared-schemas`'s
+ * re-validate the inbound payload through `@polaris/spec`'s
  * envelope Zod schema. The ingester is authoritative for that, and
  * re-running the full validator on every consumed message would
  * double-validate the hot path (same trade-off as the analytics-projector
@@ -10,7 +10,7 @@
  *
  * The structural shapes here are narrow enough to keep TypeScript honest
  * inside the transform and the runtime without pulling
- * `@polaris/shared-schemas` into the public surface of this package.
+ * `@polaris/spec` into the public surface of this package.
  */
 
 /**

@@ -13,7 +13,7 @@
  * no `GA4_API_VERSION` constant because there is nothing to pin.
  */
 
-import type { ConsumerIdentity } from "@polaris/shared-destinations";
+import type { ConsumerIdentity } from "@polaris/delivery-destinations";
 
 export const CONSUMER_VENDOR = "ga4" as const;
 /**

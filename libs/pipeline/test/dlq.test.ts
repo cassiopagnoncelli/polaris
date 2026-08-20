@@ -1,7 +1,7 @@
 /**
  * Tests for `publishToDlq`.
  *
- * The helper wraps `@polaris/shared-transport`'s `republishToDlq` with
+ * The helper wraps `@polaris/bus`'s `republishToDlq` with
  * processor-specific defaults (component name, failedAt timestamp,
  * classifier-derived reason). The tests use a stub `PolarisProducer` that
  * records `publishToQueue` calls so we can assert the resulting DLQ queue
@@ -12,7 +12,7 @@ import type {
   PolarisProducer,
   PublishToQueueInput,
   TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { publishToDlq } from "../src/dlq.js";

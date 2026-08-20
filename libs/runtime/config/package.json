@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-config",
+  "name": "@polaris/runtime-config",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -31,7 +31,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-environments": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
     "dotenv": "17.4.2",
     "zod": "4.4.3"
   },

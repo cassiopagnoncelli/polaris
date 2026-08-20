@@ -5,7 +5,7 @@
  *
  *   1. Generate a 32-byte CSPRNG secret tail and a `polaris_ot_<uuidv7>`
  *      public id.
- *   2. argon2id-hash the secret tail through `@polaris/shared-secrets`
+ *   2. argon2id-hash the secret tail through `@polaris/runtime-secrets`
  *      (the same primitive `keys create` uses — no second hashing library
  *      enters the workspace).
  *   3. INSERT the row with `status='active'` AND the audit row in one
@@ -24,7 +24,7 @@
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"
  * @see docs/implementation/tasks/P6-007-operator-tokens-and-mutation-gate.md
  */
-import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { hashSecret, POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

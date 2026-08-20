@@ -1,4 +1,4 @@
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 
 import type { PolicyReasonCode } from "./reason-codes.js";
 import type { RedactionAction } from "./types.js";
@@ -63,7 +63,7 @@ export interface RedactionEmissionContext {
 /**
  * Optional dependencies for `emitRedactionMetric`. A caller normally
  * wires a Prometheus counter or OTEL meter through `incrementCounter` and
- * a `@polaris/shared-logger` instance through `logger`.
+ * a `@polaris/observability-logger` instance through `logger`.
  *
  * The helper logs at the `debug` level and never includes the raw value.
  * Label-only logging keeps the per-event log volume bounded.

@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-transport",
+  "name": "@polaris/bus",
   "version": "0.0.0",
   "private": true,
   "description": "Polaris event transport: broker-neutral port (producer/consumer/checkpoints/replay) with a RabbitMQ streams driver over AMQP 0-9-1.",
@@ -61,9 +61,9 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
+    "@polaris/runtime-config": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
     "amqplib": "^2.0.1",
     "kysely": "^0.29.0"
   }

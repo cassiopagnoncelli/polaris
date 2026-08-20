@@ -44,24 +44,24 @@
  * returns nothing and costs one indexed lookup.
  */
 
-import type { MergeMapStore } from "@polaris/shared-clickhouse";
-import type { Logger } from "@polaris/shared-logger";
-import type { ProcessorMetrics } from "@polaris/shared-processor";
-import { classifyError } from "@polaris/shared-processor";
-import { decodeEvent, type TransportMessagePayload } from "@polaris/shared-transport";
+import type { MergeMapStore } from "@polaris/persistence-clickhouse";
+import type { Logger } from "@polaris/observability-logger";
+import type { ProcessorMetrics } from "@polaris/pipeline";
+import { classifyError } from "@polaris/pipeline";
+import { decodeEvent, type TransportMessagePayload } from "@polaris/bus";
 
 import { buildMergeRows, isActionableMerge, type MergeEvent } from "./merge-map.js";
 
 /**
  * The ClickHouse surface this worker needs.
  *
- * Defined in `@polaris/shared-clickhouse` rather than here: raw SQL is
+ * Defined in `@polaris/persistence-clickhouse` rather than here: raw SQL is
  * confined to that package by `scripts/lint-clickhouse-imports`, so the
  * worker gets a purpose-built store the same way the analytics sink and the
  * projection readers do. Re-exported so tests can name it without reaching
  * across packages.
  */
-export type { MergeMapStore } from "@polaris/shared-clickhouse";
+export type { MergeMapStore } from "@polaris/persistence-clickhouse";
 
 export interface MergeWorkerRuntimeInput {
   readonly store: MergeMapStore;

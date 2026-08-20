@@ -1,4 +1,4 @@
-import type { BatchRejectedResult } from "@polaris/shared-schemas";
+import type { BatchRejectedResult } from "@polaris/spec";
 /**
  * HTTPS POST transport for the Web SDK.
  *

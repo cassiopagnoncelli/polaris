@@ -7,8 +7,8 @@
  * The happy path is the easy case.
  */
 
-import type { IngestLogTraceRow, ViolationRow } from "@polaris/shared-clickhouse";
-import type { DeliveryRecord, DlqRecord } from "@polaris/shared-destinations";
+import type { IngestLogTraceRow, ViolationRow } from "@polaris/persistence-clickhouse";
+import type { DeliveryRecord, DlqRecord } from "@polaris/delivery-destinations";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -7,7 +7,7 @@
  * loudly, and that an unidentifiable event still reaches the spine.
  */
 
-import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
+import { sharedOnlyIsolationLookup } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";

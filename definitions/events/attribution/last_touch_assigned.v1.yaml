@@ -33,5 +33,5 @@ description: >-
   campaign tuple — same tuple does not re-emit.
 lifecycle: active
 since: "2026-05-14"
-schema_module: "@polaris/shared-schemas/events/attribution/last_touch_assigned.v1"
+schema_module: "@polaris/spec/events/attribution/last_touch_assigned.v1"
 schema_export: attributionLastTouchAssignedV1PropertiesSchema

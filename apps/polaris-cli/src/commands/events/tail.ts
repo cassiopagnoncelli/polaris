@@ -19,7 +19,7 @@
  * pair that shows event data:
  *
  *   1. **Policy redaction.** Every envelope goes through the same
- *      `@polaris/shared-policy` evaluator the ingester and the
+ *      `@polaris/governance` evaluator the ingester and the
  *      destination boundary use, with the project's override applied.
  *      A field the policy redacts on the way in is redacted here too.
  *      Reusing the evaluator is deliberate: a second implementation
@@ -38,7 +38,7 @@ import {
   type EventInput,
   evaluate,
   type ProjectPolicyOverride,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import {
   createAmqpStreamRangeDriver,
   createTransportConnection,
@@ -46,7 +46,7 @@ import {
   isCanonicalStreamFamily,
   partitionStreamNames,
   type StreamRangeEvent,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";
@@ -320,7 +320,7 @@ async function defaultFollow(input: {
   readonly signal: AbortSignal;
   readonly onEvent: (event: StreamRangeEvent) => void;
 }): Promise<void> {
-  const { rabbitmqEnvSchema } = await import("@polaris/shared-config");
+  const { rabbitmqEnvSchema } = await import("@polaris/runtime-config");
   let rabbitmq: ReturnType<typeof rabbitmqEnvSchema.parse>;
   try {
     rabbitmq = rabbitmqEnvSchema.parse(input.ctx.env);

@@ -2,7 +2,7 @@
  * Typed Kysely view of the `processor_dlq_records` table plus
  * repository helpers (3L2HKMND).
  *
- * Counterpart to `@polaris/shared-destinations`'s `dlq_records`
+ * Counterpart to `@polaris/delivery-destinations`'s `dlq_records`
  * surface, scaled down to the processor side:
  *
  *   - Identity tuple is `(processor_name, processor_version)`
@@ -20,7 +20,7 @@
  * @see libs/delivery/destinations/src/db/dlq-records.ts
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -33,7 +33,7 @@ export const LIST_PROCESSOR_DLQ_RECORDS_HARD_LIMIT = 1000 as const;
 /**
  * Typed mirror of the `processor_dlq_records` table.
  *
- * Extends `@polaris/shared-db`'s `Database` interface via module
+ * Extends `@polaris/persistence-postgres`'s `Database` interface via module
  * augmentation so any `Kysely<Database>` instance in the runtime
  * gets `db.selectFrom("processor_dlq_records")` typed automatically.
  */
@@ -64,7 +64,7 @@ export interface ProcessorDlqRecordsTable {
   resolution_note: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     processor_dlq_records: ProcessorDlqRecordsTable;
   }

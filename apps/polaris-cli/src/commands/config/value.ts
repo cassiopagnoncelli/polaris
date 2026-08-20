@@ -8,7 +8,7 @@
  * exactly why the schemas reused from the env-var era keep working.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { AuditEnvironment } from "../../db/index.js";
 import { UsageError } from "../../errors.js";
 

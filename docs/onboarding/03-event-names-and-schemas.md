@@ -55,7 +55,7 @@ stripe_webhook_received        # vendor-shaped (acceptable ONLY if the event
 
 The SDK rejects bad names *synchronously* before they enter the queue (see
 `apps/polaris-cli/src/commands/keys/list.ts`'s sibling validation in
-`@polaris/shared-schemas`; surfaced through the SDK as
+`@polaris/spec`; surfaced through the SDK as
 `ValidationError: invalid_event_name`). The ingester applies the same
 regex on the server side, so a producer that bypasses the SDK still hits
 the same gate.
@@ -96,7 +96,7 @@ description: >-
   cart line item.
 lifecycle: active
 since: "2026-01-20"
-schema_module: "@polaris/shared-schemas/events/checkout/started.v1"
+schema_module: "@polaris/spec/events/checkout/started.v1"
 schema_export: checkoutStartedV1PropertiesSchema
 ```
 
@@ -167,7 +167,7 @@ description: >-
   line item.
 lifecycle: active
 since: "2026-05-15"
-schema_module: "@polaris/shared-schemas/events/checkout/started.v1"
+schema_module: "@polaris/spec/events/checkout/started.v1"
 schema_export: checkoutStartedV1PropertiesSchema
 ```
 

@@ -95,7 +95,7 @@ describe("lintWorkspace", () => {
   });
 
   it("reports each NUL in a file with more than one", () => {
-    seedFile("packages/p/src/a.ts", `const a = "${NUL}";\nconst b = "${NUL}";\n`);
+    seedFile("libs/p/src/a.ts", `const a = "${NUL}";\nconst b = "${NUL}";\n`);
     const violations = lintWorkspace(root);
     expect(violations).toHaveLength(2);
     expect(violations.map((v) => v.line)).toEqual([1, 2]);

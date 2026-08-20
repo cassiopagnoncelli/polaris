@@ -59,7 +59,7 @@ ARG SERVICE_FILTER
 ARG SERVICE_ENTRY
 
 # `libc6-compat` lets prebuilt linux-musl native modules (e.g.
-# @node-rs/argon2 used by @polaris/shared-secrets) load on Alpine.
+# @node-rs/argon2 used by @polaris/runtime-secrets) load on Alpine.
 RUN apk add --no-cache libc6-compat \
     && npm install --global pnpm@10.30.0
 

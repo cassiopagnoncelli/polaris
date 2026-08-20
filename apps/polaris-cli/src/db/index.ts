@@ -1,7 +1,7 @@
 /**
  * Internal DB surface for the CLI.
  *
- * Almost everything here lives in `@polaris/shared-control-plane-db`, which
+ * Almost everything here lives in `@polaris/persistence-control-plane`, which
  * the CLI and the control-plane API both use so that one write has one
  * implementation, one audit snapshot, and one transaction shape. This barrel
  * exists so the command layer imports from a single place rather than
@@ -167,7 +167,7 @@ export {
   unsetProjectConfigValueWithAudit,
   updateDestinationConfigWithAudit,
   updateDestinationOpsWithAudit,
-} from "@polaris/shared-control-plane-db";
+} from "@polaris/persistence-control-plane";
 
 // ---- executor progress --------------------------------------------------
 // NOT operator actions: a running job reporting where it got to. They carry
@@ -181,7 +181,7 @@ export {
   markClickhouseRebuildJobRunning,
   recordReplayChunkProgress,
   touchOperatorTokenLastUsedAt,
-} from "@polaris/shared-control-plane-db/progress";
+} from "@polaris/persistence-control-plane/progress";
 
 // ---- CLI-local ----------------------------------------------------------
 export { type ConnectDbOptions, connectDb, type DbHandle } from "./connect.js";

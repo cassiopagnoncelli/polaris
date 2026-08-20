@@ -10,7 +10,7 @@
  * stylistic.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { FastifyInstance } from "fastify";
 import type { Kysely } from "kysely";
 

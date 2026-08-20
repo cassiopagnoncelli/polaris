@@ -13,8 +13,8 @@
  * every caller gets it rather than only the binary.
  */
 
-import type { Database } from "@polaris/shared-db";
-import type { ReadinessProbe } from "@polaris/shared-service-bootstrap";
+import type { Database } from "@polaris/persistence-postgres";
+import type { ReadinessProbe } from "@polaris/runtime-service-bootstrap";
 import { type Kysely, sql } from "kysely";
 
 /** Keep well under the bootstrap's 1s probe budget. */

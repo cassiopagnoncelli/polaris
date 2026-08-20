@@ -80,7 +80,7 @@ The Node SDK has no `priority` option — there is no overflow eviction policy, 
 
 ### Event name rules
 
-Event names are validated against the shared regex in `@polaris/shared-schemas` (`eventNameRegex`). The contract is:
+Event names are validated against the shared regex in `@polaris/spec` (`eventNameRegex`). The contract is:
 
 - lowercase ASCII
 - dot-separated, at least two segments

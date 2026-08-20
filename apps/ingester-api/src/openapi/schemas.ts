@@ -2,7 +2,7 @@
  * OpenAPI 3.0 component schemas derived from the canonical Zod sources.
  *
  * Polaris keeps a single source of truth for envelope/batch shapes (the Zod
- * schemas in `@polaris/shared-schemas`). The OpenAPI document is *derived*
+ * schemas in `@polaris/spec`). The OpenAPI document is *derived*
  * from those Zod schemas via `z.toJSONSchema(..., { target: "openapi-3.0" })`
  * — adding a hand-written OpenAPI shape next to the Zod one would drift the
  * moment a schema changed. See `docs/architecture/09-engineering-standards.md`
@@ -21,7 +21,7 @@ import {
   envelopeSchema,
   producerEnvelopeSchema,
   schemaReasonCodeSchema,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 import { z } from "zod";
 
 import { batchRequestSchema } from "../ingest/types.js";

@@ -5,7 +5,7 @@
  * `(project, environment, occurred_at date, stream)`. A background loop
  * flushes batches that have hit a size or age bound. Nothing else happens
  * here — the interesting arithmetic is the durability watermark in
- * `@polaris/shared-archive`, and the interesting decision is which
+ * `@polaris/archive-writer`, and the interesting decision is which
  * timestamp the day prefix comes from.
  *
  * ## The handler does not wait for the flush
@@ -35,11 +35,11 @@
  * a loss that only shows up years later during an un-merge.
  */
 
-import type { ArchiveBatcher } from "@polaris/shared-archive";
-import { archiveDateOf } from "@polaris/shared-archive";
-import type { Logger } from "@polaris/shared-logger";
-import type { ProcessorMetrics } from "@polaris/shared-processor";
-import { decodeEvent, type TransportMessagePayload } from "@polaris/shared-transport";
+import type { ArchiveBatcher } from "@polaris/archive-writer";
+import { archiveDateOf } from "@polaris/archive-writer";
+import type { Logger } from "@polaris/observability-logger";
+import type { ProcessorMetrics } from "@polaris/pipeline";
+import { decodeEvent, type TransportMessagePayload } from "@polaris/bus";
 
 export interface ArchiverRuntimeInput {
   readonly batcher: ArchiveBatcher;

@@ -1,41 +1,33 @@
 packages:
   - "apps/*"
-  - "packages/*"
   - "sync/*/*/*"
   - "async/*/*/*"
   - "tests"
 
-  # ADR-0007 six-kind tree. `libs/*` and `definitions/*` match today; `sdks/*`
-  # and `connectors/*/*/*` still match nothing, which is the point.
+  # ADR-0007 six-kind tree. `connectors/*/*/*` still matches nothing, which is
+  # the point: the destination is declared before P9J7X fills it, so the card
+  # that creates the first connector is a pure add.
   #
-  # The restructure moves roughly two dozen packages, and a move that also
-  # has to edit the workspace file is a move that collides with every other
-  # move in its group. So the destinations are declared first, in one card,
-  # and each subsequent move is a pure `git mv` — the package resolves under
-  # its new path the moment it lands, because pnpm resolves imports by
-  # package NAME and the name has not changed.
-  #
-  # Both old and new globs are live at once, deliberately. That is what makes
-  # the transition incremental rather than a single unreviewable commit: for
-  # the length of programme T, `packages/web-sdk` and `sdks/web` are equally
-  # valid locations for the packages that have yet to move. IJ4NN closes it
-  # by deleting the `packages/*` entry above once nothing is left there.
-  #
-  # `catalog/*` needed no such transition and got none: 0DIPB moved the whole
-  # directory in one card, so its five entries left with it rather than
-  # waiting for IJ4NN. `definitions/*` covers what they named, and their
-  # reasons are unchanged by the rename — traits, audiences, journeys and
-  # reverse-ETL are packages so the CLI and the runner import one registry
-  # instead of each re-reading the directory, and the forbidden-field policy
-  # is one so the ingester's first pass and the destination's second pass
-  # enforce an identical override set rather than each discovering files.
+  # The `packages/*` entry that sat above, and the dual-glob transition it
+  # opened, are both gone. For the length of programme T both roots were live
+  # at once so that each move could be a pure `git mv` — pnpm resolves imports
+  # by package NAME, so a package resolved under its new path the moment it
+  # landed. IJ4NN emptied `packages/`, renamed the twenty-four packages to
+  # match their new paths, and closed the transition.
   #
   # A glob that matches a directory without a package.json is skipped, not an
   # error, so `libs/*` may name `libs/persistence` (a grouping directory) and
   # `definitions/*` may name `definitions/events` (declared YAML, not code)
   # without either becoming a workspace member.
+  #
+  # `definitions/*` covers what `catalog/*` named, and their reasons are
+  # unchanged by the rename — traits, audiences, journeys and reverse-ETL are
+  # packages so the CLI and the runner import one registry instead of each
+  # re-reading the directory, and the forbidden-field policy is one so the
+  # ingester's first pass and the destination's second pass enforce an
+  # identical override set rather than each discovering files.
   - "libs/*" # libs/spec, libs/pipeline, libs/governance
-  - "libs/*/*" # libs/persistence/postgres, libs/identity/graph
+  - "libs/*/*" # libs/persistence/postgres, libs/observability/logger
   - "sdks/*" # sdks/web, sdks/node
   - "connectors/*/*/*" # connectors/destinations/braze/v1
   - "definitions/*" # definitions/{traits,policy,audiences,journeys,reverse-etl}

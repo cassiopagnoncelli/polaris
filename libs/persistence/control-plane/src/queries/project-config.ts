@@ -18,8 +18,8 @@
  * @see db/postgres/migrations/20260813000004_plaintext_project_secrets.sql
  */
 
-import { maskIfSecret } from "@polaris/shared-control-plane";
-import type { Database } from "@polaris/shared-db";
+import { maskIfSecret } from "@polaris/tenancy-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely, Transaction } from "kysely";
 import { sql } from "kysely";
 
@@ -246,7 +246,7 @@ export async function bumpProjectConfigVersion(
 }
 
 /**
- * Announce a change on the channel `@polaris/shared-project-config` listens to.
+ * Announce a change on the channel `@polaris/tenancy-project-config` listens to.
  *
  * MUST run inside the mutation's transaction. PostgreSQL delivers `NOTIFY`
  * only when the transaction commits, which is what makes invalidation atomic

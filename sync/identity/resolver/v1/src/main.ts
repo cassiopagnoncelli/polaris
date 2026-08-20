@@ -22,7 +22,7 @@
  * @see docs/architecture/05-processors-and-replay.md "Processor Model"
  * @see docs/architecture/09-engineering-standards.md "Containers"
  */
-import { createLogger } from "@polaris/shared-logger";
+import { createLogger } from "@polaris/observability-logger";
 
 import { buildSyncIdentityApp } from "./app.js";
 import { loadSyncIdentityConfig } from "./config.js";

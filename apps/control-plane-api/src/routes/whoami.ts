@@ -10,7 +10,7 @@
  * runs; an absent header surfaces as `{ source: 'cli', label: 'cli' }`.
  */
 
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyInstance } from "fastify";
 
 export function registerWhoamiRoute(app: FastifyInstance): void {

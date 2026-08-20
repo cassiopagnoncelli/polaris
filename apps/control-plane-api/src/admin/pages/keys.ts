@@ -14,7 +14,7 @@
  * keeps the UI's threat model free of plaintext secrets entirely.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import { type Html, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page, statusBadge } from "../layout.js";
 import type { ApiKeyRow } from "../queries.js";

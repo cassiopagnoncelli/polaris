@@ -2,7 +2,7 @@
  * The mutations the admin UI can perform.
  *
  * Every one is reversible, already implemented and audited in the CLI, and
- * routed through `@polaris/shared-control-plane-db`'s `*WithAudit` functions
+ * routed through `@polaris/persistence-control-plane`'s `*WithAudit` functions
  * — so the UI and the CLI write identical SQL, identical audit snapshots, and
  * identical `action` strings, inside one transaction.
  *
@@ -21,9 +21,9 @@
  * command with flags rather than clicked something.
  *
  * `dlq mark-resolved` IS here. The triage half of `dlq_records` now lives in
- * `@polaris/shared-control-plane-db` alongside every other control-plane
+ * `@polaris/persistence-control-plane` alongside every other control-plane
  * write, so resolving a row no longer means depending on
- * `@polaris/shared-destinations` and dragging the whole delivery stack —
+ * `@polaris/delivery-destinations` and dragging the whole delivery stack —
  * RabbitMQ transport included — into a service that speaks to no broker.
  * `dlq retry` still does not: republishing needs a broker, and that is the
  * dependency the split was drawn to avoid.
@@ -48,8 +48,8 @@ import {
   setProjectConfigValueWithAudit,
   type UnsetProjectConfigInput,
   unsetProjectConfigValueWithAudit,
-} from "@polaris/shared-control-plane-db";
-import type { Database } from "@polaris/shared-db";
+} from "@polaris/persistence-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 export type { MutationOutcome };

@@ -22,7 +22,7 @@
  *     refusing legitimate requests when the limiter subsystem is down.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 
 import type { IngestMetrics } from "../metrics/registry.js";
 import type { RateLimitAcquireInput, RateLimitDecision, RateLimiter } from "./types.js";

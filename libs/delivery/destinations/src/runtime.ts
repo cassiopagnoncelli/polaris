@@ -52,7 +52,7 @@
  *
  * The vendor credential arrives on the destination row as `secret_value` and
  * goes straight to the deliverer. There is no resolution step: the runtime
- * used to call `@polaris/shared-secrets` per attempt to turn a `provider:ref`
+ * used to call `@polaris/runtime-secrets` per attempt to turn a `provider:ref`
  * pointer into plaintext, which meant a delivery could fail because a secrets
  * provider was unreachable — a whole failure mode, with its own transient /
  * permanent classification, that reading a column does not have. The credential
@@ -63,16 +63,16 @@ import {
   type NormalizableEnvelope,
   type NormalizedEvent,
   normalizeForDestination,
-} from "@polaris/shared-destination-normalize";
-import type { Logger } from "@polaris/shared-logger";
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
+} from "@polaris/delivery-normalize";
+import type { Logger } from "@polaris/observability-logger";
+import type { ProjectPolicyOverride } from "@polaris/governance";
 
 /**
  * The runtime's view of project configuration.
  *
  * Deliberately a one-method seam rather than the store itself: the runtime
  * needs a synchronous slice and nothing else, and depending on
- * `@polaris/shared-project-config` here would make every consumer that has
+ * `@polaris/tenancy-project-config` here would make every consumer that has
  * NOT cut over take that dependency too.
  */
 export interface ProjectConfigLookup {
@@ -120,7 +120,7 @@ import {
   type StreamStartPosition,
   type TransportMessageHandler,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { breakerKey, DestinationCircuitBreaker } from "./breaker.js";
 import {
   type DeliveryRecord,

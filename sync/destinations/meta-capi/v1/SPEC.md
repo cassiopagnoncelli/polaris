@@ -38,7 +38,7 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `context.page.url` | `event_source_url` | none | When present; absent → omitted |
 | inferred | `action_source` | branch on app/page context | `app` when any `context.app_*` slot is populated; `website` when `context.page_url` is populated; otherwise `system_generated` |
 | `identity.customer_id` | `user_data.external_id[0]` | `sha256(lowercased(trim(value)))` | Meta requires hash for external_id |
-| `identity.email_sha256` | `user_data.em[0]` | (already hashed by normalize) | shared-destination-normalize handles email sha256 |
+| `identity.email_sha256` | `user_data.em[0]` | (already hashed by normalize) | delivery-normalize handles email sha256 |
 | `identity.phone_sha256` | `user_data.ph[0]` | (already hashed by normalize) | E.164 + sha256 |
 | `identity.anonymous_id` | `user_data.anon_id` | `sha256` | passes anonymized id through hash |
 | `context.ip` | `user_data.client_ip_address` | passthrough | Meta uses for ad-attribution match |
@@ -97,7 +97,7 @@ No `custom_data` is populated — `Lead` is a lightweight intent signal.
 
 ## Normalization rules
 
-The shared `@polaris/shared-destination-normalize` package handles:
+The shared `@polaris/delivery-normalize` package handles:
 
 ```text
 email       hashEmailLower      (lowercase + trim + sha256 hex)

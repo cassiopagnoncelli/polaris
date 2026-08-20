@@ -17,8 +17,8 @@
  * @see docs/architecture/03-rabbitmq-streams.md "Connections and recovery"
  */
 
-import type { RabbitmqConfig } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import type { RabbitmqConfig } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import { type Channel, type ChannelModel, type ConfirmChannel, connect } from "amqplib";
 
 /** Reconnect backoff defaults. Mirrors the Kafka-era client retry envelope. */
@@ -38,7 +38,7 @@ export interface ReconnectOptions {
 }
 
 export interface CreateTransportConnectionOptions {
-  /** Typed RabbitMQ config from `@polaris/shared-config`. */
+  /** Typed RabbitMQ config from `@polaris/runtime-config`. */
   readonly rabbitmq: RabbitmqConfig;
   /** Optional logger for connection lifecycle lines. */
   readonly logger?: Logger;

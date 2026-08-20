@@ -23,7 +23,7 @@
 // The `/envelope` subpath, not the package root: the root barrel re-exports
 // the file-backed catalog loader (`node:fs`, `yaml`), which every bundler
 // then drags into a deployment artifact that has no use for it.
-import { eventNameRegex } from "@polaris/shared-schemas/envelope";
+import { eventNameRegex } from "@polaris/spec/envelope";
 
 export class ValidationError extends Error {
   public override readonly name = "ValidationError";

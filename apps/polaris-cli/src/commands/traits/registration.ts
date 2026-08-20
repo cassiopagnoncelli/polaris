@@ -13,7 +13,7 @@
  * role suffices and the operator escape hatch stays closed to a nightly cron
  * job. A cron with operator credentials is a standing invitation.
  *
- * The WRITE goes through `@polaris/shared-control-plane-db`'s narrow trait
+ * The WRITE goes through `@polaris/persistence-control-plane`'s narrow trait
  * window — `traits` and `traits_version`, nothing else. That is the
  * async-writer allowance the plan's amended ownership line names, and the
  * narrowness is what makes it safe: a batch writer that cannot touch
@@ -26,13 +26,13 @@
  */
 
 import { runTraits, type TraitRunResult } from "@polaris/processor-traits-v1";
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
-import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/runtime-config";
 import {
   createPolarisProducer,
   createTransportConnection,
   sharedOnlyIsolationLookup,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext } from "../../command.js";

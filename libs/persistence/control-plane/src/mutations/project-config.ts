@@ -33,8 +33,8 @@ import {
   isMaskedSecret,
   maskIfSecret,
   SECRET_MASK,
-} from "@polaris/shared-control-plane";
-import type { Database } from "@polaris/shared-db";
+} from "@polaris/tenancy-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

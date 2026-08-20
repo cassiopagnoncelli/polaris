@@ -15,7 +15,7 @@
  * `mutates: false`. The P6-007 gate is a no-op for read-only commands.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, listActiveIsolations, type TopicIsolationRow } from "../../db/index.js";
 import { UsageError } from "../../errors.js";

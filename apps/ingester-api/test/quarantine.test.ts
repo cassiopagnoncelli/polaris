@@ -9,7 +9,7 @@
  * mechanism built, tested in isolation, and connected to nothing.
  */
 
-import type { PolarisProducer } from "@polaris/shared-transport";
+import type { PolarisProducer } from "@polaris/bus";
 import { describe, expect, it, vi } from "vitest";
 
 import {

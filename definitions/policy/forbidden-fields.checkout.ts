@@ -15,7 +15,7 @@
  *   - **not** downgrade a platform reject entry to a redact except via a
  *     `documentedExceptions` entry naming the field, reviewer, and date
  *
- * The merge logic in `@polaris/shared-policy` enforces these rules at
+ * The merge logic in `@polaris/governance` enforces these rules at
  * startup; this file demonstrates compliant additions.
  *
  * The `checkout` project deals with PCI-adjacent flows and contact
@@ -32,8 +32,8 @@
  *   - redact-pattern: `iban_in_text` — IBAN shape in any free-form field
  */
 
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
-import { POLICY_REASON_PII_ACCOUNT, POLICY_REASON_POLICY } from "@polaris/shared-policy";
+import type { ProjectPolicyOverride } from "@polaris/governance";
+import { POLICY_REASON_PII_ACCOUNT, POLICY_REASON_POLICY } from "@polaris/governance";
 
 const checkoutOverride: ProjectPolicyOverride = {
   project_id: "checkout",

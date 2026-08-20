@@ -22,7 +22,7 @@
  * comparing versions would then miss one of them entirely.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
 /** A profile's current traits, for the diff. */

@@ -13,13 +13,13 @@
  */
 
 import type { AudienceEmitter } from "@polaris/processor-audiences-v1";
-import { deriveEventId } from "@polaris/shared-processor";
+import { deriveEventId } from "@polaris/pipeline";
 import {
   type PolarisProducer,
   type PublishableEvent,
   STREAM_FAMILY_PROFILE_EVENTS,
   type SyncIsolationLookup,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 const PROCESSOR_NAME = "audiences";
 const PROCESSOR_VERSION = "v1";

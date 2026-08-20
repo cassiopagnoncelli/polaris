@@ -37,11 +37,10 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  * Carries ADR-0007's destinations beside the old roots. This list is the one
  * that manufactures FALSE positives when a root is missing: a variable read
  * only from `libs/runtime/config` would be reported as documented-but-unused
- * the moment that package moved out of `packages/`.
+ * the moment that package moved and this list did not follow.
  */
 const SEARCH_DIRS = [
   "apps",
-  "packages",
   "sync",
   "async",
   "definitions",

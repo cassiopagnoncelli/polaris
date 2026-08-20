@@ -1,29 +1,29 @@
 import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
-import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
-import { createLogger, type Logger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
+import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/persistence-postgres";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
+import { createLogger, type Logger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
+import type { ProjectPolicyOverride } from "@polaris/governance";
 import {
   createPgListenerTransport,
   createProjectConfigStore,
   type ProjectConfigStore,
-} from "@polaris/shared-project-config";
-import type { EventCatalog } from "@polaris/shared-schemas";
+} from "@polaris/tenancy-project-config";
+import type { EventCatalog } from "@polaris/spec";
 import {
   type BootstrappedService,
   bootstrapService,
   type OpenApiSetup,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   createPolarisProducer,
   createTransportConnection,
   createTransportLogHooks,
   type PolarisProducer,
   type TransportConnection,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { preHandlerAsyncHookHandler } from "fastify";
 import type { Kysely } from "kysely";
 import {
@@ -98,7 +98,7 @@ export interface BuildIngesterAppOptions {
   /**
    * Optional hash verifier override. Tests pass a stub so the suite does
    * not pay the argon2 cost; production lets the default `verifySecret`
-   * primitive from `@polaris/shared-secrets` handle verification.
+   * primitive from `@polaris/runtime-secrets` handle verification.
    */
   readonly verifyHash?: (plaintext: string, hash: string, algorithm: string) => Promise<boolean>;
   /**
@@ -174,13 +174,13 @@ export interface BuildIngesterAppOptions {
  *
  *   - request-ID propagation, RFC 7807 errors, `/health`, `/ready`,
  *     `/metrics` stub, OpenAPI hook, graceful shutdown (from
- *     `@polaris/shared-service-bootstrap`).
- *   - Typed Kysely client over PostgreSQL (via `@polaris/shared-db`).
+ *     `@polaris/runtime-service-bootstrap`).
+ *   - Typed Kysely client over PostgreSQL (via `@polaris/persistence-postgres`).
  *   - In-memory `ApiKeyCache` LRU/TTL + auth service + Fastify preHandler.
  *   - Event catalog (loaded from `definitions/events/**` once at startup).
  *   - Forbidden-field policy resolver (platform defaults plus optional
  *     per-project overrides).
- *   - RabbitMQ producer through `@polaris/shared-transport`.
+ *   - RabbitMQ producer through `@polaris/bus`.
  *   - Redis dedupe store (with documented fall-back behaviour).
  *   - The real `POST /v1/events` handler (replaces the 501 stub).
  *

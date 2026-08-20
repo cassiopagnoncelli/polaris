@@ -23,15 +23,15 @@
  */
 
 import { JOURNEY_DEFINITIONS, type JourneyDefinition } from "@polaris/journey-catalog";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger, type Logger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
-import { ProcessorMetrics } from "@polaris/shared-processor";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger, type Logger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
+import { ProcessorMetrics } from "@polaris/pipeline";
 import {
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   consumerFamiliesFor,
   createPolarisConsumer,
@@ -44,7 +44,7 @@ import {
   STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
   startIsolationSnapshot,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 

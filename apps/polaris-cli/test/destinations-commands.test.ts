@@ -16,7 +16,7 @@
  *
  * The schema-level invariant — `DestinationsTable` has NO column resembling
  * a mapping field — is enforced as a structural test against the typed
- * surface in `@polaris/shared-db`.
+ * surface in `@polaris/persistence-postgres`.
  */
 import { describe, expect, it } from "vitest";
 
@@ -1716,11 +1716,11 @@ describe("destinations command dispatcher wiring", () => {
 
 /**
  * Schema-level invariant: the Kysely `DestinationsTable` interface in
- * `@polaris/shared-db` MUST NOT carry any column resembling a mapping
+ * `@polaris/persistence-postgres` MUST NOT carry any column resembling a mapping
  * field. This is the "Tests protect against semantic mapping fields
  * entering the DB model" criterion from the task card.
  *
- * The check is structural: we import the shared-db source and inspect the
+ * The check is structural: we import the persistence-postgres source and inspect the
  * column set the typed surface exposes through `InsertDestinationInput`
  * (the only shape the CLI write path accepts). Any future refactor that
  * adds a `field_map`-shaped column would surface here.

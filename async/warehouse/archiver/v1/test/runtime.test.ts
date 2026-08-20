@@ -2,9 +2,9 @@ import {
   ArchiveBatcher,
   createArchiveWriter,
   createInMemoryArchiveStore,
-} from "@polaris/shared-archive";
-import { ProcessorMetrics } from "@polaris/shared-processor";
-import type { TransportMessagePayload } from "@polaris/shared-transport";
+} from "@polaris/archive-writer";
+import { ProcessorMetrics } from "@polaris/pipeline";
+import type { TransportMessagePayload } from "@polaris/bus";
 import { describe, expect, it, vi } from "vitest";
 
 import { createArchiveHandler, startFlushLoop } from "../src/runtime.js";

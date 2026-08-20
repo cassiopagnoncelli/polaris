@@ -15,5 +15,5 @@ description: >-
   naming the identifier, the reason, and the profile it would have joined.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/identity/link_rejected.v1"
+schema_module: "@polaris/spec/events/identity/link_rejected.v1"
 schema_export: identityLinkRejectedV1PropertiesSchema

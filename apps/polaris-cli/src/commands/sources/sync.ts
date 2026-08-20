@@ -8,7 +8,7 @@
  * Like `projects sync`, catalog absence is NOT a delete signal in v1. The
  * planner is pure; the command wires it to the database.
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 import {

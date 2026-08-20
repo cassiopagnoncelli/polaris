@@ -2,7 +2,7 @@
  * In-memory LRU+TTL cache for resolved API key records.
  *
  * The ingester hot path is `parse header -> lookup -> verify hash -> stamp`.
- * The lookup step talks to PostgreSQL through `@polaris/shared-db`. Without a
+ * The lookup step talks to PostgreSQL through `@polaris/persistence-postgres`. Without a
  * cache that round trip dominates the latency profile under steady load.
  * Redis-backed cache is a future optimisation (see
  * `docs/architecture/02-control-plane.md` "Redis Role"); v1 uses an in-process

@@ -5,7 +5,7 @@
 // boundary without paying for a full @polaris/* workspace package.
 //
 // The helpers are dependency-free on purpose: native fetch for HTTP,
-// node:crypto for randomBytes + argon2id (via shared-secrets when present),
+// node:crypto for randomBytes + argon2id (via runtime-secrets when present),
 // and a small pg HTTP query through unix socket / wire — we do NOT pull
 // `pg` directly. Seeding happens through a tiny `psql`-style shell-out
 // because:
@@ -13,7 +13,7 @@
 //   * adding `pg` here would force a workspace dependency churn
 //   * the seed surface is one INSERT and one SELECT; shelling out to
 //     `psql` keeps it portable across local Docker compose and CI matrix
-//   * shared-secrets ships an argon2id hasher we re-use directly so the
+//   * runtime-secrets ships an argon2id hasher we re-use directly so the
 //     hash is byte-compatible with what the polaris CLI would produce.
 //
 // If `psql` is unavailable on the host running the smoke (rare for an
@@ -252,7 +252,7 @@ export async function pollClickHouseForEvent({
         // ad-hoc -- it runs on every smoke, and it is the one read of
         // analytics_raw a newcomer is most likely to copy. Every other
         // reader in the repo uses argMax and the lint forbids FINAL in
-        // shared-clickhouse; a smoke test demonstrating the exception
+        // persistence-clickhouse; a smoke test demonstrating the exception
         // teaches the exception.
         const fullRow = await runClickHouseQuery(
           client,
@@ -452,17 +452,17 @@ export async function seedApiKey({ databaseUrl, projectId, environment, sourceId
 }
 
 /**
- * Dynamically import `@polaris/shared-secrets` if the workspace is
+ * Dynamically import `@polaris/runtime-secrets` if the workspace is
  * installed, otherwise fall back to a minimal argon2id implementation
  * via Node's built-in crypto.
  *
- * Picking shared-secrets when available keeps the smoke key
+ * Picking runtime-secrets when available keeps the smoke key
  * byte-compatible with what the polaris CLI mints, so a smoke API key
  * works against the same auth path as a real one.
  */
 async function hashSecretWithSharedSecrets(plaintext) {
   try {
-    const mod = await import("@polaris/shared-secrets");
+    const mod = await import("@polaris/runtime-secrets");
     if (typeof mod.hashSecret === "function") {
       return mod.hashSecret(plaintext);
     }
@@ -470,7 +470,7 @@ async function hashSecretWithSharedSecrets(plaintext) {
     // Not installed in this environment — surface a clear error.
   }
   throw new SmokeError(
-    "@polaris/shared-secrets is not available; cannot hash the API key secret. " +
+    "@polaris/runtime-secrets is not available; cannot hash the API key secret. " +
       "Run `pnpm install` from the repo root before invoking the smoke runner, " +
       "or pass POLARIS_SMOKE_API_KEY=<id>.<secret> to bypass seeding.",
   );

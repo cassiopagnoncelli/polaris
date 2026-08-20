@@ -2,7 +2,7 @@
  * Fastify service bootstrap building blocks.
  *
  * Most services should call `bootstrapService` from
- * `@polaris/shared-service-bootstrap` directly. The individual helpers
+ * `@polaris/runtime-service-bootstrap` directly. The individual helpers
  * exported here exist so services that need to compose a non-standard
  * Fastify instance can still reuse Polaris's request-ID generation, error
  * handler, and route plugins.

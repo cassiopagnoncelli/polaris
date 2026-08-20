@@ -2,12 +2,12 @@ import {
   type ForbiddenFieldPolicy,
   mergePolicy,
   type ProjectPolicyOverride,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 
 /**
  * Resolver for the merged forbidden-field policy per project.
  *
- * The platform defaults live in `@polaris/shared-policy/PLATFORM_DEFAULT_POLICY`
+ * The platform defaults live in `@polaris/governance/PLATFORM_DEFAULT_POLICY`
  * (re-exported by `definitions/policy/forbidden-fields.ts`). Project overrides
  * live in `definitions/policy/forbidden-fields.<project_id>.ts`. Per the docs
  * the override files are **file-backed**, not runtime mutable.
@@ -20,7 +20,7 @@ import {
  *
  * The resolver returns the `ProjectPolicyOverride` (or `undefined` for
  * platform-default projects) rather than a pre-merged policy. This matches
- * the `evaluate()` API in `@polaris/shared-policy`, which re-runs the
+ * the `evaluate()` API in `@polaris/governance`, which re-runs the
  * merge on every call to enforce the documented downgrade rules.
  */
 

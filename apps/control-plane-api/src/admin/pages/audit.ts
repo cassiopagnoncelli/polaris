@@ -12,7 +12,7 @@
  * `<pre>` as escaped text, never as markup.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import { formatJson, html } from "../html.js";
 import { type AdminPageContext, emptyRow, envBadge, mono, page } from "../layout.js";
 import type { AuditRow } from "../queries.js";

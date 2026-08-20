@@ -13,8 +13,8 @@
  * separate workflow because removal would cascade through every FK referencing
  * the row. That capability is out of scope here.
  */
-import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
-import type { Database } from "@polaris/shared-db";
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/tenancy-config-schemas";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 import {

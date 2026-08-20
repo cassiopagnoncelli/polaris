@@ -18,7 +18,7 @@
  *      replicas. Operators issue rebuilds through this CLI surface.
  *
  *   2. The planner is read-only and lives in
- *      `@polaris/shared-clickhouse/rebuild`. PostgreSQL stores only the
+ *      `@polaris/persistence-clickhouse/rebuild`. PostgreSQL stores only the
  *      rebuild-job declaration (projection, optional range, reason,
  *      requester, status, outcome).
  *
@@ -60,7 +60,7 @@ export const clickhouseRebuildCommand: CommandDefinition = {
     const group = parent
       .command("clickhouse-rebuild")
       .description(
-        "Manage controlled ClickHouse projection rebuilds. Postgres stores job runtime state; the planner lives in @polaris/shared-clickhouse/rebuild. Executor is deferred — see docs/development/clickhouse-rebuilds.md.",
+        "Manage controlled ClickHouse projection rebuilds. Postgres stores job runtime state; the planner lives in @polaris/persistence-clickhouse/rebuild. Executor is deferred — see docs/development/clickhouse-rebuilds.md.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

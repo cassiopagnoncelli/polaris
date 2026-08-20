@@ -37,7 +37,7 @@
  *
  * `_version` still matters, for the reason it always did: a replayed or
  * redelivered row must collapse against the original rather than beside
- * it. See `@polaris/shared-clickhouse/version.ts`.
+ * it. See `@polaris/persistence-clickhouse/version.ts`.
  *
  * The split is made here, at INSERT time, rather than by a WHERE clause
  * in each materialized view. A filter would have to be right in three
@@ -117,9 +117,9 @@ import {
   type ProfileEventQueueRow,
   VIOLATIONS_QUEUE_TABLE,
   type ViolationQueueRow,
-} from "@polaris/shared-clickhouse";
-import type { Logger } from "@polaris/shared-logger";
-import { parseViolationRecord } from "@polaris/shared-schemas";
+} from "@polaris/persistence-clickhouse";
+import type { Logger } from "@polaris/observability-logger";
+import { parseViolationRecord } from "@polaris/spec";
 import {
   consumerFamiliesFor,
   type DeferredCheckpointStore,
@@ -134,7 +134,7 @@ import {
   STREAM_FAMILY_SESSION_EVENTS,
   type TransportMessageHandler,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import { SINK_COMPONENT } from "./config.js";
 import type { SinkMetrics } from "./metrics.js";

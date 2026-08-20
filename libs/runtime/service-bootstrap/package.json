@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-service-bootstrap",
+  "name": "@polaris/runtime-service-bootstrap",
   "version": "0.0.0",
   "private": true,
   "description": "Thin Fastify service bootstrap for Polaris: config loading, request IDs, Pino logger wiring, RFC 7807 Problem Details, health/ready/metrics hooks, OpenAPI setup, and graceful shutdown.",
@@ -38,8 +38,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
+    "@polaris/runtime-config": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
     "fastify": "^5.8.5",
     "uuid": "^14.0.0"
   }

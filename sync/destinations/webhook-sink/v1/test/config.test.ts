@@ -9,7 +9,7 @@
  * @see sync/destinations/webhook-sink/v1/src/config.ts
  */
 
-import { ConfigValidationError } from "@polaris/shared-config";
+import { ConfigValidationError } from "@polaris/runtime-config";
 import { describe, expect, it } from "vitest";
 
 import { CONSUMER_SERVICE_NAME, webhookSinkConfigSchema } from "../src/config.js";

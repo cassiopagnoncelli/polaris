@@ -42,7 +42,7 @@ export interface BuildMetadata {
   readonly serviceName: string;
   /**
    * Package version stamped at build time. Falls back to `"0.0.0"` in dev
-   * runs (the `@polaris/shared-config` schema default), so callers always
+   * runs (the `@polaris/runtime-config` schema default), so callers always
    * have a non-empty string to surface.
    */
   readonly serviceVersion: string;
@@ -68,7 +68,7 @@ export interface GetBuildMetadataOptions {
   readonly serviceName: string;
   /**
    * Package/release version. Most callers pass `config.service.serviceVersion`
-   * directly — `@polaris/shared-config` already resolves it from the
+   * directly — `@polaris/runtime-config` already resolves it from the
    * `POLARIS_SERVICE_VERSION` / `POLARIS_BUILD_VERSION` env vars with the
    * `0.0.0` default.
    */

@@ -25,5 +25,5 @@ description: >-
   expiration lazily on the next observed event for the same key.
 lifecycle: active
 since: "2026-05-12"
-schema_module: "@polaris/shared-schemas/events/session/ended.v1"
+schema_module: "@polaris/spec/events/session/ended.v1"
 schema_export: sessionEndedV1PropertiesSchema

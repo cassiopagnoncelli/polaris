@@ -23,14 +23,14 @@
  * order is this way round and not the other.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   buildProfilePartitionKey,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
   STREAM_FAMILY_PROFILE_EVENTS,
   type SyncIsolationLookup,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import {
   buildIdentityLinkedEvent,
@@ -395,7 +395,7 @@ import {
   type PolarisConsumer,
   STREAM_FAMILY_RAW_EVENTS,
   type TransportMessageHandler,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 export interface IdentityStageRuntime {
   start(): Promise<void>;

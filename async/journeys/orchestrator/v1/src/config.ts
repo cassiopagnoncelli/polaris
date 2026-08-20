@@ -25,7 +25,7 @@ import {
   rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 export const PROCESSOR_SERVICE_NAME = "journey-orchestrator" as const;

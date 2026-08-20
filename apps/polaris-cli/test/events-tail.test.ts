@@ -8,7 +8,7 @@
  * outright is never shown at all.
  */
 
-import type { StreamRangeEvent } from "@polaris/shared-transport";
+import type { StreamRangeEvent } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import {

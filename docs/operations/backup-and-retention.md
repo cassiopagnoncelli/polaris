@@ -577,7 +577,7 @@ polaris processors chains-prune --version v2 --idle 15552000   # 180 days
 The command refuses `--version v1` and refuses an `--idle` shorter than
 the version's own window — both would delete rows the engine can still
 read. The guard lives in the mutation
-(`@polaris/shared-control-plane-db`), so a future scheduled job or the
+(`@polaris/persistence-control-plane`), so a future scheduled job or the
 control-plane API inherits it rather than reimplementing it.
 
 ### Scheduling it

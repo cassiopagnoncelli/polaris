@@ -121,7 +121,7 @@ offsets), so ingestion becomes a Polaris-owned consumer:
 
 | # | Workstream | Contents | Size | Gate |
 |---|---|---|---|---|
-| **R0** | Port abstraction (do this regardless of broker) | New `@polaris/shared-transport`: broker-neutral `PolarisMessage`, producer/consumer/driver interfaces; wrap current KafkaJS impl as the first driver; migrate all services off KafkaJS types (`EachMessagePayload`, `.raw`, ~20 files); ADR | L (3–4d) | Full tests + acceptance green **still on Redpanda** |
+| **R0** | Port abstraction (do this regardless of broker) | New `@polaris/bus`: broker-neutral `PolarisMessage`, producer/consumer/driver interfaces; wrap current KafkaJS impl as the first driver; migrate all services off KafkaJS types (`EachMessagePayload`, `.raw`, ~20 files); ADR | L (3–4d) | Full tests + acceptance green **still on Redpanda** |
 | **R1** | Local infra + config | Compose service `rabbitmq:4.1-management` (+ `rabbitmq_stream`, `rabbitmq_prometheus`), ports 5672/15672/5552/15692, healthcheck; `scripts/rabbitmq-provision.mjs` (super streams, retention policies, retry/redeliver/dlq queues — replaces topic auto-creation); `shared-config` `rabbitmq.ts` schema (`POLARIS_RABBITMQ_URL`, `_MANAGEMENT_URL`, TLS, prefetch, partition map); env examples | S (1d) | `make up` + provision idempotent |
 | **R2** | RabbitMQ driver | amqplib driver for the R0 port: confirm-channel producer with client-side partition hashing; stream consumer (per-partition channels, prefetch, ack); Postgres `transport_checkpoints` migration + store; retry/redeliver/DLQ helpers; headers mapping (AMQP headers table); hooks/metrics parity | L (3–5d) | Driver test suite + smoke vs live broker |
 | **R3** | Spine cutover | `ingester-api` + 5 processors switch driver; static partition assignment wiring; `processor_runs.last_offset` stays informational; **throughput gate**: sustained publish/consume benchmark vs current acceptance baseline | M (2–3d) | Acceptance suite green on RabbitMQ |
@@ -193,7 +193,7 @@ processor-lag alerting signal, CI shape.
 |---|---|---|
 | 1 | Prod partition counts per family | `raw.events` 6, others 3 |
 | 2 | Sink placement | `async/warehouse/clickhouse-sink/v1` |
-| 3 | Package name | new `@polaris/shared-transport`, `shared-kafka` deleted at R9 |
+| 3 | Package name | new `@polaris/bus`, `shared-kafka` deleted at R9 |
 | 4 | Dual-write phase | No (pre-GA assumption) — confirm |
 | 5 | Broker HA target for prod (3-node quorum/stream replication) | 3-node, RF=3, mirrors current prod posture |
 
@@ -214,7 +214,7 @@ practice the port and the RabbitMQ driver landed together: writing a
 KafkaJS driver for a port whose only purpose was to delete KafkaJS would
 have doubled the work for one intermediate green build.
 
-The architectural value survives — `@polaris/shared-transport` is a real
+The architectural value survives — `@polaris/bus` is a real
 port, no amqplib type crosses its boundary, and a second driver is a new
 file rather than a refactor. What was given up is the hybrid off-ramp
 being *demonstrated* mid-migration rather than merely available.
@@ -250,7 +250,7 @@ five processors had no DB client wired. They have one now, purely for
 `transport_checkpoints`.
 
 This is the honest cost of the broker not owning offsets. It also
-enabled a simplification: `createDb({postgres})` in `@polaris/shared-db`
+enabled a simplification: `createDb({postgres})` in `@polaris/persistence-postgres`
 replaced the same hand-rolled connection string in five services.
 
 ### 5. `session.events` became a canonical family

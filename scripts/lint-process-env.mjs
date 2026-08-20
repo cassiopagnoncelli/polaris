@@ -15,7 +15,7 @@
 //
 //   - The BOOTSTRAP tier legitimately does. A service must know its Postgres
 //     DSN and broker URL to reach the store that holds everything else, and
-//     that knowledge can only come from the environment. `@polaris/shared-config`
+//     that knowledge can only come from the environment. `@polaris/runtime-config`
 //     owns the reading; a short list of other modules own the reading they
 //     genuinely cannot delegate (a logger built before config is parsed, a
 //     build stamp, the CLI's own connection resolution).
@@ -57,7 +57,6 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  */
 const SCAN_DIRS = [
   "apps",
-  "packages",
   "sync",
   "async",
   "libs",

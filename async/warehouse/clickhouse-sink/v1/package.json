@@ -27,14 +27,14 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@polaris/shared-clickhouse": "workspace:*",
-    "@polaris/shared-config": "workspace:*",
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-metrics": "workspace:*",
-    "@polaris/shared-schemas": "workspace:*",
-    "@polaris/shared-service-bootstrap": "workspace:*",
-    "@polaris/shared-transport": "workspace:*",
+    "@polaris/persistence-clickhouse": "workspace:*",
+    "@polaris/runtime-config": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
+    "@polaris/observability-metrics": "workspace:*",
+    "@polaris/spec": "workspace:*",
+    "@polaris/runtime-service-bootstrap": "workspace:*",
+    "@polaris/bus": "workspace:*",
     "kysely": "^0.29.0",
     "zod": "^4.4.3"
   },

@@ -7,13 +7,13 @@ import {
   PROFILE_EVENTS_QUEUE_TABLE,
   type ProfileEventQueueRow,
   type ViolationQueueRow,
-} from "@polaris/shared-clickhouse";
+} from "@polaris/persistence-clickhouse";
 import {
   DeferredCheckpointStore,
   InMemoryCheckpointStore,
   type PolarisConsumer,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { SinkMetrics } from "../src/metrics.js";

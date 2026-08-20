@@ -20,7 +20,7 @@
  * taken under the previous policy.
  */
 
-import { mergePolicy, type ProjectPolicyOverride } from "@polaris/shared-policy";
+import { mergePolicy, type ProjectPolicyOverride } from "@polaris/governance";
 
 import checkoutOverride from "./forbidden-fields.checkout.js";
 

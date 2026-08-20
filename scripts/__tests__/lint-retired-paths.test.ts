@@ -98,12 +98,12 @@ describe("scanning a tree", () => {
       'import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";\n',
     );
     write("apps/ingester-api/src/app.ts", 'import { loadRuntimeCatalog } from "./catalog/runtime.js";\n');
-    write("packages/shared-schemas/src/index.ts", 'export * from "./catalog/index.js";\n');
+    write("libs/spec/src/index.ts", 'export * from "./catalog/index.js";\n');
     expect(scan()).toEqual([]);
   });
 
   it("leaves a word-ish prefix alone, and the directory's new name", () => {
-    write("docs/ok-catalog.md", "A registry could live at `packages/event-catalog/events/`.\n");
+    write("docs/ok-catalog.md", "A registry could live at `libs/event-catalog/events/`.\n");
     write("docs/ok-defs.md", "Declared content lives at `definitions/traits/`.\n");
     expect(scan()).toEqual([]);
   });
@@ -134,11 +134,11 @@ describe("scanning a tree", () => {
     expect(scan().map((p) => p.rule)).toContain("db-migrations-dir");
   });
 
-  it("leaves the migrations directory at its new depth, and a package suffix", () => {
+  it("leaves the migrations directory at its new depth", () => {
     // `db/` is the storage root now, one directory per engine under it. The
-    // lookbehind is what keeps `@polaris/shared-db` out of the rule's way.
+    // lookbehind is what keeps a longer path off the rule.
     write("docs/ok-pg.md", "Author the migration in `db/postgres/migrations/`.\n");
-    write("docs/ok-pkg.md", "dbmate is a devDependency of `@polaris/shared-db`.\n");
+    write("docs/ok-lib.md", "dbmate is a devDependency of `libs/persistence/postgres/`.\n");
     expect(scan()).toEqual([]);
   });
 
@@ -148,7 +148,7 @@ describe("scanning a tree", () => {
   });
 
   it("finds the retired family", () => {
-    write("packages/a/src/b.ts", "/** routes enriched.events to the processed queue */\n");
+    write("libs/a/src/b.ts", "/** routes enriched.events to the processed queue */\n");
     expect(scan().map((p) => p.rule)).toContain("enriched-events-family");
   });
 
@@ -175,7 +175,7 @@ describe("scanning a tree", () => {
     // The case that keeps the exception list short. Each of these has to
     // name the retired thing in order to say anything true about it.
     write(
-      "packages/a/test/b.test.ts",
+      "libs/a/test/b.test.ts",
       [
         'expect(isCanonicalStreamFamily("enriched.events")).toBe(false);',
         "// `enriched.events` was retired with the fan-out.",
@@ -193,41 +193,47 @@ describe("scanning a tree", () => {
     expect(scan()).toEqual([]);
   });
 
-  it("finds a platform library at the path ADR-0007 moved it off", () => {
+  it("finds the location ADR-0007 emptied", () => {
     write("docs/x.md", "The pool is configured in `packages/shared-db/src/database.ts`.\n");
-    expect(scan().map((p) => p.rule)).toContain("moved-library-shared-db");
+    expect(scan().map((p) => p.rule)).toContain("packages-dir");
   });
 
-  it("names the destination, so nobody has to read the ADR to fix it", () => {
+  it("finds the directory named bare, in a list of directories", () => {
+    // The docs shape, and the reason the rule does not require a child.
+    // `ci.md` had exactly this line, naming four roots and one dead one.
+    write("docs/y.md", "It walks `apps/`, `packages/`, `sync/` and `db/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("packages-dir");
+  });
+
+  it("names the new directory AND the new package, which changed separately", () => {
+    // Two cards moved this package: one changed where it lives, the other
+    // what it is called. A reader holding only one of the two is still stuck.
     write("docs/x.md", "See `packages/shared-service-bootstrap/src/bootstrap/health.ts`.\n");
-    expect(scan()[0]?.hint).toContain("libs/runtime/service-bootstrap/");
+    const hint = scan()[0]?.hint ?? "";
+    expect(hint).toContain("libs/runtime/service-bootstrap/");
+    expect(hint).toContain("@polaris/runtime-service-bootstrap");
   });
 
-  it("leaves the package NAME alone, which the move did not change", () => {
-    // The whole point of the move: pnpm resolves by name, so every import
-    // still works. Only the PATH retired, and a rule that fired on the name
-    // would demand an edit to code that is correct.
+  it("leaves the destination roots alone", () => {
+    // The complement: a rule that fired on the tree the packages moved INTO
+    // would fail every corrected line the sweep just wrote.
     write(
       "apps/a/src/b.ts",
       [
-        'import { pool } from "@polaris/shared-db";',
-        'import { bootstrap } from "@polaris/shared-service-bootstrap";',
+        'import { pool } from "@polaris/persistence-postgres";',
+        'import { bootstrap } from "@polaris/runtime-service-bootstrap";',
+        "// see `libs/persistence/postgres/src/` and `sdks/web/src/`",
       ].join("\n"),
     );
     expect(scan()).toEqual([]);
   });
 
-  it("leaves the packages that did NOT move alone", () => {
-    // `packages/shared-control-plane` is the sharp case: it is a live
-    // location and a prefix of `packages/shared-control-plane-db`, which is
-    // not. A rule anchored one character short would retire both.
-    write(
-      "docs/x.md",
-      [
-        "Handlers live in `packages/shared-control-plane/src/`.",
-        "Schemas live in `packages/shared-schemas/src/`.",
-      ].join("\n"),
-    );
+  it("leaves the English pair alone, which is not a path", () => {
+    // "ESM-first packages/services" is a slash meaning "and", and three files
+    // say some version of it. A rule that fired on those is a rule somebody
+    // turns off, so it requires a trailing slash or a child segment.
+    write("docs/ok-prose.md", "Polaris is ESM-first packages/services throughout.\n");
+    write("docs/ok-prose2.md", "It will build all packages/services in one pass.\n");
     expect(scan()).toEqual([]);
   });
 
@@ -240,8 +246,8 @@ describe("scanning a tree", () => {
   });
 
   it("does not scan generated or vendored output", () => {
-    write("packages/a/dist/b.js", "// consumers/<vendor>/v<n>/mappers/\n");
-    write("packages/a/node_modules/c/d.ts", "// processors/<name>/v1/\n");
+    write("libs/a/dist/b.js", "// consumers/<vendor>/v<n>/mappers/\n");
+    write("libs/a/node_modules/c/d.ts", "// processors/<name>/v1/\n");
     expect(scan()).toEqual([]);
   });
 });

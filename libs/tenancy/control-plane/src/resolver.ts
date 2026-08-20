@@ -31,7 +31,7 @@
  * best-effort — a failure does NOT block the command. This mirrors the
  * `api_keys.last_used_at` coalescing pattern from P2-002.
  */
-import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/shared-secrets";
+import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/runtime-secrets";
 import type { ActorSource, ResolvedActor } from "./actor.js";
 import { parseOperatorToken } from "./token-format.js";
 
@@ -57,7 +57,7 @@ export const CLI_FALLBACK_LABEL = "cli";
  *
  * `hash_algorithm` is carried through so the verifier can refuse rows
  * written with a non-argon2id primitive on day one — the
- * `@polaris/shared-secrets` `verifySecret` helper already short-circuits
+ * `@polaris/runtime-secrets` `verifySecret` helper already short-circuits
  * on algorithm mismatch, but having the column on the row lets the
  * resolver fail closed if the column is somehow missing.
  */
@@ -93,7 +93,7 @@ export interface OperatorTokenRepository {
  *
  * `env` defaults to `process.env`. `now` defaults to `() => new Date()`.
  * `verify` defaults to the platform's argon2id verifier from
- * `@polaris/shared-secrets`; tests substitute a deterministic verifier so
+ * `@polaris/runtime-secrets`; tests substitute a deterministic verifier so
  * the suite does not pay the argon2 cost.
  */
 export interface ResolveActorOptions {

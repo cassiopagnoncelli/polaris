@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-processor",
+  "name": "@polaris/pipeline",
   "version": "0.0.0",
   "private": true,
   "description": "Polaris processor runtime helpers: processor identity, metadata stamping, run registration (PostgreSQL), retry classification, in-memory metrics, DLQ publish helper, and manifest loading. Intentionally thin \u2014 the helpers wrap glue around PolarisConsumer/PolarisProducer, they do not hide Kafka behind a framework.",
@@ -57,11 +57,11 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-environments": "workspace:*",
-    "@polaris/shared-transport": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-schemas": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
+    "@polaris/bus": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
+    "@polaris/spec": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0",
     "yaml": "2.9.0",

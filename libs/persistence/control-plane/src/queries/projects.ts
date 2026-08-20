@@ -2,7 +2,7 @@
  * Repository helpers for the `projects` and `sources` tables.
  *
  * These helpers are written against the typed Kysely surface in
- * `@polaris/shared-db`. They expose plain async functions so the command
+ * `@polaris/persistence-postgres`. They expose plain async functions so the command
  * layer can stay focused on rendering and orchestration.
  *
  * No business logic lives here — every helper is a single query. The sync
@@ -15,7 +15,7 @@ import type {
   SourceRuntime,
   SourceStatus,
   SourceType,
-} from "@polaris/shared-db";
+} from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 /**
  * Row and input shapes.

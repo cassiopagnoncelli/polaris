@@ -30,5 +30,5 @@ description: >-
   and does not interpret conversions.
 lifecycle: active
 since: "2026-05-14"
-schema_module: "@polaris/shared-schemas/events/attribution/first_touch_assigned.v1"
+schema_module: "@polaris/spec/events/attribution/first_touch_assigned.v1"
 schema_export: attributionFirstTouchAssignedV1PropertiesSchema

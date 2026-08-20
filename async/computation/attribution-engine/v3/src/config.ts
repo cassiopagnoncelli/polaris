@@ -10,7 +10,7 @@ import {
   rabbitmqEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 /**

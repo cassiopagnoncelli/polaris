@@ -123,7 +123,7 @@ The SDKs are intentionally small:
 - no fingerprinting libraries
 - no heavy polyfills
 
-The only runtime dependencies are `@polaris/shared-schemas` (envelope types) and `uuid` (UUIDv7). Do not introduce vendor SDKs or analytics-engine helpers into the SDK packages — that is what processors and destination consumers are for.
+The only runtime dependencies are `@polaris/spec` (envelope types) and `uuid` (UUIDv7). Do not introduce vendor SDKs or analytics-engine helpers into the SDK packages — that is what processors and destination consumers are for.
 
 ## Next
 

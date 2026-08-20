@@ -2,7 +2,7 @@
  * Stable Problem Details codes the auth layer emits.
  *
  * The catalog mirrors `COMMON_PROBLEM_CODES` in
- * `@polaris/shared-service-bootstrap`; we redeclare them locally so the
+ * `@polaris/runtime-service-bootstrap`; we redeclare them locally so the
  * ingester's wire contract documents are self-contained and changes here are
  * caught by the ingester's own tests rather than leaking through the shared
  * package.

@@ -11,7 +11,7 @@
  * and the run is the part with side effects outside Postgres.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import {

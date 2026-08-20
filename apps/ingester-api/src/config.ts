@@ -13,7 +13,7 @@ import {
   redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 /**
@@ -187,7 +187,7 @@ export const rateLimitEnvKeys = [
 /**
  * Runtime configuration for the Polaris ingester API.
  *
- * The slots are composed from the shared `@polaris/shared-config` schema
+ * The slots are composed from the shared `@polaris/runtime-config` schema
  * fragments so a single deployment template covers every dependency. The
  * ingester adds two ingester-specific groups on top: `authCache` (P2-002)
  * and `ingest` (P2-003).
@@ -236,7 +236,7 @@ export function ingesterConfigSchema() {
 
 /**
  * Load the ingester runtime config, applying the shared `.env` precedence
- * rules. Throws `ConfigValidationError` (from `@polaris/shared-config`) when
+ * rules. Throws `ConfigValidationError` (from `@polaris/runtime-config`) when
  * any required value is missing or malformed; services let that error crash
  * the process so deployments fail fast.
  */

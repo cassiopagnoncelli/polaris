@@ -56,7 +56,7 @@ import {
   POLARIS_COMPONENTS,
   parsePartitionOverrides,
   RETRY_BACKOFF_TIERS_MS,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { connect } from "amqplib";
 
 const DEFAULT_URL = "amqp://polaris:polaris@localhost:5672";

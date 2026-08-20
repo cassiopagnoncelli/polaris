@@ -26,7 +26,7 @@
  * the label by passing the raw name through would look like a fix.
  */
 
-import { createLogger } from "@polaris/shared-logger";
+import { createLogger } from "@polaris/observability-logger";
 import { describe, expect, it } from "vitest";
 
 import { createIngestHandler } from "../../src/ingest/handler.js";

@@ -5,7 +5,7 @@
  * `db/postgres/migrations/20260512000010_create_delivery_records.sql`. This module:
  *
  *   1. Mirrors the SQL schema as a `DeliveryRecordsTable` interface.
- *   2. Extends `@polaris/shared-db`'s `Database` interface via module
+ *   2. Extends `@polaris/persistence-postgres`'s `Database` interface via module
  *      augmentation so any `Kysely<Database>` instance in the runtime gets
  *      `db.selectFrom("delivery_records")` typed automatically (same pattern
  *      P6-006 used for `audit_records` and P8-001 used for `processor_runs`).
@@ -34,7 +34,7 @@
  * @see libs/delivery/destinations/src/runtime.ts
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -142,7 +142,7 @@ export const VENDOR_RESPONSE_SUMMARY_MAX_LENGTH = 1024;
 /**
  * Typed mirror of the `delivery_records` table.
  *
- * Extends `@polaris/shared-db`'s `Database` interface via module augmentation
+ * Extends `@polaris/persistence-postgres`'s `Database` interface via module augmentation
  * (the `declare module` below) so any `Kysely<Database>` instance in the
  * runtime gets `db.selectFrom("delivery_records")` typed automatically.
  */
@@ -194,7 +194,7 @@ export interface DeliveryRecordsTable {
   >;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     delivery_records: DeliveryRecordsTable;
   }

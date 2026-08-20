@@ -2,7 +2,7 @@
  * archiver v1 process.
  *
  * Wiring. The two pieces worth reading before this file are the
- * durability watermark in `@polaris/shared-archive/batcher.ts` and the
+ * durability watermark in `@polaris/archive-writer/batcher.ts` and the
  * checkpoint clamp in `deferred-checkpoints.ts`; everything here exists to
  * connect them to a consumer, a bucket and a flush timer.
  *
@@ -32,17 +32,17 @@ import {
   createArchiveWriter,
   createDeferredCheckpointStore,
   createS3ArchiveStore,
-} from "@polaris/shared-archive";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
-import { ProcessorMetrics } from "@polaris/shared-processor";
+} from "@polaris/archive-writer";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
+import { ProcessorMetrics } from "@polaris/pipeline";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   consumerFamiliesFor,
   createPolarisConsumer,
@@ -51,7 +51,7 @@ import {
   type PolarisConsumer,
   PostgresCheckpointStore,
   STREAM_FAMILY_RAW_EVENTS,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 
 import type { ArchiverRuntimeConfig } from "./config.js";

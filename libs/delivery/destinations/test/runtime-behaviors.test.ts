@@ -15,9 +15,9 @@
  * @see docs/implementation/tasks/P9-001b-destination-runtime-behavioral-tests.md
  */
 
-import type { NormalizableEnvelope } from "@polaris/shared-destination-normalize";
-import type { Logger } from "@polaris/shared-logger";
-import type { MessageHeaders, TransportMessagePayload } from "@polaris/shared-transport";
+import type { NormalizableEnvelope } from "@polaris/delivery-normalize";
+import type { Logger } from "@polaris/observability-logger";
+import type { MessageHeaders, TransportMessagePayload } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import {

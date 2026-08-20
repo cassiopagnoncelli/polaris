@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-schemas",
+  "name": "@polaris/spec",
   "version": "0.0.0",
   "private": true,
   "description": "Canonical event envelope, per-event Zod property schemas, and file-backed event catalog loader for Polaris.",
@@ -40,7 +40,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@polaris/shared-environments": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
     "yaml": "^2.6.1",
     "zod": "^4.4.3"
   }

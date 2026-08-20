@@ -21,7 +21,7 @@
  *
  *   `polaris topics isolate` does NOT auto-cut producers and consumers
  *   over to the dedicated topic. The runtime resolver in
- *   `@polaris/shared-transport` reads the active row through a TTL-bounded
+ *   `@polaris/bus` reads the active row through a TTL-bounded
  *   cache, so the cutover becomes live within one TTL window across
  *   all services that wired the cache in. The
  *   `docs/operations/topic-isolation-cutover.md` runbook walks
@@ -53,7 +53,7 @@ export const topicsCommand: CommandDefinition = {
     const group = parent
       .command("topics")
       .description(
-        "Manage RabbitMQ topic isolation. PostgreSQL stores runtime state only; canonical topic families live in @polaris/shared-transport.",
+        "Manage RabbitMQ topic isolation. PostgreSQL stores runtime state only; canonical topic families live in @polaris/bus.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

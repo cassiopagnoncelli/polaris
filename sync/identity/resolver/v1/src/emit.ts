@@ -21,7 +21,7 @@ import {
   type CanonicalEnvelopeInput,
   deriveEventId,
   stampProcessorMetadata,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 
 import type { BoundIdentifier, MergeOutcome, RejectedIdentifier } from "./repository.js";
 

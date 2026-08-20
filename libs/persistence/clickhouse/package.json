@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-clickhouse",
+  "name": "@polaris/persistence-clickhouse",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@clickhouse/client": "^1.23.1",
-    "@polaris/shared-logger": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
     "zod": "^4.4.3"
   },
   "engines": {

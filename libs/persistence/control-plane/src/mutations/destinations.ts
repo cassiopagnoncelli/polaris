@@ -14,8 +14,8 @@
  * in ../queries/destinations.ts do not select `secret_value`.
  */
 
-import { assertNoMappingSemantics } from "@polaris/shared-control-plane";
-import type { Database } from "@polaris/shared-db";
+import { assertNoMappingSemantics } from "@polaris/tenancy-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

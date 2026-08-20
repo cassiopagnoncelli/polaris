@@ -1,8 +1,8 @@
 {
-  "name": "@polaris/shared-destinations",
+  "name": "@polaris/delivery-destinations",
   "version": "0.0.0",
   "private": true,
-  "description": "Polaris destination consumer runtime: subscribes to analytics.events, composes the shared normalize step from @polaris/shared-destination-normalize, routes through a vendor mapper and deliverer, and writes delivery_records / DLQ entries. Vendor-AGNOSTIC; each sync/destinations/<vendor>/<version>/ wraps this runtime with its own mapper + deliverer.",
+  "description": "Polaris destination consumer runtime: subscribes to analytics.events, composes the shared normalize step from @polaris/delivery-normalize, routes through a vendor mapper and deliverer, and writes delivery_records / DLQ entries. Vendor-AGNOSTIC; each sync/destinations/<vendor>/<version>/ wraps this runtime with its own mapper + deliverer.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -69,14 +69,14 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-db": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
     "ioredis": "^5.4.2",
-    "@polaris/shared-destination-normalize": "workspace:*",
-    "@polaris/shared-transport": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-policy": "workspace:*",
-    "@polaris/shared-processor": "workspace:*",
-    "@polaris/shared-secrets": "workspace:*",
+    "@polaris/delivery-normalize": "workspace:*",
+    "@polaris/bus": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
+    "@polaris/governance": "workspace:*",
+    "@polaris/pipeline": "workspace:*",
+    "@polaris/runtime-secrets": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0"
   }

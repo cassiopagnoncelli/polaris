@@ -7,7 +7,7 @@
  * rows stay small and operator-readable, and the canonical envelope is
  * already preserved on the `dlq_records` row itself.
  */
-import type { DlqRecord } from "@polaris/shared-destinations";
+import type { DlqRecord } from "@polaris/delivery-destinations";
 
 export interface DlqAuditSnapshot {
   readonly dlq_id: string;

@@ -6,7 +6,7 @@
  * topic (`raw.events`) to a dedicated topic (`raw.events.<project_id>`)
  * when an isolation trigger fires. The move is operational, not
  * structural — producer and consumer code references the family and
- * consults the resolver in `@polaris/shared-transport` for the concrete
+ * consults the resolver in `@polaris/bus` for the concrete
  * topic.
  *
  * This module owns the typed Kysely SELECT / INSERT / UPDATE surface
@@ -35,7 +35,7 @@
  * @see libs/persistence/postgres/src/database.ts TopicIsolationsTable
  * @see libs/bus/src/isolation-cache.ts
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**
@@ -60,7 +60,7 @@ export interface TopicIsolationRow {
  * Insert input for the `polaris topics isolate` command. The caller has
  * already validated the closed-set fields (family, environment) and
  * generated the `id`. The `concrete_topic` value is derived from the
- * `dedicatedStreamFamily` helper in `@polaris/shared-transport`.
+ * `dedicatedStreamFamily` helper in `@polaris/bus`.
  */
 export interface InsertTopicIsolationInput {
   readonly id: string;

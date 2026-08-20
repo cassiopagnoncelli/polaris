@@ -32,7 +32,7 @@
  *     adapter implementations are future work.
  */
 
-import type { Envelope } from "@polaris/shared-schemas";
+import type { Envelope } from "@polaris/spec";
 import { newEventId, newIdentityId } from "./internal/ids.js";
 import { computeBackoffMs, resolveRetryPolicy, sleep } from "./internal/retry.js";
 import {

@@ -42,7 +42,7 @@ import {
   createKyselyDlqRecordRepository,
   type DlqRecord,
   type ListDlqRecordsFilter,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb } from "../../db/index.js";

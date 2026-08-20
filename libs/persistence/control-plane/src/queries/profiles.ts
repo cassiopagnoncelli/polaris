@@ -23,7 +23,7 @@
  * @see db/postgres/migrations/20260814000001_create_profile_plane.sql
  * @see sync/identity/resolver/v1/src/repository.ts
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**

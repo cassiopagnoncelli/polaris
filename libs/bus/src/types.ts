@@ -5,7 +5,7 @@
  * driver. Nothing here mentions AMQP, amqplib, or RabbitMQ: a service that
  * handles a `TransportMessagePayload` can be re-targeted at a different
  * broker by swapping the driver, which is exactly the coupling the old
- * `@polaris/shared-kafka` package failed to prevent (it re-exported
+ * `shared-kafka` package failed to prevent (it re-exported
  * KafkaJS's `EachMessagePayload` and handed out `.raw`).
  *
  * @see docs/architecture/03-rabbitmq-streams.md

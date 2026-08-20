@@ -17,7 +17,7 @@
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"
  */
 
-import type { Passport, PlatformRole } from "@polaris/idp";
+import type { Passport, PlatformRole } from "@polaris/auth";
 
 /** The role names Idp emits, ranked. */
 export const PLATFORM_ROLE_RANK = {

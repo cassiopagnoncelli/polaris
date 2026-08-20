@@ -23,7 +23,7 @@
  * attribute of the event, not an event about the event.
  */
 
-import { type CanonicalEnvelopeInput, stampProcessorMetadata } from "@polaris/shared-processor";
+import { type CanonicalEnvelopeInput, stampProcessorMetadata } from "@polaris/pipeline";
 import type { GeoBlock } from "@polaris/sync-enrichment-geoip-v1";
 
 import { PROCESSOR_IDENTITY } from "./pins.js";

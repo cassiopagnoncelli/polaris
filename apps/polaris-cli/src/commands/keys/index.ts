@@ -13,7 +13,7 @@
  * commands so the dispatcher gate from P6-007 plugs in cleanly.
  *
  * Hashing uses the platform-standard argon2id primitive from
- * `@polaris/shared-secrets`. The same primitive runs in the ingester
+ * `@polaris/runtime-secrets`. The same primitive runs in the ingester
  * (`apps/ingester-api/src/auth/hash.ts`), so a key issued by this CLI
  * verifies on the next ingester request.
  *

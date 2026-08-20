@@ -14,8 +14,8 @@
  * The mutates-flag assertions guarantee the production gate from P6-007
  * picks the right commands up.
  */
-import { OPERATOR_TOKEN_ID_PREFIX, parseOperatorToken } from "@polaris/shared-control-plane";
-import { POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { OPERATOR_TOKEN_ID_PREFIX, parseOperatorToken } from "@polaris/tenancy-control-plane";
+import { POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import { describe, expect, it } from "vitest";
 
 import {

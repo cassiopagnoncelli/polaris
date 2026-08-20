@@ -81,52 +81,42 @@ sdks/                              published clients; ADR-0003 is their standard
   web/                             browser producers; layered first-party identity
   node/                            backend producers; queue-first, explicit flush/close
 
-packages/
-  shared-schemas/                  envelope + event Zod schemas
-  shared-transport/                    transport port + RabbitMQ driver + stream-family resolver
-  shared-logger/                   Pino setup
-  shared-config/                   Zod-validated runtime config
-  shared-secrets/                  argon2id hashing primitive (API keys, operator tokens)
-  shared-clickhouse/               wraps @clickhouse/client; only sanctioned ClickHouse access path
-  shared-destinations/             destination consumer runtime (normalize/map/deliver helpers)
-  shared-destination-normalize/    vendor-agnostic normalization primitives
-  shared-policy/                   forbidden-field policy evaluator
-  shared-control-plane/            CLI <-> control-plane-api shared types and helpers
-  shared-processor/                processor runtime helpers (manifests, run records)
+libs/                              domain meaning: pure logic, no runtime identity
+  spec/                            envelope + event Zod schemas; imports nothing (ADR-0007 law 2)
+  bus/                             transport port + RabbitMQ driver + stream-family resolver
+  pipeline/                        stage runtime: manifests, run records, DLQ, checkpoints
+  governance/                      forbidden-field policy evaluator + violation vocabulary
+  auth/                            vendored IdP access-token verification
+  tenancy/{project-config,config-schemas,control-plane}/
+  delivery/{destinations,normalize,host}/
+  archive/{writer,replay}/
+  persistence/{postgres,clickhouse,control-plane}/
+  observability/{logger,metrics}/
+  runtime/{config,environments,secrets,service-bootstrap}/
 
-catalog/
-  events/                          file-backed event catalog (yaml + Zod schemas in shared-schemas)
+definitions/                       declared intent, in git — the control plane of record
+  events/                          file-backed event catalog (yaml + Zod schemas in libs/spec)
   policy/                          forbidden-field policy and project overrides
+  {traits,audiences,journeys,reverse-etl,projects,sources}/
+
+connectors/                        vendor adapters, by family (P9J7X; empty today)
 
 sync/                              synchronous spine stages
   identity/resolver/v1/            raw.events -> identified.events, mints the profile
-  enrichment/runtime/v1/           identified.events -> resolved.events (traits + geo)
-  destinations/                    vendor adapters (braze, ga4, meta-capi, tiktok, webhook-sink)
+  enrichment/{runtime,geoip,traits}/v1/   identified.events -> resolved.events
+  destinations/<vendor>/v1/        braze, ga4, meta-capi, tiktok, webhook-sink
 
 async/                             everything off the hot path
   computation/sessionizer/         v1 reads raw.events, v2 reads resolved.events
-  computation/attribution-engine/v3/
-  computation/traits/v1/
-  computation/audiences/v1/
+  computation/{attribution-engine/v3,traits/v1,audiences/v1}/
+  journeys/orchestrator/v1/
   merges/merge-worker/v1/
-  warehouse/clickhouse-sink/v1/
-  warehouse/archiver/v1/
+  warehouse/{clickhouse-sink,archiver}/v1/
   reverse-etl/runner/v1/
-    v1/                            simplest exemplar; canonical SPEC.md reference
-  meta-capi/
-    v1/
-  ga4/
-    v1/
-  tiktok/
-    v1/
-  braze/
-    v1/
-  reverse-etl/
-    v1/
 
-  Each consumer/<vendor>/v<N>/ ships:
+  Each sync/destinations/<vendor>/v<N>/ ships:
     SPEC.md            filled from docs/implementation/templates/consumer-spec-template.md
-    normalize/         vendor-specific normalization on top of shared-destination-normalize
+    normalize/         vendor-specific normalization on top of @polaris/delivery-normalize
     mappers/           per-canonical-event vendor payload mappers
     deliver/           vendor client adapter (auth, batching, retry, rate limit)
     manifest.json      versioning metadata
@@ -169,7 +159,7 @@ Use these defaults unless a task explicitly changes them:
 - RFC 7807 Problem Details for request-level HTTP errors
 - Pino for JSON logs
 - shared Zod-validated runtime config
-- amqplib behind the `shared-transport` port
+- amqplib behind the `@polaris/bus` transport port
 - ClickHouse SQL files plus official ClickHouse JavaScript client
 - OpenAPI generated from Fastify/Zod route schemas
 - Biome for formatting/linting

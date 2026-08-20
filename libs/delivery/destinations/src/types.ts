@@ -19,7 +19,7 @@
  *
  *   - **Mappers receive the normalized intermediate, NEVER the raw envelope.**
  *     The `MapperContext` shape carries `normalized` (a `NormalizedEvent`
- *     from `@polaris/shared-destination-normalize`) and the destination
+ *     from `@polaris/delivery-normalize`) and the destination
  *     instance, but it does NOT carry the raw envelope. A mapper that wants
  *     raw PII cannot reach it through this API — the type system rejects
  *     the call. Tests in `test/mapper-no-raw-pii.test.ts` lock the surface.
@@ -31,7 +31,7 @@
  *
  *   - **Deliverers receive a resolved secret as a plain `string`, never a
  *     reference.** Secret resolution happens at the runtime boundary so
- *     the vendor code does not have to reach into `@polaris/shared-secrets`.
+ *     the vendor code does not have to reach into `@polaris/runtime-secrets`.
  *     The plaintext lives in memory for the duration of one delivery
  *     attempt and is not retained by the runtime.
  */
@@ -42,7 +42,7 @@ import type {
   NormalizedEvent,
   RawIdentityInput,
   RequiredConsent,
-} from "@polaris/shared-destination-normalize";
+} from "@polaris/delivery-normalize";
 import type { DeliveryRecordErrorClass } from "./db/delivery-records.js";
 import type { DestinationInstance } from "./db/destination-instance.js";
 
@@ -234,7 +234,7 @@ export type DelivererResult =
  * to catch their own network errors and return a `failed_retryable` /
  * `failed_permanent` result with the appropriate `error_class`. If a
  * deliverer DOES throw, the runtime catches and classifies the error via
- * `@polaris/shared-processor`'s `classifyError`, but that path is a
+ * `@polaris/pipeline`'s `classifyError`, but that path is a
  * fallback for unexpected exceptions (e.g. a programmer bug in the
  * deliverer code).
  */

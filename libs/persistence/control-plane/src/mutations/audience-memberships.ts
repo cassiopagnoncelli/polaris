@@ -28,7 +28,7 @@
  * That is why they are two functions and not one with a flag.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
 /** One stored membership row, as the diff reads it. */

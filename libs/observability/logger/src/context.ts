@@ -11,7 +11,7 @@
  * Usage pattern:
  *
  * ```ts
- * import { createLogger, withRequest, withProcessor } from "@polaris/shared-logger";
+ * import { createLogger, withRequest, withProcessor } from "@polaris/observability-logger";
  *
  * const root = createLogger({ service: "ingester-api" });
  *

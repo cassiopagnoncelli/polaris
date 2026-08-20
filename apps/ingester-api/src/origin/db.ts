@@ -1,10 +1,10 @@
 /**
- * Module augmentation extending `@polaris/shared-db`'s `Database` interface
+ * Module augmentation extending `@polaris/persistence-postgres`'s `Database` interface
  * with the `source_allowed_origins` table.
  *
  * Same pattern P6-006 (audit_records), P6-007 (operator_tokens), and P7-001
  * (replay_jobs) use to keep the typed schema co-located with the migration
- * that creates it. The shared-db package stays scope-tight — its README
+ * that creates it. The persistence-postgres package stays scope-tight — its README
  * documents this augmentation as the canonical way to add tables owned by
  * a feature package.
  *
@@ -42,7 +42,7 @@ export interface SourceAllowedOriginsTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     source_allowed_origins: SourceAllowedOriginsTable;
   }

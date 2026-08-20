@@ -38,7 +38,7 @@
  */
 
 import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
-import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/shared-db";
+import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/persistence-postgres";
 import {
   createDestinationConsumer,
   createDestinationSharedState,
@@ -57,24 +57,24 @@ import {
   type DestinationRedisConfig,
   type DlqRecordRepository,
   type ProjectConfigLookup,
-} from "@polaris/shared-destinations";
-import type { Logger } from "@polaris/shared-logger";
-import { createLogger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
-import type { ProjectPolicyOverride } from "@polaris/shared-policy";
+} from "@polaris/delivery-destinations";
+import type { Logger } from "@polaris/observability-logger";
+import { createLogger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
+import type { ProjectPolicyOverride } from "@polaris/governance";
 import {
   createDestinationProjectConfigLookup,
   createPgListenerTransport,
   createProjectConfigStore,
   type ProjectConfigStore,
-} from "@polaris/shared-project-config";
+} from "@polaris/tenancy-project-config";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   type CanonicalStreamFamily,
   createPolarisConsumer,
@@ -86,7 +86,7 @@ import {
   startIsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 
 /** The config sections every destination host needs. Vendors add their own. */

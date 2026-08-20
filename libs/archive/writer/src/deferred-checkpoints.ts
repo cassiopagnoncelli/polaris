@@ -30,7 +30,7 @@
  * a full replay.
  */
 
-import type { Checkpoint, CheckpointStore } from "@polaris/shared-transport";
+import type { Checkpoint, CheckpointStore } from "@polaris/bus";
 
 export interface DeferredCheckpointStoreOptions {
   /** The real store. Reads pass straight through. */

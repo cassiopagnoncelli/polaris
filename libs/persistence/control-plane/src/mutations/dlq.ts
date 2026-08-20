@@ -6,14 +6,14 @@
  * `dlq_records` and `processor_dlq_records` each have two distinct users:
  *
  *   - the **runtime**, which records a new row when a delivery or a
- *     processor handler fails. That lives in `@polaris/shared-destinations`
- *     and `@polaris/shared-processor`, next to the code that fails.
+ *     processor handler fails. That lives in `@polaris/delivery-destinations`
+ *     and `@polaris/pipeline`, next to the code that fails.
  *   - the **operator**, who triages: lists, reads, retries, marks resolved.
  *     That is control-plane state, and it is what this file owns.
  *
  * Splitting on that line is what lets `apps/control-plane-api` resolve a DLQ
  * row without taking a dependency on the destination delivery stack — which
- * would drag `@polaris/shared-transport` and therefore amqplib into a service
+ * would drag `@polaris/bus` and therefore amqplib into a service
  * that deliberately speaks to no broker, for the sake of one triage toggle.
  *
  * ## On having two UPDATEs against the same column
@@ -29,7 +29,7 @@
  * worth making.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

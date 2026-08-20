@@ -12,7 +12,7 @@
  * database" behaviours are actually asserted rather than assumed.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import type { ListenerHandlers, ListenerTransport } from "../src/listener.js";
 

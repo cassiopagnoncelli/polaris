@@ -7,11 +7,11 @@
  * this module owns the typed Kysely SELECT / INSERT shapes the recorder and
  * the `audit` / `export audit` commands consume.
  *
- * The typed `AuditRecordsTable` interface extends `@polaris/shared-db`'s
+ * The typed `AuditRecordsTable` interface extends `@polaris/persistence-postgres`'s
  * `Database` interface through module augmentation — the comment block in
  * `libs/persistence/postgres/src/database.ts` documents the exact pattern. This
  * keeps the migration SQL the schema source-of-truth (the `Database`
- * interface in `shared-db` carries the columns of tables that have already
+ * interface in `persistence-postgres` carries the columns of tables that have already
  * landed) while letting later tasks extend the typed surface from their own
  * package without an inter-package edit.
  *
@@ -30,8 +30,8 @@
  * @see db/postgres/migrations/20260512000007_create_audit_records.sql
  * @see apps/polaris-cli/src/audit/recorder.ts
  */
-import type { Database } from "@polaris/shared-db";
-import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
+import type { Database } from "@polaris/persistence-postgres";
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/runtime-environments";
 import type { ColumnType, Kysely } from "kysely";
 
 /**
@@ -75,7 +75,7 @@ export type AuditEnvironment = PolarisEnvironment;
 /**
  * Typed mirror of the `audit_records` table.
  *
- * Extends `@polaris/shared-db`'s `Database` interface via module augmentation
+ * Extends `@polaris/persistence-postgres`'s `Database` interface via module augmentation
  * (the `declare module` below) so any `Kysely<Database>` instance in the CLI
  * gets `db.selectFrom("audit_records")` typed automatically.
  */
@@ -99,7 +99,7 @@ export interface AuditRecordsTable {
   request_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     audit_records: AuditRecordsTable;
   }

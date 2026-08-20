@@ -20,7 +20,7 @@ import {
   createKyselyProcessorDlqRecordRepository,
   type ListProcessorDlqRecordsFilter,
   type ProcessorDlqRecord,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../../command.js";

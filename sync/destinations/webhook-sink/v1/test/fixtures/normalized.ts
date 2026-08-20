@@ -2,18 +2,18 @@
  * Test fixtures for the webhook-sink v1 mapper / deliverer / app tests.
  *
  * Builds a realistic `NormalizedEvent` + `MapperContext` + `DelivererContext`
- * without reaching into `@polaris/shared-destination-normalize`'s actual
+ * without reaching into `@polaris/delivery-normalize`'s actual
  * normalizer — the consumer's mapper accepts whatever shape arrives in
  * `MapperContext.normalized`, so structural-typing a frozen literal is
  * sufficient and faster than running the full normalize pipeline per test.
  */
 
-import type { NormalizedEvent } from "@polaris/shared-destination-normalize";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
 import type {
   DelivererContext,
   DestinationInstance,
   MapperContext,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 
 import type { WebhookPayload } from "../../src/types.js";
 

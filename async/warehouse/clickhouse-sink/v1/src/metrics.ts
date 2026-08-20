@@ -27,8 +27,8 @@ import {
   ANALYTICS_QUEUE_TABLE,
   PROFILE_EVENTS_QUEUE_TABLE,
   VIOLATIONS_QUEUE_TABLE,
-} from "@polaris/shared-clickhouse";
-import type { MetricSample } from "@polaris/shared-metrics";
+} from "@polaris/persistence-clickhouse";
+import type { MetricSample } from "@polaris/observability-metrics";
 
 export const METRIC_SINK_ROWS_CONSUMED_TOTAL = "polaris_clickhouse_sink_rows_consumed_total";
 export const METRIC_SINK_ROWS_SKIPPED_TOTAL = "polaris_clickhouse_sink_rows_skipped_total";

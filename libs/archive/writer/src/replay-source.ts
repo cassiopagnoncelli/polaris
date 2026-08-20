@@ -52,9 +52,9 @@ import type { ArchiveObjectStore } from "./object-store.js";
 /**
  * The subset of `ReplaySourceEvent` this module produces.
  *
- * Structurally identical to `@polaris/shared-replay`'s type but declared
+ * Structurally identical to `@polaris/archive-replay`'s type but declared
  * here so this package does not depend on that one — the dependency would
- * be backwards, and `shared-replay` is deliberately dependency-light.
+ * be backwards, and `archive-replay` is deliberately dependency-light.
  * The CLI wires the two together and the compiler checks the match there.
  */
 export interface ArchivedReplayEvent {

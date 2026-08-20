@@ -1,4 +1,4 @@
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   applyRedactions,
   emitAllRedactionMetrics,
@@ -6,7 +6,7 @@ import {
   type PatternRedactionMetricIncrement,
   POLICY_BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
   type PolicyDecision,
-} from "@polaris/shared-policy";
+} from "@polaris/governance";
 import {
   BATCH_REASON_DUPLICATE,
   BATCH_REASON_FORBIDDEN_FIELD_REJECTED,
@@ -21,14 +21,14 @@ import {
   type EventCatalog,
   isRetryableBatchReason,
   validateCatalogEvent,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 import {
   buildRawEventsPartitionKey,
   type PolarisProducer,
   STREAM_FAMILY_RAW_EVENTS,
   type SyncIsolationLookup,
   sharedOnlyIsolationLookup,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { IngestConfig } from "../config.js";
 import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
 import { eventLabel, type IngestMetrics } from "../metrics/registry.js";

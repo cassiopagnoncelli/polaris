@@ -1,7 +1,7 @@
-# @polaris/shared-service-bootstrap
+# @polaris/runtime-service-bootstrap
 
 Thin Fastify service bootstrap for Polaris services. Composes
-`@polaris/shared-config` for runtime configuration and `@polaris/shared-logger`
+`@polaris/runtime-config` for runtime configuration and `@polaris/observability-logger`
 for Pino-based JSON logging, and adds the standard request-ID,
 RFC 7807 Problem Details, health/ready/metrics, OpenAPI, and graceful
 shutdown wiring.
@@ -26,8 +26,8 @@ shutdown wiring.
 ## Quick start
 
 ```ts
-import { loadConfigWithDefaults, composeConfigSchema, serviceEnvSchema, httpEnvSchema } from "@polaris/shared-config";
-import { bootstrapService, ProblemError } from "@polaris/shared-service-bootstrap";
+import { loadConfigWithDefaults, composeConfigSchema, serviceEnvSchema, httpEnvSchema } from "@polaris/runtime-config";
+import { bootstrapService, ProblemError } from "@polaris/runtime-service-bootstrap";
 
 const schema = composeConfigSchema({
   service: serviceEnvSchema,
@@ -165,10 +165,10 @@ cleanup is better than no cleanup.
 
 ## Scripts
 
-- `pnpm --filter @polaris/shared-service-bootstrap build` — emit `dist/`
-- `pnpm --filter @polaris/shared-service-bootstrap typecheck` — strict TypeScript
-- `pnpm --filter @polaris/shared-service-bootstrap lint` — Biome
-- `pnpm --filter @polaris/shared-service-bootstrap test` — Vitest
+- `pnpm --filter @polaris/runtime-service-bootstrap build` — emit `dist/`
+- `pnpm --filter @polaris/runtime-service-bootstrap typecheck` — strict TypeScript
+- `pnpm --filter @polaris/runtime-service-bootstrap lint` — Biome
+- `pnpm --filter @polaris/runtime-service-bootstrap test` — Vitest
 
 ## References
 

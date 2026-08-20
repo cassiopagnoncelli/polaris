@@ -23,14 +23,14 @@
 import { createServer, type Server } from "node:http";
 
 import { welcomeRecentPurchasers } from "@polaris/journey-catalog";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import {
   createAmqpStreamRangeDriver,
   createTransportConnection,
   readStreamRange,
   STREAM_FAMILY_PROFILE_EVENTS,
   type TransportConnection,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

@@ -24,7 +24,7 @@
  * or the event was replayed from an archive older than the store.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /** A committed profile, as the enricher needs it. */

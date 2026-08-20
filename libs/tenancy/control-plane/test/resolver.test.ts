@@ -1,4 +1,4 @@
-import { POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+import { POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import { describe, expect, it } from "vitest";
 
 import {

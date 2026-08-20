@@ -2,10 +2,10 @@
  * Zod-validated config for the shared ClickHouse client.
  *
  * The package never reads `process.env` itself — that responsibility lives in
- * `@polaris/shared-config` (P0-003). Services build the config object there,
+ * `@polaris/runtime-config` (P0-003). Services build the config object there,
  * pass it here, and we validate the runtime shape.
  *
- * The credential is resolved from `@polaris/shared-secrets` (P0-008) at
+ * The credential is resolved from `@polaris/runtime-secrets` (P0-008) at
  * config-build time; this package accepts a fully-materialised credential so
  * secrets never round-trip through Zod schemas.
  */

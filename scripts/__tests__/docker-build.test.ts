@@ -13,7 +13,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { POLARIS_COMPONENTS } from "@polaris/shared-transport";
+import { POLARIS_COMPONENTS } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { services } from "../docker-build.mjs";

@@ -26,7 +26,7 @@
 --     Cache revalidation reads this one row instead of re-reading values.
 --   - `environment` is text + CHECK, matching every other environment-scoped
 --     table. The TypeScript mirror is `POLARIS_ENVIRONMENTS` in
---     @polaris/shared-environments.
+--     @polaris/runtime-environments.
 --
 -- See:
 --   - docs/implementation/project-config-plan.md "Schema", "Cache and invalidation"

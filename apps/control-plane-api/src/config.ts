@@ -15,7 +15,7 @@ import {
   postgresEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 
 import { type AdminConfig, adminEnvSchema } from "./admin/config.js";
 

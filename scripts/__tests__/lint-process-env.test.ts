@@ -67,7 +67,7 @@ describe("findDirectEnvReads", () => {
   it("does NOT flag a doc comment that merely mentions process.env", () => {
     // This is the case that decides whether the lint is kept or deleted.
     seed(
-      "packages/thing/src/index.ts",
+      "libs/thing/src/index.ts",
       [
         "/**",
         " * This package never reads `process.env` directly — callers pass a",
@@ -81,10 +81,10 @@ describe("findDirectEnvReads", () => {
 
   it("ignores tests, dist and node_modules", () => {
     const read = 'export const a = process.env["X"];';
-    seed("packages/thing/test/helper.ts", read);
-    seed("packages/thing/src/thing.test.ts", read);
-    seed("packages/thing/dist/index.ts", read);
-    seed("packages/thing/node_modules/dep/src/index.ts", read);
+    seed("libs/thing/test/helper.ts", read);
+    seed("libs/thing/src/thing.test.ts", read);
+    seed("libs/thing/dist/index.ts", read);
+    seed("libs/thing/node_modules/dep/src/index.ts", read);
     expect(findDirectEnvReads(root)).toEqual([]);
   });
 
@@ -95,7 +95,7 @@ describe("findDirectEnvReads", () => {
   });
 
   it("respects the ALLOW list by exact repo-relative path", () => {
-    // shared-config/src/env.ts is loadEnv itself — the one sanctioned reader.
+    // runtime-config/src/env.ts is loadEnv itself — the one sanctioned reader.
     seed("libs/runtime/config/src/env.ts", 'export const a = process.env["X"];');
     // A sibling in the same package is not covered by that entry.
     seed("libs/runtime/config/src/other.ts", 'export const b = process.env["Y"];');

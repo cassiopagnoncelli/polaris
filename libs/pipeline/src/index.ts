@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-processor` — processor runtime helpers.
+ * `@polaris/pipeline` — processor runtime helpers.
  *
  * Polaris processors are independent, versioned TypeScript services per
  * `docs/architecture/05-processors-and-replay.md`. This package
@@ -23,7 +23,7 @@
  *   - transport lifecycle hooks -> logs + metrics (`./transport-hooks`)
  *   - boot-to-shutdown run lifecycle policy on top of it (`./run-lifecycle`)
  *   - retry/DLQ error classification (`./classify`)
- *   - DLQ publish helper on top of `@polaris/shared-transport` (`./dlq`)
+ *   - DLQ publish helper on top of `@polaris/bus` (`./dlq`)
  *   - in-memory metrics counters (`./metrics`)
  *   - manifest loader (`./manifest`)
  *

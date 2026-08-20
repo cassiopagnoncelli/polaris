@@ -7,7 +7,7 @@
  * stamps every `delivery_records` row with these strings.
  */
 
-import type { ConsumerIdentity } from "@polaris/shared-destinations";
+import type { ConsumerIdentity } from "@polaris/delivery-destinations";
 
 export const CONSUMER_VENDOR = "webhook" as const;
 /**

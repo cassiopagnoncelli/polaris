@@ -11,12 +11,12 @@
  *   - The smaller surface tests (mutates flags, --help wiring, token format)
  *     drive the real command tree through `run()` to confirm the dispatcher
  *     sees them.
- *   - One round-trip test imports `hashSecret` from `@polaris/shared-secrets`
+ *   - One round-trip test imports `hashSecret` from `@polaris/runtime-secrets`
  *     and `verifyApiKeyHash` from the ingester, proving both sides speak the
  *     same primitive. That keeps "no second hash library" enforced as a
  *     compile-time + runtime invariant.
  */
-import { hashSecret, POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/shared-secrets";
+import { hashSecret, POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/runtime-secrets";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -286,10 +286,10 @@ function fixedMaterial(apiKeyId: string, rawSecret: string): IssuedKeyMaterial {
   };
 }
 
-describe("hashing primitive (CLI imports shared-secrets)", () => {
+describe("hashing primitive (CLI imports runtime-secrets)", () => {
   // The CLI side of the round-trip lives here. The ingester side asserts the
   // same in `apps/ingester-api/test/auth/hash.test.ts` — both call sites
-  // round-trip through `@polaris/shared-secrets`, proving there is exactly
+  // round-trip through `@polaris/runtime-secrets`, proving there is exactly
   // one argon2id integration in the workspace.
   it("hashSecret -> verifySecret round-trip", async () => {
     const plaintext = "shared-secret-tail-123";

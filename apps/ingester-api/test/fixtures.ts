@@ -11,7 +11,7 @@ import {
   defaultSchemaBindings,
   type EventCatalog,
   envelopeSchema,
-} from "@polaris/shared-schemas";
+} from "@polaris/spec";
 import type { ApiKeyRecord, ApiKeyRepository } from "../src/auth/repository.js";
 import type { IngesterConfig } from "../src/config.js";
 import type { DedupeClaimInput, DedupeClaimOutcome, DedupeStore } from "../src/dedupe/index.js";
@@ -198,7 +198,7 @@ export class RecordingProducer {
 
 /**
  * Build a minimal `EventCatalog` covering `page.viewed` v1+v2 and
- * `checkout.started` v1. Bindings come from `@polaris/shared-schemas`.
+ * `checkout.started` v1. Bindings come from `@polaris/spec`.
  *
  * Reusing the default schema bindings against synthetic YAML entries
  * keeps tests independent of the on-disk `definitions/events/**` tree —

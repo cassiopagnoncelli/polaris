@@ -51,8 +51,8 @@
  * port stays usable without a producer.
  */
 
-import { partitionsForFamily } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import { partitionsForFamily } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import type { Channel, ConsumeMessage } from "amqplib";
 import type { CheckpointStore } from "./checkpoints.js";
 import type { TransportConnection } from "./connection.js";
@@ -137,7 +137,7 @@ export interface PoisonHandle {
    * Without it a dead-lettered message exists only as bytes on a queue, and
    * `polaris processors dlq list/show/retry` reads a permanently empty table —
    * an operator surface for an incident it cannot see. A callback rather than
-   * a repository because the ledger lives in `@polaris/shared-processor`,
+   * a repository because the ledger lives in `@polaris/pipeline`,
    * which depends on this package; taking the dependency the other way would
    * close a cycle.
    *

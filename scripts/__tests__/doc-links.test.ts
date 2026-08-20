@@ -14,7 +14,7 @@
  * `attribution-engine/v1|v2/src/config.ts` deleted with the fan-out,
  * `topic-family.ts` and `topic-isolation-cache.ts` renamed,
  * `apps/polaris-cli/src/db/replay-jobs.ts` moved into
- * `shared-control-plane-db`, `processors/` gone entirely, and a README
+ * `persistence-control-plane`, `processors/` gone entirely, and a README
  * pointing at an implementation kanban that was never written.
  *
  * Seven links, in the operational runbooks and the front page — the two

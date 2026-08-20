@@ -3,7 +3,7 @@
  *
  * Lists rows of `processor_runs`: which processor version ran, on which host,
  * since when, and how it ended. The rows are written by the processors
- * themselves at boot, through `@polaris/shared-processor`'s
+ * themselves at boot, through `@polaris/pipeline`'s
  * `openProcessorRun`; this command only reads them.
  *
  * A run row is what an emitted event's `processor.run_id` points at, so this

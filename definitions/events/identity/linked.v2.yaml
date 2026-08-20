@@ -16,5 +16,5 @@ description: >-
   that profile or by attaching to an existing one.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/identity/linked.v2"
+schema_module: "@polaris/spec/events/identity/linked.v2"
 schema_export: identityLinkedV2PropertiesSchema

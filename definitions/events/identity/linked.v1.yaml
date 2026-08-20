@@ -18,5 +18,5 @@ description: >-
   Companion table: `identity_links` (PostgreSQL).
 lifecycle: active
 since: "2026-05-12"
-schema_module: "@polaris/shared-schemas/events/identity/linked.v1"
+schema_module: "@polaris/spec/events/identity/linked.v1"
 schema_export: identityLinkedV1PropertiesSchema

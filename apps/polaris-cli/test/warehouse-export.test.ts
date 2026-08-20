@@ -2,7 +2,7 @@ import {
   WAREHOUSE_DATASETS,
   type WarehouseExportResult,
   type WarehouseExportTarget,
-} from "@polaris/shared-clickhouse";
+} from "@polaris/persistence-clickhouse";
 import { describe, expect, it } from "vitest";
 
 import {

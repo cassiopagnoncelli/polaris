@@ -24,11 +24,11 @@
  * The snapshot names the blast radius, because that is what a reader of the
  * audit log actually wants to reconstruct: the resolved target topic,
  * whether that topic reaches vendor destinations, and whether the operator
- * acknowledged it. See `@polaris/shared-replay`'s `destinations.ts` for why
+ * acknowledged it. See `@polaris/archive-replay`'s `destinations.ts` for why
  * reachability is a property of the topic rather than of the declared target.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

@@ -15,7 +15,7 @@
  * want operators to see schema updates the moment a new build deploys.
  */
 
-import type { OpenApiSetup } from "@polaris/shared-service-bootstrap";
+import type { OpenApiSetup } from "@polaris/runtime-service-bootstrap";
 import type { FastifyInstance } from "fastify";
 
 import {

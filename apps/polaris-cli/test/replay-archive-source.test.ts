@@ -11,7 +11,7 @@
  * that would call it.
  */
 
-import type { ReplayExecutorSource, ReplayPlan, ReplaySourceEvent } from "@polaris/shared-replay";
+import type { ReplayExecutorSource, ReplayPlan, ReplaySourceEvent } from "@polaris/archive-replay";
 import { describe, expect, it } from "vitest";
 
 import {

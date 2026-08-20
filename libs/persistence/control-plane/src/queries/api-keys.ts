@@ -3,12 +3,12 @@
  *
  * The lifecycle CLI (P6-003) is the v1 writer side for this table. The
  * ingester (P2-002) is the read side. Both go through a typed Kysely client
- * over `@polaris/shared-db`; this file owns the query shapes the CLI needs.
+ * over `@polaris/persistence-postgres`; this file owns the query shapes the CLI needs.
  *
  * Rules baked into this module:
  *
  *   - The CLI inserts the argon2id `hash` produced by
- *     `@polaris/shared-secrets`. Plaintext never appears here.
+ *     `@polaris/runtime-secrets`. Plaintext never appears here.
  *   - `hash_algorithm` is stamped explicitly as `'argon2id'`. The column has a
  *     default at the migration level but writing it from the application
  *     keeps the rotation-to-a-different-primitive story explicit — a future
@@ -19,7 +19,7 @@
  * @see db/postgres/migrations/20260512000003_create_api_keys.sql
  * @see libs/persistence/postgres/src/database.ts ApiKeyTable
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**

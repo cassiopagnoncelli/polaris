@@ -15,7 +15,7 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
-import type { MapperContext } from "@polaris/shared-destinations";
+import type { MapperContext } from "@polaris/delivery-destinations";
 import { describe, expect, it } from "vitest";
 import {
   CONSUMER_VENDOR,

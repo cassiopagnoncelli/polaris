@@ -16,7 +16,7 @@
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 
-import type { Environment } from "@polaris/shared-db";
+import type { Environment } from "@polaris/persistence-postgres";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import { loadProcessorManifest, resolveCatalogRoot } from "../../catalog/index.js";

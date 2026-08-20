@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-logger` — Pino-based structured logger for Polaris services.
+ * `@polaris/observability-logger` — Pino-based structured logger for Polaris services.
  *
  * Polaris services emit JSON-only logs. This package centralises:
  *

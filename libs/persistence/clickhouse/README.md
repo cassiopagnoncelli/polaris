@@ -1,4 +1,4 @@
-# @polaris/shared-clickhouse
+# @polaris/persistence-clickhouse
 
 The only sanctioned in-process path to ClickHouse for Polaris services and the
 CLI. Wraps the official [`@clickhouse/client`](https://www.npmjs.com/package/@clickhouse/client)
@@ -28,7 +28,7 @@ exposes a narrow, role-aware surface so:
 ## Profiles
 
 ```ts
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
 
 // Service profile: ingester, processors, consumers, dashboard API,
 // CLI inspection commands.
@@ -94,14 +94,14 @@ the query patterns it serves (per
 
 ## Composition with other shared packages
 
-Once `@polaris/shared-config`, `@polaris/shared-logger`, and
-`@polaris/shared-secrets` land, services should construct the client like this:
+Once `@polaris/runtime-config`, `@polaris/observability-logger`, and
+`@polaris/runtime-secrets` land, services should construct the client like this:
 
 ```ts
-import { loadConfig } from "@polaris/shared-config";
-import { createLogger } from "@polaris/shared-logger";
-import { getSecret } from "@polaris/shared-secrets";
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
+import { loadConfig } from "@polaris/runtime-config";
+import { createLogger } from "@polaris/observability-logger";
+import { getSecret } from "@polaris/runtime-secrets";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
 
 const config = loadConfig();
 const logger = createLogger({ service: "ingester" });

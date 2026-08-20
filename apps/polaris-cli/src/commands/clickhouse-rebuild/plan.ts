@@ -4,7 +4,7 @@
  *
  * Renders the deterministic dry-run plan for a hypothetical rebuild.
  * Hands the operator-supplied declaration to the planner in
- * `@polaris/shared-clickhouse/rebuild` and prints the result. Does
+ * `@polaris/persistence-clickhouse/rebuild` and prints the result. Does
  * NOT touch PostgreSQL and does NOT write to ClickHouse. The planner
  * is permitted ONE ClickHouse read (against `system.parts`) for the
  * partition estimate; in unit tests that read is stubbed.
@@ -33,7 +33,7 @@ import {
   planClickhouseRebuild,
   REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES,
   renderClickhouseRebuildPlanHuman,
-} from "@polaris/shared-clickhouse/rebuild";
+} from "@polaris/persistence-clickhouse/rebuild";
 import { connectOperatorClickHouse } from "../../clickhouse/connect.js";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";
@@ -55,7 +55,7 @@ export interface ClickhouseRebuildPlanHooks {
   /**
    * Partition reader adapter. Injected for tests; in production the
    * runner falls back to `defaultReadPartitions(ctx.env)` which wraps
-   * the shared-clickhouse operator client's `raw.query` escape hatch.
+   * the persistence-clickhouse operator client's `raw.query` escape hatch.
    *
    * Supplying this skips the production wiring entirely (no
    * ClickHouse client construction, no env validation). Pass an

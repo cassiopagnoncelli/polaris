@@ -1,4 +1,4 @@
-import { hashSecret } from "@polaris/shared-secrets";
+import { hashSecret } from "@polaris/runtime-secrets";
 import { describe, expect, it } from "vitest";
 
 import { verifyApiKeyHash } from "../../src/auth/hash.js";
@@ -6,7 +6,7 @@ import { verifyApiKeyHash } from "../../src/auth/hash.js";
 // argon2 is intentionally slow. The default cost parameters compute in
 // ~30-80ms per call on modern hardware; we run a tiny number of cases here.
 //
-// The hash primitive is owned by `@polaris/shared-secrets`. We import
+// The hash primitive is owned by `@polaris/runtime-secrets`. We import
 // `hashSecret` from there so the test exercises the actual issuance path
 // the lifecycle CLI uses, and assert it round-trips through the ingester's
 // `verifyApiKeyHash`.

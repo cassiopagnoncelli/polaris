@@ -260,7 +260,7 @@ describe("GET /openapi.json (live route)", () => {
   });
 
   it("does not register the route when openApiSetup is overridden", async () => {
-    const { NOOP_OPENAPI_SETUP } = await import("@polaris/shared-service-bootstrap");
+    const { NOOP_OPENAPI_SETUP } = await import("@polaris/runtime-service-bootstrap");
     const { app } = await buildIngesterApp({
       config: testConfig,
       installShutdown: false,

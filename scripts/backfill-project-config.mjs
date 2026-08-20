@@ -39,8 +39,8 @@
 import {
   listProjectConfig,
   setProjectConfigValueWithAudit,
-} from "@polaris/shared-control-plane-db";
-import { closeDb, createDb } from "@polaris/shared-db";
+} from "@polaris/persistence-control-plane";
+import { closeDb, createDb } from "@polaris/persistence-postgres";
 import { v7 as uuidv7 } from "uuid";
 
 /**

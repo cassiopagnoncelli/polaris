@@ -24,7 +24,7 @@ import {
   POLARIS_HEADER_EVENT_NAME,
   POLARIS_HEADER_PROJECT_ID,
   type PoisonRecord,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { ProcessorDlqRecordRepository } from "./db/processor-dlq-records.js";
 import type { ProcessorIdentity } from "./identity.js";
 

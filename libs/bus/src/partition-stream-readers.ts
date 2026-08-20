@@ -19,7 +19,7 @@
  *
  * Polaris replay turns a deterministic plan into a sequence of stream
  * reads + republished events. The plan owns the time window; the
- * `@polaris/shared-replay` executor walks the chunks; the **reader** in
+ * `@polaris/archive-replay` executor walks the chunks; the **reader** in
  * this module is the only place that actually talks to a RabbitMQ
  * partition stream.
  *
@@ -85,7 +85,7 @@ import { parsePartitionStreamName } from "./streams.js";
 
 /**
  * A single event read from a source partition stream. Structurally
- * compatible with `@polaris/shared-replay`'s `ReplaySourceEvent` so a thin
+ * compatible with `@polaris/archive-replay`'s `ReplaySourceEvent` so a thin
  * adapter can hand the reader's output to the executor without a
  * field-by-field copy.
  *

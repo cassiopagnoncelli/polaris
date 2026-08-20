@@ -17,5 +17,5 @@ description: >-
   Records that a participant moved to a step, carrying an action step's payload for destinations to act on.
 lifecycle: active
 since: "2026-08-18"
-schema_module: "@polaris/shared-schemas/events/journey/step_advanced.v1"
+schema_module: "@polaris/spec/events/journey/step_advanced.v1"
 schema_export: journeyStepAdvancedV1PropertiesSchema

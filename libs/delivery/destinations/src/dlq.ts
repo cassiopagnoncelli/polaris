@@ -4,7 +4,7 @@
  * Per `docs/architecture/06-destinations.md` "Retry and DLQ Policy", each
  * consumer owns retry and DLQ topics named `<vendor>.retry` and
  * `<vendor>.dlq`. The architecture doc lists examples (`meta-capi.dlq`,
- * `ga4.dlq`); the topic-resolver in `@polaris/shared-transport`'s
+ * `ga4.dlq`); the topic-resolver in `@polaris/bus`'s
  * `dlqTopicName` builds the literal.
  *
  * For destination consumers the "component" identifier is the consumer's
@@ -12,7 +12,7 @@
  * the same literal the host passes as the consumer's poison-message
  * component, and the same set `pnpm rabbitmq:provision` declares.
  *
- * This helper wraps `@polaris/shared-transport`'s `republishToDlq` with the
+ * This helper wraps `@polaris/bus`'s `republishToDlq` with the
  * defaults a destination consumer always wants:
  *
  *   - the `component` is `<vendor>.<consumerVersion>` (so DLQ topic names
@@ -36,7 +36,7 @@ import {
   type PolarisProducer,
   republishToDlq,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import {
   type DeliveryRecordErrorClass,
@@ -48,7 +48,7 @@ import type { ConsumerIdentity, NormalizableEnvelope } from "./types.js";
 
 /**
  * Polaris-defined extra headers stamped on destination DLQ messages.
- * Mirrors the `polaris-*` convention from `@polaris/shared-transport`.
+ * Mirrors the `polaris-*` convention from `@polaris/bus`.
  */
 export const POLARIS_HEADER_DESTINATION_ID = "polaris-destination-id";
 export const POLARIS_HEADER_DESTINATION_VENDOR = "polaris-destination-vendor";
@@ -77,7 +77,7 @@ export interface PublishToDestinationDlqInput {
   readonly payload: TransportMessagePayload;
   /**
    * Classification reason. Mirrors the
-   * `@polaris/shared-processor`'s classify-error reason set but allows
+   * `@polaris/pipeline`'s classify-error reason set but allows
    * destination-specific reasons (`mapping`, `auth`, etc.) for header
    * clarity.
    */
@@ -141,7 +141,7 @@ export async function publishToDestinationDlq(input: PublishToDestinationDlqInpu
   const component = input.identity.component;
 
   // Stamp stage-version + destination headers onto the existing platform
-  // headers. `mergeHeaders` in `@polaris/shared-transport` would also do this
+  // headers. `mergeHeaders` in `@polaris/bus` would also do this
   // but the producer's `republishToDlq` already merges retry headers; we
   // pass our extra headers in alongside the original headers so the
   // combined header bag survives.

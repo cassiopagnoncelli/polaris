@@ -2,7 +2,7 @@
  * Behavioral tests for the `polaris replay execute` runner (P7-003).
  *
  * The execute command picks up a replay-job row, derives the
- * deterministic plan via `@polaris/shared-replay`, and runs the
+ * deterministic plan via `@polaris/archive-replay`, and runs the
  * executor against an injected source/producer/store. The runner is
  * the only CLI seam that turns the executor's lifecycle transitions
  * (`pending|planning -> running -> completed | failed | aborted`) into
@@ -62,7 +62,7 @@ import {
   type ReplayMarkRunningInput,
   type ReplayProduceRecord,
   type ReplaySourceEvent,
-} from "@polaris/shared-replay";
+} from "@polaris/archive-replay";
 import {
   POLARIS_HEADER_ENVIRONMENT,
   POLARIS_HEADER_EVENT_ID,
@@ -72,7 +72,7 @@ import {
   POLARIS_HEADER_PROJECT_ID,
   type StreamRangeDelivery,
   type StreamRangeDriver,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { buildStreamReplaySource } from "../src/commands/replay/stream-adapters.js";
@@ -206,7 +206,7 @@ class InMemoryExecuteStore {
     return {
       findById: async (id) => this.rows.get(id) ?? null,
       // The in-memory double writes no audit row; the audited transition is
-      // covered by shared-control-plane-db's own suite. What matters here is
+      // covered by persistence-control-plane's own suite. What matters here is
       // that the runner arms it before executing — asserted below.
       armAudit: (context) => {
         this.armedAudit = context;

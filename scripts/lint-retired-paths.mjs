@@ -66,10 +66,10 @@ const SCAN_DIRS = [
   "definitions",
   "docs",
   "infra",
-  // ADR-0007 destination for the libraries `packages/` held. Absent, a moved
-  // page stops being scanned and its stale sentence survives the move.
+  // ADR-0007 destination for the libraries `packages/` held, which IJ4NN
+  // deleted. Absent, a moved page stops being scanned and its stale sentence
+  // survives the move.
   "libs",
-  "packages",
   "scripts",
   // The SDK tier, listed when ZXBDY moved the two SDKs out of `packages/`.
   // A root this check does not name is not a root it reports clean; it is one
@@ -123,20 +123,22 @@ const SCANNED_EXT = new Set([
  * anybody to `git log` to find out what the path became.
  */
 /**
- * Where ADR-0007 sent the platform libraries.
+ * Where ADR-0007 sent everything `packages/` used to hold.
  *
- * The move is a directory move only — `@polaris/shared-db` still resolves,
- * because pnpm resolves by package NAME and the names do not change until
- * IJ4NN. What stops resolving is the PATH, and a path is what documentation,
- * runbooks, dashboards and module headers point with. So the same argument
- * that produced this file applies again: a sentence naming
- * `packages/shared-db/` is now naming a directory that does not exist, and a
- * reader cannot tell it from a current one.
+ * `packages/` was a flat namespace of twenty-four packages, twenty of them
+ * under a `shared-` prefix that ADR-0007 records as meaning "not yet
+ * categorised". The restructure emptied it in two steps: the directories
+ * moved first, under dual workspace globs, and then IJ4NN renamed the
+ * packages to match their new paths and deleted the location.
  *
- * Keyed by old path so the hint can name the exact destination rather than
- * telling everybody to go and read the ADR. The thirteen packages still under
- * `packages/` are deliberately absent — they have not moved, and IJ4NN is the
- * card that retires the location itself.
+ * So the rule below is about a location that no longer exists at all, and
+ * this map is only about the HINT. A reader who finds `packages/shared-db/`
+ * in a runbook needs two things the ADR would make them hunt for: where the
+ * directory went, and what the package is now called. Both changed, and they
+ * changed on different cards.
+ *
+ * Keyed by the old directory name under `packages/`. All twenty-four are
+ * listed — there is no longer any such thing as a package that has not moved.
  *
  * What this cannot see: a path built from segments rather than written out,
  * `join(ROOT, "packages", "shared-transport", "src", "streams.ts")`. Two script
@@ -146,36 +148,73 @@ const SCANNED_EXT = new Set([
  * false positives, so the division stands: prose and literal paths here, real
  * reads in the tests that do them.
  */
-const MOVED_LIBRARIES = new Map([
-  ["shared-transport", "libs/bus"],
-  ["shared-processor", "libs/pipeline"],
-  ["shared-db", "libs/persistence/postgres"],
-  ["shared-clickhouse", "libs/persistence/clickhouse"],
-  ["shared-control-plane-db", "libs/persistence/control-plane"],
-  ["shared-logger", "libs/observability/logger"],
-  ["shared-metrics", "libs/observability/metrics"],
-  ["shared-service-bootstrap", "libs/runtime/service-bootstrap"],
-  ["shared-config", "libs/runtime/config"],
-  ["shared-environments", "libs/runtime/environments"],
-  ["shared-secrets", "libs/runtime/secrets"],
+const MOVED_PACKAGES = new Map([
+  ["shared-schemas", ["libs/spec", "@polaris/spec"]],
+  ["shared-transport", ["libs/bus", "@polaris/bus"]],
+  ["shared-processor", ["libs/pipeline", "@polaris/pipeline"]],
+  ["shared-policy", ["libs/governance", "@polaris/governance"]],
+  ["polaris-idp", ["libs/auth", "@polaris/auth"]],
+  ["shared-db", ["libs/persistence/postgres", "@polaris/persistence-postgres"]],
+  ["shared-clickhouse", ["libs/persistence/clickhouse", "@polaris/persistence-clickhouse"]],
+  [
+    "shared-control-plane-db",
+    ["libs/persistence/control-plane", "@polaris/persistence-control-plane"],
+  ],
+  ["shared-logger", ["libs/observability/logger", "@polaris/observability-logger"]],
+  ["shared-metrics", ["libs/observability/metrics", "@polaris/observability-metrics"]],
+  ["shared-config", ["libs/runtime/config", "@polaris/runtime-config"]],
+  ["shared-environments", ["libs/runtime/environments", "@polaris/runtime-environments"]],
+  ["shared-secrets", ["libs/runtime/secrets", "@polaris/runtime-secrets"]],
+  [
+    "shared-service-bootstrap",
+    ["libs/runtime/service-bootstrap", "@polaris/runtime-service-bootstrap"],
+  ],
+  ["shared-project-config", ["libs/tenancy/project-config", "@polaris/tenancy-project-config"]],
+  ["project-config-schemas", ["libs/tenancy/config-schemas", "@polaris/tenancy-config-schemas"]],
+  ["shared-control-plane", ["libs/tenancy/control-plane", "@polaris/tenancy-control-plane"]],
+  ["shared-destinations", ["libs/delivery/destinations", "@polaris/delivery-destinations"]],
+  [
+    "shared-destination-normalize",
+    ["libs/delivery/normalize", "@polaris/delivery-normalize"],
+  ],
+  ["destination-host", ["libs/delivery/host", "@polaris/delivery-host"]],
+  ["shared-archive", ["libs/archive/writer", "@polaris/archive-writer"]],
+  ["shared-replay", ["libs/archive/replay", "@polaris/archive-replay"]],
+  ["web-sdk", ["sdks/web", "@polaris/web-sdk"]],
+  ["node-sdk", ["sdks/node", "@polaris/node-sdk"]],
 ]);
 
-/**
- * One rule per moved library, so the hint names the destination.
- *
- * The trailing `(?![\w-])` is what keeps `packages/shared-control-plane/`
- * (which has NOT moved) from matching the `shared-control-plane-db` rule, and
- * the leading `(?<![\w/.-])` keeps the rule anchored to a repository location
- * rather than firing inside a longer path.
- */
-const movedLibraryRules = [...MOVED_LIBRARIES].map(([name, destination]) => ({
-  id: `moved-library-${name}`,
-  pattern: new RegExp(`(?<![\\w/.-])packages/${name}(?![\\w-])`),
-  hint: `\`${name}\` moved to \`${destination}/\` (ADR-0007); the package NAME is unchanged, so imports of \`@polaris/${name}\` still resolve`,
-}));
+/** The destination clause for a `packages/<name>/...` match, when we know it. */
+export function movedPackageHint(line) {
+  const match = /(?<![\w.-])packages\/([\w.-]+)/.exec(line);
+  const moved = match === null ? undefined : MOVED_PACKAGES.get(match[1]);
+  if (moved === undefined) return "";
+  const [path, name] = moved;
+  return ` \`${match[1]}\` is now \`${path}/\`, imported as \`${name}\``;
+}
 
 export const RETIRED = [
-  ...movedLibraryRules,
+  {
+    // `packages/` is gone, not moved: ADR-0007 split its twenty-four packages
+    // across `libs/` and `sdks/`, and IJ4NN deleted the directory.
+    //
+    // Matched two ways, because the location is named two ways. A path with a
+    // child -- `packages/shared-db/src/database.ts` -- is the runbook shape.
+    // The bare directory in a list of directories -- "it walks `apps/`,
+    // `packages/`, `sync/`" -- is the docs shape, and a rule that required a
+    // child would call every one of those clean.
+    //
+    // What the alternation refuses is a bare word after the slash, which is
+    // how English writes a pair: "ESM-first packages/services" and "build all
+    // packages/services" are not paths, and three files say one of them. The
+    // cost is a false negative on `packages/web-sdk` written with no trailing
+    // slash and no child; the shape that actually appears in this repository
+    // is the one with a slash, and a rule that fired on the prose would be
+    // turned off within a week.
+    id: "packages-dir",
+    pattern: /(?<![\w.-])packages\/(?:[\w.-]+\/|(?![\w]))/,
+    hint: "`packages/` is retired — domain libraries live at `libs/<domain>[/<name>]/`, published clients at `sdks/<platform>/` (ADR-0007)",
+  },
   {
     id: "processors-dir",
     pattern: /(?<![\w/.-])processors\/(?:<[a-z_]+>|[a-z][a-z0-9-]*)\//,
@@ -372,7 +411,11 @@ export function findRetiredPaths(root = DEFAULT_ROOT) {
           line: i + 1,
           rule: rule.id,
           text: line.trim().slice(0, 110),
-          hint: rule.hint,
+          // The generic hint names the two destination roots; where the line
+          // names a package we knew, the specific one names the directory AND
+          // what the package is called now. Both changed, on different cards,
+          // so a reader who has only one of them is still stuck.
+          hint: rule.id === "packages-dir" ? rule.hint + movedPackageHint(line) : rule.hint,
         });
       }
     }

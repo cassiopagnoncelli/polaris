@@ -21,17 +21,17 @@
  * anything this worker sees.
  */
 
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
-import { ProcessorMetrics } from "@polaris/shared-processor";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
+import { ProcessorMetrics } from "@polaris/pipeline";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   consumerFamiliesFor,
   createPolarisConsumer,
@@ -41,7 +41,7 @@ import {
   PostgresCheckpointStore,
   STREAM_FAMILY_IDENTITY_EVENTS,
   startIsolationSnapshot,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 
 import type { MergeWorkerRuntimeConfig } from "./config.js";

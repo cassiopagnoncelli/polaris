@@ -46,7 +46,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/shared-destinations";
+import type { Deliverer, DelivererContext, DelivererResult } from "@polaris/delivery-destinations";
 import { stampDelivery } from "./mapper.js";
 import { parseWebhookSinkProjectConfig } from "./project-config.js";
 import type { ResolvedWebhookConfig, WebhookPayload } from "./types.js";

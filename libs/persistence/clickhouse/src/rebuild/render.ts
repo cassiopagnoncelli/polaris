@@ -1,7 +1,7 @@
 /**
  * Stable human renderer for the ClickHouse rebuild plan.
  *
- * Mirrors the `renderPlanHuman` helper in `@polaris/shared-replay`:
+ * Mirrors the `renderPlanHuman` helper in `@polaris/archive-replay`:
  * one place to format the dry-run digest the CLI prints so the
  * formatting is deterministic and assertable in tests.
  *

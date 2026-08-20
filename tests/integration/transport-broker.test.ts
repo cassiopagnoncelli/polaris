@@ -32,9 +32,9 @@
  * @see docs/architecture/03-rabbitmq-streams.md "Failure handling"
  */
 
-import type { RabbitmqConfig } from "@polaris/shared-config";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import type { Logger } from "@polaris/shared-logger";
+import type { RabbitmqConfig } from "@polaris/runtime-config";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import type { Logger } from "@polaris/observability-logger";
 import {
   buildEventHeaders,
   createAmqpStreamRangeDriver,
@@ -53,7 +53,7 @@ import {
   republishToRetry,
   retryQueueName,
   type TransportConnection,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

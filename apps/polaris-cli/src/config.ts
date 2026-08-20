@@ -32,7 +32,7 @@ export interface CliConfig {
    * Bearer token read from the env var declared by the active profile. `null`
    * when the env var is unset. The token is NEVER stored in the config file
    * or in process state beyond this struct. Callers should treat it as a
-   * secret and avoid logging it (`@polaris/shared-logger`'s redaction list
+   * secret and avoid logging it (`@polaris/observability-logger`'s redaction list
    * masks `config.token` for safety).
    */
   readonly token: string | null;

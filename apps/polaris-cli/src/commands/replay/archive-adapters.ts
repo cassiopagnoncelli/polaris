@@ -2,7 +2,7 @@
  * Replay-execute adapters for the object-storage archive.
  *
  * The stream keeps ninety days. Past that the events live in the archive
- * (`@polaris/shared-archive`, written by `async/warehouse/archiver/v1`),
+ * (`@polaris/archive-writer`, written by `async/warehouse/archiver/v1`),
  * and this file makes them look like a source the executor already knows
  * how to drive. Nothing downstream changes: the same executor, the same
  * replay headers, the same destination guardrails, the same lineage.
@@ -22,12 +22,12 @@
  * off-by-one would drop events an operator would never think to look for.
  */
 
-import type { ArchivedReplayEvent, ArchiveReplaySource } from "@polaris/shared-archive";
+import type { ArchivedReplayEvent, ArchiveReplaySource } from "@polaris/archive-writer";
 import type {
   ReplayExecutorSource,
   ReplayFetchChunkInput,
   ReplaySourceEvent,
-} from "@polaris/shared-replay";
+} from "@polaris/archive-replay";
 
 export interface BuildArchiveReplaySourceOptions {
   readonly archive: ArchiveReplaySource;

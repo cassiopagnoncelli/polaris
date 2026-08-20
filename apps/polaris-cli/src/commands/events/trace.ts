@@ -59,13 +59,13 @@ import {
   INGEST_LOG_TRACE_MAX_LIMIT,
   type IngestLogTraceRow,
   type ViolationRow,
-} from "@polaris/shared-clickhouse";
+} from "@polaris/persistence-clickhouse";
 import {
   createKyselyDeliveryRecordRepository,
   createKyselyDlqRecordRepository,
   type DeliveryRecord,
   type DlqRecord,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 import type { Command } from "commander";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

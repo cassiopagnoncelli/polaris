@@ -7,7 +7,7 @@
  * UUIDv7 is preferred so the ingester's short-window dedupe layer and any
  * downstream ClickHouse storage can take advantage of the time-ordered
  * prefix for clustering. The same `uuid@^14` package is already used by
- * `@polaris/shared-service-bootstrap`, so this is a re-use, not a new dep
+ * `@polaris/runtime-service-bootstrap`, so this is a re-use, not a new dep
  * choice for the workspace.
  */
 

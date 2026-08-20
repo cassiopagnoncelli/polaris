@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-policy` — forbidden-field policy evaluator.
+ * `@polaris/governance` — forbidden-field policy evaluator.
  *
  * This package implements the two-tier (reject vs redact) forbidden-field
  * policy described in `docs/architecture/01-event-contract.md`. It is the

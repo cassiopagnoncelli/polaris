@@ -51,7 +51,7 @@
 --   400 days, matching the production-readiness data lifecycle
 --   defaults.
 --
--- Query rules (enforced by ClickHouse roles + the shared-clickhouse
+-- Query rules (enforced by ClickHouse roles + the persistence-clickhouse
 -- helper package; see docs/architecture/07-clickhouse.md "Access
 -- Control"):
 --   * MVs use argMax(col, _version) GROUP BY (project_id,

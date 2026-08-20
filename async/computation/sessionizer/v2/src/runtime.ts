@@ -24,7 +24,7 @@
  *                                   the new one, in that order. Replace
  *                                   the store record.
  *        - record consume / emit / failure counters on
- *          `@polaris/shared-processor`'s `ProcessorMetrics`,
+ *          `@polaris/pipeline`'s `ProcessorMetrics`,
  *        - on error: classify via the shared `classifyError`, increment
  *          the failed counter, and re-throw so KafkaJS surfaces the
  *          failure through its own retry path.
@@ -46,10 +46,10 @@
  *
  * Caller-owned DLQ orchestration: the runtime does not auto-route to
  * DLQ. Hosts that want DLQ routing wrap the handler with `publishToDlq`
- * from `@polaris/shared-processor`.
+ * from `@polaris/pipeline`.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   ALWAYS_ENABLED_GATE,
   classifyError,
@@ -60,7 +60,7 @@ import {
   type ProcessorMetricLabels,
   ProcessorMetrics,
   type ProcessorRetryClassification,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   buildRawEventsPartitionKey,
   consumerFamiliesFor,
@@ -75,7 +75,7 @@ import {
   sharedOnlyIsolationLookup,
   type TransportMessageContext,
   type TransportMessageHandler,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import {
   buildSessionEndedEnvelope,
@@ -99,7 +99,7 @@ import type { RawEventEnvelope } from "./types.js";
 /**
  * Output topic name. Per the manifest, the sessionizer publishes on
  * `session.events`. The constant lives in the runtime (rather than in
- * `@polaris/shared-transport`) so v1 stays inside the task's write scope —
+ * `@polaris/bus`) so v1 stays inside the task's write scope —
  * see the file header comment.
  */
 export const OUTPUT_STREAM_FAMILY = STREAM_FAMILY_SESSION_EVENTS;

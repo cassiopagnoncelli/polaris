@@ -73,7 +73,7 @@ function computeLuhnCheckDigit(digits: string): number {
 
 /**
  * Capture stream that buffers any written log lines for assertions.
- * Mirrors the helper used in `@polaris/shared-logger` tests but kept
+ * Mirrors the helper used in `@polaris/observability-logger` tests but kept
  * local here so the policy tests do not depend on logger internals.
  */
 export class CapturingStream {

@@ -1,4 +1,4 @@
-import { POLARIS_INGEST_REDACTED_PATTERN_TOTAL } from "@polaris/shared-policy";
+import { POLARIS_INGEST_REDACTED_PATTERN_TOTAL } from "@polaris/governance";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/idp",
+  "name": "@polaris/auth",
   "version": "0.0.0",
   "private": true,
   "description": "Idp access-token verification for Polaris services. A vendored, trimmed subset of the private @idp/jwt package (cassiopagnoncelli/idp-js), carrying only what a resource server needs: JWKS-backed ES256 verification, the Passport claim accessors, and the refresh-token grant. See README.md for provenance and the upgrade procedure.",

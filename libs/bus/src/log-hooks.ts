@@ -22,7 +22,7 @@
  * message's position was lost, and both need someone.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import type { TransportHookEvent, TransportHookPayload, TransportHooks } from "./hooks.js";
 
 type Level = "trace" | "info" | "warn" | "error";

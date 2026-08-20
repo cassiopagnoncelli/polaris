@@ -1,4 +1,4 @@
-# @polaris/shared-schemas
+# @polaris/spec
 
 Canonical Polaris event envelope, per-event Zod property schemas, and the
 file-backed event catalog loader.
@@ -59,8 +59,8 @@ the catalog.
 ## Checks
 
 ```bash
-pnpm --filter @polaris/shared-schemas typecheck
-pnpm --filter @polaris/shared-schemas lint
-pnpm --filter @polaris/shared-schemas test
-pnpm --filter @polaris/shared-schemas build
+pnpm --filter @polaris/spec typecheck
+pnpm --filter @polaris/spec lint
+pnpm --filter @polaris/spec test
+pnpm --filter @polaris/spec build
 ```

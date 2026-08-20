@@ -34,7 +34,7 @@
  * `actions/`, not in the gate.
  */
 
-import type { Passport } from "@polaris/idp";
+import type { Passport } from "@polaris/auth";
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 import { MINIMUM_PLATFORM_ROLE } from "./config.js";
 import { type AdminIdentity, type AdminIdentityCodec, bindIdentity } from "./identity.js";

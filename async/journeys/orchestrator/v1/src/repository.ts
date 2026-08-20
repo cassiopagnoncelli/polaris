@@ -31,7 +31,7 @@
  * duplicated vendor action is not.
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
 /** A participant as the orchestrator reads it. */

@@ -32,9 +32,9 @@
  * `polaris config get --reveal` is the disclosure path.
  */
 
-import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
-import type { ProjectConfigRow } from "@polaris/shared-control-plane-db";
-import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/shared-environments";
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/tenancy-config-schemas";
+import type { ProjectConfigRow } from "@polaris/persistence-control-plane";
+import { POLARIS_ENVIRONMENTS, type PolarisEnvironment } from "@polaris/runtime-environments";
 import { describeRefusal, type MutationRefusal } from "../actions/authorize.js";
 import { type Html, html } from "../html.js";
 import { statCard } from "../layout.js";

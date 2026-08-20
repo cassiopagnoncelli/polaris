@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadProcessorManifest, validateProcessorFixtures } from "@polaris/shared-processor";
+import { loadProcessorManifest, validateProcessorFixtures } from "@polaris/pipeline";
 import { ENRICHER_IDENTITY as GEOIP_IDENTITY } from "@polaris/sync-enrichment-geoip-v1";
 import { ENRICHER_IDENTITY as TRAITS_IDENTITY } from "@polaris/sync-enrichment-traits-v1";
 import { describe, expect, it } from "vitest";

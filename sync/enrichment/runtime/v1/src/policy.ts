@@ -5,7 +5,7 @@
  * spine will carry. It comes from the manifest's declared default, and a
  * project may NARROW it in the `enrichment:` block of
  * `definitions/projects/<id>.yaml` — never widen it past the manifest's
- * bounds. The block's shape is pinned by `@polaris/shared-policy`, the
+ * bounds. The block's shape is pinned by `@polaris/governance`, the
  * same schema the CLI validates catalog files against.
  *
  * Deploy-time and file-backed, like every semantic parameter: the value
@@ -13,7 +13,7 @@
  * the precondition for a reproducible rebuild.
  */
 
-import type { ProjectEnrichmentOverride } from "@polaris/shared-policy";
+import type { ProjectEnrichmentOverride } from "@polaris/governance";
 
 export type { ProjectEnrichmentOverride };
 

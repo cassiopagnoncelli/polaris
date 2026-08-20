@@ -16,7 +16,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CANONICAL_STREAM_FAMILIES } from "@polaris/shared-transport";
+import { CANONICAL_STREAM_FAMILIES } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -1,4 +1,4 @@
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyInstance, preHandlerAsyncHookHandler } from "fastify";
 
 import { AUTH_PROBLEM_CODES } from "../auth/index.js";

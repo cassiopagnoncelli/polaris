@@ -1,4 +1,4 @@
-import type { ListViolationsFilter, ViolationRow } from "@polaris/shared-clickhouse";
+import type { ListViolationsFilter, ViolationRow } from "@polaris/persistence-clickhouse";
 import { describe, expect, it } from "vitest";
 
 import {

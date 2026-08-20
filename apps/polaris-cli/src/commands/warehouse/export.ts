@@ -62,7 +62,7 @@ import {
   type WarehouseDataset,
   type WarehouseExportResult,
   type WarehouseExportTarget,
-} from "@polaris/shared-clickhouse";
+} from "@polaris/persistence-clickhouse";
 import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";

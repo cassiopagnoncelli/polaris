@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from "@polaris/shared-logger";
+import { createLogger, type Logger } from "@polaris/observability-logger";
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
@@ -101,7 +101,7 @@ export interface BootstrappedService {
  *
  * The returned instance has:
  *
- *   - a Pino logger from `@polaris/shared-logger` attached as
+ *   - a Pino logger from `@polaris/observability-logger` attached as
  *     `app.log` (and on every `request.log`)
  *   - per-request UUIDv7 IDs (echoed back as `x-request-id`)
  *   - RFC 7807 Problem Details error handler and 404 handler
@@ -125,7 +125,7 @@ export async function bootstrapService(
       ...(options.info.environment !== undefined ? { env: options.info.environment } : {}),
       // Stamp the release label on the platform bindings so every log line
       // can be filtered by rollout in Loki/Grafana without each service
-      // wiring it manually. The shared-logger schema reserves this key.
+      // wiring it manually. The observability-logger schema reserves this key.
       ...(options.info.releaseLabel !== undefined
         ? { releaseLabel: options.info.releaseLabel }
         : {}),

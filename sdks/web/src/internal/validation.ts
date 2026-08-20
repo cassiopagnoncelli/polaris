@@ -26,7 +26,7 @@
 // `node:path`, and `yaml`. Bundlers keep those in the module graph and a
 // browser build fails outright ("does not support external modules:
 // node:fs"). The envelope subpath is the SDK-safe surface.
-import { eventNameRegex } from "@polaris/shared-schemas/envelope";
+import { eventNameRegex } from "@polaris/spec/envelope";
 import type { EventPriority } from "../types.js";
 
 export class ValidationError extends Error {

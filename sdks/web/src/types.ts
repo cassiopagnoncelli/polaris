@@ -33,7 +33,7 @@
  * P3-002 identity layer.
  */
 
-import type { Envelope } from "@polaris/shared-schemas";
+import type { Envelope } from "@polaris/spec";
 
 /**
  * Layers the SDK considers when reading/writing identity.

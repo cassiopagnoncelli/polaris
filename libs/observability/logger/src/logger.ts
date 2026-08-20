@@ -33,7 +33,7 @@ export type { Logger } from "pino";
  *
  * @example
  * ```ts
- * import { createLogger, withRequest } from "@polaris/shared-logger";
+ * import { createLogger, withRequest } from "@polaris/observability-logger";
  *
  * const root = createLogger({
  *   service: "ingester-api",

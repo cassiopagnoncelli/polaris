@@ -3,7 +3,7 @@
 # Mounted read-only into the `promtail` container by
 # docker-compose.observability.yml. Promtail tails the Docker engine
 # socket, picks up every Polaris container's stdout/stderr, parses the
-# Pino JSON envelope emitted by `@polaris/shared-logger`, and pushes
+# Pino JSON envelope emitted by `@polaris/observability-logger`, and pushes
 # the lines into the local single-binary Loki.
 #
 # Why promtail (not the OTel collector log path) for v1 local dev:
@@ -100,7 +100,7 @@ scrape_configs:
     relabel_configs:
       # The compose service name (`ingester-api`, `sync-identity`,
       # `rabbitmq`, ...) becomes the `service` label. This matches the
-      # `service` binding emitted by @polaris/shared-logger so logs
+      # `service` binding emitted by @polaris/observability-logger so logs
       # from JSON-aware services line up with logs from infrastructure
       # containers (rabbitmq, postgres, clickhouse) that don't emit
       # Pino JSON.

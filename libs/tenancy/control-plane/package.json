@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-control-plane",
+  "name": "@polaris/tenancy-control-plane",
   "version": "0.0.0",
   "private": true,
   "description": "Polaris control-plane shared primitives: operator identity / actor resolution and the production-mutation dispatcher gate. Reused by the polaris CLI today and the future control-plane API.",
@@ -29,7 +29,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-environments": "workspace:*",
-    "@polaris/shared-secrets": "workspace:*"
+    "@polaris/runtime-environments": "workspace:*",
+    "@polaris/runtime-secrets": "workspace:*"
   }
 }

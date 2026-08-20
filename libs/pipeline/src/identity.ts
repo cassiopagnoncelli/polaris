@@ -15,7 +15,7 @@
  * the shape is structural so a processor's TypeScript literals (`"v1"`
  * `as const`) flow through unchanged.
  */
-import type { StandardLogFields } from "@polaris/shared-logger";
+import type { StandardLogFields } from "@polaris/observability-logger";
 
 /**
  * The fixed-shape identity of a versioned processor. Both fields are
@@ -60,7 +60,7 @@ export interface ProcessorLogContextInput {
 /**
  * Build the standard log-binding object for a processor scope. The shape
  * matches the Pino child-logger bindings produced by
- * `@polaris/shared-logger`'s `withProcessor(...)`, plus an optional
+ * `@polaris/observability-logger`'s `withProcessor(...)`, plus an optional
  * `processor_run_id` slot.
  *
  * Returning a plain `StandardLogFields` (rather than a Pino-specific type)

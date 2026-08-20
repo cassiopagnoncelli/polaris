@@ -11,7 +11,7 @@
  *         <source_id>.yaml
  *
  * This loader walks both trees, parses each file as YAML (using the same
- * `yaml` parser that `@polaris/shared-schemas` already brings into the
+ * `yaml` parser that `@polaris/spec` already brings into the
  * workspace), validates it with the Zod schemas in `./types.js`, and returns
  * a normalized `LoadedCatalog`. It also enforces structural rules that don't
  * fit in a single-file Zod schema:

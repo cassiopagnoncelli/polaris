@@ -3,7 +3,7 @@
  *
  * No credential appears on this page. It used to render `secret_ref`, and that
  * was right at the time: the column held a `<provider>:<ref>` pointer that
- * `@polaris/shared-secrets` resolved at delivery time, so showing it was how
+ * `@polaris/runtime-secrets` resolved at delivery time, so showing it was how
  * an operator confirmed a destination was wired to the right vault entry. The
  * column holds the credential itself now, and `DestinationRow` no longer
  * carries it — `DESTINATION_COLUMNS` in ../queries.ts does not select it.
@@ -13,7 +13,7 @@
  * Changing it is `polaris destinations rotate-secret`.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import { type Html, html } from "../html.js";
 import {
   type AdminPageContext,

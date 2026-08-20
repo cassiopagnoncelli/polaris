@@ -23,9 +23,9 @@
 
 import type { IngestBatchResult } from "@polaris/processor-reverse-etl-v1";
 import type { ReverseEtlRow } from "@polaris/reverse-etl-catalog";
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
 
-import { listProjectConfig, revealProjectConfigSecret } from "@polaris/shared-control-plane-db";
+import { listProjectConfig, revealProjectConfigSecret } from "@polaris/persistence-control-plane";
 
 import type { CommandContext } from "../../command.js";
 import { connectDb } from "../../db/index.js";

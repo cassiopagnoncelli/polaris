@@ -40,12 +40,12 @@
  * `mutates: false`: bypasses the production gate from P6-007.
  */
 
-import type { ViolationRow, ViolationSummaryRow } from "@polaris/shared-clickhouse";
+import type { ViolationRow, ViolationSummaryRow } from "@polaris/persistence-clickhouse";
 import {
   createClickHouseClient,
   type ListViolationsFilter,
   VIOLATIONS_MAX_LIMIT,
-} from "@polaris/shared-clickhouse";
+} from "@polaris/persistence-clickhouse";
 
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { UsageError } from "../../errors.js";

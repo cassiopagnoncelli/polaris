@@ -5,7 +5,7 @@
  * project may NARROW them — and declare its identifier denylist — in the
  * `identity:` block of `definitions/projects/<id>.yaml`, but never widen
  * them past the manifest's bounds. The block's shape is pinned by
- * `@polaris/shared-policy` so the CLI's catalog validation and this
+ * `@polaris/governance` so the CLI's catalog validation and this
  * stage's boot loader (`overrides.ts`) cannot drift.
  *
  * These are deploy-time, file-backed inputs — not `project_config`.
@@ -16,7 +16,7 @@
  * which is what makes a rebuild reproducible.
  */
 
-import type { ProjectIdentityOverride } from "@polaris/shared-policy";
+import type { ProjectIdentityOverride } from "@polaris/governance";
 
 import type { IdentityPolicy, StrongIdentityKind } from "./transform.js";
 

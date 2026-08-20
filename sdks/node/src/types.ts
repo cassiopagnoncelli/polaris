@@ -18,7 +18,7 @@
  *     v1 — the default memory queue does not survive process crashes.
  */
 
-import type { Envelope } from "@polaris/shared-schemas";
+import type { Envelope } from "@polaris/spec";
 
 /**
  * The shape of an event as it leaves `track()` and enters the queue.

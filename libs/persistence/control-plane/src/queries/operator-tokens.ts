@@ -2,14 +2,14 @@
  * Repository helpers for the `operator_tokens` table.
  *
  * The lifecycle CLI (P6-007) is the v1 writer side. The dispatcher's
- * resolver (`@polaris/shared-control-plane`) is the read side. Both go
- * through a typed Kysely client over `@polaris/shared-db`; this file owns
+ * resolver (`@polaris/tenancy-control-plane`) is the read side. Both go
+ * through a typed Kysely client over `@polaris/persistence-postgres`; this file owns
  * the query shapes and the typed `OperatorTokensTable` interface.
  *
- * The typed `OperatorTokensTable` interface extends `@polaris/shared-db`'s
+ * The typed `OperatorTokensTable` interface extends `@polaris/persistence-postgres`'s
  * `Database` interface through module augmentation — the same pattern
  * `audit-records.ts` (P6-006) uses. This keeps the migration SQL the
- * schema source-of-truth (the `Database` interface in `shared-db` carries
+ * schema source-of-truth (the `Database` interface in `persistence-postgres` carries
  * the columns of tables that have already landed) while letting later
  * tasks extend the typed surface from their own package without an
  * inter-package edit.
@@ -17,7 +17,7 @@
  * Rules baked into this module:
  *
  *   - The CLI inserts the argon2id `hash` produced by
- *     `@polaris/shared-secrets`. Plaintext NEVER enters this module.
+ *     `@polaris/runtime-secrets`. Plaintext NEVER enters this module.
  *   - `hash_algorithm` is stamped explicitly. The column has a default at
  *     the migration level but writing it from the application makes a
  *     future primitive bump explicit.
@@ -30,7 +30,7 @@
  * @see db/postgres/migrations/20260512000009_create_operator_tokens.sql
  * @see libs/tenancy/control-plane/src/resolver.ts
  */
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { ColumnType, Kysely } from "kysely";
 
 /**
@@ -43,7 +43,7 @@ export type OperatorTokenStatus = (typeof OPERATOR_TOKEN_STATUSES)[number];
 /**
  * Typed mirror of the `operator_tokens` table.
  *
- * Extends `@polaris/shared-db`'s `Database` interface via module
+ * Extends `@polaris/persistence-postgres`'s `Database` interface via module
  * augmentation (the `declare module` below) so any
  * `Kysely<Database>` instance in the CLI gets
  * `db.selectFrom("operator_tokens")` typed automatically.
@@ -59,7 +59,7 @@ export interface OperatorTokensTable {
   last_used_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null>;
 }
 
-declare module "@polaris/shared-db" {
+declare module "@polaris/persistence-postgres" {
   interface Database {
     operator_tokens: OperatorTokensTable;
   }
@@ -113,7 +113,7 @@ export interface InsertOperatorTokenInput {
  * INSERT a freshly-issued operator-token row. `status` defaults to
  * `'active'` and `created_at` defaults to `now()` at the schema level; we
  * stamp `hash_algorithm` explicitly so the application owns the
- * lockstep-with-shared-secrets invariant.
+ * lockstep-with-runtime-secrets invariant.
  */
 export async function insertOperatorToken(
   db: Kysely<Database>,
@@ -158,7 +158,7 @@ export async function findOperatorTokenById(
 
 /**
  * Look up one row INCLUDING the argon2id `hash`. Used by the resolver
- * (`@polaris/shared-control-plane`) at dispatcher time. Returns `null` for
+ * (`@polaris/tenancy-control-plane`) at dispatcher time. Returns `null` for
  * an unknown id.
  *
  * Separate from {@link findOperatorTokenById} on purpose: the read view

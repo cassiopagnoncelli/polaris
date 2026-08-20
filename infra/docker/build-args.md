@@ -36,7 +36,7 @@ See `docs/deployment/versioning.md` for the full hybrid-versioning model.
   metadata and visible to anyone with `docker inspect` access.
 - Build args MUST NOT change runtime behaviour beyond metadata. Service
   configuration belongs in environment variables read by
-  `@polaris/shared-config`, applied at container start.
+  `@polaris/runtime-config`, applied at container start.
 - Default values for all three args are present so `docker build` without
   any `--build-arg` flags succeeds; the resulting image identifies itself
   as `0.0.0-dev` with `unknown` revision. This keeps developer ergonomics

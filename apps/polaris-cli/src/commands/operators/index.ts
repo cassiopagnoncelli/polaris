@@ -11,12 +11,12 @@
  * logged, never re-emitted by `list` or `revoke`.
  *
  * Hashing uses the platform-standard argon2id primitive from
- * `@polaris/shared-secrets` — the same primitive `keys create` uses, so
+ * `@polaris/runtime-secrets` — the same primitive `keys create` uses, so
  * a token issued by this CLI verifies through the same code path the
  * dispatcher's resolver uses.
  *
  * The token-format primitives (prefix, parser, formatter) and the
- * dispatcher gate live in `@polaris/shared-control-plane` so the future
+ * dispatcher gate live in `@polaris/tenancy-control-plane` so the future
  * control-plane API can re-use them without a refactor.
  *
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"

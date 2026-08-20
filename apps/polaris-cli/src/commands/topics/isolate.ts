@@ -10,7 +10,7 @@
  *
  * **What this command does NOT do.** It does NOT cut producers or
  * consumers over to the dedicated topic. The runtime resolver in
- * `@polaris/shared-transport` reads the active row through a TTL-bounded
+ * `@polaris/bus` reads the active row through a TTL-bounded
  * cache, so the cutover becomes live within one TTL window across all
  * services that wired the cache in. The
  * `docs/operations/topic-isolation-cutover.md` runbook walks operators
@@ -32,13 +32,13 @@
  * @see docs/implementation/tasks/P11-008-topic-isolation.md
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import {
   CANONICAL_STREAM_FAMILIES,
   type CanonicalStreamFamily,
   dedicatedStreamFamily,
   isCanonicalStreamFamily,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import {

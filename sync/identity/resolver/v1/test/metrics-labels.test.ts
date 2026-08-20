@@ -15,7 +15,7 @@
  * incident.
  */
 
-import { sharedOnlyIsolationLookup } from "@polaris/shared-transport";
+import { sharedOnlyIsolationLookup } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent, type StageMetricScope } from "../src/runtime.js";

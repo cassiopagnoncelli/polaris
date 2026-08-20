@@ -13,7 +13,7 @@ import {
   redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 import { DEFAULT_INACTIVITY_SECONDS } from "./transform.js";

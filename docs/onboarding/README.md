@@ -32,7 +32,7 @@ Polaris, not running it.
 | 4. Install the Web SDK (if you have a browser surface) | team | `@polaris/web-sdk` initialized with your frontend key |
 | 5. Install the Node SDK (if you have a backend surface) | team | `@polaris/node-sdk` initialized with your backend key |
 | 6. Send your first event + verify ingestion | team | event visible in `polaris audit` / `polaris export audit` |
-| 7. View it in analytics | team | row visible via `shared-clickhouse` projection helpers or ad-hoc `clickhouse-client` |
+| 7. View it in analytics | team | row visible via `@polaris/persistence-clickhouse` projection helpers or ad-hoc `clickhouse-client` |
 | 8. Request destination enablement | team -> operator | `polaris destinations create ...` lands a row; operator hands you the `destination_id` |
 | 9. Wire support + escalation | team | DLQ runbook bookmarked, on-call alias known |
 

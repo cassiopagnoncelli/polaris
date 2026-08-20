@@ -42,7 +42,7 @@ import type {
   DestinationMode,
   DestinationRetryPolicy,
   DestinationStatus,
-} from "@polaris/shared-db";
+} from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**
@@ -110,7 +110,7 @@ export interface DestinationInstance {
  * The contract is intentionally narrow: one `findById` and one fan-out
  * lookup. Operational write
  * commands (`polaris destinations create`, `enable`, `disable`, ...) live
- * in the CLI and write through `@polaris/shared-db` directly — they do not
+ * in the CLI and write through `@polaris/persistence-postgres` directly — they do not
  * go through this reader.
  */
 export interface DestinationInstanceReader {

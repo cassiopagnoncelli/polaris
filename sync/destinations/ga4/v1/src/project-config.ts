@@ -2,7 +2,7 @@
  * ga4's per-`(project, environment)` configuration contract.
  *
  * The C3 generator reads this module from the built entry to produce
- * `@polaris/project-config-schemas`, which the admin UI's typed form and
+ * `@polaris/tenancy-config-schemas`, which the admin UI's typed form and
  * `polaris config validate` both work from. Adding a key here and
  * regenerating is the whole opt-in.
  *
@@ -25,8 +25,8 @@
  * @see docs/implementation/project-config-plan.md §3.1
  */
 
-import { positiveIntSchema } from "@polaris/shared-config";
-import { ROUTING_GATE_CONFIG_KEY } from "@polaris/shared-destinations";
+import { positiveIntSchema } from "@polaris/runtime-config";
+import { ROUTING_GATE_CONFIG_KEY } from "@polaris/delivery-destinations";
 import { z } from "zod";
 
 /** Namespace this consumer reads. One slice per component (plan §3.5). */

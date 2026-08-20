@@ -12,7 +12,7 @@
  *     route registered only in this test)
  */
 
-import type { OperatorTokenRepository } from "@polaris/shared-control-plane";
+import type { OperatorTokenRepository } from "@polaris/tenancy-control-plane";
 import { describe, expect, it } from "vitest";
 
 import { buildControlPlaneApp } from "../src/app.js";

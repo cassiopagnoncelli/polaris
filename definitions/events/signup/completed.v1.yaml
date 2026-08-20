@@ -15,5 +15,5 @@ description: >-
   producer's predicted lifetime value in minor currency units.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/signup/completed.v1"
+schema_module: "@polaris/spec/events/signup/completed.v1"
 schema_export: signupCompletedV1PropertiesSchema

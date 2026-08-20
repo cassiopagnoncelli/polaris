@@ -49,7 +49,7 @@
 //   --destroy   phases 1, 2, 3, 5. A teardown with no rebuild. It still
 //               installs the shared packages first, because the RabbitMQ
 //               teardown imports the topology definitions from
-//               `@polaris/shared-transport` — the names it deletes are the
+//               `@polaris/bus` — the names it deletes are the
 //               names that package declares, and deriving them anywhere else
 //               is how a teardown silently stops matching.
 //   --seed      phase 7 alone, and the only entry point here that destroys
@@ -505,7 +505,7 @@ function probeTcp(host, port) {
  *
  * The CLI build is skipped for `--destroy`, which has nothing to run it
  * for. The shared packages are not: the RabbitMQ teardown imports its
- * object names from `@polaris/shared-transport`.
+ * object names from `@polaris/bus`.
  */
 async function install(destroyOnly) {
   section("Install");
@@ -520,11 +520,11 @@ async function install(destroyOnly) {
   await step("shared packages", "pnpm", [
     "-r",
     "--filter",
-    "./packages/*",
-    "--filter",
     "./libs/*",
     "--filter",
     "./libs/*/*",
+    "--filter",
+    "./sdks/*",
     "run",
     "build",
   ]);
@@ -585,7 +585,7 @@ async function provision(endpoints) {
       PGPORT: String(endpoints.postgres.port),
     },
   });
-  await step("postgres migrations", "pnpm", ["--filter", "@polaris/shared-db", "db:migrate"], {
+  await step("postgres migrations", "pnpm", ["--filter", "@polaris/persistence-postgres", "db:migrate"], {
     env: { DATABASE_URL: endpoints.postgres.url },
   });
   await step("clickhouse schema", "node", ["scripts/clickhouse-bootstrap-local.mjs"], {

@@ -28,7 +28,7 @@
  * @see db/postgres/migrations/20260814000001_create_profile_plane.sql
  */
 
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import { createKyselyProfileReader } from "@polaris/sync-enrichment-traits-v1";
 import { createKyselyProfileRepository } from "@polaris/sync-identity-resolver-v1";
 import type { Kysely } from "kysely";

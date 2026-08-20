@@ -11,7 +11,7 @@ Node.js
 TypeScript
 Fastify
 Zod
-amqplib (via @polaris/shared-transport)
+amqplib (via @polaris/bus)
 RabbitMQ
 Redis
 PostgreSQL

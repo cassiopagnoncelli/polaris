@@ -10,7 +10,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@polaris/project-config-schemas", () => ({
+vi.mock("@polaris/tenancy-config-schemas", () => ({
   PROJECT_CONFIG_SCHEMAS: {
     "meta-capi": {
       project: {

@@ -32,7 +32,7 @@ export type {
   RateLimiter,
 } from "./types.js";
 
-import type { PolarisEnvironment } from "@polaris/shared-environments";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
 import type { RateLimitAllowanceResolver } from "./redis.js";
 import type { RateLimitAcquireInput } from "./types.js";
 

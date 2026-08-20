@@ -20,7 +20,7 @@
  * token waiting to be replayed.
  */
 
-import { RefreshClient, RefreshError, type RefreshResult } from "@polaris/idp";
+import { RefreshClient, RefreshError, type RefreshResult } from "@polaris/auth";
 
 import type { AdminIdpConfig } from "./config.js";
 

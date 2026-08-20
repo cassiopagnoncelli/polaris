@@ -20,7 +20,7 @@
  *
  *   2. The schema-level invariant: `ProcessorActivationsTable` has NO column
  *      resembling a transform-rule field. Enforced as a structural test
- *      against the typed surface in `@polaris/shared-db` AND against the
+ *      against the typed surface in `@polaris/persistence-postgres` AND against the
  *      live migration SQL on disk.
  *
  *   3. `processor_runs` reads: `runs list` / `runs show` render rows the
@@ -1225,7 +1225,7 @@ describe("processors command dispatcher wiring", () => {
 
 /**
  * Schema-level invariant: the Kysely `ProcessorActivationsTable` interface
- * in `@polaris/shared-db` MUST NOT carry any column resembling a
+ * in `@polaris/persistence-postgres` MUST NOT carry any column resembling a
  * transform-rule field. This is the "Tests verify semantic config is not
  * stored in runtime tables" criterion from the task card.
  *

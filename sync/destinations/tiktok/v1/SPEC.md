@@ -45,7 +45,7 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `context.page.url` | `page.url` | none | When present; absent → omitted |
 | inferred | wrapper `event_source` | branch on app/page context | `app` when any `context.app_*` slot is populated; `web` when `context.page.url` is populated; otherwise `crm` |
 | `identity.customer_id` | `user.external_id` | `sha256(lowercased(trim(value)))` | TikTok requires hash for external_id |
-| `identity.email_sha256` | `user.email` | (already hashed by normalize) | shared-destination-normalize handles email sha256 |
+| `identity.email_sha256` | `user.email` | (already hashed by normalize) | delivery-normalize handles email sha256 |
 | `identity.phone_sha256` | `user.phone` | (already hashed by normalize) | E.164 + sha256 |
 | `context.ip` | `user.ip` | passthrough | TikTok uses for ad-attribution match |
 | `context.user_agent` | `user.user_agent` | passthrough | same |
@@ -103,7 +103,7 @@ No `properties` block is populated — `CompleteRegistration` is a lightweight s
 
 ## Normalization rules
 
-The shared `@polaris/shared-destination-normalize` package handles:
+The shared `@polaris/delivery-normalize` package handles:
 
 ```text
 email       hashEmailLower      (lowercase + trim + sha256 hex)

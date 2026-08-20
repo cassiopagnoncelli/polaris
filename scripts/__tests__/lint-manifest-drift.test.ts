@@ -70,7 +70,7 @@ describe("wiredFamilies", () => {
     // Otherwise every unit would appear to wire everything it imports,
     // and the check would have nothing to say.
     const { inputs, outputs } = wiredFamilies(`
-      import { STREAM_FAMILY_RAW_EVENTS } from "@polaris/shared-transport";
+      import { STREAM_FAMILY_RAW_EVENTS } from "@polaris/bus";
       // Mentions STREAM_FAMILY_PROFILE_EVENTS in prose.
       /* And STREAM_FAMILY_IDENTITY_EVENTS in a block. */
     `);

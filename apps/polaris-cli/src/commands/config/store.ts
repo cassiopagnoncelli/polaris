@@ -3,7 +3,7 @@
  *
  * One contract shared by all five verbs, with the Kysely-backed default at the
  * bottom; tests inject an in-memory adapter. The mutating methods delegate
- * straight to the `*WithAudit` functions in `@polaris/shared-control-plane-db`
+ * straight to the `*WithAudit` functions in `@polaris/persistence-control-plane`
  * — which own the transaction carrying the value write, the version bump, the
  * `pg_notify`, and the audit row. The CLI deliberately holds no SQL of its
  * own: the admin UI (C5) will call the same functions, and two surfaces that

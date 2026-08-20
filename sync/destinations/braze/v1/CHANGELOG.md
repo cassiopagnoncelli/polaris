@@ -18,13 +18,13 @@
 
 ## v1.0.0 — initial release (P9-006)
 
-- Third real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003) and refined by `@polaris/consumer-tiktok-v1` (P9-005).
+- Third real-vendor consumer of the destination runtime (`@polaris/delivery-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003) and refined by `@polaris/consumer-tiktok-v1` (P9-005).
 - Maps the canonical Polaris event subset {`payment.approved`, `checkout.started`, `user.identified`} into Braze REST wire families {`purchases[]`, `events[]`, `attributes[]`}.
 - Stages composed:
   - `normalize/v1` — shared layer (defensive second-pass redaction, raw email/phone preserved because `identityHashing.email=false` and `identityHashing.phone=false`) — Braze's REST API consumes raw identifiers (the vendor hashes server-side).
   - `mapper/v1` — per-event canonical → Braze family builder. `checkout.started` → `events[]` entry with `name='checkout_started'`; `payment.approved` → `purchases[]` entry; `user.identified` → `attributes[]` entry with `_update_existing_only=false`. Each array entry is keyed by `external_id` (resolved from canonical `customer_id` → `anonymous_id`).
   - `deliverer/v1` — HTTP POST to `rest.<instance>.braze.com/users/track` with `Authorization: Bearer <api_key>` header; body is the `BrazePayload` shape directly (`{ attributes?, events?, purchases? }` with at least one populated).
-- Secret shape: JSON `{ instance, api_key }` resolved through `@polaris/shared-secrets`. `instance` is the Braze workspace's instance slug (`iad-01`, `iad-02`, ..., `eu-01`, `eu-02`, ...); the plaintext API key never lands in PostgreSQL or audit_records.
+- Secret shape: JSON `{ instance, api_key }` resolved through `@polaris/runtime-secrets`. `instance` is the Braze workspace's instance slug (`iad-01`, `iad-02`, ..., `eu-01`, `eu-02`, ...); the plaintext API key never lands in PostgreSQL or audit_records.
 - Error class mapping:
   - HTTP 2xx → accepted
   - HTTP 408 / 429 / 5xx → failed_retryable (timeout / rate_limit / transient)
@@ -38,6 +38,6 @@
 
 ### Known divergence from canonical
 
-Braze does NOT provide a generic vendor-side event dedupe key — its REST contract accepts and re-records duplicate `events[]` entries with the same `(external_id, name, time)` tuple. The Polaris-side delivery-key idempotency in `@polaris/shared-destinations` is the canonical guard against double-delivery; `SPEC.md` documents the contract in full.
+Braze does NOT provide a generic vendor-side event dedupe key — its REST contract accepts and re-records duplicate `events[]` entries with the same `(external_id, name, time)` tuple. The Polaris-side delivery-key idempotency in `@polaris/delivery-destinations` is the canonical guard against double-delivery; `SPEC.md` documents the contract in full.
 
 Unsupported canonical events in v1 (will be added per task or in a future minor version): `signup.completed`, `subscription.renewed`, `support.ticket.opened`. Events not in the supported set produce `mapped_failed` records with `error_class='mapping'`; the runbook documents the operator path.

@@ -1,5 +1,5 @@
-import type { ResolvedActor } from "@polaris/shared-control-plane";
-import type { Logger } from "@polaris/shared-logger";
+import type { ResolvedActor } from "@polaris/tenancy-control-plane";
+import type { Logger } from "@polaris/observability-logger";
 import type { Command } from "commander";
 import type { CliConfig } from "./config.js";
 import type { ExitCode } from "./errors.js";
@@ -15,7 +15,7 @@ import type { PackageMeta } from "./package-meta.js";
  * `process.stdout` directly, so tests can drive them deterministically.
  *
  * `actor` is resolved once by the dispatcher (`resolveActor()` from
- * `@polaris/shared-control-plane`) before any handler runs. Commands stamp
+ * `@polaris/tenancy-control-plane`) before any handler runs. Commands stamp
  * `actor.source` and `actor.label` onto audit rows so the persisted row
  * reflects the authenticated operator (when `POLARIS_OPERATOR_TOKEN` was
  * set) or the `cli` fallback (when it was not). The same `actor` is what

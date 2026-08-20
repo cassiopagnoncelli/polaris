@@ -40,7 +40,7 @@
 --     `env:META_CAPI_TOKEN_STOREFRONT_PROD` or
 --     `secret_manager:polaris/production/storefront/meta-capi`). PostgreSQL
 --     never stores the resolved value — the runtime resolves it through
---     `@polaris/shared-secrets` at delivery time.
+--     `@polaris/runtime-secrets` at delivery time.
 --   - `status` toggles instance availability (active | paused | disabled);
 --     `mode` toggles delivery behavior (live | sandbox | test) and is a
 --     non-semantic operational dial.

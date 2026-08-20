@@ -4,7 +4,7 @@
  * Replaces upstream `@idp/jwt`'s `configuration.ts`, which keeps a mutable
  * module-level singleton (`configure()` / `getConfig()` / `resetConfig()`).
  * Polaris services pass configuration explicitly — `docs/instructions/claude.md`
- * requires env reading to go through `@polaris/shared-config`, and a global
+ * requires env reading to go through `@polaris/runtime-config`, and a global
  * singleton makes two differently-configured verifiers in one process
  * impossible (which the test suite needs).
  *

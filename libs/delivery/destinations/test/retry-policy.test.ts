@@ -7,7 +7,7 @@
  * profile so the knob is verifiably connected to something.
  */
 
-import { RETRY_BACKOFF_TIERS_MS } from "@polaris/shared-transport";
+import { RETRY_BACKOFF_TIERS_MS } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { retryDelayMsFor } from "../src/retry-policy.js";

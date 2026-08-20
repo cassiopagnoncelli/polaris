@@ -20,7 +20,7 @@
  *   - `InMemoryProcessorRunRepository` — for tests and bootstrap scenarios
  *     where no PostgreSQL is available yet.
  *   - `createKyselyProcessorRunRepository` — production binding against
- *     `@polaris/shared-db`'s typed `Kysely<Database>`.
+ *     `@polaris/persistence-postgres`'s typed `Kysely<Database>`.
  *
  * Both implementations satisfy the `ProcessorRunRepository` contract so
  * callers do not have to branch on transport. Concrete processors pick the
@@ -30,7 +30,7 @@
  * @see docs/architecture/05-processors-and-replay.md
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -71,7 +71,7 @@ export interface RegisterRunInput {
   readonly processor_version: string;
   /** Optional project scope. Some processors run cross-project; leave undefined. */
   readonly project_id?: string | undefined;
-  /** Optional environment scope. Closed set per `Environment` in shared-db. */
+  /** Optional environment scope. Closed set per `Environment` in persistence-postgres. */
   readonly environment?: string | undefined;
   /** Optional pod / hostname for triage. */
   readonly host?: string | undefined;
@@ -120,7 +120,7 @@ export interface UpdateRunInput extends ProcessorRunCounters {
 
 /**
  * In-memory view of a `processor_runs` row. Mirrors the typed
- * `ProcessorRunsTable` schema in `@polaris/shared-db` but uses plain JS
+ * `ProcessorRunsTable` schema in `@polaris/persistence-postgres` but uses plain JS
  * types so callers do not have to map Kysely's `ColumnType` helpers.
  */
 export interface ProcessorRunRecord {

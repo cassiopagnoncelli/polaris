@@ -7,7 +7,7 @@ import {
   ProductionMutationRefusedError,
   type ResolvedActor,
   resolveActor,
-} from "@polaris/shared-control-plane";
+} from "@polaris/tenancy-control-plane";
 import { Command, Option } from "commander";
 import type {
   CommandContext,
@@ -64,7 +64,7 @@ export interface RunOptions {
   readonly operatorTokenRepository?: OperatorTokenRepository;
   /**
    * Test override: a deterministic secret-tail verifier. Production uses
-   * the platform's argon2id verifier from `@polaris/shared-secrets`; tests
+   * the platform's argon2id verifier from `@polaris/runtime-secrets`; tests
    * substitute a fast stub so the suite does not pay the ~30ms argon2
    * cost per case. NEVER set this in production — every production CLI
    * invocation uses argon2id.

@@ -1,4 +1,4 @@
-import { createProblemErrorHandler } from "@polaris/shared-service-bootstrap";
+import { createProblemErrorHandler } from "@polaris/runtime-service-bootstrap";
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 

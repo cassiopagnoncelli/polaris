@@ -1,5 +1,5 @@
-import type { RedisConfig } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import type { RedisConfig } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import type { RedisOptions } from "ioredis";
 
 import {

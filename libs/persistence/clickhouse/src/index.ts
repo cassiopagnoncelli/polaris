@@ -1,5 +1,5 @@
 /**
- * @polaris/shared-clickhouse
+ * @polaris/persistence-clickhouse
  *
  * The only sanctioned in-process path to ClickHouse for Polaris services
  * and the CLI. Wraps the official `@clickhouse/client` package and exposes

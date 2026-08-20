@@ -16,7 +16,7 @@
  * @see docs/implementation/project-config-plan.md §4.1
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import pg from "pg";
 
 /** Payload carried on {@link CONFIG_NOTIFY_CHANNEL}. */

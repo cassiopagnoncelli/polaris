@@ -4,7 +4,7 @@
  * Config and descriptor. Everything else — Postgres, the AMQP connection,
  * checkpoints, the DLQ producer, the instance cache, the project-config
  * store, the Redis-backed dedupe and rate limiter, shutdown ordering and the
- * Fastify shell — is `@polaris/destination-host`.
+ * Fastify shell — is `@polaris/delivery-host`.
  *
  * This consumer is the reason the host takes its component from the
  * descriptor identity rather than from a vendor string. Its vendor is
@@ -18,11 +18,11 @@ import {
   type BuiltDestinationHost,
   buildDestinationHost,
   type DestinationHostOverrides,
-} from "@polaris/destination-host";
+} from "@polaris/delivery-host";
 import {
   STREAM_FAMILY_PROFILE_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import type { WebhookSinkRuntimeConfig } from "./config.js";
 import { createWebhookSinkDescriptor } from "./descriptor.js";

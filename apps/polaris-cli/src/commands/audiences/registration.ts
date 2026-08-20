@@ -11,7 +11,7 @@
  * The PROFILE read goes through the same narrow trait window the traits
  * runner writes through. Audiences only ever read it.
  *
- * The MEMBERSHIP write goes through `@polaris/shared-control-plane-db`'s
+ * The MEMBERSHIP write goes through `@polaris/persistence-control-plane`'s
  * audience functions — `audience_memberships` and nothing else. A batch
  * writer that cannot touch profiles or identifiers cannot cause an
  * identity split, which is the same argument that made the async trait
@@ -27,13 +27,13 @@
  */
 
 import { type AudienceRunResult, runAudiences } from "@polaris/processor-audiences-v1";
-import { createClickHouseClient } from "@polaris/shared-clickhouse";
-import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
+import { createClickHouseClient } from "@polaris/persistence-clickhouse";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/runtime-config";
 import {
   createPolarisProducer,
   createTransportConnection,
   sharedOnlyIsolationLookup,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { v7 as uuidv7 } from "uuid";
 
 import type { CommandContext } from "../../command.js";

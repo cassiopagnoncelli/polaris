@@ -130,7 +130,7 @@ Without `POLARIS_SMOKE_API_KEY`, the runner mints an API key by:
    DO NOTHING`.
 2. Generating a `polaris_ak_smoke_<uuidv7>` id with a fresh 32-byte
    base64url secret tail.
-3. Hashing the secret through `@polaris/shared-secrets` so the resulting
+3. Hashing the secret through `@polaris/runtime-secrets` so the resulting
    row is byte-compatible with what `polaris keys create` would produce.
 4. Inserting an `active` row.
 
@@ -159,7 +159,7 @@ pnpm smoke:vertical-slice
 | `timed out after 60000ms waiting for analytics_raw`                  | A spine stage or the sink is not running, or the MV is down.                             | `docker compose logs sync-identity sync-enrichment clickhouse-sink clickhouse`. Bump `POLARIS_SMOKE_POLL_TIMEOUT_MS` for slow CI runners. |
 | `profile_id is empty — the event did not cross the identity stage`   | The identity stage is not consuming. NOT an activation problem: the gate is open unless an explicit `disabled` row exists. | Check that sync-identity is running and reading `raw.events`.                                                        |
 | `psql: command not found`                                            | The seed step shells out to `psql`.                                                     | Install postgresql-client (`brew install postgresql` / `apt-get install postgresql-client`), or pass `POLARIS_SMOKE_API_KEY`. |
-| `@polaris/shared-secrets is not available`                           | The smoke runner ran from a tree without `pnpm install`.                                | Run `pnpm install` from the repo root, or pass `POLARIS_SMOKE_API_KEY`.                                               |
+| `@polaris/runtime-secrets is not available`                           | The smoke runner ran from a tree without `pnpm install`.                                | Run `pnpm install` from the repo root, or pass `POLARIS_SMOKE_API_KEY`.                                               |
 | `ClickHouse 500 ... Cannot resolve host: rabbitmq`                   | ClickHouse is running outside the compose network and cannot reach RabbitMQ.            | Use `docker compose up -d` (which the smoke expects), not standalone `docker run` for ClickHouse.                     |
 
 ## CI integration

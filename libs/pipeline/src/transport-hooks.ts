@@ -25,14 +25,14 @@
  * twice would double every failure on the dashboard.
  */
 
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import {
   composeHooks,
   createTransportLogHooks,
   type TransportHookEvent,
   type TransportHookPayload,
   type TransportHooks,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import type { ProcessorIdentity } from "./identity.js";
 import type { ProcessorMetrics } from "./metrics.js";

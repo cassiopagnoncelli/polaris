@@ -1,5 +1,5 @@
 /**
- * Smoke tests for the public surface of `@polaris/shared-destinations`.
+ * Smoke tests for the public surface of `@polaris/delivery-destinations`.
  *
  * Deep behavioral coverage (consent + retry + DLQ + delivery_records
  * round-trips) is owned by the follow-up task that completes the
@@ -36,7 +36,7 @@ import {
   VENDOR_RESPONSE_SUMMARY_MAX_LENGTH,
 } from "../src/index.js";
 
-describe("@polaris/shared-destinations public surface", () => {
+describe("@polaris/delivery-destinations public surface", () => {
   it("re-exports the closed sets used by the runtime", () => {
     expect(DELIVERY_RECORD_STATUSES).toContain("delivered");
     expect(DELIVERY_RECORD_STATUSES).toContain("dropped_consent");

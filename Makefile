@@ -11,7 +11,7 @@
 .DEFAULT_GOAL := help
 
 # Pull `.env.local` (if present) into every `make` subprocess as real
-# environment variables. shared-config's `.env`-file resolution is cwd-based,
+# environment variables. runtime-config's `.env`-file resolution is cwd-based,
 # so a single repo-root `.env.local` wouldn't otherwise be visible when
 # services run from `apps/*` / `processors/*/v1` / `consumers/*/v1`. Doing the
 # load here in Make is the cheapest way to make `make dev`, `make db-migrate`,
@@ -54,24 +54,25 @@ KEY_TYPE    ?= web
 POLARIS_CLI = apps/polaris-cli/dist/bin/polaris.js
 
 # Code surfaces tracked by `make stats`. Mirrors the architecture docs:
-# apps/ holds the services; packages/ and libs/ hold the shared libraries, both
-# at once for the length of programme T (ADR-0007); sync/ and async/
+# apps/ holds the services; libs/ holds the domain libraries and sdks/ the
+# published clients (this said `packages libs` until 2026-08-20, while both
+# roots were live for the length of programme T -- ADR-0007); sync/ and async/
 # hold the pipeline units (this said `processors consumers` until 2026-08-19,
 # which is where they lived before the R-programme move -- both globs had
 # matched nothing since, so the whole pipeline counted as zero lines);
 # definitions/ holds the file-backed registries; db/ holds the storage DDL for
 # both engines (this said `catalog sql db/migrations` until 2026-08-20, and the
 # first two had stopped existing by then).
-LOC_DIRS = apps packages libs sync async definitions db
+LOC_DIRS = apps libs sdks sync async definitions db
 LOC_PRUNE = \( -name node_modules -o -name dist -o -name build -o -name .next -o -name out -o -name coverage \) -prune
 LOC_FIND_TYPES = \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' \)
 LOC_GIT_PATHS = \
 	':(glob)apps/**/*.ts' \
 	':(glob)apps/**/*.tsx' \
-	':(glob)packages/**/*.ts' \
-	':(glob)packages/**/*.tsx' \
 	':(glob)libs/**/*.ts' \
 	':(glob)libs/**/*.tsx' \
+	':(glob)sdks/**/*.ts' \
+	':(glob)sdks/**/*.tsx' \
 	':(glob)sync/**/*.ts' \
 	':(glob)async/**/*.ts' \
 	':(glob)processors/**/*.ts' \
@@ -153,12 +154,13 @@ build: ## Build all workspace packages
 # so starting the stack is one script and not a prerequisite chain; keep the
 # two in step. `tsc --incremental` makes the no-op case ~3-5s, cheap enough to
 # pay on every start.
-# `libs/*` and `libs/*/*` are the ADR-0007 destinations, listed beside
-# `packages/*` because both are live until IJ4NN. A filter that names only the
-# old root builds nothing for a moved library, and `make seed` then fails at
-# runtime on a `@polaris/*` import with no dist behind it.
+# `libs/*`, `libs/*/*` and `sdks/*` are the library roots ADR-0007 settled on;
+# the old flat library root was removed from this filter at IJ4NN, with the
+# directory it named. A filter that
+# misses a root builds nothing for the libraries under it, and `make seed` then
+# fails at runtime on a `@polaris/*` import with no dist behind it.
 build-packages: ## Build shared packages so workspace imports resolve at runtime
-	pnpm -r --filter './packages/*' --filter './libs/*' --filter './libs/*/*' run build
+	pnpm -r --filter './libs/*' --filter './libs/*/*' --filter './sdks/*' run build
 
 # `build-packages` covers the library roots only, and the CLI lives in apps/ — so
 # `make seed` and `make api_key`, which shell out to the built CLI, name this

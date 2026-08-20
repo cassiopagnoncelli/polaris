@@ -19,7 +19,7 @@
  * `mutates: false`.
  */
 
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { connectDb, type DestinationRow, listDestinationsByProjectEnv } from "../../db/index.js";
 import { UsageError } from "../../errors.js";

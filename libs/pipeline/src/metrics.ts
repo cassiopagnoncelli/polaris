@@ -71,7 +71,7 @@ export const METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL = "polaris_processor_events_s
  * Module-private, unlike its six siblings above — they are exported and
  * carried in the dead-export baseline, and that baseline says shrink it,
  * do not grow it. The metric NAME is the contract; it is pinned by the
- * exposition test in `@polaris/shared-metrics` and by the dashboards
+ * exposition test in `@polaris/observability-metrics` and by the dashboards
  * that query it.
  */
 const METRIC_PROCESSOR_OUTCOME_TOTAL = "polaris_processor_outcome_total";
@@ -161,7 +161,7 @@ export interface ProcessorMetricLabels {
   /**
    * Logical RabbitMQ topic family this metric scopes to (e.g.
    * `raw.events`, `resolved.events`). See `CANONICAL_STREAM_FAMILIES` in
-   * `@polaris/shared-transport`.
+   * `@polaris/bus`.
    */
   readonly topic_family?: string | undefined;
   /**

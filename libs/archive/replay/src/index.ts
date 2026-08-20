@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-replay` — replay planner.
+ * `@polaris/archive-replay` — replay planner.
  *
  * Pure-function module that turns an operator-issued replay-job
  * declaration into a deterministic plan. Consumed by:

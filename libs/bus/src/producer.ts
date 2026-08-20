@@ -21,8 +21,8 @@
  * which is exactly what a partial topology looks like.
  */
 
-import { partitionsForFamily } from "@polaris/shared-config";
-import type { Logger } from "@polaris/shared-logger";
+import { partitionsForFamily } from "@polaris/runtime-config";
+import type { Logger } from "@polaris/observability-logger";
 import type { ConfirmChannel } from "amqplib";
 import type { TransportConnection } from "./connection.js";
 import {

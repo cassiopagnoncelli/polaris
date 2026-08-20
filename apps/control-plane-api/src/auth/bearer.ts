@@ -9,7 +9,7 @@
  *   Authorization: Bearer polaris_ot_<uuidv7>.<base64url-32B>
  *
  * Resolution semantics mirror the CLI resolver in
- * `@polaris/shared-control-plane/src/resolver.ts`:
+ * `@polaris/tenancy-control-plane/src/resolver.ts`:
  *
  *   1. Bearer header absent → `{ source: 'cli', label: 'cli' }`. The
  *      dispatcher gate refuses production-mutating requests in this
@@ -38,9 +38,9 @@ import {
   type OperatorTokenRepository,
   parseOperatorToken,
   type ResolvedActor,
-} from "@polaris/shared-control-plane";
-import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/shared-secrets";
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+} from "@polaris/tenancy-control-plane";
+import { POLARIS_HASH_ALGORITHM, verifySecret } from "@polaris/runtime-secrets";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 
 /** Problem code returned when the bearer header is malformed. */

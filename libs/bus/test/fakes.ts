@@ -7,7 +7,7 @@
  * anything would pass while the real broker rejected the declaration.
  */
 
-import type { RabbitmqConfig } from "@polaris/shared-config";
+import type { RabbitmqConfig } from "@polaris/runtime-config";
 import type { Channel, ConfirmChannel, ConsumeMessage } from "amqplib";
 import type { TransportConnection } from "../src/connection.js";
 

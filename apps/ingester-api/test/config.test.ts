@@ -1,4 +1,4 @@
-import { ConfigValidationError, loadConfig } from "@polaris/shared-config";
+import { ConfigValidationError, loadConfig } from "@polaris/runtime-config";
 import { describe, expect, it } from "vitest";
 
 import {

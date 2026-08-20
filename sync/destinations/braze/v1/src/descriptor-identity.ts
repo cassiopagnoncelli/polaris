@@ -15,7 +15,7 @@
  * if Braze breaks the contract semantically.
  */
 
-import type { ConsumerIdentity } from "@polaris/shared-destinations";
+import type { ConsumerIdentity } from "@polaris/delivery-destinations";
 
 export const CONSUMER_VENDOR = "braze" as const;
 /**

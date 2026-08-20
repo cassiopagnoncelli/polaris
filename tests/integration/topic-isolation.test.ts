@@ -12,8 +12,8 @@
  * SKIPS unless `POLARIS_INTEGRATION=1`, matching the other files here.
  */
 
-import type { RabbitmqConfig } from "@polaris/shared-config";
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
+import type { RabbitmqConfig } from "@polaris/runtime-config";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import {
   consumerFamiliesFor,
   createAmqpStreamRangeDriver,
@@ -25,7 +25,7 @@ import {
   STREAM_FAMILY_RAW_EVENTS,
   startIsolationSnapshot,
   type TransportConnection,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

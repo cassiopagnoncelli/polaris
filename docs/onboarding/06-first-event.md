@@ -170,7 +170,7 @@ polaris audit list \
 > destination changes, replay jobs, DLQ retries, etc.) — not raw ingestion
 > events. To see whether a *specific event* reached RabbitMQ
 > `raw.events`, you go through `clickhouse-client` /
-> `@polaris/shared-clickhouse` against `analytics_raw` (next phase) or ask
+> `@polaris/persistence-clickhouse` against `analytics_raw` (next phase) or ask
 > the operator to tail the topic. Routine "did my event land" verification
 > is done via the metrics endpoint and the ClickHouse query in
 > [Phase 7](./07-analytics.md).

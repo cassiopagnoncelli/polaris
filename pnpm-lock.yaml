@@ -11,21 +11,21 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.15
         version: 2.4.15
-      '@polaris/shared-clickhouse':
-        specifier: workspace:*
-        version: link:libs/persistence/clickhouse
-      '@polaris/shared-control-plane-db':
-        specifier: workspace:*
-        version: link:libs/persistence/control-plane
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:libs/persistence/postgres
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:libs/runtime/secrets
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:libs/bus
+      '@polaris/persistence-clickhouse':
+        specifier: workspace:*
+        version: link:libs/persistence/clickhouse
+      '@polaris/persistence-control-plane':
+        specifier: workspace:*
+        version: link:libs/persistence/control-plane
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:libs/persistence/postgres
+      '@polaris/runtime-secrets':
+        specifier: workspace:*
+        version: link:libs/runtime/secrets
       '@polaris/trait-catalog':
         specifier: workspace:*
         version: link:definitions/traits
@@ -62,39 +62,39 @@ importers:
       '@fastify/cookie':
         specifier: ^11.1.2
         version: 11.1.2
-      '@polaris/idp':
+      '@polaris/auth':
         specifier: workspace:*
         version: link:../../libs/auth
-      '@polaris/project-config-schemas':
-        specifier: workspace:*
-        version: link:../../libs/tenancy/config-schemas
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../libs/runtime/config
-      '@polaris/shared-control-plane':
-        specifier: workspace:*
-        version: link:../../libs/tenancy/control-plane
-      '@polaris/shared-control-plane-db':
-        specifier: workspace:*
-        version: link:../../libs/persistence/control-plane
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../libs/persistence/postgres
-      '@polaris/shared-environments':
-        specifier: workspace:*
-        version: link:../../libs/runtime/environments
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../libs/observability/logger
-      '@polaris/shared-metrics':
+      '@polaris/observability-metrics':
         specifier: workspace:*
         version: link:../../libs/observability/metrics
-      '@polaris/shared-secrets':
+      '@polaris/persistence-control-plane':
+        specifier: workspace:*
+        version: link:../../libs/persistence/control-plane
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../libs/runtime/config
+      '@polaris/runtime-environments':
+        specifier: workspace:*
+        version: link:../../libs/runtime/environments
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../libs/runtime/secrets
-      '@polaris/shared-service-bootstrap':
+      '@polaris/runtime-service-bootstrap':
         specifier: workspace:*
         version: link:../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-config-schemas':
+        specifier: workspace:*
+        version: link:../../libs/tenancy/config-schemas
+      '@polaris/tenancy-control-plane':
+        specifier: workspace:*
+        version: link:../../libs/tenancy/control-plane
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -110,42 +110,42 @@ importers:
 
   apps/ingester-api:
     dependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../libs/bus
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../libs/governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../libs/persistence/postgres
       '@polaris/policy-catalog':
         specifier: workspace:*
         version: link:../../definitions/policy
-      '@polaris/shared-config':
+      '@polaris/runtime-config':
         specifier: workspace:*
         version: link:../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../libs/persistence/postgres
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../libs/runtime/environments
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../libs/observability/metrics
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../libs/governance
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../libs/tenancy/project-config
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../libs/spec
-      '@polaris/shared-secrets':
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../libs/runtime/secrets
-      '@polaris/shared-service-bootstrap':
+      '@polaris/runtime-service-bootstrap':
         specifier: workspace:*
         version: link:../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/spec':
         specifier: workspace:*
-        version: link:../../libs/bus
+        version: link:../../libs/spec
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../libs/tenancy/project-config
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -164,9 +164,39 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1110.0
+      '@polaris/archive-replay':
+        specifier: workspace:*
+        version: link:../../libs/archive/replay
+      '@polaris/archive-writer':
+        specifier: workspace:*
+        version: link:../../libs/archive/writer
       '@polaris/audience-catalog':
         specifier: workspace:*
         version: link:../../definitions/audiences
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../libs/delivery/destinations
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../libs/governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../libs/observability/logger
+      '@polaris/persistence-clickhouse':
+        specifier: workspace:*
+        version: link:../../libs/persistence/clickhouse
+      '@polaris/persistence-control-plane':
+        specifier: workspace:*
+        version: link:../../libs/persistence/control-plane
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../libs/pipeline
       '@polaris/policy-catalog':
         specifier: workspace:*
         version: link:../../definitions/policy
@@ -182,54 +212,24 @@ importers:
       '@polaris/processor-traits-v1':
         specifier: workspace:*
         version: link:../../async/computation/traits/v1
-      '@polaris/project-config-schemas':
-        specifier: workspace:*
-        version: link:../../libs/tenancy/config-schemas
       '@polaris/reverse-etl-catalog':
         specifier: workspace:*
         version: link:../../definitions/reverse-etl
-      '@polaris/shared-archive':
-        specifier: workspace:*
-        version: link:../../libs/archive/writer
-      '@polaris/shared-clickhouse':
-        specifier: workspace:*
-        version: link:../../libs/persistence/clickhouse
-      '@polaris/shared-config':
+      '@polaris/runtime-config':
         specifier: workspace:*
         version: link:../../libs/runtime/config
-      '@polaris/shared-control-plane':
-        specifier: workspace:*
-        version: link:../../libs/tenancy/control-plane
-      '@polaris/shared-control-plane-db':
-        specifier: workspace:*
-        version: link:../../libs/persistence/control-plane
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../libs/persistence/postgres
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../libs/delivery/destinations
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../libs/runtime/environments
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../libs/observability/logger
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../libs/governance
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../libs/pipeline
-      '@polaris/shared-replay':
-        specifier: workspace:*
-        version: link:../../libs/archive/replay
-      '@polaris/shared-secrets':
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../libs/runtime/secrets
-      '@polaris/shared-transport':
+      '@polaris/tenancy-config-schemas':
         specifier: workspace:*
-        version: link:../../libs/bus
+        version: link:../../libs/tenancy/config-schemas
+      '@polaris/tenancy-control-plane':
+        specifier: workspace:*
+        version: link:../../libs/tenancy/control-plane
       '@polaris/trait-catalog':
         specifier: workspace:*
         version: link:../../definitions/traits
@@ -254,30 +254,30 @@ importers:
 
   async/computation/attribution-engine/v3:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -296,30 +296,30 @@ importers:
 
   async/computation/sessionizer/v1:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1(supports-color@7.2.0)
@@ -332,30 +332,30 @@ importers:
 
   async/computation/sessionizer/v2:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1(supports-color@7.2.0)
@@ -368,33 +368,33 @@ importers:
 
   async/computation/traits/v1:
     dependencies:
-      '@polaris/shared-clickhouse':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/clickhouse
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-clickhouse':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/clickhouse
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1(supports-color@7.2.0)
@@ -413,30 +413,30 @@ importers:
       '@polaris/audience-catalog':
         specifier: workspace:*
         version: link:../../../../definitions/audiences
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
       '@polaris/journey-catalog':
         specifier: workspace:*
         version: link:../../../../definitions/journeys
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
+      '@polaris/observability-metrics':
         specifier: workspace:*
         version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
         specifier: workspace:*
         version: link:../../../../libs/pipeline
-      '@polaris/shared-service-bootstrap':
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
         specifier: workspace:*
         version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../../../../libs/bus
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -446,33 +446,33 @@ importers:
 
   async/merges/merge-worker/v1:
     dependencies:
-      '@polaris/shared-clickhouse':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/clickhouse
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-clickhouse':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/clickhouse
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1(supports-color@7.2.0)
@@ -497,30 +497,30 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.700.0
         version: 3.1110.0
-      '@polaris/shared-archive':
+      '@polaris/archive-writer':
         specifier: workspace:*
         version: link:../../../../libs/archive/writer
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -530,30 +530,30 @@ importers:
 
   async/warehouse/clickhouse-sink/v1:
     dependencies:
-      '@polaris/shared-clickhouse':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/clickhouse
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-clickhouse':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/clickhouse
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -578,7 +578,7 @@ importers:
 
   definitions/policy:
     dependencies:
-      '@polaris/shared-policy':
+      '@polaris/governance':
         specifier: workspace:*
         version: link:../../libs/governance
 
@@ -596,13 +596,13 @@ importers:
 
   libs/archive/replay:
     dependencies:
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../runtime/environments
 
   libs/archive/writer:
     dependencies:
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../bus
     devDependencies:
@@ -618,15 +618,15 @@ importers:
 
   libs/bus:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../persistence/postgres
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../observability/logger
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../runtime/config
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
@@ -636,27 +636,27 @@ importers:
 
   libs/delivery/destinations:
     dependencies:
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../normalize
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../observability/logger
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../governance
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../pipeline
-      '@polaris/shared-secrets':
-        specifier: workspace:*
-        version: link:../../runtime/secrets
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../bus
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../normalize
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../observability/logger
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../pipeline
+      '@polaris/runtime-secrets':
+        specifier: workspace:*
+        version: link:../../runtime/secrets
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1(supports-color@7.2.0)
@@ -669,52 +669,52 @@ importers:
 
   libs/delivery/host:
     dependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../destinations
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../persistence/postgres
       '@polaris/policy-catalog':
         specifier: workspace:*
         version: link:../../../definitions/policy
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../persistence/postgres
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../observability/metrics
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../governance
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../tenancy/project-config
-      '@polaris/shared-service-bootstrap':
+      '@polaris/runtime-service-bootstrap':
         specifier: workspace:*
         version: link:../../runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/tenancy-project-config':
         specifier: workspace:*
-        version: link:../../bus
+        version: link:../../tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
 
   libs/delivery/normalize:
     dependencies:
-      '@polaris/shared-policy':
+      '@polaris/governance':
         specifier: workspace:*
         version: link:../../governance
-      '@polaris/shared-schemas':
+      '@polaris/spec':
         specifier: workspace:*
         version: link:../../spec
 
   libs/governance:
     dependencies:
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../observability/logger
-      '@polaris/shared-schemas':
+      '@polaris/spec':
         specifier: workspace:*
         version: link:../spec
       zod:
@@ -734,7 +734,7 @@ importers:
       '@clickhouse/client':
         specifier: ^1.23.1
         version: 1.23.1
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../observability/logger
       zod:
@@ -743,18 +743,18 @@ importers:
 
   libs/persistence/control-plane:
     dependencies:
-      '@polaris/shared-control-plane':
-        specifier: workspace:*
-        version: link:../../tenancy/control-plane
-      '@polaris/shared-db':
+      '@polaris/persistence-postgres':
         specifier: workspace:*
         version: link:../postgres
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../runtime/environments
-      '@polaris/shared-secrets':
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../runtime/secrets
+      '@polaris/tenancy-control-plane':
+        specifier: workspace:*
+        version: link:../../tenancy/control-plane
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -764,7 +764,7 @@ importers:
 
   libs/persistence/postgres:
     dependencies:
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../runtime/environments
       kysely:
@@ -783,21 +783,21 @@ importers:
 
   libs/pipeline:
     dependencies:
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../persistence/postgres
-      '@polaris/shared-environments':
-        specifier: workspace:*
-        version: link:../runtime/environments
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../observability/logger
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../spec
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../observability/logger
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../persistence/postgres
+      '@polaris/runtime-environments':
+        specifier: workspace:*
+        version: link:../runtime/environments
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../spec
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -813,7 +813,7 @@ importers:
 
   libs/runtime/config:
     dependencies:
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../environments
       dotenv:
@@ -847,21 +847,21 @@ importers:
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../config
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../observability/logger
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../config
 
   libs/runtime/service-bootstrap:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../config
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../observability/logger
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../config
       fastify:
         specifier: ^5.8.5
         version: 5.8.5
@@ -871,7 +871,7 @@ importers:
 
   libs/spec:
     dependencies:
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../runtime/environments
       yaml:
@@ -885,25 +885,25 @@ importers:
 
   libs/tenancy/control-plane:
     dependencies:
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../../runtime/environments
-      '@polaris/shared-secrets':
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../runtime/secrets
 
   libs/tenancy/project-config:
     dependencies:
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../persistence/postgres
-      '@polaris/shared-environments':
-        specifier: workspace:*
-        version: link:../../runtime/environments
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../observability/logger
-      '@polaris/shared-secrets':
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../persistence/postgres
+      '@polaris/runtime-environments':
+        specifier: workspace:*
+        version: link:../../runtime/environments
+      '@polaris/runtime-secrets':
         specifier: workspace:*
         version: link:../../runtime/secrets
       kysely:
@@ -919,7 +919,7 @@ importers:
 
   sdks/node:
     dependencies:
-      '@polaris/shared-schemas':
+      '@polaris/spec':
         specifier: workspace:*
         version: link:../../libs/spec
       uuid:
@@ -928,7 +928,7 @@ importers:
 
   sdks/web:
     dependencies:
-      '@polaris/shared-schemas':
+      '@polaris/spec':
         specifier: workspace:*
         version: link:../../libs/spec
       uuid:
@@ -944,36 +944,36 @@ importers:
 
   sync/destinations/braze/v1:
     dependencies:
-      '@polaris/destination-host':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/host
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../libs/tenancy/project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/destinations
+      '@polaris/delivery-host':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/host
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../../../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -983,36 +983,36 @@ importers:
 
   sync/destinations/ga4/v1:
     dependencies:
-      '@polaris/destination-host':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/host
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../libs/tenancy/project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/destinations
+      '@polaris/delivery-host':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/host
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../../../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1022,36 +1022,36 @@ importers:
 
   sync/destinations/meta-capi/v1:
     dependencies:
-      '@polaris/destination-host':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/host
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../libs/tenancy/project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/destinations
+      '@polaris/delivery-host':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/host
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../../../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1061,36 +1061,36 @@ importers:
 
   sync/destinations/tiktok/v1:
     dependencies:
-      '@polaris/destination-host':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/host
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../libs/tenancy/project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/destinations
+      '@polaris/delivery-host':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/host
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../../../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1100,36 +1100,36 @@ importers:
 
   sync/destinations/webhook-sink/v1:
     dependencies:
-      '@polaris/destination-host':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/host
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-destination-normalize':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/normalize
-      '@polaris/shared-destinations':
-        specifier: workspace:*
-        version: link:../../../../libs/delivery/destinations
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../../../../libs/tenancy/project-config
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/destinations
+      '@polaris/delivery-host':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/host
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../../../../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1139,7 +1139,7 @@ importers:
 
   sync/enrichment/geoip/v1:
     dependencies:
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
       mmdb-lib:
@@ -1148,30 +1148,30 @@ importers:
 
   sync/enrichment/runtime/v1:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../../../libs/governance
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../../../libs/governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
       '@polaris/sync-enrichment-geoip-v1':
         specifier: workspace:*
         version: link:../../geoip/v1
@@ -1190,45 +1190,45 @@ importers:
 
   sync/enrichment/traits/v1:
     dependencies:
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
+      '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
 
   sync/identity/resolver/v1:
     dependencies:
-      '@polaris/shared-config':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/config
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../../../../libs/persistence/postgres
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/logger
-      '@polaris/shared-metrics':
-        specifier: workspace:*
-        version: link:../../../../libs/observability/metrics
-      '@polaris/shared-policy':
-        specifier: workspace:*
-        version: link:../../../../libs/governance
-      '@polaris/shared-processor':
-        specifier: workspace:*
-        version: link:../../../../libs/pipeline
-      '@polaris/shared-schemas':
-        specifier: workspace:*
-        version: link:../../../../libs/spec
-      '@polaris/shared-service-bootstrap':
-        specifier: workspace:*
-        version: link:../../../../libs/runtime/service-bootstrap
-      '@polaris/shared-transport':
+      '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../../../libs/governance
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+      '@polaris/observability-metrics':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/metrics
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../../../../libs/persistence/postgres
+      '@polaris/pipeline':
+        specifier: workspace:*
+        version: link:../../../../libs/pipeline
+      '@polaris/runtime-config':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/config
+      '@polaris/runtime-service-bootstrap':
+        specifier: workspace:*
+        version: link:../../../../libs/runtime/service-bootstrap
+      '@polaris/spec':
+        specifier: workspace:*
+        version: link:../../../../libs/spec
       kysely:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1244,45 +1244,45 @@ importers:
 
   tests:
     dependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../libs/bus
       '@polaris/journey-catalog':
         specifier: workspace:*
         version: link:../definitions/journeys
       '@polaris/node-sdk':
         specifier: workspace:*
         version: link:../sdks/node
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../libs/observability/logger
+      '@polaris/persistence-control-plane':
+        specifier: workspace:*
+        version: link:../libs/persistence/control-plane
+      '@polaris/persistence-postgres':
+        specifier: workspace:*
+        version: link:../libs/persistence/postgres
       '@polaris/processor-journey-orchestrator-v1':
         specifier: workspace:*
         version: link:../async/journeys/orchestrator/v1
-      '@polaris/shared-config':
+      '@polaris/runtime-config':
         specifier: workspace:*
         version: link:../libs/runtime/config
-      '@polaris/shared-control-plane':
-        specifier: workspace:*
-        version: link:../libs/tenancy/control-plane
-      '@polaris/shared-control-plane-db':
-        specifier: workspace:*
-        version: link:../libs/persistence/control-plane
-      '@polaris/shared-db':
-        specifier: workspace:*
-        version: link:../libs/persistence/postgres
-      '@polaris/shared-environments':
+      '@polaris/runtime-environments':
         specifier: workspace:*
         version: link:../libs/runtime/environments
-      '@polaris/shared-logger':
-        specifier: workspace:*
-        version: link:../libs/observability/logger
-      '@polaris/shared-project-config':
-        specifier: workspace:*
-        version: link:../libs/tenancy/project-config
-      '@polaris/shared-transport':
-        specifier: workspace:*
-        version: link:../libs/bus
       '@polaris/sync-enrichment-traits-v1':
         specifier: workspace:*
         version: link:../sync/enrichment/traits/v1
       '@polaris/sync-identity-resolver-v1':
         specifier: workspace:*
         version: link:../sync/identity/resolver/v1
+      '@polaris/tenancy-control-plane':
+        specifier: workspace:*
+        version: link:../libs/tenancy/control-plane
+      '@polaris/tenancy-project-config':
+        specifier: workspace:*
+        version: link:../libs/tenancy/project-config
       kysely:
         specifier: ^0.29.0
         version: 0.29.0

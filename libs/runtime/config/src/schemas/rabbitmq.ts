@@ -10,7 +10,7 @@ import {
 /**
  * RabbitMQ transport config.
  *
- * Polaris services talk to RabbitMQ through `@polaris/shared-transport`.
+ * Polaris services talk to RabbitMQ through `@polaris/bus`.
  * This schema produces the values that package needs and nothing more —
  * the driver itself owns producer/consumer tuning defaults.
  *
@@ -34,7 +34,7 @@ import {
  *
  * Credentials live in the URL because that is the shape every RabbitMQ
  * client, CLI, and operator runbook already uses. The URL is a secret and
- * is resolved through `@polaris/shared-secrets` in deployed environments.
+ * is resolved through `@polaris/runtime-secrets` in deployed environments.
  */
 
 /**

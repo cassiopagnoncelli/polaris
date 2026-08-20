@@ -23,5 +23,5 @@ description: >-
   version that evaluated the transition and whether it is a re-entry.
 lifecycle: active
 since: "2026-08-16"
-schema_module: "@polaris/shared-schemas/events/audience/entered.v1"
+schema_module: "@polaris/spec/events/audience/entered.v1"
 schema_export: audienceEnteredV1PropertiesSchema

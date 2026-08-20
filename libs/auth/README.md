@@ -1,4 +1,4 @@
-# @polaris/idp
+# @polaris/auth
 
 Idp access-token verification for Polaris services.
 
@@ -36,7 +36,7 @@ hand-built. Polaris does not repeat that.
 | `revocation-catch-up.ts`, `client-credentials-client.ts` | **Dropped.** Only meaningful alongside the revocation subscriber. |
 | `express.ts` | **Dropped.** Polaris services are Fastify; the guard is hand-rolled, as `haws` does for Express. |
 | `user-agent.ts` | **Dropped.** Removes the `ua-parser-js` dependency. |
-| `configuration.ts` | **Replaced** by `src/config.ts`. Upstream keeps a mutable module-level singleton (`configure()` / `getConfig()`); Polaris services pass config explicitly — `docs/instructions/claude.md` forbids reading process env outside `@polaris/shared-config`. |
+| `configuration.ts` | **Replaced** by `src/config.ts`. Upstream keeps a mutable module-level singleton (`configure()` / `getConfig()`); Polaris services pass config explicitly — `docs/instructions/claude.md` forbids reading process env outside `@polaris/runtime-config`. |
 
 The result depends on `jose` alone.
 
@@ -66,7 +66,7 @@ If Idp changes any of those, that test fails and tells you what moved.
 ## Usage
 
 ```ts
-import { Verifier, type IdpConfig } from "@polaris/idp";
+import { Verifier, type IdpConfig } from "@polaris/auth";
 
 const verifier = new Verifier({
   config: {

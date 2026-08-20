@@ -15,7 +15,7 @@
  * refresh that makes the next delivery warm.
  */
 
-import { isPolarisEnvironment } from "@polaris/shared-environments";
+import { isPolarisEnvironment } from "@polaris/runtime-environments";
 import type { ProjectConfigStore } from "./store.js";
 
 /** Shared so a cold path does not allocate per delivery. */

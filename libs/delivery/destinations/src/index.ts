@@ -1,5 +1,5 @@
 /**
- * `@polaris/shared-destinations` — the destination consumer runtime.
+ * `@polaris/delivery-destinations` — the destination consumer runtime.
  *
  * Polaris destinations follow a five-stage pipeline per
  * `docs/architecture/06-destinations.md`:
@@ -11,7 +11,7 @@
  * compose with this runtime by supplying `Mapper` + `Deliverer`
  * implementations that match the typed contracts in `./types.ts`.
  *
- * NORMALIZE is delegated to `@polaris/shared-destination-normalize`
+ * NORMALIZE is delegated to `@polaris/delivery-normalize`
  * (P9-000). This runtime owns subscribe + mapper invocation + delivery
  * + delivery_records persistence + DLQ routing + rate limiting +
  * idempotency + replay suppression.

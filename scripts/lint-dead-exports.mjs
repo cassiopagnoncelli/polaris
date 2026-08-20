@@ -19,7 +19,7 @@
 // does anything actually CALL this?
 //
 // Scope: exported symbols under the roots where shared mechanisms live —
-// `packages/`, and the `libs/` and `sdks/` that ADR-0007 moves them into. A
+// `libs/` (domain libraries) and `sdks/` (published clients). A
 // symbol is live if any production file outside its own package references it
 // by name. Tests do not count — a helper exercised only by its own unit test is
 // precisely the thing this check exists to surface.
@@ -40,10 +40,10 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 /**
  * Where shared mechanisms live. Apps and processors are leaves; skip them.
  *
- * Two epochs at once, the way `pnpm-workspace.yaml` carries both: ADR-0007
- * sends `packages/*` into `libs/` (the platform and domain libraries) and
- * `sdks/` (the published clients), and for the length of programme T a package
- * may be in either place. IJ4NN drops `packages` once nothing is left there.
+ * One epoch now: ADR-0007 settled the libraries into `libs/` and the published
+ * clients into `sdks/`, and IJ4NN deleted the flat root they came from. While
+ * both were live this list named all three, because a root missing here is not
+ * a root reported clean -- it is one nothing is ever scanned under.
  *
  * `connectors/` and `definitions/` are deliberately absent. A root belongs here
  * when a package this check already scans moves INTO it, and neither receives
@@ -53,7 +53,7 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  * report every one of them dead, since the delivery engine loads a vendor
  * adapter by name rather than importing it.
  */
-const PACKAGE_ROOTS = ["packages", "libs", "sdks"];
+const PACKAGE_ROOTS = ["libs", "sdks"];
 
 /**
  * Where a call site counts from.
@@ -65,14 +65,13 @@ const PACKAGE_ROOTS = ["packages", "libs", "sdks"];
  * the platform disappears at once and the check reports it as dead.
  *
  * `catalog/` is absent, and that is a live gap rather than a decision: three
- * `shared-policy` symbols are called from `definitions/policy` and sit in the
+ * `governance` symbols are called from `definitions/policy` and sit in the
  * baseline as dead because nothing looks there. Listing `definitions/` means
  * 0DIPB's rename is what surfaces them — as a "now have a caller" note on the
  * baseline it already regenerates, which is the card that should absorb it.
  */
 const CONSUMER_DIRS = [
   "apps",
-  "packages",
   "sync",
   "async",
   "scripts",
@@ -89,31 +88,29 @@ const CONSUMER_DIRS = [
  * symbol is load-bearing despite having no caller; if you cannot write the
  * reason in one line, the honest move is to delete the symbol instead.
  *
- * Keys are paths, so every entry needs its ADR-0007 destination alongside it or
- * the promise expires the moment the package moves — loudly, as a wave of newly
- * dead exports on the move card. Both keys stay until IJ4NN.
+ * Keys are paths. While the move cards were in flight each entry carried both
+ * its old and its new path, so the promise could not expire silently the moment
+ * a package moved; IJ4NN landed the last of them, and the duplicates went with
+ * the directory that made them necessary.
  */
 const ALLOW = new Map([
   // Public SDK surface: consumed by applications outside this repository.
-  ["packages/node-sdk", "published SDK surface"],
   ["sdks/node", "published SDK surface"],
-  // There is deliberately no `sdks/web` twin. A `packages/browser-sdk` entry
-  // sat here for months and never matched anything — the browser SDK has always
-  // been `web-sdk` — so the web SDK has been scanned all along, and its 29
+  // There is deliberately no `sdks/web` twin. A `browser-sdk` entry sat here
+  // for months and never matched anything — the browser SDK has always been
+  // `web-sdk` — so the web SDK has been scanned all along, and its 29
   // unreferenced exports are in the baseline as debt rather than allowed as
-  // surface. Carrying the misspelling into the new epoch would have allow-listed
-  // a real, scanned package at the moment it moved, which is the one thing a
-  // `git mv` must not do; writing it correctly would have done the same thing
-  // and looked like a typo fix. So the entry is gone and the check is unchanged:
-  // `sdks/web` is scanned, exactly as `packages/web-sdk` was. Whether those 29
-  // are surface or debt is a real question, and it is not one a move card gets
-  // to answer in passing.
+  // surface. Carrying the misspelling into the new epoch would have
+  // allow-listed a real, scanned package at the moment it moved, which is the
+  // one thing a `git mv` must not do; writing it correctly would have done the
+  // same thing and looked like a typo fix. So the entry is gone and the check
+  // is unchanged: `sdks/web` is scanned, exactly as it always was. Whether
+  // those 29 are surface or debt is a real question, and it is not one a move
+  // card gets to answer in passing.
   // Generated or contract types re-exported for downstream typing.
-  ["libs/spec", "event contract types are the public schema surface"],
   ["libs/spec", "event contract types are the public schema surface"],
   // Generated schema surface, consumed by control-plane-api and `polaris
   // config validate` in later cards.
-  ["libs/tenancy/config-schemas", "generated schema artifacts land before their consumers"],
   ["libs/tenancy/config-schemas", "generated schema artifacts land before their consumers"],
 ]);
 
@@ -126,7 +123,7 @@ const SOURCE_EXT = new Set([".ts", ".mts", ".tsx"]);
  * Wider than `SOURCE_EXT` on purpose. Exports are declared in TypeScript, but
  * they are consumed by plain scripts too: `scripts/rabbitmq-provision.mjs`
  * imports `declareSuperStream`, `deleteSuperStream`, `deleteComponentQueues`
- * and `DEFAULT_STREAM_MAX_BYTES` from `@polaris/shared-transport`, and it is
+ * and `DEFAULT_STREAM_MAX_BYTES` from `@polaris/bus`, and it is
  * the ONLY caller of several of them. Scanning references as TypeScript-only
  * reported all four as dead — the provisioner that creates every stream in
  * the platform was invisible to the check.
@@ -182,8 +179,8 @@ const packageKeyCache = new Map();
 /**
  * The package a file belongs to, as a repo-relative path.
  *
- * The first two path segments were exactly right while every package was
- * `packages/<name>`. The six-kind tree has `libs/persistence/postgres` and
+ * The first two path segments were exactly right while every package sat one
+ * level under a single flat root. The six-kind tree has `libs/persistence/postgres` and
  * `connectors/destinations/braze/v1`, where two segments name a GROUPING
  * directory instead: every `libs/persistence/*` would collapse into one
  * "package", so a call from the clickhouse driver into the postgres one would

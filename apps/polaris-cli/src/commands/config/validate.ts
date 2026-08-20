@@ -34,7 +34,7 @@
  * @see docs/implementation/project-config-plan.md §11
  */
 
-import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/tenancy-config-schemas";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import type { AuditEnvironment, ProjectConfigRow } from "../../db/index.js";
 import { CliError, ExitCode } from "../../errors.js";

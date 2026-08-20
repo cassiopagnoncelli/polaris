@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
 import { destinationReachingFamilies, topicFamilyReachesDestinations } from "../src/index.js";
 
 // Four levels: this file sits at `libs/archive/replay/test/`, one deeper than
-// the `packages/<name>/test/` it moved from.
+// the flat `<package>/test/` it moved from.
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 
 describe("topicFamilyReachesDestinations", () => {

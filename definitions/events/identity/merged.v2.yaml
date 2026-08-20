@@ -17,5 +17,5 @@ description: >-
   and the tombstoned profile so downstream reads can resolve either.
 lifecycle: active
 since: "2026-08-14"
-schema_module: "@polaris/shared-schemas/events/identity/merged.v2"
+schema_module: "@polaris/spec/events/identity/merged.v2"
 schema_export: identityMergedV2PropertiesSchema

@@ -4,7 +4,7 @@
  * Same shape as the sessionizer / identity-resolver / analytics-projector
  * bootstraps:
  *
- *   1. Build the logger and KafkaJS client through `@polaris/shared-transport`.
+ *   1. Build the logger and KafkaJS client through `@polaris/bus`.
  *   2. Build the `PolarisProducer` and `PolarisConsumer`.
  *   3. Build the PostgreSQL touchpoint store (ADR 0005); tests inject their own.
  *   4. Build the streaming runtime (consumer + producer + store + transform).
@@ -19,9 +19,9 @@
  */
 
 import { hostname } from "node:os";
-import { closeDb, createDb } from "@polaris/shared-db";
-import { createLogger, type Logger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
+import { closeDb, createDb } from "@polaris/persistence-postgres";
+import { createLogger, type Logger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
 import {
   createDlqLedgerRecorder,
   createKyselyProcessorDlqRecordRepository,
@@ -34,14 +34,14 @@ import {
   type ProcessorRunHandle,
   type ProcessorRunRepository,
   processorLogContext,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   createPolarisConsumer,
   createPolarisProducer,
@@ -56,7 +56,7 @@ import {
   startIsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 
 import type { AttributionEngineRuntimeConfig } from "./config.js";
 import { createKyselyTouchpointStore } from "./repository.js";

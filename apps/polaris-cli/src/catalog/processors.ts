@@ -17,7 +17,7 @@
  *
  * A read-only reader has no license to disagree with the writer about
  * what a valid manifest is. The schema now comes from
- * `@polaris/shared-processor`, which is where the manifest contract
+ * `@polaris/pipeline`, which is where the manifest contract
  * lives; what stays here is the part that is genuinely CLI-shaped — the
  * tree walk, and the decision to warn-and-continue rather than throw so
  * one bad file cannot break `processors list`.
@@ -47,7 +47,7 @@ import {
   processorReplaySchema,
   processorTopicSpecSchema,
   processorVersionSchema,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import { parse as parseYaml } from "yaml";
 
 // Re-exported so existing CLI imports keep resolving through this module.

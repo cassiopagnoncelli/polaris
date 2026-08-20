@@ -86,7 +86,7 @@ export async function planClickhouseRebuild(
     return reject(
       "clickhouse_unreachable",
       "clickhouse_unreachable: the planner needs a `readPartitions` adapter to estimate partitions. " +
-        "The CLI wires this from the shared-clickhouse operator client; ensure the runner can reach ClickHouse.",
+        "The CLI wires this from the persistence-clickhouse operator client; ensure the runner can reach ClickHouse.",
     );
   }
 

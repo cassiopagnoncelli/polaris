@@ -14,10 +14,10 @@
  * forbids the columns and tests assert the surface.
  */
 
-import type { ResolvedActor } from "@polaris/shared-control-plane";
-import type { AuditRecordsTable } from "@polaris/shared-control-plane-db";
-import type { Database } from "@polaris/shared-db";
-import { POLARIS_ENVIRONMENTS } from "@polaris/shared-environments";
+import type { ResolvedActor } from "@polaris/tenancy-control-plane";
+import type { AuditRecordsTable } from "@polaris/persistence-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
+import { POLARIS_ENVIRONMENTS } from "@polaris/runtime-environments";
 import type { Kysely } from "kysely";
 import { v7 as uuidv7 } from "uuid";
 
@@ -25,7 +25,7 @@ import { v7 as uuidv7 } from "uuid";
  * Typed mirror of the `audit_records` table. Duplicated from
  * `apps/polaris-cli/src/db/audit-records.ts` for the same reason the
  * table shape and its `declare module` augmentation now live in
- * `@polaris/shared-control-plane-db`, which owns them for both this service
+ * `@polaris/persistence-control-plane`, which owns them for both this service
  * and the CLI. They used to be declared here AND in the CLI: module
  * augmentation is additive, so TypeScript merged the two copies silently —
  * right up until someone edited one of them.

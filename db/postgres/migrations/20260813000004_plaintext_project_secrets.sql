@@ -4,7 +4,7 @@
 --
 -- Until now the platform rule was "PostgreSQL stores references, never
 -- plaintext": a secret lived in Vault (or the process environment) and the
--- database held a `provider:ref` pointer that `@polaris/shared-secrets`
+-- database held a `provider:ref` pointer that `@polaris/runtime-secrets`
 -- resolved per use. The rule now splits in two:
 --
 --   - APP / DEPLOYMENT secrets (the Postgres DSN, the broker password, the

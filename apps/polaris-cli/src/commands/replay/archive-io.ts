@@ -24,7 +24,7 @@ import {
   type ArchiveReplaySource,
   createArchiveReplaySource,
   createS3ArchiveStore,
-} from "@polaris/shared-archive";
+} from "@polaris/archive-writer";
 
 /** Environment variable that decides whether an archive exists at all. */
 export const ARCHIVE_BUCKET_ENV = "POLARIS_ARCHIVE_BUCKET";

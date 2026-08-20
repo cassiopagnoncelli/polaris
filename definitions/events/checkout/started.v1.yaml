@@ -8,5 +8,5 @@ description: >-
   cart line item.
 lifecycle: active
 since: "2026-01-20"
-schema_module: "@polaris/shared-schemas/events/checkout/started.v1"
+schema_module: "@polaris/spec/events/checkout/started.v1"
 schema_export: checkoutStartedV1PropertiesSchema

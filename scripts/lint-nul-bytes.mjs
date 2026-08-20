@@ -45,10 +45,16 @@ const ESCAPE_FORM = `${String.fromCharCode(92)}u0000`;
 // Root-level files (README.md, AGENTS.md, Makefile) are scanned too — see
 // `iterateSourceFiles`. The success message claims the repo is clean, so the
 // scan has to cover everything that claim implies.
+// The list is a SET: `iterateSourceFiles` walks each entry in turn and yields
+// what it finds, so a root named twice yields every file under it twice and
+// reports every NUL in it twice. `libs` and `definitions` were each listed
+// twice while the ADR-0007 destinations sat beside the roots they replaced,
+// which was invisible for as long as no fixture had two NULs under either.
 const SCAN_DIRS = [
   "apps",
-  "packages",
   "libs",
+  "sdks",
+  "connectors",
   "sync",
   "async",
   "definitions",
@@ -58,13 +64,6 @@ const SCAN_DIRS = [
   "tests",
   "agents",
   "bin",
-  // ADR-0007 destinations, listed beside the old roots. The success message
-  // claims the repository is clean, so every root the tree can hold code in
-  // has to be scanned for that claim to stay true.
-  "libs",
-  "sdks",
-  "connectors",
-  "definitions",
 ];
 
 // An allow-list, not a deny-list. Every extension here is text by definition,

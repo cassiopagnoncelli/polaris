@@ -16,7 +16,7 @@
 --
 --   - **No resolved secret values.** The destination row stores a `secret_ref`
 --     (`provider:ref` form); the runtime resolves it through
---     `@polaris/shared-secrets` only at delivery time, in memory, and the
+--     `@polaris/runtime-secrets` only at delivery time, in memory, and the
 --     plaintext NEVER lands in this table. The schema has NO column
 --     resembling `secret`, `token`, `bearer`, `credential`, `plaintext`,
 --     `authorization`, `api_key`, or `private_key`.

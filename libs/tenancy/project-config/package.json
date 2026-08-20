@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-project-config",
+  "name": "@polaris/tenancy-project-config",
   "version": "0.0.0",
   "private": true,
   "description": "Read side of per-(project, environment) configuration: snapshot assembly, in-process cache, LISTEN/NOTIFY invalidation, and redaction-safe secret boxing.",
@@ -29,10 +29,10 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-environments": "workspace:*",
-    "@polaris/shared-logger": "workspace:*",
-    "@polaris/shared-secrets": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
+    "@polaris/observability-logger": "workspace:*",
+    "@polaris/runtime-secrets": "workspace:*",
     "kysely": "^0.29.0",
     "pg": "^8.20.0"
   },

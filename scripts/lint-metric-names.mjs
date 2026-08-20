@@ -69,7 +69,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
  */
 const SOURCE_ROOTS = [
   "apps",
-  "packages",
   "sync",
   "async",
   "libs",

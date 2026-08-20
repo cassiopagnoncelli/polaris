@@ -18,8 +18,8 @@
  * @see db/postgres/migrations/20260810000001_create_transport_checkpoints.sql
  */
 
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { PostgresCheckpointStore } from "@polaris/shared-transport";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { PostgresCheckpointStore } from "@polaris/bus";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

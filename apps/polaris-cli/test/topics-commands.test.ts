@@ -29,7 +29,7 @@ import {
   dedicatedStreamFamily,
   STREAM_FAMILY_RAW_EVENTS,
   STREAM_FAMILY_RESOLVED_EVENTS,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -28,7 +28,7 @@
  * @see db/postgres/migrations/20260811000001_create_attribution_touchpoint_chains.sql
  */
 
-import type { Database } from "@polaris/shared-db";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 import type { TouchpointStore } from "./store.js";
 import type { CampaignTuple, PrimaryIdentifierKind } from "./transform.js";

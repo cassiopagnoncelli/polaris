@@ -19,10 +19,10 @@
  */
 
 import fastifyCookie from "@fastify/cookie";
-import { MappingSemanticsError } from "@polaris/shared-control-plane";
-import { MaskedSecretWriteError } from "@polaris/shared-control-plane-db";
-import type { PolarisEnvironment } from "@polaris/shared-environments";
-import { ProblemError } from "@polaris/shared-service-bootstrap";
+import { MappingSemanticsError } from "@polaris/tenancy-control-plane";
+import { MaskedSecretWriteError } from "@polaris/persistence-control-plane";
+import type { PolarisEnvironment } from "@polaris/runtime-environments";
+import { ProblemError } from "@polaris/runtime-service-bootstrap";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import {

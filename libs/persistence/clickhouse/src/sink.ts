@@ -27,7 +27,7 @@ import {
   createClient,
   type ClickHouseClient as UnderlyingClickHouseClient,
 } from "@clickhouse/client";
-import type { Logger } from "@polaris/shared-logger";
+import type { Logger } from "@polaris/observability-logger";
 import { ClickHouseConnectionError, ClickHouseQueryError } from "./errors.js";
 
 /** Ingestion interface table for source events (`resolved.events`). */

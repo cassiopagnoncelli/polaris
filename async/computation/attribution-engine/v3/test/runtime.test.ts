@@ -14,13 +14,13 @@
  *   - output events include processor metadata.
  */
 
-import { createLogger } from "@polaris/shared-logger";
+import { createLogger } from "@polaris/observability-logger";
 import {
   deriveEventId,
   METRIC_PROCESSOR_EVENTS_SKIPPED_TOTAL,
   type ProcessorActivationGate,
   type ProcessorMetrics,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   decodeEvent,
   type PolarisConsumer,
@@ -31,7 +31,7 @@ import {
   STREAM_FAMILY_RAW_EVENTS,
   type TransportMessageContext,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { describe, expect, it, vi } from "vitest";
 import { createRuntime } from "../src/runtime.js";
 import { InMemoryTouchpointStore } from "../src/store.js";

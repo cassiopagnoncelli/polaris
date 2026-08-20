@@ -22,9 +22,9 @@
 
 import { hostname } from "node:os";
 
-import { closeDb, createDb, type Database } from "@polaris/shared-db";
-import { createLogger, type Logger } from "@polaris/shared-logger";
-import { toPrometheusText } from "@polaris/shared-metrics";
+import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
+import { createLogger, type Logger } from "@polaris/observability-logger";
+import { toPrometheusText } from "@polaris/observability-metrics";
 import {
   createDlqLedgerRecorder,
   createKyselyProcessorDlqRecordRepository,
@@ -37,14 +37,14 @@ import {
   type ProcessorRunHandle,
   type ProcessorRunRepository,
   processorLogContext,
-} from "@polaris/shared-processor";
+} from "@polaris/pipeline";
 import {
   type BootstrappedService,
   bootstrapService,
   NOOP_OPENAPI_SETUP,
   type ReadinessProbe,
   type ShutdownTask,
-} from "@polaris/shared-service-bootstrap";
+} from "@polaris/runtime-service-bootstrap";
 import {
   createPolarisConsumer,
   createPolarisProducer,
@@ -63,7 +63,7 @@ import {
   type IsolationSnapshot,
   type TransportConnection,
   type TransportHooks,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Kysely } from "kysely";
 
 import type { SyncIdentityRuntimeConfig } from "./config.js";

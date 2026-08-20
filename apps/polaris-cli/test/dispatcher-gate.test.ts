@@ -23,8 +23,8 @@ import type {
   OperatorTokenRepository,
   OperatorTokenRow,
   ResolvedActor,
-} from "@polaris/shared-control-plane";
-import { POLARIS_HASH_ALGORITHM } from "@polaris/shared-secrets";
+} from "@polaris/tenancy-control-plane";
+import { POLARIS_HASH_ALGORITHM } from "@polaris/runtime-secrets";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type CommandContext,

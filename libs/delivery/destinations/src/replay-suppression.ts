@@ -55,9 +55,9 @@
 /**
  * Header name the replay tooling stamps when redelivering an event for
  * replay purposes. Matches the platform header convention from
- * `@polaris/shared-transport/src/headers.ts`.
+ * `@polaris/bus/src/headers.ts`.
  */
-import type { MessageHeaders } from "@polaris/shared-transport";
+import type { MessageHeaders } from "@polaris/bus";
 
 export const POLARIS_HEADER_REPLAY = "polaris-replay";
 

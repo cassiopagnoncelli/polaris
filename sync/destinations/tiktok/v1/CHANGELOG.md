@@ -3,7 +3,7 @@
 ## v1.2.0 — mobile-app `event_source` inference (WH7LZ0WZ)
 
 - `inferEventSource` now returns `app` when any `context.app_*` slot on the normalized envelope is populated. `app` wins over `web` so native-app webviews are attributed correctly.
-- Depends on the additive `EnvelopeAppContext` extension to `@polaris/shared-destination-normalize`'s `FlatContext` (landed alongside G7ZCYLL6).
+- Depends on the additive `EnvelopeAppContext` extension to `@polaris/delivery-normalize`'s `FlatContext` (landed alongside G7ZCYLL6).
 - No deliverer or descriptor identity changes; v1 contract preserved.
 
 ## v1.1.0 — additive event-matrix expansion (XJ8BT875)
@@ -15,13 +15,13 @@
 
 ## v1.0.0 — initial release (P9-005)
 
-- Second real-vendor consumer of the destination runtime (`@polaris/shared-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003).
+- Second real-vendor consumer of the destination runtime (`@polaris/delivery-destinations`, P9-001); follows the structure pioneered by `@polaris/consumer-meta-capi-v1` (P9-003).
 - Maps the canonical Polaris event subset {`payment.approved`, `checkout.started`, `user.identified`} into TikTok Events API events {`Purchase`, `InitiateCheckout`, `CompleteRegistration`}.
 - Stages composed:
   - `normalize/v1` — shared layer (email + phone sha256, identity hashing on, defensive second-pass redaction) plus TikTok-specific `event_source` inference (`web` for browser source types, `app` for mobile, `crm` for backend-emitted events).
   - `mapper/v1` — per-event canonical → TikTok payload (`user` / `properties`) builders. Vendor dedupe keys on the canonical `event_id`.
   - `deliverer/v1` — HTTP POST to `business-api.tiktok.com/open_api/<vendor_api_version>/event/track/` with `Access-Token: <token>` header; body wraps payload in `{ event_source, event_source_id, data: [...], test_event_code? }`.
-- Secret shape: JSON `{ access_token, pixel_id, test_event_code? }` resolved through `@polaris/shared-secrets`. The plaintext access token never lands in PostgreSQL or audit_records.
+- Secret shape: JSON `{ access_token, pixel_id, test_event_code? }` resolved through `@polaris/runtime-secrets`. The plaintext access token never lands in PostgreSQL or audit_records.
 - Error class mapping:
   - HTTP 2xx → accepted
   - HTTP 408 / 429 / 5xx → failed_retryable (timeout / rate_limit / transient)

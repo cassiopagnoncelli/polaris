@@ -84,7 +84,7 @@ Alpine wins for image size (~50 MB final layer compared to ~140 MB for
 `bookworm-slim`) and matches the platform's "boring and explicit" rule.
 
 The known native-deps risk is `@node-rs/argon2` (used by
-`@polaris/shared-secrets`). It ships prebuilt `linux-musl-x64-gnu` and
+`@polaris/runtime-secrets`). It ships prebuilt `linux-musl-x64-gnu` and
 `linux-musl-arm64-gnu` binaries, so Alpine works without rebuilding from
 source. `libc6-compat` is installed in both the builder and runtime stages
 to keep glibc-targeted prebuilts compatible if they ever appear.
@@ -113,7 +113,7 @@ Every image creates `polaris` (uid 1001, gid 1001) and runs as that user.
 `tini` is the entrypoint, which:
 
 - forwards POSIX signals (`SIGTERM`, `SIGINT`) to the Node process so
-  graceful shutdown handlers in `@polaris/shared-service-bootstrap` fire.
+  graceful shutdown handlers in `@polaris/runtime-service-bootstrap` fire.
 - reaps zombie children if the service ever shells out (it does not today;
   defensive insurance).
 
@@ -198,7 +198,7 @@ working tree automatically. Pre-set the env vars to override.
 ## Runtime configuration
 
 Each service reads its configuration from environment variables validated by
-`@polaris/shared-config`. The Dockerfiles bake **no** runtime config. Refer
+`@polaris/runtime-config`. The Dockerfiles bake **no** runtime config. Refer
 to each service's `src/config.ts` for the exhaustive list:
 
 - `apps/ingester-api/src/config.ts`

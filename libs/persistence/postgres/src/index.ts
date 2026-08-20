@@ -1,5 +1,5 @@
 /**
- * @polaris/shared-db
+ * @polaris/persistence-postgres
  *
  * Polaris's sanctioned PostgreSQL access layer.
  *

@@ -31,18 +31,18 @@
  * `mutates: true`. P6-007 gates this against production-without-token.
  */
 
-import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/shared-config";
+import { loadConfigWithDefaults, rabbitmqEnvSchema } from "@polaris/runtime-config";
 import {
   createKyselyDlqRecordRepository,
   type DlqRecord,
   type DlqRecordRepository,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 import {
   createPolarisProducer,
   createTransportConnection,
   type PolarisProducer,
   redeliverQueueName,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

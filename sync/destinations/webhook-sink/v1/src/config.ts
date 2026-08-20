@@ -35,7 +35,7 @@ import {
   redisEnvSchema,
   type ServiceConfig,
   serviceEnvSchema,
-} from "@polaris/shared-config";
+} from "@polaris/runtime-config";
 import { z } from "zod";
 
 /**
@@ -145,7 +145,7 @@ export function webhookSinkConfigSchema() {
 
 /**
  * Load the runtime config. Throws `ConfigValidationError` (from
- * `@polaris/shared-config`) when any required value is missing or
+ * `@polaris/runtime-config`) when any required value is missing or
  * malformed — services let that error crash the process so deployments
  * fail fast.
  */

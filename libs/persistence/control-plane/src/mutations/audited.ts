@@ -24,8 +24,8 @@
  * Anything that throws inside the callback rolls both writes back together.
  */
 
-import type { ActorSource } from "@polaris/shared-control-plane";
-import type { Database } from "@polaris/shared-db";
+import type { ActorSource } from "@polaris/tenancy-control-plane";
+import type { Database } from "@polaris/persistence-postgres";
 import type { Kysely, Transaction } from "kysely";
 
 import type { AuditEnvironment } from "../queries/audit-records.js";

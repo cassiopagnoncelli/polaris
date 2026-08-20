@@ -20,7 +20,7 @@
 FROM node:22-alpine AS builder
 
 # `libc6-compat` lets prebuilt linux-musl native modules (e.g.
-# @node-rs/argon2 used by @polaris/shared-secrets) load on Alpine.
+# @node-rs/argon2 used by @polaris/runtime-secrets) load on Alpine.
 RUN apk add --no-cache libc6-compat \
     # No version: pnpm reads `packageManager` from the root package.json and
     # self-manages to it. Pinning here made a THIRD copy of that version --

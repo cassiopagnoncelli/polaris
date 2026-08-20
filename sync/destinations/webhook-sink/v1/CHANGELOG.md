@@ -2,7 +2,7 @@
 
 ## v1.0.0 — initial release (P9-002)
 
-- First real consumer of the destination runtime (`@polaris/shared-destinations`, P9-001).
+- First real consumer of the destination runtime (`@polaris/delivery-destinations`, P9-001).
 - POST canonical envelope as JSON to `instance.config.target_url` (resolved from the destination instance's `secret_ref` — the secret value IS the URL when stored in env/secret manager; receivers without a URL secret can use a fixed URL on the destination instance row).
 - Optional HMAC-SHA256 signature via `X-Polaris-Signature: sha256=<hex>` when a signing secret is configured.
 - Stable `X-Polaris-Delivery-Id` and `X-Polaris-Delivery-Attempt` headers for receiver-side dedupe / observability.

@@ -32,5 +32,5 @@ description: >-
   identifier are dropped.
 lifecycle: active
 since: "2026-05-14"
-schema_module: "@polaris/shared-schemas/events/attribution/touchpoint_captured.v1"
+schema_module: "@polaris/spec/events/attribution/touchpoint_captured.v1"
 schema_export: attributionTouchpointCapturedV1PropertiesSchema

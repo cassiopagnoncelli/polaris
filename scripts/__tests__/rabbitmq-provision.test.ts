@@ -20,7 +20,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultSuperStreams, POLARIS_COMPONENTS } from "@polaris/shared-transport";
+import { defaultSuperStreams, POLARIS_COMPONENTS } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");

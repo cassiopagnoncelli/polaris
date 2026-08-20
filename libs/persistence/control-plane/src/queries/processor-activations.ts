@@ -5,7 +5,7 @@
  * row records whether the processor is enabled in that scope. The CLI
  * (`polaris processors enable` / `disable`) upserts the runtime toggle, and
  * each processor's activation gate
- * (`@polaris/shared-processor`'s `createProcessorActivationGate`) reads it per
+ * (`@polaris/pipeline`'s `createProcessorActivationGate`) reads it per
  * message: a `disabled` row stops that processor from acting on that scope,
  * anything else lets the event through.
  *
@@ -15,7 +15,7 @@
  *     no `transform`, `rule`, `mapping`, `input_topic`, `output_topic`,
  *     `config_blob`, `routing`, or any other column that would let a write
  *     path stash processor semantics into PostgreSQL. The typed schema in
- *     `@polaris/shared-db` enforces this at compile time, and the CLI's
+ *     `@polaris/persistence-postgres` enforces this at compile time, and the CLI's
  *     argument validation rejects rule-shaped flags before ever reaching
  *     this module.
  *
@@ -29,7 +29,7 @@
  * @see db/postgres/migrations/20260512000006_create_processor_activations.sql
  * @see libs/persistence/postgres/src/database.ts ProcessorActivationsTable
  */
-import type { Database, ProcessorActivationState } from "@polaris/shared-db";
+import type { Database, ProcessorActivationState } from "@polaris/persistence-postgres";
 import type { Kysely } from "kysely";
 
 /**

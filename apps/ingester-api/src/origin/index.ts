@@ -25,7 +25,7 @@ export type {
   OriginLookupInput,
 } from "./types.js";
 
-// Side-effect import: applies `declare module "@polaris/shared-db"` so the
+// Side-effect import: applies `declare module "@polaris/persistence-postgres"` so the
 // `Database` interface gains `source_allowed_origins` for typed Kysely
 // queries. Without this import the repository's `db.selectFrom(...)` won't
 // know the table exists.

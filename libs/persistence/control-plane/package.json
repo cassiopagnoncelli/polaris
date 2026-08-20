@@ -1,5 +1,5 @@
 {
-  "name": "@polaris/shared-control-plane-db",
+  "name": "@polaris/persistence-control-plane",
   "version": "0.0.0",
   "private": true,
   "description": "Control-plane data access shared by the polaris CLI and the control-plane API. Owns the audited mutation units of work: the bare writers and insertAuditRecord are internal, so no caller can mutate control-plane state without its audit row.",
@@ -33,10 +33,10 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-control-plane": "workspace:*",
-    "@polaris/shared-db": "workspace:*",
-    "@polaris/shared-environments": "workspace:*",
-    "@polaris/shared-secrets": "workspace:*",
+    "@polaris/tenancy-control-plane": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/runtime-environments": "workspace:*",
+    "@polaris/runtime-secrets": "workspace:*",
     "kysely": "^0.29.0",
     "uuid": "^14.0.0"
   }

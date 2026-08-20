@@ -6,16 +6,16 @@ export default defineConfig({
     environment: "node",
     include: [
       "apps/**/*.{test,spec}.?(c|m)[jt]s?(x)",
-      "packages/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "sync/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "async/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       // ADR-0007's six-kind roots. `definitions/**` is live: 0DIPB moved
       // `catalog/` under it, and those packages are workspace members whose
       // contents are enforcement inputs rather than documentation, so their
-      // registries carry tests like any package. The other three still match
-      // nothing, exactly as in `pnpm-workspace.yaml`: both epochs are
-      // collected at once so that each move card is a pure `git mv`, and
-      // IJ4NN deletes the `packages/**` line once nothing is left behind it.
+      // registries carry tests like any package. `connectors/**` still matches
+      // nothing, exactly as in `pnpm-workspace.yaml`. The old flat root was
+      // collected alongside these for the length of the transition, so that
+      // each move card could be a pure `git mv`; IJ4NN emptied it and its line
+      // went with it.
       //
       // A root missing from this list does not fail — the tests under it are
       // simply never collected, and a suite that runs nothing is the one
@@ -39,7 +39,6 @@ export default defineConfig({
       reportsDirectory: "./coverage",
       include: [
         "apps/**/src/**",
-        "packages/**/src/**",
         "sync/**/src/**",
         "async/**/src/**",
         // The same six-kind roots, so a moved package keeps being measured as

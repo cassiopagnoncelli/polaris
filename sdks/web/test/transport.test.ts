@@ -1,4 +1,4 @@
-import { batchRejectedResultSchema } from "@polaris/shared-schemas";
+import { batchRejectedResultSchema } from "@polaris/spec";
 // @vitest-environment happy-dom
 /**
  * `HttpsTransport` — fetch / sendBeacon transport for the Web SDK.

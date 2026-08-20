@@ -1,5 +1,5 @@
 /**
- * @polaris/idp — Idp access-token verification for Polaris services.
+ * @polaris/auth — Idp access-token verification for Polaris services.
  *
  * A vendored subset of the private `@idp/jwt` package. See README.md for
  * provenance, what was left behind, and the upgrade procedure.

@@ -1,8 +1,8 @@
 {
-  "name": "@polaris/shared-destination-normalize",
+  "name": "@polaris/delivery-normalize",
   "version": "0.0.0",
   "private": true,
-  "description": "Vendor-agnostic normalization primitives reused by every Polaris destination consumer. Owns SHA-256 hashing of canonical PII, identity priority selection, context flattening, timestamp dual-form normalization, consent gating, and a defensive second-pass into @polaris/shared-policy. No network. No I/O. No vendor mapping.",
+  "description": "Vendor-agnostic normalization primitives reused by every Polaris destination consumer. Owns SHA-256 hashing of canonical PII, identity priority selection, context flattening, timestamp dual-form normalization, consent gating, and a defensive second-pass into @polaris/governance. No network. No I/O. No vendor mapping.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -69,7 +69,7 @@
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
-    "@polaris/shared-policy": "workspace:*",
-    "@polaris/shared-schemas": "workspace:*"
+    "@polaris/governance": "workspace:*",
+    "@polaris/spec": "workspace:*"
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Processor DLQ publish helper.
  *
- * Thin wrapper around `@polaris/shared-transport`'s `republishToDlq`. Adds the
+ * Thin wrapper around `@polaris/bus`'s `republishToDlq`. Adds the
  * defaults that every processor needs:
  *
  *   - the `component` field is derived from the processor identity
@@ -15,7 +15,7 @@
  * The wrapper does NOT decide retry vs DLQ. Processors call this helper
  * only when they have already decided the message is going to the DLQ —
  * the helper is the LAST step. Retry routing uses `republishToRetry` from
- * `@polaris/shared-transport` directly; the classifier in `./classify.ts`
+ * `@polaris/bus` directly; the classifier in `./classify.ts`
  * names that decision.
  *
  * @see libs/bus/src/dlq.ts
@@ -27,7 +27,7 @@ import {
   type PolarisProducer,
   republishToDlq,
   type TransportMessagePayload,
-} from "@polaris/shared-transport";
+} from "@polaris/bus";
 import { classifyError, type ProcessorRetryClassification } from "./classify.js";
 import type { ProcessorDlqRecordRepository } from "./db/processor-dlq-records.js";
 import type { ProcessorIdentity } from "./identity.js";

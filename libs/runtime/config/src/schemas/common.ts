@@ -1,7 +1,7 @@
 import {
   type DeploymentEnvironment,
   deploymentEnvironmentSchema,
-} from "@polaris/shared-environments";
+} from "@polaris/runtime-environments";
 import { z } from "zod";
 
 /**

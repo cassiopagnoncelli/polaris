@@ -41,7 +41,6 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 // other package's violations stopped being looked for.
 const SCAN_DIRS = [
   "apps",
-  "packages",
   "sync",
   "async",
   "definitions",
@@ -329,7 +328,7 @@ function main() {
   }
   console.error("");
   console.error(
-    "  Route the access through @polaris/shared-clickhouse instead. See docs/architecture/07-clickhouse.md 'Access Control'.",
+    "  Route the access through @polaris/persistence-clickhouse instead. See docs/architecture/07-clickhouse.md 'Access Control'.",
   );
   process.exitCode = 1;
 }

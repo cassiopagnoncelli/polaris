@@ -29,5 +29,5 @@ description: >-
   is deterministically derived so replays produce the same value.
 lifecycle: active
 since: "2026-05-12"
-schema_module: "@polaris/shared-schemas/events/session/started.v1"
+schema_module: "@polaris/spec/events/session/started.v1"
 schema_export: sessionStartedV1PropertiesSchema

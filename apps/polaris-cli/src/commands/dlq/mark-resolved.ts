@@ -21,7 +21,7 @@ import {
   createKyselyDlqRecordRepository,
   type DlqRecord,
   type DlqRecordRepository,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";

@@ -18,14 +18,14 @@
  * Variables panel is the one to reach for when typing a credential by hand.
  */
 
-import { PROJECT_CONFIG_SCHEMAS } from "@polaris/project-config-schemas";
-import { MappingSemanticsError } from "@polaris/shared-control-plane";
+import { PROJECT_CONFIG_SCHEMAS } from "@polaris/tenancy-config-schemas";
+import { MappingSemanticsError } from "@polaris/tenancy-control-plane";
 import {
   FILTER_OPERATORS,
   FILTERABLE_ROOTS,
   parseRoutingGateConfig,
   ROUTING_GATE_CONFIG_KEY,
-} from "@polaris/shared-destinations";
+} from "@polaris/delivery-destinations";
 import { v7 as uuidv7 } from "uuid";
 import type { CommandContext, CommandDefinition } from "../../command.js";
 import { MaskedSecretWriteError } from "../../db/index.js";
