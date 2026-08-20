@@ -73,6 +73,15 @@ const RETIRED_PATH_CANARY = `consumers${"/"}<vendor>/v<n>/mappers/`;
  */
 const CONFIG_KEY_CANARY = `unread_${"canary"}_key`;
 
+/**
+ * The exclusion that broke the identity and enrichment images.
+ *
+ * Written as a literal, unlike the canaries above: `lint-docker-context`
+ * reads `.dockerignore` and Dockerfiles and nothing else, so a mention in
+ * this file cannot be mistaken for a use.
+ */
+const DOCKER_CONTEXT_CANARY = "catalog";
+
 /** A column no ClickHouse table has. Assembled, like every canary here. */
 const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
 
@@ -264,6 +273,22 @@ const GATES = [
     files: [".env.example"],
     inject: () => append(".env.example", `\n${ENV_DOC_CANARY}=1\n`),
     assertInjected: () => read(".env.example").includes(ENV_DOC_CANARY),
+  },
+  {
+    // Injected into `.dockerignore`, not into a Dockerfile: the exclusion is
+    // the half that moved. Re-adding the one word that made two images
+    // unbuildable for six days is the exact fault, and `assertInjected` looks
+    // for a BARE `catalog` line because the file now explains the word at
+    // length in comments -- an `includes("catalog")` would hold before the
+    // injection and prove nothing.
+    name: "lint:docker-context",
+    command: "node scripts/lint-docker-context.mjs",
+    files: [".dockerignore"],
+    inject: () => append(".dockerignore", `\n${DOCKER_CONTEXT_CANARY}\n`),
+    assertInjected: () =>
+      read(".dockerignore")
+        .split("\n")
+        .some((line) => line === DOCKER_CONTEXT_CANARY),
   },
   {
     name: "openapi:check",
