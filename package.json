@@ -12,7 +12,7 @@
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && pnpm -r --if-present run typecheck",
-    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql && pnpm lint:manifest-drift && pnpm lint:retired-paths && pnpm lint:package-name-congruence && pnpm lint:env-example && pnpm lint:docker-context",
+    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql && pnpm lint:manifest-drift && pnpm lint:retired-paths && pnpm lint:package-name-congruence && pnpm lint:env-example && pnpm lint:docker-context && pnpm lint:blueprint-links",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
     "lint:nul-bytes": "node scripts/lint-nul-bytes.mjs",
@@ -65,6 +65,7 @@
     "lint:retired-paths": "node scripts/lint-retired-paths.mjs",
     "lint:package-name-congruence": "node scripts/lint-package-name-congruence.mjs",
     "lint:docker-context": "node scripts/lint-docker-context.mjs",
+    "lint:blueprint-links": "node scripts/lint-blueprint-links.mjs",
     "check:catalog-sql:ci": "node scripts/check-catalog-sql.mjs --require-clickhouse",
     "verify:gates:services": "node scripts/verify-gates.mjs --with-services"
   },

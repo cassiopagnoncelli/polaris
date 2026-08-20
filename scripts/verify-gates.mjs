@@ -102,6 +102,16 @@ const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
  */
 const PACKAGE_NAME_CANARY = `@polaris/${"shared"}-governance`;
 
+/**
+ * A blueprint link target ADR-0007 deleted, assembled like the rest.
+ *
+ * `lint-retired-paths` does not match this spelling as it stands — its
+ * `packages-dir` rule wants a trailing slash or a word boundary, and a
+ * package name supplies neither. It is one edit away from supplying both,
+ * which is the trap every other canary in this file was assembled to avoid.
+ */
+const BLUEPRINT_LINK_CANARY = `link:../../${"packages"}/node-sdk`;
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -235,8 +245,22 @@ const GATES = [
       const file = "libs/governance/package.json";
       write(file, read(file).replace('"@polaris/governance"', `"${PACKAGE_NAME_CANARY}"`));
     },
+    assertInjected: () => read("libs/governance/package.json").includes(PACKAGE_NAME_CANARY),
+  },
+  {
+    // Injected into the blueprint's own manifest rather than into a fixture:
+    // the check reads DECLARED specifiers, and the fault as it actually
+    // occurs is a specifier a move left behind. `01-storefront` is the only
+    // blueprint there is, so it is also the only place the fault can go.
+    name: "lint:blueprint-links",
+    command: "node scripts/lint-blueprint-links.mjs",
+    files: ["blueprints/01-storefront/package.json"],
+    inject: () => {
+      const file = "blueprints/01-storefront/package.json";
+      write(file, read(file).replace('"link:../../sdks/node"', `"${BLUEPRINT_LINK_CANARY}"`));
+    },
     assertInjected: () =>
-      read("libs/governance/package.json").includes(PACKAGE_NAME_CANARY),
+      read("blueprints/01-storefront/package.json").includes(BLUEPRINT_LINK_CANARY),
   },
   {
     name: "lint:metric-names (dashboard)",
