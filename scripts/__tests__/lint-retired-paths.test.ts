@@ -138,7 +138,7 @@ describe("scanning a tree", () => {
     // `db/` is the storage root now, one directory per engine under it. The
     // lookbehind is what keeps `@polaris/shared-db` out of the rule's way.
     write("docs/ok-pg.md", "Author the migration in `db/postgres/migrations/`.\n");
-    write("docs/ok-pkg.md", "dbmate is a devDependency of `packages/shared-db/`.\n");
+    write("docs/ok-pkg.md", "dbmate is a devDependency of `@polaris/shared-db`.\n");
     expect(scan()).toEqual([]);
   });
 
