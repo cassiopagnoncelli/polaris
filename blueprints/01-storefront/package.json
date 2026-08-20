@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@polaris/node-sdk": "link:../../packages/node-sdk",
-    "@polaris/web-sdk": "link:../../packages/web-sdk",
+    "@polaris/node-sdk": "link:../../sdks/node",
+    "@polaris/web-sdk": "link:../../sdks/web",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

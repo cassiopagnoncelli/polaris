@@ -625,7 +625,7 @@ async function stepSendViaNodeSdk(cfg, apiKey) {
     // auto-flush ran first and drained the queue, so the explicit
     // flush() chained after observed an empty queue and returned
     // delivered=0 even though the event had been delivered — the SDK
-    // comment at packages/node-sdk/src/sdk.ts:238 documents the
+    // comment at sdks/node/src/sdk.ts:238 documents the
     // contract: "track() returns once the event is durably enqueued.
     // The diagnostic onFlush callback is the right place to observe
     // outcomes."
@@ -873,7 +873,7 @@ function parseJsonOrThrow(stdout, label) {
 async function loadNodeSdk() {
   // The acceptance test imports the SDK from the workspace by name —
   // exactly what an internal team's package.json would do. We do NOT
-  // reach into ./packages/node-sdk/src by relative path because that
+  // reach into ./sdks/node/src by relative path because that
   // would skip the published `dist/` artifact and let the test pass
   // even if the SDK is broken at the published entry point.
   return import("@polaris/node-sdk");

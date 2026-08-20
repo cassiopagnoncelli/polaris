@@ -194,7 +194,7 @@ Both SDKs are workspace packages that are not published yet, so the blueprint
 links to their built output:
 
 ```json
-"@polaris/web-sdk": "link:../../packages/web-sdk"
+"@polaris/web-sdk": "link:../../sdks/web"
 ```
 
 Two consequences. Re-run `pnpm build` at the repo root after changing SDK

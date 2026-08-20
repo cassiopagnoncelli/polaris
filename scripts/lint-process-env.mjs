@@ -49,6 +49,11 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  * `git mv`. A root matching nothing is a no-op; a root MISSING here silently
  * stops checking everything under it — the platform libraries moved to
  * `libs/` would have left every direct `process.env` read in them unseen.
+ *
+ * `sdks` earns its line twice over: the SDKs read the environment
+ * legitimately and three of their files hold ALLOW entries below. Left off,
+ * those entries would read as promises about files nothing scans — the check
+ * would report the repository clean without ever opening a published SDK.
  */
 const SCAN_DIRS = [
   "apps",
@@ -120,11 +125,11 @@ const ALLOW = new Map([
 
   // --- published SDKs: a customer's process, not a Polaris service -------
   [
-    "packages/node-sdk/src/index.ts",
+    "sdks/node/src/index.ts",
     "published SDK; the host application's environment is its own",
   ],
-  ["packages/web-sdk/src/index.ts", "published SDK; bundler-replaced build flag"],
-  ["packages/web-sdk/src/sdk.ts", "published SDK; bundler-replaced build flag"],
+  ["sdks/web/src/index.ts", "published SDK; bundler-replaced build flag"],
+  ["sdks/web/src/sdk.ts", "published SDK; bundler-replaced build flag"],
 
   // --- known debt --------------------------------------------------------
   // Empty, and worth keeping the heading to say so.

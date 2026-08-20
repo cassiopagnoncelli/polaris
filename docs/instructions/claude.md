@@ -77,9 +77,11 @@ apps/
   control-plane-api/               Fastify admin/control-plane API (target of the CLI)
   polaris-cli/                     polaris CLI (thin client of control-plane-api)
 
+sdks/                              published clients; ADR-0003 is their standards ledger
+  web/                             browser producers; layered first-party identity
+  node/                            backend producers; queue-first, explicit flush/close
+
 packages/
-  web-sdk/
-  node-sdk/
   shared-schemas/                  envelope + event Zod schemas
   shared-transport/                    transport port + RabbitMQ driver + stream-family resolver
   shared-logger/                   Pino setup
@@ -212,7 +214,7 @@ Reject list: event rejected with `forbidden_field_rejected`. Redact list: field 
 
 ## SDKs
 
-Build `packages/web-sdk` and `packages/node-sdk` first. Defer React, Ruby, and mobile SDKs.
+Build `sdks/web` and `sdks/node` first. Defer React, Ruby, and mobile SDKs.
 
 SDK v1 exposes:
 

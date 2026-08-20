@@ -1,6 +1,6 @@
 # Initialization
 
-This page enumerates the configuration options accepted by each SDK and their defaults. Type signatures match the actual exports in `packages/web-sdk/src/types.ts` and `packages/node-sdk/src/types.ts`.
+This page enumerates the configuration options accepted by each SDK and their defaults. Type signatures match the actual exports in `sdks/web/src/types.ts` and `sdks/node/src/types.ts`.
 
 ## Web SDK
 

@@ -2,7 +2,7 @@
 
 The Polaris Web SDK (`@polaris/web-sdk`) is the supported way to emit
 events from a browser. The package is real — see
-`packages/web-sdk/package.json`. The handbook with the full surface is at
+`sdks/web/package.json`. The handbook with the full surface is at
 [SDK Handbook](../sdk/README.md); this page is the *minimum* onboarding
 path.
 

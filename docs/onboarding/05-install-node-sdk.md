@@ -2,7 +2,7 @@
 
 The Polaris Node SDK (`@polaris/node-sdk`) is the supported way to emit
 events from backend services. The package is real — see
-`packages/node-sdk/package.json`. The handbook with the full surface is at
+`sdks/node/package.json`. The handbook with the full surface is at
 [SDK Handbook](../sdk/README.md); this page is the *minimum* onboarding
 path.
 

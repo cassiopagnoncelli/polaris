@@ -917,7 +917,7 @@ importers:
         specifier: ^8.15.5
         version: 8.20.0
 
-  packages/node-sdk:
+  sdks/node:
     dependencies:
       '@polaris/shared-schemas':
         specifier: workspace:*
@@ -926,7 +926,7 @@ importers:
         specifier: ^14.0.0
         version: 14.0.0
 
-  packages/web-sdk:
+  sdks/web:
     dependencies:
       '@polaris/shared-schemas':
         specifier: workspace:*
@@ -1249,7 +1249,7 @@ importers:
         version: link:../definitions/journeys
       '@polaris/node-sdk':
         specifier: workspace:*
-        version: link:../packages/node-sdk
+        version: link:../sdks/node
       '@polaris/processor-journey-orchestrator-v1':
         specifier: workspace:*
         version: link:../async/journeys/orchestrator/v1

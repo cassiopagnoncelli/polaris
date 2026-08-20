@@ -97,12 +97,17 @@ const ALLOW = new Map([
   // Public SDK surface: consumed by applications outside this repository.
   ["packages/node-sdk", "published SDK surface"],
   ["sdks/node", "published SDK surface"],
-  // `packages/browser-sdk` has never existed: the browser SDK is
-  // `packages/web-sdk`, which is NOT allow-listed and is scanned today. So this
-  // entry gets no `sdks/web` twin — writing one would allow-list a real package
-  // at the moment it moves, shrinking the check under cover of a `git mv`.
-  // ZXBDY owns the entry and resolves it with the SDK promotion.
-  ["packages/browser-sdk", "published SDK surface"],
+  // There is deliberately no `sdks/web` twin. A `packages/browser-sdk` entry
+  // sat here for months and never matched anything — the browser SDK has always
+  // been `web-sdk` — so the web SDK has been scanned all along, and its 29
+  // unreferenced exports are in the baseline as debt rather than allowed as
+  // surface. Carrying the misspelling into the new epoch would have allow-listed
+  // a real, scanned package at the moment it moved, which is the one thing a
+  // `git mv` must not do; writing it correctly would have done the same thing
+  // and looked like a typo fix. So the entry is gone and the check is unchanged:
+  // `sdks/web` is scanned, exactly as `packages/web-sdk` was. Whether those 29
+  // are surface or debt is a real question, and it is not one a move card gets
+  // to answer in passing.
   // Generated or contract types re-exported for downstream typing.
   ["libs/spec", "event contract types are the public schema surface"],
   ["libs/spec", "event contract types are the public schema surface"],

@@ -161,11 +161,11 @@ describe("findDeadExports under the six-kind tree", () => {
   });
 
   it("scans the promoted SDKs, and allow-lists only the one that was", () => {
-    // `packages/node-sdk` is allow-listed today and `packages/web-sdk` is not,
-    // so ZXBDY's move must not change either verdict. `sdks/web` deliberately
-    // has no ALLOW entry: the stale `packages/browser-sdk` key names a
-    // directory that has never existed, and mirroring it into the new epoch
-    // would allow-list a scanned package under cover of a `git mv`.
+    // `packages/node-sdk` was allow-listed and `packages/web-sdk` was not, and
+    // ZXBDY's move changed neither verdict. `sdks/web` deliberately has no ALLOW
+    // entry: the stale `packages/browser-sdk` key named a directory that never
+    // existed, so mirroring it into the new epoch would have allow-listed a
+    // scanned package under cover of a `git mv`. The key was deleted instead.
     seedPackage("sdks/node", "@polaris/node-sdk");
     seed("sdks/node/src/public.ts", "export function publicApi(): number {\n  return 1;\n}\n");
     seedPackage("sdks/web", "@polaris/web-sdk");

@@ -79,7 +79,7 @@
     "libs/observability/logger/test",
     "libs/governance/test",
     "libs/runtime/service-bootstrap/test",
-    "packages/web-sdk/test",
+    "sdks/web/test",
     "async/computation/sessionizer/v1/test",
     "scripts/__tests__"
   ]

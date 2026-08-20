@@ -150,7 +150,7 @@ Concretely:
 | Concern | Owner |
 | --- | --- |
 | Ingester request validation, per-event reject codes | `apps/ingester-api/test/**` (unit + behavioural). |
-| Node SDK retry policy, queue overflow, drop reasons | `packages/node-sdk/test/**` (unit). |
+| Node SDK retry policy, queue overflow, drop reasons | `sdks/node/test/**` (unit). |
 | spine emit shape | `sync/identity/resolver/v1/test/**`, `sync/enrichment/runtime/v1/test/**`. |
 | Replay planner deterministic output | `libs/archive/replay/test/**`. |
 | CLI argument parsing per command | `apps/polaris-cli/test/**`. |

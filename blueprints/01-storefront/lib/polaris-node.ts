@@ -80,7 +80,7 @@ const EMPTY_IDENTITY: StitchedIdentity = {
  * Backend events carry whatever identity the caller hands them — the Node
  * SDK never infers one. The Web SDK persists `anonymous_id`, `session_id`
  * and `customer_id` as one JSON record in a first-party `polaris_id` cookie
- * (see `packages/web-sdk/src/identity/serialize.ts`), and a first-party
+ * (see `sdks/web/src/identity/serialize.ts`), and a first-party
  * cookie is readable here. Read it, pass it to `track()`, and the browser's
  * `page.viewed` and this process's `checkout.started` land on the same
  * visitor instead of looking like two strangers.

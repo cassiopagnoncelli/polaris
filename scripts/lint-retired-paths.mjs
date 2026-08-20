@@ -59,6 +59,9 @@ const SCAN_DIRS = [
   ".github",
   "apps",
   "async",
+  // ADR-0007's remaining destination. Matches nothing until P9J7X creates it;
+  // listed now so the card that fills it cannot forget the gate.
+  "connectors",
   "db",
   "definitions",
   "docs",
@@ -68,17 +71,13 @@ const SCAN_DIRS = [
   "libs",
   "packages",
   "scripts",
+  // The SDK tier, listed when ZXBDY moved the two SDKs out of `packages/`.
+  // A root this check does not name is not a root it reports clean; it is one
+  // it never opens, and the whole point of a gate over prose is that a stale
+  // sentence cannot be told from a current one by reading it.
+  "sdks",
   "sync",
   "tests",
-  // ADR-0007's destinations, listed beside the old roots the way
-  // `pnpm-workspace.yaml` carries both epochs. A root matching nothing is a
-  // no-op; a root missing here stops the check looking at everything under it,
-  // so a page that moved into `libs/` could reintroduce a retired path and
-  // still pass.
-  "libs",
-  "sdks",
-  "connectors",
-  "definitions",
 ];
 
 /** Files at the repository root that are read before anything else is. */

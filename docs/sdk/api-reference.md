@@ -1,6 +1,6 @@
 # API Reference
 
-The canonical reference for the four public SDK methods. Behaviour matches `packages/web-sdk/src/sdk.ts` and `packages/node-sdk/src/sdk.ts`.
+The canonical reference for the four public SDK methods. Behaviour matches `sdks/web/src/sdk.ts` and `sdks/node/src/sdk.ts`.
 
 ```text
 track(event, properties, options?)

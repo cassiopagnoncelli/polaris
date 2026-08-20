@@ -11,16 +11,16 @@ SDKs help producers emit well-formed canonical events to the ingester. They do n
 Build these SDKs first:
 
 ```text
-packages/web-sdk
-packages/node-sdk
+sdks/web
+sdks/node
 ```
 
 Deferred:
 
 ```text
-packages/react-sdk
-packages/ruby-sdk
-packages/mobile-sdk
+sdks/react
+sdks/ruby
+sdks/mobile
 ```
 
 Framework and language-specific wrappers should build on the core SDK behavior after transport, identity/session handling, batching, retry, and ingestion compatibility are stable.
