@@ -22,3 +22,4 @@ add it now rather than after.
 | 0004 | [Production readiness decisions ledger](./0004-production-readiness-ledger.md) | Accepted | 2026-05-12 |
 | 0005 | [Externalise processor state stores, split by state shape](./0005-externalise-processor-state-stores.md) | Accepted | 2026-08-11 |
 | 0006 | [Publish the decision records](./0006-publish-the-decision-records.md) | Accepted | 2026-08-19 |
+| 0007 | [Restructure the repository around six object kinds](./0007-restructure-the-repository-around-six-object-kinds.md) | Accepted | 2026-08-20 |
