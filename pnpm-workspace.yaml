@@ -16,6 +16,32 @@ packages:
   - "catalog/journeys"
   - "catalog/reverse-etl"
   - "tests"
+
+  # ADR-0007 six-kind tree. Nothing matches these today; that is the point.
+  #
+  # The restructure moves roughly two dozen packages, and a move that also
+  # has to edit the workspace file is a move that collides with every other
+  # move in its group. So the destinations are declared first, in one card,
+  # and each subsequent move is a pure `git mv` — the package resolves under
+  # its new path the moment it lands, because pnpm resolves imports by
+  # package NAME and the name has not changed.
+  #
+  # Both old and new globs are live at once, deliberately. That is what makes
+  # the transition incremental rather than a single unreviewable commit: for
+  # the length of programme T, `packages/shared-db` and
+  # `libs/persistence/postgres` are equally valid locations. IJ4NN closes it
+  # by deleting the `packages/*` and `catalog/*` entries above once nothing
+  # is left there.
+  #
+  # A glob that matches a directory without a package.json is skipped, not an
+  # error, so `libs/*` may name `libs/persistence` (a grouping directory) and
+  # `definitions/*` may name `definitions/events` (declared YAML, not code)
+  # without either becoming a workspace member.
+  - "libs/*" # libs/spec, libs/pipeline, libs/governance
+  - "libs/*/*" # libs/persistence/postgres, libs/identity/graph
+  - "sdks/*" # sdks/web, sdks/node
+  - "connectors/*/*/*" # connectors/destinations/braze/v1
+  - "definitions/*" # definitions/traits, definitions/policy
 allowBuilds:
   # esbuild arrives transitively via tsx and vite/vitest. Its install script only
   # links the prebuilt @esbuild/<platform> binary that pnpm already fetched as an

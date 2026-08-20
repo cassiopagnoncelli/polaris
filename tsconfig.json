@@ -17,6 +17,10 @@
     "packages",
     "sync",
     "async",
-    "tests"
+    "tests",
+    "libs",
+    "sdks",
+    "connectors",
+    "definitions"
   ]
 }
