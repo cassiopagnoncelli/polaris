@@ -59,8 +59,10 @@ POLARIS_CLI = apps/polaris-cli/dist/bin/polaris.js
 # hold the pipeline units (this said `processors consumers` until 2026-08-19,
 # which is where they lived before the R-programme move -- both globs had
 # matched nothing since, so the whole pipeline counted as zero lines);
-# catalog/ holds the file-backed registries; sql/ + db/migrations hold DDL.
-LOC_DIRS = apps packages libs sync async catalog sql db/migrations
+# definitions/ holds the file-backed registries; db/ holds the storage DDL for
+# both engines (this said `catalog sql db/migrations` until 2026-08-20, and the
+# first two had stopped existing by then).
+LOC_DIRS = apps packages libs sync async definitions db
 LOC_PRUNE = \( -name node_modules -o -name dist -o -name build -o -name .next -o -name out -o -name coverage \) -prune
 LOC_FIND_TYPES = \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sql' -o -name '*.yaml' -o -name '*.yml' \)
 LOC_GIT_PATHS = \
@@ -77,8 +79,7 @@ LOC_GIT_PATHS = \
 	':(glob)definitions/**/*.ts' \
 	':(glob)definitions/**/*.yaml' \
 	':(glob)definitions/**/*.yml' \
-	':(glob)sql/**/*.sql' \
-	':(glob)db/migrations/**/*.sql'
+	':(glob)db/**/*.sql'
 
 help: ## Show this help
 	@echo "Usage: make <target>"

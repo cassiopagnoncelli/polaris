@@ -31,7 +31,7 @@
  *     reconstruct "when was this family isolated for this project?"
  *     without consulting the audit log.
  *
- * @see db/migrations/20260514000003_create_topic_isolations.sql
+ * @see db/postgres/migrations/20260514000003_create_topic_isolations.sql
  * @see libs/persistence/postgres/src/database.ts TopicIsolationsTable
  * @see libs/bus/src/isolation-cache.ts
  */

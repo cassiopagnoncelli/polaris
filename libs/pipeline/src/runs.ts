@@ -26,7 +26,7 @@
  * callers do not have to branch on transport. Concrete processors pick the
  * Kysely repo at boot and pass the same handle to runtime/helper code.
  *
- * @see db/migrations/20260512000007_create_processor_runs.sql
+ * @see db/postgres/migrations/20260512000007_create_processor_runs.sql
  * @see docs/architecture/05-processors-and-replay.md
  */
 
@@ -349,7 +349,7 @@ export interface KyselyProcessorRunRepositoryOptions {
  * contract as the in-memory adapter.
  *
  * The migration owning the table is
- * `db/migrations/20260512000007_create_processor_runs.sql`.
+ * `db/postgres/migrations/20260512000007_create_processor_runs.sql`.
  */
 export function createKyselyProcessorRunRepository(
   options: KyselyProcessorRunRepositoryOptions,

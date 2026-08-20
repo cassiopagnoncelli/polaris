@@ -47,7 +47,7 @@
 -- A materialized view without this clause runs its SELECT as the user
 -- performing the INSERT. That user is `polaris_sink`, which holds INSERT
 -- on the ingestion interface table and — deliberately, per
--- sql/clickhouse/roles/01_grants.sql — SELECT on nothing at all. So every
+-- db/clickhouse/roles/01_grants.sql — SELECT on nothing at all. So every
 -- INSERT the sink made failed with ACCESS_DENIED "while pushing to view",
 -- and because the sink rolls its checkpoint back on a failed batch,
 -- nothing ever reached ClickHouse.

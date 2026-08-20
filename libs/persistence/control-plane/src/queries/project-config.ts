@@ -14,8 +14,8 @@
  * an audit snapshot.
  *
  * @see ../mutations/project-config.ts
- * @see db/migrations/20260813000001_create_project_config.sql
- * @see db/migrations/20260813000004_plaintext_project_secrets.sql
+ * @see db/postgres/migrations/20260813000001_create_project_config.sql
+ * @see db/postgres/migrations/20260813000004_plaintext_project_secrets.sql
  */
 
 import { maskIfSecret } from "@polaris/shared-control-plane";

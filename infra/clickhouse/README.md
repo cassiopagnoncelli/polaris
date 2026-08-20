@@ -1,7 +1,7 @@
 # Polaris ClickHouse Infra
 
 Configuration files that ride alongside the SQL DDL in
-[`sql/clickhouse/`](../../sql/clickhouse/) to make a single set of
+[`db/clickhouse/`](../../db/clickhouse/) to make a single set of
 SQL files work in both local/dev and production.
 
 See [`docs/architecture/07-clickhouse.md`](../../docs/architecture/07-clickhouse.md)
@@ -99,7 +99,7 @@ runtime.
 ## How SQL files are applied
 
 Both environments apply
-[`sql/clickhouse/`](../../sql/clickhouse/) in lexical order via
+[`db/clickhouse/`](../../db/clickhouse/) in lexical order via
 [`scripts/clickhouse-migrate.mjs`](../../scripts/clickhouse-migrate.mjs):
 
 ```text

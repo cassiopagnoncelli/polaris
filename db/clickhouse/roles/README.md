@@ -29,7 +29,7 @@ or operator code from querying the queue directly.
 These files apply after the schema DDL has run, because the grants
 reference concrete tables. The compose-driven local/dev init flow
 applies them in lexical order alongside the rest of
-`sql/clickhouse/`. Production applies them through the standard
+`db/clickhouse/`. Production applies them through the standard
 migration runner, which inherits the same lexical ordering.
 
 ```text
@@ -73,10 +73,10 @@ This DDL only defines and grants the roles themselves.
 ## Adding a new projection
 
 1. Write the projection table SQL under
-   [`sql/clickhouse/projections/`](../projections/) using
+   [`db/clickhouse/projections/`](../projections/) using
    `{replicated}<Engine>` for engine selection.
 2. Write the argMax-based MV under
-   [`sql/clickhouse/materialized-views/`](../materialized-views/).
+   [`db/clickhouse/materialized-views/`](../materialized-views/).
 3. Add a `GRANT ... SELECT ON polaris.<new_projection> TO polaris_service`
    line to [`01_grants.sql`](./01_grants.sql).
 4. Add a typed read method for the projection to

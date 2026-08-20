@@ -27,7 +27,7 @@
  *     `OperatorTokenRepository` contract. The update path is best-effort:
  *     failures are swallowed upstream, not surfaced here.
  *
- * @see db/migrations/20260512000009_create_operator_tokens.sql
+ * @see db/postgres/migrations/20260512000009_create_operator_tokens.sql
  * @see libs/tenancy/control-plane/src/resolver.ts
  */
 import type { Database } from "@polaris/shared-db";

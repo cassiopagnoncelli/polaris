@@ -122,7 +122,7 @@ the supported escape hatch in
   pattern.** Replays write duplicate rows by design; the dedupe pattern
   is how reads stay correct.
 - **DDL from anything except the operator role's migration path.** The
-  migrations under [`sql/clickhouse/`](../../sql/clickhouse/) are the only
+  migrations under [`db/clickhouse/`](../../db/clickhouse/) are the only
   sanctioned DDL source.
 
 ## Done when

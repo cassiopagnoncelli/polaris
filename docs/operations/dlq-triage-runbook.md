@@ -397,7 +397,7 @@ DLQ records (and delivery records) must **never** contain raw secrets.
 This is enforced at three layers:
 
 1. **Schema.** The `dlq_records` migration
-   ([`db/migrations/20260514000001_create_dlq_records.sql`](../../db/migrations/20260514000001_create_dlq_records.sql))
+   ([`db/postgres/migrations/20260514000001_create_dlq_records.sql`](../../db/postgres/migrations/20260514000001_create_dlq_records.sql))
    defines no column resembling a credential, and nothing joins one in.
    `destinations.secret_value` holds a vendor credential in plaintext,
    and no DLQ read path selects it.

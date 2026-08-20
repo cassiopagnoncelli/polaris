@@ -34,7 +34,7 @@
  *     does NOT expose a counter setter for P7-001; that lands when the
  *     executor does.
  *
- * @see db/migrations/20260512000011_create_replay_jobs.sql
+ * @see db/postgres/migrations/20260512000011_create_replay_jobs.sql
  * @see docs/architecture/05-processors-and-replay.md "Replay Control Plane"
  * @see docs/implementation/tasks/P7-001-replay-job-model-cli.md
  */

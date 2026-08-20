@@ -16,7 +16,7 @@
  * Mirrors the destination repo shape so the CLI surface and the
  * triage runbook read consistently across both DLQ surfaces.
  *
- * @see db/migrations/20260516000001_create_processor_dlq_records.sql
+ * @see db/postgres/migrations/20260516000001_create_processor_dlq_records.sql
  * @see libs/delivery/destinations/src/db/dlq-records.ts
  */
 

@@ -2,7 +2,7 @@
  * Typed Kysely view of the `dlq_records` table plus repository helpers.
  *
  * The table is created by
- * `db/migrations/20260514000001_create_dlq_records.sql` (P9-007). This
+ * `db/postgres/migrations/20260514000001_create_dlq_records.sql` (P9-007). This
  * module:
  *
  *   1. Mirrors the SQL schema as a `DlqRecordsTable` interface.
@@ -31,7 +31,7 @@
  *   - `dlq_id` is UUIDv7 with the `polaris_dlq_` prefix. The repository
  *     allocates one when the caller omits it.
  *
- * @see db/migrations/20260514000001_create_dlq_records.sql
+ * @see db/postgres/migrations/20260514000001_create_dlq_records.sql
  * @see docs/architecture/06-destinations.md "Retry and DLQ Policy"
  */
 

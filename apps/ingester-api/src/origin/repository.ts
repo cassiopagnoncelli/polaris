@@ -2,7 +2,7 @@
  * PostgreSQL-backed implementation of {@link AllowedOriginsRepository}.
  *
  * Reads from the `source_allowed_origins` table created by
- * `db/migrations/20260512000011_create_source_allowed_origins.sql`.
+ * `db/postgres/migrations/20260512000011_create_source_allowed_origins.sql`.
  *
  * The repository is read-only at the ingester. Issuance/revocation of
  * origin entries is a CLI concern (a sibling task in the P6 cluster — see

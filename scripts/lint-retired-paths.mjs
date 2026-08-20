@@ -24,9 +24,10 @@
 //
 // Two things, both stated as literal patterns rather than inferred:
 //
-//   1. RETIRED PATHS — `processors/<name>/...`, `consumers/<vendor>/...` and
-//      `catalog/<kind>/` as a repository location. Units live under
-//      `{sync,async}/<stage>/`; declared content lives under `definitions/`.
+//   1. RETIRED PATHS — `processors/<name>/...`, `consumers/<vendor>/...`,
+//      `catalog/<kind>/`, `sql/` and `db/migrations/` as a repository
+//      location. Units live under `{sync,async}/<stage>/`; declared content
+//      lives under `definitions/`; storage DDL lives under `db/<engine>/`.
 //   2. RETIRED MODEL — the fan-out prose. Processors no longer read
 //      `raw.events` in parallel and emit sibling derived events; the spine
 //      chains, and enrichment lands IN the envelope.
@@ -67,7 +68,6 @@ const SCAN_DIRS = [
   "libs",
   "packages",
   "scripts",
-  "sql",
   "sync",
   "tests",
   // ADR-0007's destinations, listed beside the old roots the way
@@ -208,6 +208,34 @@ export const RETIRED = [
     pattern:
       /(?<![\w.-])catalog\/(?:events|traits|audiences|journeys|policy|projects|sources|reverse-etl)(?![\w-])/,
     hint: "declared content lives at `definitions/<kind>/` — e.g. `definitions/traits/`. `catalog` names a connector registry in the industry, and ADR-0007 reserves that role for `connectors/`",
+  },
+  {
+    // `sql/` held exactly one thing -- `sql/clickhouse/` -- and the split it
+    // encoded, `db/` for PostgreSQL and `sql/` for ClickHouse, was not a
+    // distinction anybody could state. Storage DDL has one home now, with one
+    // directory per engine under it.
+    //
+    // Matched bare, unlike `catalog-dir`, which had to anchor to the eight
+    // kind directories to keep the three `src/catalog/` modules legal. There
+    // is no `sql` module, package or concept anywhere in this tree to collide
+    // with, and prose naming the directory in a list -- the shape both
+    // `getting-started.md` and `ci.md` had -- carries no child to anchor to.
+    // The lookbehind refuses a word-ish prefix, so `mysql/`, `postgresql/`
+    // and `graphql/` are not violations; a path separator passes, so
+    // `/workspace/sql/clickhouse` is one.
+    id: "sql-dir",
+    pattern: /(?<![\w.-])sql\//,
+    hint: "storage DDL lives under `db/<engine>/` — ClickHouse DDL is `db/clickhouse/`, PostgreSQL migrations are `db/postgres/migrations/`",
+  },
+  {
+    // The PostgreSQL migrations moved a level down when ClickHouse came in
+    // beside them, so `db/` names the storage root rather than one engine.
+    // Applied migrations still say `db/migrations` and are meant to: they are
+    // skipped here with the rest of `migrations/`, on the rule that a file
+    // recording what was true when it ran is not edited to satisfy a lint.
+    id: "db-migrations-dir",
+    pattern: /(?<![\w.-])db\/migrations(?![\w-])/,
+    hint: "PostgreSQL migrations live at `db/postgres/migrations/` — `db/` is the storage root and holds one directory per engine",
   },
   {
     id: "fan-out-model",

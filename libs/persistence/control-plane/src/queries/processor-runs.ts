@@ -15,7 +15,7 @@
  * events off the shared stream and register cross-project runs with a null
  * `project_id`.
  *
- * @see db/migrations/20260512000008_create_processor_runs.sql
+ * @see db/postgres/migrations/20260512000008_create_processor_runs.sql
  * @see libs/pipeline/src/run-lifecycle.ts
  */
 import type { Database } from "@polaris/shared-db";

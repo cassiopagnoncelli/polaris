@@ -15,7 +15,7 @@
  * the env var on after bringing up the compose stack.
  *
  * @see libs/bus/src/checkpoints.ts
- * @see db/migrations/20260810000001_create_transport_checkpoints.sql
+ * @see db/postgres/migrations/20260810000001_create_transport_checkpoints.sql
  */
 
 import { closeDb, createDb, type Database } from "@polaris/shared-db";

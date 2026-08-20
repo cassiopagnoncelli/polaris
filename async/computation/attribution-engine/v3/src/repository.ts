@@ -25,7 +25,7 @@
  * take a trigger — so the enforcement is this query, which is why the
  * column list is written out rather than spread.
  *
- * @see db/migrations/20260811000001_create_attribution_touchpoint_chains.sql
+ * @see db/postgres/migrations/20260811000001_create_attribution_touchpoint_chains.sql
  */
 
 import type { Database } from "@polaris/shared-db";

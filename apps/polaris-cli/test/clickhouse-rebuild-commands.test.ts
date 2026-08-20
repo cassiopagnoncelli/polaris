@@ -127,7 +127,7 @@ describe("rebuildable projection registry matches the on-disk SQL", () => {
     expect(REBUILDABLE_CLICKHOUSE_PROJECTION_NAMES.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("every registered projection has a real sqlFile under sql/clickhouse/projections/", () => {
+  it("every registered projection has a real sqlFile under db/clickhouse/projections/", () => {
     for (const descriptor of REBUILDABLE_CLICKHOUSE_PROJECTIONS) {
       const absPath = resolve(REPO_ROOT, descriptor.sqlFile);
       expect(

@@ -28,7 +28,7 @@
  * "customer profile" where the distinction could bite.
  *
  * @see docs/implementation/pipeline-redesign-plan.md §4 "The profile plane"
- * @see db/migrations/20260814000001_create_profile_plane.sql
+ * @see db/postgres/migrations/20260814000001_create_profile_plane.sql
  */
 import type { CommandDefinition } from "../../command.js";
 import { profilesLinksCommand } from "./links.js";

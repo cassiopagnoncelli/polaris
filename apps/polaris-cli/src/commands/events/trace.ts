@@ -78,7 +78,7 @@ const CLICKHOUSE_DATABASE_ENV = "POLARIS_CLICKHOUSE_DATABASE";
 const CLICKHOUSE_USER_ENV = "POLARIS_CLICKHOUSE_SERVICE_USER";
 const CLICKHOUSE_PASSWORD_ENV = "POLARIS_CLICKHOUSE_SERVICE_PASSWORD";
 
-/** Retention of `analytics_ingest_log`, per `sql/clickhouse/20_*.sql`. */
+/** Retention of `analytics_ingest_log`, per `db/clickhouse/20_*.sql`. */
 const INGEST_LOG_RETENTION_DAYS = 30;
 
 export interface EventsTraceArgs {

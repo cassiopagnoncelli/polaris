@@ -3,13 +3,13 @@
 -- This file is LOCAL ONLY. It creates concrete ClickHouse users tied to
 -- the `polaris_service`, `polaris_operator`, and `polaris_sink` roles
 -- defined in
--- sql/clickhouse/roles/00_roles.sql so workspace code (services, the CLI,
+-- db/clickhouse/roles/00_roles.sql so workspace code (services, the CLI,
 -- the vertical-slice smoke test) can authenticate against the local stack.
 --
 -- Production never applies this file. Production users come from the
 -- secret provider (P11-004) and live outside the SQL DDL.
 --
--- Apply order: after sql/clickhouse/ has been migrated (so roles exist).
+-- Apply order: after db/clickhouse/ has been migrated (so roles exist).
 -- The local-stack bootstrap script (scripts/clickhouse-bootstrap-local.mjs)
 -- runs `pnpm clickhouse:migrate` first, then this file, so the GRANT
 -- statements below resolve cleanly.

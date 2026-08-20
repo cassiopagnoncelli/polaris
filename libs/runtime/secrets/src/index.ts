@@ -15,7 +15,7 @@
  * That rule no longer holds, deliberately. Per-project secrets — a project's
  * own sensitive variables and its destination credentials — are stored in the
  * control-plane database as plaintext
- * (`db/migrations/20260813000004_plaintext_project_secrets.sql`). Those two
+ * (`db/postgres/migrations/20260813000004_plaintext_project_secrets.sql`). Those two
  * were the resolver's ONLY callers, so the adapters, the reference format, the
  * failure classifier and the Vault client had nothing left to serve and were
  * removed rather than kept as unreachable code.

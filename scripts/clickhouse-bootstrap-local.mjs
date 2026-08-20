@@ -15,11 +15,11 @@
 //   phase 1 (polaris user): CREATE USER polaris from the `default`
 //     superuser when polaris cannot authenticate. Grants ALL with grant
 //     option so phase 3 can apply role DDL.
-//   phase 2 (schema): apply the canonical DDL under sql/clickhouse/.
+//   phase 2 (schema): apply the canonical DDL under db/clickhouse/.
 //   phase 3 (local users): apply infra/clickhouse/init/ to create the
 //     `polaris_service` / `polaris_operator` users used by service profiles.
 //
-// Production does NOT use this script — it applies only sql/clickhouse/.
+// Production does NOT use this script — it applies only db/clickhouse/.
 // Local user provisioning in production comes from the secret provider
 // (P11-004), not from a checked-in SQL file with hard-coded passwords.
 //
@@ -31,7 +31,7 @@
 // `--destroy` drops the `polaris` database and returns; it applies nothing.
 // It exists for `bin/setup`, which drops every Polaris store before
 // rebuilding — and for ClickHouse that is the only way an edited table
-// definition ever takes effect, since every file under sql/clickhouse/ is
+// definition ever takes effect, since every file under db/clickhouse/ is
 // `CREATE ... IF NOT EXISTS` and therefore a no-op against an existing
 // table. See the phase-2 note above.
 //
@@ -49,7 +49,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
 
-const SQL_ROOT = resolve(REPO_ROOT, "sql", "clickhouse");
+const SQL_ROOT = resolve(REPO_ROOT, "db", "clickhouse");
 const LOCAL_INIT_ROOT = resolve(REPO_ROOT, "infra", "clickhouse", "init");
 
 function envOr(key, fallback) {
@@ -486,7 +486,7 @@ async function ensurePolarisUser({ url, user, password, adminUser, adminPassword
  * detach and fail. With it, the statement returns once the database is
  * really gone.
  *
- * No `ON CLUSTER '{cluster}'`, unlike `sql/clickhouse/00_database.sql`.
+ * No `ON CLUSTER '{cluster}'`, unlike `db/clickhouse/00_database.sql`.
  * Destroy is local-only — one node, one replica — so a plain drop is
  * already complete, and the clustered form would fail outright on a server
  * that has not been through phase 0 yet and has no `{cluster}` macro.
@@ -565,7 +565,7 @@ async function main() {
     return;
   }
 
-  logger.info("[clickhouse-bootstrap-local] phase=schema root=sql/clickhouse");
+  logger.info("[clickhouse-bootstrap-local] phase=schema root=db/clickhouse");
   try {
     const summary = await applyMigrations({ root: SQL_ROOT, client, dryRun, logger });
     logger.info(

@@ -4,7 +4,7 @@
  * The only sanctioned in-process path to ClickHouse for Polaris services
  * and the CLI. Wraps the official `@clickhouse/client` package and exposes
  * a role-aware surface (service / operator) that mirrors the database-level
- * grants in `sql/clickhouse/roles/`.
+ * grants in `db/clickhouse/roles/`.
  *
  * See `docs/architecture/07-clickhouse.md` "Access Control" and
  * `docs/architecture/09-engineering-standards.md` "ClickHouse Access" for

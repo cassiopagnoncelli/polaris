@@ -205,7 +205,7 @@ fires on INSERT, not on merge or on delete**. Two consequences:
 
 For a `SummingMergeTree` projection this double-counts the replayed window.
 Rebuild the projection for that window rather than trusting it to settle —
-[`42_session_daily_metrics_rebuild.sql`](../../sql/clickhouse/projections/42_session_daily_metrics_rebuild.sql)
+[`42_session_daily_metrics_rebuild.sql`](../../db/clickhouse/projections/42_session_daily_metrics_rebuild.sql)
 is the worked example of the shape. This is the step most likely to be
 forgotten, and its symptom (session metrics quietly inflated for one day, six
 weeks ago) is one nobody goes looking for.
@@ -221,6 +221,6 @@ state, and it is strictly better than a botched backfill.
 ## Related
 
 - [`derived-id.ts`](../../libs/pipeline/src/derived-id.ts) — the derivation itself
-- [`32_analytics_processed.sql`](../../sql/clickhouse/32_analytics_processed.sql) — engine, dedup key, and why they are what they are
+- [`32_analytics_processed.sql`](../../db/clickhouse/32_analytics_processed.sql) — engine, dedup key, and why they are what they are
 - [Replay stuck](runbook-replay-stuck.md) — when a replay job will not advance
 - [Processor version cutover](processor-version-cutover.md) — the other reason to reprocess a window

@@ -65,7 +65,7 @@ Makefile
 README.md
 USAGE.md
 docs
-sql
+db
 scripts/smoke
 tests
 resources/maxmind

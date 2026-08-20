@@ -29,7 +29,7 @@
 -- separately in 01_grants.sql so role identity and grant policy can
 -- evolve on different cadences.
 --
--- See sql/clickhouse/roles/README.md for the role model rationale
+-- See db/clickhouse/roles/README.md for the role model rationale
 -- and the helper-package mapping (libs/persistence/clickhouse/).
 
 CREATE ROLE IF NOT EXISTS polaris_service ON CLUSTER '{cluster}';

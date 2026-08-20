@@ -20,7 +20,7 @@
  * to audit, so there is none — `polaris profiles rebuild` lands with R4
  * as an audited mutation, not as a query.
  *
- * @see db/migrations/20260814000001_create_profile_plane.sql
+ * @see db/postgres/migrations/20260814000001_create_profile_plane.sql
  * @see sync/identity/resolver/v1/src/repository.ts
  */
 import type { Database } from "@polaris/shared-db";

@@ -9,8 +9,8 @@
  *
  * See:
  *   - docs/architecture/02-control-plane.md "Projects and Environments", "Sources"
- *   - db/migrations/20260512000002_create_projects.sql
- *   - db/migrations/20260512000003_create_sources.sql
+ *   - db/postgres/migrations/20260512000002_create_projects.sql
+ *   - db/postgres/migrations/20260512000003_create_sources.sql
  */
 import {
   POLARIS_ENVIRONMENTS,
@@ -33,7 +33,7 @@ export type Environment = PolarisEnvironment;
 
 /**
  * Closed set of source types. Must match the `sources_source_type_allowed`
- * CHECK constraint in `db/migrations/20260512000003_create_sources.sql`.
+ * CHECK constraint in `db/postgres/migrations/20260512000003_create_sources.sql`.
  */
 export const SOURCE_TYPES = ["web", "backend", "mobile", "webhook", "job"] as const;
 export const sourceTypeSchema = z.enum(SOURCE_TYPES);

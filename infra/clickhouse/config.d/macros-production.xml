@@ -8,7 +8,7 @@
   The cluster name, shard, and replica should be templated at deploy
   time (Kubernetes ConfigMap, Helm values, or equivalent). The
   default_replica_path / default_replica_name elements let Replicated
-  engines work with the minimal engine spec from sql/clickhouse/ —
+  engines work with the minimal engine spec from db/clickhouse/ —
   the DDL only passes the version column, never the ZK path.
 -->
 <clickhouse>
@@ -34,7 +34,7 @@
       Replicated* engines need a ZooKeeper/Keeper path and a replica
       name. Setting these defaults at the server level lets every
       Replicated* table use the shorthand engine spec from
-      sql/clickhouse/ without repeating the path on every CREATE
+      db/clickhouse/ without repeating the path on every CREATE
       TABLE statement.
 
       The path includes {shard} so adding a second shard later does

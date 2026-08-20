@@ -1,7 +1,7 @@
 /**
  * Repository helpers for the `audit_records` table.
  *
- * The `audit_records` table is created by `db/migrations/20260512000007_create_audit_records.sql`
+ * The `audit_records` table is created by `db/postgres/migrations/20260512000007_create_audit_records.sql`
  * and owns every CLI mutation's audit row. The recorder in
  * `apps/polaris-cli/src/audit/recorder.ts` is the central write surface;
  * this module owns the typed Kysely SELECT / INSERT shapes the recorder and
@@ -27,7 +27,7 @@
  *     callers (P6-003 keys, P6-004 destinations, P6-005 processors) emit
  *     secret references (`provider:ref`) only.
  *
- * @see db/migrations/20260512000007_create_audit_records.sql
+ * @see db/postgres/migrations/20260512000007_create_audit_records.sql
  * @see apps/polaris-cli/src/audit/recorder.ts
  */
 import type { Database } from "@polaris/shared-db";

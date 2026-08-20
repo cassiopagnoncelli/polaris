@@ -9,7 +9,7 @@ This package exports two surfaces:
   (`Kysely<Database>`) over `pg.Pool`.
 - A `Database` interface describing the control-plane schema. The
   interface is the typed mirror of the live PostgreSQL schema; the SQL
-  migrations in `db/migrations/` remain the source of truth.
+  migrations in `db/postgres/migrations/` remain the source of truth.
 
 The migration tool (`dbmate`) is also installed as a devDependency here, so
 running migrations does not require a global install. Migration commands
@@ -76,7 +76,7 @@ const db = createDb({ pool });
 
 When a future task lands a migration that creates a new table:
 
-1. Author the SQL migration in `db/migrations/` (see `db/README.md`).
+1. Author the SQL migration in `db/postgres/migrations/` (see `db/README.md`).
 2. In the same change, extend the `Database` interface in
    `libs/persistence/postgres/src/database.ts` to reflect the new table's
    columns and nullability. Use idiomatic Kysely column types

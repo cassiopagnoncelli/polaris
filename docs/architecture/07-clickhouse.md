@@ -327,7 +327,7 @@ polaris_operator    broader access including the raw-tier tables and DDL
 polaris_sink        INSERT on the two ingestion interface tables, SELECT on nothing
 ``
 
-Role definitions and grants live in `sql/clickhouse/roles/` and are applied as part of P1-003.
+Role definitions and grants live in `db/clickhouse/roles/` and are applied as part of P1-003.
 
 ### Connection identity
 
@@ -507,7 +507,7 @@ control plane answers what IS.
 
 ## Profiles
 
-`polaris.profiles` holds what Polaris currently believes about each person, fed from `profile.events` through its own queue and MV (`sql/clickhouse/35`–`37`).
+`polaris.profiles` holds what Polaris currently believes about each person, fed from `profile.events` through its own queue and MV (`db/clickhouse/35`–`37`).
 
 **One row per `(profile_id, trait_key)`, not per profile.** That follows from a decision made upstream: `profile.updated` carries CHANGED KEYS ONLY, because a full snapshot per update would multiply storage by the trait count. A table keyed per profile cannot absorb a sparse stream — each update would overwrite the whole map with just the keys that changed, and nothing about the write would look wrong.
 
@@ -573,7 +573,7 @@ Load it into `polaris.profiles` directly, not through the queue: the queue's MV 
 
 History is never rewritten. When the identity stage concludes two profiles were one person, every event already written under the losing profile stays exactly as it was — that row records what Polaris believed when it wrote it, and a delivery made under the loser's id really was made under that id. Rewriting it would make the warehouse disagree with the vendor's own record of the same delivery, and it would be a mutation over an arbitrarily large MergeTree slice besides.
 
-Reads resolve instead. `async/merges/merge-worker/v1` consumes `identity.merged` and maintains `polaris.profile_merge_map`, which backs the `polaris.profile_canonical` dictionary (`sql/clickhouse/34_profile_merge_map.sql`).
+Reads resolve instead. `async/merges/merge-worker/v1` consumes `identity.merged` and maintains `polaris.profile_merge_map`, which backs the `polaris.profile_canonical` dictionary (`db/clickhouse/34_profile_merge_map.sql`).
 
 **Every person-keyed query groups by the canonical id:**
 

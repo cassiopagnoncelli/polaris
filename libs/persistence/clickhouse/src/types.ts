@@ -107,7 +107,7 @@ export interface CountDistinctEventsFilter {
 
 /**
  * Row shape returned from a deduped `analytics_raw` read. Columns mirror the
- * physical schema defined in `sql/clickhouse/30_analytics_raw.sql`.
+ * physical schema defined in `db/clickhouse/30_analytics_raw.sql`.
  */
 export interface AnalyticsRawRow {
   event_id: string;
@@ -139,7 +139,7 @@ export interface AnalyticsRawRow {
 
 /**
  * Row shape returned from a deduped `analytics_processed` read. Columns
- * mirror `sql/clickhouse/32_analytics_processed.sql`.
+ * mirror `db/clickhouse/32_analytics_processed.sql`.
  *
  * Deliberately not `AnalyticsRawRow`: the derived table carries transport
  * lineage (`_topic`, `_partition`, `_offset`) because it has no ingest
@@ -235,7 +235,7 @@ export interface IngestLogFilter {
 
 /**
  * Row shape for `event_daily_counts`. Mirrors the projection in
- * `sql/clickhouse/projections/40_event_daily_counts.sql`.
+ * `db/clickhouse/projections/40_event_daily_counts.sql`.
  */
 export interface EventDailyCountRow {
   project_id: string;

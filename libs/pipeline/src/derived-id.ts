@@ -8,7 +8,7 @@
  *   - `analytics_processed` is `ReplacingMergeTree` keyed on
  *     `(project_id, environment, event, event_id)`. Random ids mean the
  *     duplicates never collapse; they accumulate as distinct facts.
- *   - `sql/clickhouse/32_analytics_processed.sql` justifies that engine choice
+ *   - `db/clickhouse/32_analytics_processed.sql` justifies that engine choice
  *     with "Derived events carry deterministic event_ids (a replay of the same
  *     input reproduces the same id)". It was not true when written.
  *

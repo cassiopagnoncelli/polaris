@@ -53,7 +53,6 @@ const SCAN_DIRS = [
   "async",
   "definitions",
   "scripts",
-  "sql",
   "db",
   "docs",
   "tests",

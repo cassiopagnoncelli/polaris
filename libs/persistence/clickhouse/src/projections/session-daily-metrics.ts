@@ -1,8 +1,8 @@
 /**
  * Typed reader for `polaris.session_daily_metrics`.
  *
- * Backing DDL: `sql/clickhouse/projections/42_session_daily_metrics.sql`.
- * Feeder MV:   `sql/clickhouse/materialized-views/43_mv_processed_to_session_daily_metrics.sql`.
+ * Backing DDL: `db/clickhouse/projections/42_session_daily_metrics.sql`.
+ * Feeder MV:   `db/clickhouse/materialized-views/43_mv_processed_to_session_daily_metrics.sql`.
  *
  * The MV already deduped `analytics_processed` via `argMax(_, _version)`
  * and the projection table is a SummingMergeTree, so reads use plain

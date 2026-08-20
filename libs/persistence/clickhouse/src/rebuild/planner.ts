@@ -71,7 +71,7 @@ export async function planClickhouseRebuild(
       "unknown_projection",
       `unknown_projection: "${declaration.projection.trim()}" is not in the closed set of rebuildable projections. ` +
         "Add a row to `libs/persistence/clickhouse/src/rebuild/projections.ts` " +
-        "and ship the matching DDL under `sql/clickhouse/projections/` before rebuilding.",
+        "and ship the matching DDL under `db/clickhouse/projections/` before rebuilding.",
     );
   }
 

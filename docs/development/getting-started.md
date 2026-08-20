@@ -341,7 +341,7 @@ Polaris is **file-heavy, database-light**. Two halves:
 | Project + source declarations (`definitions/projects/`, `definitions/sources/`) | `destination_instances` rows                             |
 | Processor manifests + code (`{sync,async}/<stage>/<name>/<version>/`)       | `processor_activations` rows (runtime enable/disable)      |
 | Destination consumer mappings + manifests (`sync/destinations/<vendor>/<version>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
-| SQL DDL and migrations (`sql/`, `db/migrations/`)            | `audit_records`                                            |
+| SQL DDL and migrations (`db/clickhouse/`, `db/postgres/migrations/`) | `audit_records`                                            |
 
 The CLI's `--from-catalog` import path (on `projects list`, `projects show`,
 `sources list`, `sources show`) lets you inspect declarations without a DB
@@ -415,7 +415,7 @@ secrets — they exist so role-aware code paths work in development. See
 [`infra/clickhouse/init/01_local_users.sql`](../../infra/clickhouse/init/01_local_users.sql).
 
 The grants and role definitions themselves live in
-[`sql/clickhouse/roles/`](../../sql/clickhouse/roles/) and are applied by
+[`db/clickhouse/roles/`](../../db/clickhouse/roles/) and are applied by
 `pnpm clickhouse:migrate` in any environment.
 
 ### From `clickhouse-client`

@@ -12,7 +12,7 @@
  * CHECK), this test fails LOUDLY rather than letting an inconsistent
  * row reach production.
  *
- * @see db/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
+ * @see db/postgres/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
  * @see docs/implementation/tasks/P7-005-clickhouse-rebuild-workflows.md
  */
 import { readFileSync } from "node:fs";
@@ -28,7 +28,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 function readMigration(): string {
   const path = resolve(
     HERE,
-    "../../../../db/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql",
+    "../../../../db/postgres/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql",
   );
   return readFileSync(path, "utf8");
 }

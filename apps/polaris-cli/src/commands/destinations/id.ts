@@ -11,7 +11,7 @@
  *   - `polaris_ot_<uuidv7>`  operator token id (P6-007)
  *
  * Mirrors the `destinations_destination_id_format` CHECK constraint in
- * `db/migrations/20260512000005_create_destinations.sql`.
+ * `db/postgres/migrations/20260512000005_create_destinations.sql`.
  */
 
 import { v7 as uuidv7 } from "uuid";

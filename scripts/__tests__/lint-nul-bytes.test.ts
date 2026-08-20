@@ -74,13 +74,13 @@ describe("lintWorkspace", () => {
   });
 
   it("scans docs and SQL, not just code", () => {
-    seedFile("sql/clickhouse/01_x.sql", `SELECT 1;${NUL}\n`);
+    seedFile("db/clickhouse/01_x.sql", `SELECT 1;${NUL}\n`);
     seedFile("docs/architecture/02-control-plane.md", `prose${NUL}\n`);
     expect(
       lintWorkspace(root)
         .map((v) => v.file)
         .sort(),
-    ).toEqual(["docs/architecture/02-control-plane.md", "sql/clickhouse/01_x.sql"]);
+    ).toEqual(["db/clickhouse/01_x.sql", "docs/architecture/02-control-plane.md"]);
   });
 
   it("ignores build output, so a compiled artefact cannot fail the build", () => {

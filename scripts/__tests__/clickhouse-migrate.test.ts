@@ -12,7 +12,7 @@ import {
 
 /**
  * The ClickHouse migration runner is exercised against a temporary tree
- * shaped like sql/clickhouse/. The runner's network layer is injected
+ * shaped like db/clickhouse/. The runner's network layer is injected
  * (`executor`) so the test never opens a real socket — we only assert
  * apply order, statement splitting, and error propagation.
  */
@@ -300,13 +300,13 @@ describe("parseArgs", () => {
   });
 });
 
-describe("end-to-end against the real sql/clickhouse/ tree", () => {
+describe("end-to-end against the real db/clickhouse/ tree", () => {
   // This test is a guardrail: if a future SQL file lands with a syntax that
   // the tokenizer cannot parse, the test fails fast in CI before the runner
   // is ever exercised against a live ClickHouse instance.
-  it("discovers and tokenizes every file in the workspace's sql/clickhouse/", async () => {
+  it("discovers and tokenizes every file in the workspace's db/clickhouse/", async () => {
     const repoRoot = join(__dirname, "..", "..");
-    const sqlRoot = join(repoRoot, "sql", "clickhouse");
+    const sqlRoot = join(repoRoot, "db", "clickhouse");
     const migrations = discoverMigrations(sqlRoot);
 
     expect(migrations.length).toBeGreaterThan(0);

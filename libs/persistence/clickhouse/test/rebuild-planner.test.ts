@@ -286,9 +286,9 @@ describe("planClickhouseRebuild — happy path", () => {
         throw new Error(`expected planned for ${name}, got ${result.kind}`);
       }
       expect(result.descriptor.qualifiedTable).toMatch(/^polaris\.[a-z][a-z0-9_]*$/);
-      expect(result.descriptor.sqlFile).toMatch(/^sql\/clickhouse\/projections\/.+\.sql$/);
+      expect(result.descriptor.sqlFile).toMatch(/^db\/clickhouse\/projections\/.+\.sql$/);
       expect(result.descriptor.feederMvFile).toMatch(
-        /^sql\/clickhouse\/materialized-views\/.+\.sql$/,
+        /^db\/clickhouse\/materialized-views\/.+\.sql$/,
       );
       expect(result.descriptor.description.length).toBeGreaterThan(0);
     }

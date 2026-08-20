@@ -60,7 +60,7 @@ export interface ReplayReader {
 
 /**
  * Columns we project through the argMax pattern. Keep this list in sync
- * with `sql/clickhouse/30_analytics_raw.sql`. The ORDER BY columns
+ * with `db/clickhouse/30_analytics_raw.sql`. The ORDER BY columns
  * (`project_id`, `environment`, `event`, `event_id`) appear in the
  * GROUP BY, not the argMax projection, because they are constant within
  * each group.
@@ -90,7 +90,7 @@ const ARG_MAX_COLUMNS = [
 
 /**
  * Columns projected through argMax for `analytics_processed`. Keep in
- * sync with `sql/clickhouse/32_analytics_processed.sql`.
+ * sync with `db/clickhouse/32_analytics_processed.sql`.
  *
  * The lineage columns are projected too, so a single deduped row says
  * which stream offset produced it. For delivery *history* — the same

@@ -108,6 +108,40 @@ describe("scanning a tree", () => {
     expect(scan()).toEqual([]);
   });
 
+  it("finds a reintroduced sql location", () => {
+    write("docs/x.md", "ClickHouse DDL lives at `sql/clickhouse/roles/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("sql-dir");
+  });
+
+  it("finds the directory named bare, with no child to anchor to", () => {
+    // The shape `getting-started.md` and `ci.md` both had: the location in a
+    // list of locations. A rule anchored to `sql/clickhouse` the way
+    // `catalog-dir` is anchored to its kinds would have called these clean.
+    write("docs/y.md", "It walks `apps/`, `sql/`, `db/`, and `tests/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("sql-dir");
+  });
+
+  it("leaves the other SQLs alone", () => {
+    // Why the lookbehind refuses a word-ish prefix. Nothing in the tree is
+    // named `sql`, but plenty of things END in it.
+    write("docs/ok-sql.md", "See `mysql/`, `postgresql/` and `graphql/` for the dialects.\n");
+    write("docs/ok-db.md", "ClickHouse DDL lives at `db/clickhouse/roles/`.\n");
+    expect(scan()).toEqual([]);
+  });
+
+  it("finds the migrations directory at its old depth", () => {
+    write("docs/w.md", "Author the migration in `db/migrations/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("db-migrations-dir");
+  });
+
+  it("leaves the migrations directory at its new depth, and a package suffix", () => {
+    // `db/` is the storage root now, one directory per engine under it. The
+    // lookbehind is what keeps `@polaris/shared-db` out of the rule's way.
+    write("docs/ok-pg.md", "Author the migration in `db/postgres/migrations/`.\n");
+    write("docs/ok-pkg.md", "dbmate is a devDependency of `packages/shared-db/`.\n");
+    expect(scan()).toEqual([]);
+  });
+
   it("finds the fan-out sentence", () => {
     write("docs/z.md", "Processors fan out from `raw.events` rather than chaining.\n");
     expect(scan().map((p) => p.rule)).toContain("fan-out-model");
@@ -155,7 +189,7 @@ describe("scanning a tree", () => {
     // Editing one to satisfy a lint would falsify the history it exists to
     // keep -- `20260818000001_retire_fan_out_topic_families.sql` names the
     // families because deleting them is its subject.
-    write("db/migrations/20260818000001_retire.sql", "-- drops enriched.events\n");
+    write("db/postgres/migrations/20260818000001_retire.sql", "-- drops enriched.events\n");
     expect(scan()).toEqual([]);
   });
 

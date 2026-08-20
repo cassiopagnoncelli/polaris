@@ -18,7 +18,7 @@
  * transaction and get checkpoint-with-side-effect atomicity, which the
  * Kafka setup could not offer.
  *
- * @see db/migrations/20260810000001_create_transport_checkpoints.sql
+ * @see db/postgres/migrations/20260810000001_create_transport_checkpoints.sql
  */
 
 import type { Database } from "@polaris/shared-db";

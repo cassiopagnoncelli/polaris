@@ -1,20 +1,57 @@
-# Polaris PostgreSQL Migrations
+# Polaris Storage DDL
 
-This directory holds the SQL-first migration history for the Polaris control
-plane.
+Every schema Polaris owns, one directory per engine.
 
-## Why this directory exists
+```text
+db/
+  postgres/
+    migrations/        dbmate migrations for the control plane
+    .env.example       starter DATABASE_URL for the local compose stack
+  clickhouse/          SQL-first DDL for the analytical store
+    roles/             polaris_service / polaris_operator, and their grants
+    projections/       one file per projection table
+    materialized-views/  the MVs that feed them
+    <ddl files>        ingestion interface tables, ingest log, raw, processed
+```
+
+## Why one directory
+
+The two engines used to live apart: PostgreSQL migrations under `db/`, and
+ClickHouse DDL under a sibling `sql/` that no longer exists. That split
+encoded nothing. Both trees hold schema for a store Polaris operates, both are
+applied by a runner at deploy time, and neither is reachable from application
+code — so a reader looking for "where is the schema" had to know which engine
+before they could know which directory. Naming the engine is the distinction
+worth keeping, and it is now the only one.
+
+The two halves still differ in how they are applied, and that difference is
+real:
+
+| | `postgres/` | `clickhouse/` |
+| --- | --- | --- |
+| Runner | dbmate | `scripts/clickhouse-migrate.mjs` |
+| Ledger | `schema_migrations` table | none — the DDL is the ledger |
+| A file is | applied once, then immutable | re-applied on every run, idempotently |
+| Reversible | `-- migrate:down` in every file | no; forward-only `CREATE ... IF NOT EXISTS` |
+
+## Which store owns what
 
 Polaris is **file-heavy and database-light**. PostgreSQL stores only mutable
 runtime/control state — API keys, sources, destination instance settings,
 processor runs, replay jobs, delivery records, audit records, operator tokens.
-Semantic platform truth (event schemas, destination mappings, processor logic,
-ClickHouse DDL) lives in versioned code, not in PostgreSQL.
+ClickHouse stores the analytical plane. Semantic platform truth — event
+schemas, destination mappings, processor logic — lives in versioned code and
+in `definitions/`, not in either database.
 
 See:
 
 - `docs/architecture/02-control-plane.md` — what PostgreSQL is allowed to own
-- `docs/architecture/09-engineering-standards.md` — "PostgreSQL Migrations" section
+- `docs/architecture/07-clickhouse.md` — the analytical store's design
+- `docs/architecture/09-engineering-standards.md` — "PostgreSQL Migrations"
+
+---
+
+# PostgreSQL — `db/postgres/`
 
 ## Tooling
 
@@ -51,11 +88,11 @@ pnpm db:status
 defaults, so a freshly started stack accepts the default URL above without
 configuration.
 
-A starter env file is available at `db/.env.example`. The simplest way to
-use it is to source it into the shell that runs the script:
+A starter env file is available at `db/postgres/.env.example`. The simplest way
+to use it is to source it into the shell that runs the script:
 
 ```bash
-set -a; source db/.env.example; set +a
+set -a; source db/postgres/.env.example; set +a
 pnpm db:migrate
 ```
 
@@ -103,8 +140,8 @@ Shows applied and pending migrations.
 pnpm db:create <short_slug>
 ```
 
-Generates `db/migrations/<timestamp>_<slug>.sql` with empty `migrate:up` and
-`migrate:down` blocks. Fill both blocks before committing.
+Generates `db/postgres/migrations/<timestamp>_<slug>.sql` with empty
+`migrate:up` and `migrate:down` blocks. Fill both blocks before committing.
 
 ### Reset the local database
 
@@ -141,24 +178,39 @@ This is local-only. Never run `down -v` against shared environments.
    destination instance row; do not store the mapper code.
 8. **Run migrations forward, never edit applied files.** Once a migration has
    landed on `main`, fix mistakes with a follow-up migration. The history
-   table is the source of truth.
+   table is the source of truth. This is also why an applied migration may
+   still name a directory that has since been renamed: the file records what
+   was true when it ran.
 
-## What goes here later (not now)
+---
 
-The current migration file (`20260512000001_bootstrap.sql`) only pins the
-database timezone to UTC. Application tables ship with the tasks that own
-them:
+# ClickHouse — `db/clickhouse/`
 
-| Tables                              | Owner task        |
-| ----------------------------------- | ----------------- |
-| `api_keys`, `sources`               | P6-002 / P6-003   |
-| `destination_instances`             | P6-004            |
-| `processor_runs`                    | P6-005 / P8-001   |
-| `replay_jobs`                       | P7-001            |
-| `delivery_records`                  | P9-001 / P9-007   |
-| `audit_records`, `operator_tokens`  | P6-006 / P6-007   |
-| `topic_isolations`                  | P11-008           |
-| `identity_links`                    | P8-002            |
+[`db/clickhouse/README.md`](clickhouse/README.md) is the reference: the
+pipeline the tables form, the file layout, and the engine choice behind each
+one. [`db/clickhouse/roles/README.md`](clickhouse/roles/README.md) covers the
+two roles and what each may read.
 
-Each owning task is responsible for shipping the migration that creates its
-tables and any necessary indexes. This task ships only the mechanism.
+What differs from PostgreSQL, and why there is no migration ledger here:
+
+- **Every file is re-applied on every run.** The DDL uses
+  `CREATE ... IF NOT EXISTS` throughout and grants are additive, so ClickHouse
+  accepts a re-run as a no-op. The schema in the server *is* the ledger.
+- **Apply order is explicit, not lexicographic across the tree.** The runner
+  walks the root, then `projections/`, then `materialized-views/`, then
+  `roles/`, taking each directory's files in lexicographic order. Grants run
+  last so they can name concrete tables.
+- **The same files serve local and production.** Engine selection is a server
+  macro, not a second copy of the DDL — see
+  [`infra/clickhouse/`](../infra/clickhouse/).
+
+### Common workflows
+
+```bash
+pnpm clickhouse:migrate:dry-run   # print what would be applied, no I/O
+pnpm clickhouse:migrate           # apply against CLICKHOUSE_URL
+pnpm clickhouse:bootstrap-local   # local only: users, then schema
+```
+
+`clickhouse:bootstrap-local` is local-only and additionally creates the
+development users. Production applies `db/clickhouse/` and nothing else.

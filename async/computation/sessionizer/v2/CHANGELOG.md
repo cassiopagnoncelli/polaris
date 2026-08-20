@@ -14,7 +14,7 @@ Emitted `event_id`s were `uuidv7()` per attempt, so a redelivery or a replay
 of the same input produced a NEW derived event every time.
 `analytics_processed` is `ReplacingMergeTree` keyed on `event_id`, so those
 duplicates never collapsed — they accumulated as distinct facts — and
-`sql/clickhouse/32_analytics_processed.sql` justified that engine choice by
+`db/clickhouse/32_analytics_processed.sql` justified that engine choice by
 claiming derived ids were already deterministic.
 
 Ids now come from `deriveEventId({ processor, sourceEventId, slot })`

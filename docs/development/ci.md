@@ -56,7 +56,7 @@ Every PR must pass these jobs in `ci.yml`:
   includes the event-catalog validation tests in
   [`@polaris/shared-schemas`](../../libs/spec/test/catalog.test.ts),
   so no dedicated catalog runner is needed.
-- **`migrations`** — applies every file in `db/migrations/` against a
+- **`migrations`** — applies every file in `db/postgres/migrations/` against a
   disposable PostgreSQL 17 service via `pnpm db:migrate`. dbmate does not
   ship a true dry-run mode, so a smoke `up` is the lightest validation
   available.
@@ -128,8 +128,8 @@ string at runtime and leaves the file as plain text.
 
 The check is implemented in
 [`scripts/lint-nul-bytes.mjs`](../../scripts/lint-nul-bytes.mjs). It walks
-`apps/`, `packages/`, `processors/`, `consumers/`, `catalog/`, `scripts/`,
-`sql/`, `db/`, `docs/`, and `tests/`, scanning an **allow-list** of text
+`apps/`, `packages/`, `sync/`, `async/`, `definitions/`, `scripts/`, `db/`,
+`docs/`, `tests/`, `agents/` and `bin/`, scanning an **allow-list** of text
 extensions — so a genuinely binary file committed to the tree can never
 fail the build. It is wired into the root `pnpm lint`, and
 [`scripts/__tests__/lint-nul-bytes.test.ts`](../../scripts/__tests__/lint-nul-bytes.test.ts)

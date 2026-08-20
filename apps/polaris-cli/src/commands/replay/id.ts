@@ -11,7 +11,7 @@
  *   - `polaris_rpj_<uuidv7>` replay job id (P7-001, this file)
  *
  * Mirrors the `replay_jobs_replay_job_id_format` CHECK constraint in
- * `db/migrations/20260512000011_create_replay_jobs.sql`.
+ * `db/postgres/migrations/20260512000011_create_replay_jobs.sql`.
  */
 import { v7 as uuidv7 } from "uuid";
 

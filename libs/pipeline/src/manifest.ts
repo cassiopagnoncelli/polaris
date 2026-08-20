@@ -39,7 +39,7 @@ export type ProcessorMode = z.infer<typeof processorModeSchema>;
 /**
  * Version-string pattern. `v1`, `v2`, `v1.2.3` all valid. Mirrors the
  * `processor_activations_processor_version_format` CHECK constraint in
- * `db/migrations/20260512000006_create_processor_activations.sql`.
+ * `db/postgres/migrations/20260512000006_create_processor_activations.sql`.
  */
 export const processorVersionSchema = z
   .string()

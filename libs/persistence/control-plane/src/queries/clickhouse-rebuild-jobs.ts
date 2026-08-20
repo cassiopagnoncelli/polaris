@@ -35,7 +35,7 @@
  *     consistency rules; this module ships only the operator-facing
  *     `create` / `abort` setters needed by P7-005.
  *
- * @see db/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
+ * @see db/postgres/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
  * @see libs/persistence/clickhouse/src/rebuild/
  * @see docs/development/clickhouse-rebuilds.md
  */

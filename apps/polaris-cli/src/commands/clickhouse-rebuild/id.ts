@@ -11,7 +11,7 @@
  *   - `polaris_chr_<uuidv7>` ClickHouse rebuild job id (P7-005, this file)
  *
  * Mirrors the `clickhouse_rebuild_jobs_id_format` CHECK constraint in
- * `db/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql`.
+ * `db/postgres/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql`.
  */
 import { v7 as uuidv7 } from "uuid";
 

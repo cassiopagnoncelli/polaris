@@ -25,10 +25,10 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:migrate": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/migrations up",
-    "db:rollback": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/migrations rollback",
-    "db:status": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/migrations status",
-    "db:create": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/migrations new"
+    "db:migrate": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/postgres/migrations up",
+    "db:rollback": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --no-dump-schema --migrations-dir ../../../db/postgres/migrations rollback",
+    "db:status": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/postgres/migrations status",
+    "db:create": "DATABASE_URL=\"${DATABASE_URL:-postgres://polaris:polaris@localhost:5432/polaris?sslmode=disable}\" dbmate --migrations-dir ../../../db/postgres/migrations new"
   },
   "dependencies": {
     "@polaris/shared-environments": "workspace:*",

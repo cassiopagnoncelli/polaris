@@ -21,7 +21,7 @@
  * The set MUST stay in lockstep with:
  *
  *   - `audit_records_actor_source_allowed` CHECK constraint
- *     (`db/migrations/20260512000007_create_audit_records.sql`)
+ *     (`db/postgres/migrations/20260512000007_create_audit_records.sql`)
  *   - `AUDIT_ACTOR_SOURCES` constant
  *     (`apps/polaris-cli/src/db/audit-records.ts`)
  *

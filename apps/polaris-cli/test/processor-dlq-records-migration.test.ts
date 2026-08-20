@@ -16,7 +16,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 function readMigration(): string {
   return readFileSync(
-    resolve(HERE, "../../../db/migrations/20260516000001_create_processor_dlq_records.sql"),
+    resolve(HERE, "../../../db/postgres/migrations/20260516000001_create_processor_dlq_records.sql"),
     "utf8",
   );
 }

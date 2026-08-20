@@ -579,6 +579,7 @@ describe("audit_records migration shape", () => {
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260512000007_create_audit_records.sql",
     );
@@ -632,6 +633,7 @@ describe("audit_records migration shape", () => {
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260512000007_create_audit_records.sql",
     );
@@ -673,6 +675,7 @@ describe("audit_records migration shape", () => {
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260512000007_create_audit_records.sql",
     );

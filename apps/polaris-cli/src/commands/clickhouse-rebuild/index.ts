@@ -30,7 +30,7 @@
  *
  *      This is the repair path for the incremental projections, which
  *      over-count cross-block duplicates by construction — see
- *      sql/clickhouse/materialized-views/41_*.sql. A full-partition
+ *      db/clickhouse/materialized-views/41_*.sql. A full-partition
  *      scan sees every duplicate at once, which is exactly what a
  *      per-insert-block materialized view cannot do.
  *

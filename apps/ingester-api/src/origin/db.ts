@@ -9,7 +9,7 @@
  * a feature package.
  *
  * Schema reference:
- *   `db/migrations/20260512000013_create_source_allowed_origins.sql`.
+ *   `db/postgres/migrations/20260512000013_create_source_allowed_origins.sql`.
  */
 
 import type { ColumnType, Generated } from "kysely";

@@ -138,15 +138,14 @@ infra/
   grafana/
   loki/
 
-sql/
+db/
   clickhouse/
     roles/                         polaris_service / polaris_operator definitions + grants
     projections/                   one .sql file per projection table
     materialized-views/            MVs that feed projections (argMax pattern)
     <ddl files>                    ingestion interface table, analytics_ingest_log, analytics_raw
-
-db/
-migrations/                        SQL-first PostgreSQL migrations (dbmate by default)
+  postgres/
+    migrations/                    SQL-first PostgreSQL migrations (dbmate by default)
 
 docs/
 ```

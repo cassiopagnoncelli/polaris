@@ -1288,6 +1288,7 @@ describe("schema invariant: no transform-rule fields on processor_activations", 
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260512000006_create_processor_activations.sql",
     );

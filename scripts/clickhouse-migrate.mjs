@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Polaris ClickHouse migration runner.
 //
-// Applies every .sql file under sql/clickhouse/ in lexicographic order
+// Applies every .sql file under db/clickhouse/ in lexicographic order
 // against a ClickHouse server, idempotently.
 //
 // Why this script instead of the @clickhouse/client package:
@@ -25,13 +25,13 @@
 //   ClickHouse DDL itself is the ledger.
 //
 // Application order:
-//   1. sql/clickhouse/*.sql           (top-level, lexicographic)
-//   2. sql/clickhouse/projections/*.sql
-//   3. sql/clickhouse/materialized-views/*.sql
-//   4. sql/clickhouse/roles/*.sql
+//   1. db/clickhouse/*.sql           (top-level, lexicographic)
+//   2. db/clickhouse/projections/*.sql
+//   3. db/clickhouse/materialized-views/*.sql
+//   4. db/clickhouse/roles/*.sql
 //
 //   This matches docs/architecture/07-clickhouse.md and
-//   sql/clickhouse/README.md "Application order". Grants run last so they
+//   db/clickhouse/README.md "Application order". Grants run last so they
 //   can reference concrete tables.
 //
 // Usage:
@@ -44,7 +44,7 @@
 //   CLICKHOUSE_USER       default polaris
 //   CLICKHOUSE_PASSWORD   default polaris
 //   CLICKHOUSE_DATABASE   default polaris (database name only; the runner
-//                         does not append it to the URL — sql/clickhouse/
+//                         does not append it to the URL — db/clickhouse/
 //                         files use fully-qualified `polaris.<table>`
 //                         references everywhere, and 00_database.sql
 //                         creates the database itself).
@@ -55,7 +55,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const DEFAULT_SQL_ROOT = resolve(__dirname, "..", "sql", "clickhouse");
+const DEFAULT_SQL_ROOT = resolve(__dirname, "..", "db", "clickhouse");
 
 /**
  * Where in the file tree to look for SQL, in apply order. Each entry is a
@@ -71,7 +71,7 @@ const APPLY_DIRECTORIES = [".", "projections", "materialized-views", "roles"];
 const SCANNED_EXTENSIONS = new Set([".sql"]);
 
 /**
- * Filename suffixes for `.sql` files that live under sql/clickhouse/ but
+ * Filename suffixes for `.sql` files that live under db/clickhouse/ but
  * are NOT migrations — they're SELECT templates loaded by application
  * code (e.g. `polaris clickhouse-rebuild create` reads
  * `projections/<name>_rebuild.sql` and wraps it in an INSERT). Templates

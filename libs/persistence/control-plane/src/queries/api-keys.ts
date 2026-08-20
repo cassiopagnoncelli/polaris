@@ -16,7 +16,7 @@
  *   - Revocation is idempotent: the helper UPDATEs unconditionally and the
  *     command layer reports whether the row was already revoked.
  *
- * @see db/migrations/20260512000003_create_api_keys.sql
+ * @see db/postgres/migrations/20260512000003_create_api_keys.sql
  * @see libs/persistence/postgres/src/database.ts ApiKeyTable
  */
 import type { Database } from "@polaris/shared-db";

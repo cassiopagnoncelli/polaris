@@ -11,7 +11,7 @@ Binding architecture references:
 
 Implementation:
 
-- [`db/migrations/20260813000004_plaintext_project_secrets.sql`](../../db/migrations/20260813000004_plaintext_project_secrets.sql)
+- [`db/postgres/migrations/20260813000004_plaintext_project_secrets.sql`](../../db/postgres/migrations/20260813000004_plaintext_project_secrets.sql)
 - [`libs/tenancy/control-plane/src/secret-masking.ts`](../../libs/tenancy/control-plane/src/secret-masking.ts)
 - [`libs/tenancy/project-config/src/secret-box.ts`](../../libs/tenancy/project-config/src/secret-box.ts)
 

@@ -20,8 +20,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 function readMigration(): string {
   // The migration lives at the repo root, four levels above this test
-  // file (apps/polaris-cli/test/<this>.ts → repo/db/migrations/...).
-  const path = resolve(HERE, "../../../../db/migrations/20260512000009_create_operator_tokens.sql");
+  // file (apps/polaris-cli/test/<this>.ts → repo/db/postgres/migrations/...).
+  const path = resolve(HERE, "../../../../db/postgres/migrations/20260512000009_create_operator_tokens.sql");
   return readFileSync(path, "utf8");
 }
 

@@ -3,7 +3,7 @@
  * through `polaris clickhouse-rebuild`.
  *
  * The source of truth for "what is a known projection" is the
- * `sql/clickhouse/projections/` directory in the repo. This module
+ * `db/clickhouse/projections/` directory in the repo. This module
  * mirrors that directory in code so:
  *
  *   1. The planner refuses an unknown projection without needing a
@@ -19,7 +19,7 @@
  * Why a hand-maintained constant and not a filesystem walk: the
  * planner is a pure-function module with NO I/O. A filesystem walk
  * would couple the planner to the repo layout at runtime (the
- * `dist/` build would not have `sql/clickhouse/` next to it) and
+ * `dist/` build would not have `db/clickhouse/` next to it) and
  * would force a test seam for filesystem stubbing. The constant is
  * cheap, the four-step process keeps it in sync, and the schema
  * invariant test in `apps/polaris-cli/test/` asserts every SQL file
@@ -27,7 +27,7 @@
  *
  * @see docs/architecture/07-clickhouse.md "Projection Tables"
  * @see docs/development/clickhouse-rebuilds.md
- * @see sql/clickhouse/projections/
+ * @see db/clickhouse/projections/
  */
 
 /**
@@ -42,12 +42,12 @@
  *                       in v1.
  *
  *   `sqlFile`           the canonical SQL file under
- *                       `sql/clickhouse/projections/` (relative to
+ *                       `db/clickhouse/projections/` (relative to
  *                       the repo root) so docs / tooling can link
  *                       back to the source-of-truth DDL.
  *
  *   `feederMvFile`      the canonical materialized-view SQL file
- *                       under `sql/clickhouse/materialized-views/`.
+ *                       under `db/clickhouse/materialized-views/`.
  *                       The executor (deferred) replays this MV's
  *                       SELECT against its own source table to
  *                       repopulate the projection. The source is
@@ -87,31 +87,31 @@ export interface ClickhouseProjectionDescriptor {
  *
  *   1. The DDL file at `sqlFile`.
  *   2. The feeder MV file at `feederMvFile`.
- *   3. The SELECT grant in `sql/clickhouse/roles/01_grants.sql`.
+ *   3. The SELECT grant in `db/clickhouse/roles/01_grants.sql`.
  *   4. The reader module under
  *      `libs/persistence/clickhouse/src/projections/`.
  *
  * The `rebuild-projections-registry` test in
  * `apps/polaris-cli/test/clickhouse-rebuild-commands.test.ts` asserts
  * every entry's `sqlFile` resolves to a real file under
- * `sql/clickhouse/projections/`.
+ * `db/clickhouse/projections/`.
  */
 export const REBUILDABLE_CLICKHOUSE_PROJECTIONS: readonly ClickhouseProjectionDescriptor[] = [
   {
     name: "event_daily_counts",
     qualifiedTable: "polaris.event_daily_counts",
-    sqlFile: "sql/clickhouse/projections/40_event_daily_counts.sql",
-    feederMvFile: "sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
-    rebuildSelectFile: "sql/clickhouse/projections/40_event_daily_counts_rebuild.sql",
+    sqlFile: "db/clickhouse/projections/40_event_daily_counts.sql",
+    feederMvFile: "db/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
+    rebuildSelectFile: "db/clickhouse/projections/40_event_daily_counts_rebuild.sql",
     description:
       "Per-day event counts keyed by (project_id, environment, event). SummingMergeTree.",
   },
   {
     name: "profile_event_daily_counts",
     qualifiedTable: "polaris.profile_event_daily_counts",
-    sqlFile: "sql/clickhouse/projections/44_profile_event_daily_counts.sql",
-    feederMvFile: "sql/clickhouse/materialized-views/45_mv_raw_to_profile_event_daily_counts.sql",
-    rebuildSelectFile: "sql/clickhouse/projections/44_profile_event_daily_counts_rebuild.sql",
+    sqlFile: "db/clickhouse/projections/44_profile_event_daily_counts.sql",
+    feederMvFile: "db/clickhouse/materialized-views/45_mv_raw_to_profile_event_daily_counts.sql",
+    rebuildSelectFile: "db/clickhouse/projections/44_profile_event_daily_counts_rebuild.sql",
     description:
       "Per-day event counts keyed by (project_id, environment, profile_id, event). " +
       "SummingMergeTree. The person-dimensioned sibling of event_daily_counts, and the " +
@@ -120,9 +120,9 @@ export const REBUILDABLE_CLICKHOUSE_PROJECTIONS: readonly ClickhouseProjectionDe
   {
     name: "session_daily_metrics",
     qualifiedTable: "polaris.session_daily_metrics",
-    sqlFile: "sql/clickhouse/projections/42_session_daily_metrics.sql",
-    feederMvFile: "sql/clickhouse/materialized-views/43_mv_processed_to_session_daily_metrics.sql",
-    rebuildSelectFile: "sql/clickhouse/projections/42_session_daily_metrics_rebuild.sql",
+    sqlFile: "db/clickhouse/projections/42_session_daily_metrics.sql",
+    feederMvFile: "db/clickhouse/materialized-views/43_mv_processed_to_session_daily_metrics.sql",
+    rebuildSelectFile: "db/clickhouse/projections/42_session_daily_metrics_rebuild.sql",
     description:
       "Per-day sessions started/ended keyed by (project_id, environment). SummingMergeTree over analytics_processed.",
   },

@@ -24,7 +24,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 function readMigration(): string {
   const path = resolve(
     HERE,
-    "../../../../db/migrations/20260514000003_create_topic_isolations.sql",
+    "../../../../db/postgres/migrations/20260514000003_create_topic_isolations.sql",
   );
   return readFileSync(path, "utf8");
 }
@@ -42,7 +42,7 @@ function readMigration(): string {
  * constraint instead.
  */
 function readFamilyCheckSql(): string {
-  const dir = resolve(HERE, "../../../../db/migrations");
+  const dir = resolve(HERE, "../../../../db/postgres/migrations");
   return readdirSync(dir)
     .filter((file) => file.endsWith(".sql"))
     .sort()

@@ -194,7 +194,7 @@ jobs:
       # dbmate has no dry-run mode. We validate by applying every migration
       # against a disposable Postgres service. The shared-db package owns the
       # dbmate binary; running `pnpm db:migrate` from the repo root applies
-      # files in `db/migrations/`.
+      # files in `db/postgres/migrations/`.
       - name: Apply migrations (db:migrate)
         run: pnpm db:migrate
 

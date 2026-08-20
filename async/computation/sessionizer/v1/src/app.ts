@@ -169,7 +169,7 @@ export async function buildSessionizerApp(options: BuildAppOptions): Promise<Bui
   // One AMQP connection per process, shared by the producer and the
   // consumer. Checkpoints live in PostgreSQL: RabbitMQ streams consumed
   // over AMQP have no server-side offset store, so the resume point is
-  // Polaris-owned (see db/migrations/*_create_transport_checkpoints.sql).
+  // Polaris-owned (see db/postgres/migrations/*_create_transport_checkpoints.sql).
   const connection = createTransportConnection({
     rabbitmq: config.rabbitmq,
     logger: processorLogger,

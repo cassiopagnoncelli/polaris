@@ -29,7 +29,7 @@ and
 [`isolation-snapshot.ts`](../../libs/bus/src/isolation-snapshot.ts),
 which is what a service actually wires.
 The migration that owns the persistent state is
-[`db/migrations/20260514000003_create_topic_isolations.sql`](../../db/migrations/20260514000003_create_topic_isolations.sql).
+[`db/postgres/migrations/20260514000003_create_topic_isolations.sql`](../../db/postgres/migrations/20260514000003_create_topic_isolations.sql).
 
 ## What "topic isolation" means
 

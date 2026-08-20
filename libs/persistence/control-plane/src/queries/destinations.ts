@@ -33,8 +33,8 @@
  *     and nothing here reads it back. The delivery runtime's own reader in
  *     `@polaris/shared-destinations` is the single consumer.
  *
- * @see db/migrations/20260512000005_create_destinations.sql
- * @see db/migrations/20260813000004_plaintext_project_secrets.sql
+ * @see db/postgres/migrations/20260512000005_create_destinations.sql
+ * @see db/postgres/migrations/20260813000004_plaintext_project_secrets.sql
  * @see libs/persistence/postgres/src/database.ts DestinationsTable
  */
 import type {

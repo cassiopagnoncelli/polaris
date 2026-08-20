@@ -52,7 +52,7 @@ happen through the helper-package's `replay` namespace under the
 ## File layout
 
 ```text
-sql/clickhouse/
+db/clickhouse/
   00_database.sql                              CREATE DATABASE polaris
   10_analytics_events_queue.sql                ingestion interface, source events
   11_analytics_processed_queue.sql             ingestion interface, derived events

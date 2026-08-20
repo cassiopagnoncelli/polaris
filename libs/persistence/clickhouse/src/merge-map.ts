@@ -9,7 +9,7 @@
  * outside this package writes a query string.
  *
  * The table and the `polaris.profile_canonical` dictionary it backs are
- * defined in `sql/clickhouse/34_profile_merge_map.sql`; the reasoning for
+ * defined in `db/clickhouse/34_profile_merge_map.sql`; the reasoning for
  * resolving merges at read time instead of rewriting history is in
  * `docs/architecture/07-clickhouse.md` under "Retroactive Merges".
  */

@@ -1,12 +1,12 @@
 /**
  * Projection-table readers.
  *
- * Each projection table in `sql/clickhouse/projections/` has a typed reader
+ * Each projection table in `db/clickhouse/projections/` has a typed reader
  * here. Adding a new projection is a four-step process:
  *
- *   1. Land the DDL in `sql/clickhouse/projections/<name>.sql`.
- *   2. Land the argMax-based MV in `sql/clickhouse/materialized-views/`.
- *   3. Add the SELECT grant to `sql/clickhouse/roles/01_grants.sql`.
+ *   1. Land the DDL in `db/clickhouse/projections/<name>.sql`.
+ *   2. Land the argMax-based MV in `db/clickhouse/materialized-views/`.
+ *   3. Add the SELECT grant to `db/clickhouse/roles/01_grants.sql`.
  *   4. Add a reader module here and re-export from this index.
  *
  * Projection reads use plain `SELECT` because the MV upstream already

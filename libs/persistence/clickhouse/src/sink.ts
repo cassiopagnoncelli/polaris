@@ -6,7 +6,7 @@
  * Until the RabbitMQ migration nothing did: `polaris.analytics_events_queue`
  * was a Kafka Engine table and ClickHouse pulled rows itself. RabbitMQ
  * streams have no ClickHouse engine, so the pull became a push and this
- * module is the push. See `sql/clickhouse/10_analytics_events_queue.sql`
+ * module is the push. See `db/clickhouse/10_analytics_events_queue.sql`
  * for the full rationale.
  *
  * Deliberately separate from `createClickHouseClient`:
@@ -20,7 +20,7 @@
  *     for a process whose whole job is to move bytes in one direction.
  *
  * @see async/warehouse/clickhouse-sink/v1
- * @see sql/clickhouse/roles/01_grants.sql
+ * @see db/clickhouse/roles/01_grants.sql
  */
 
 import {
@@ -42,7 +42,7 @@ export const ANALYTICS_QUEUE_TABLE = "analytics_events_queue";
  * unfiltered and a routing mistake shows up as rows in the wrong table
  * instead of as quietly inflated counts in `analytics_raw`.
  *
- * @see sql/clickhouse/11_analytics_processed_queue.sql
+ * @see db/clickhouse/11_analytics_processed_queue.sql
  */
 export const ANALYTICS_PROCESSED_QUEUE_TABLE = "analytics_processed_queue";
 
@@ -57,7 +57,7 @@ export const ANALYTICS_PROCESSED_QUEUE_TABLE = "analytics_processed_queue";
  * that keeps every row versus a table that collapses to the latest per
  * person.
  *
- * @see sql/clickhouse/35_profile_events_queue.sql
+ * @see db/clickhouse/35_profile_events_queue.sql
  */
 export const PROFILE_EVENTS_QUEUE_TABLE = "profile_events_queue";
 

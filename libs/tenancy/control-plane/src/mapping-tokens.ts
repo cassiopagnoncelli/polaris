@@ -16,7 +16,7 @@
  * here, reachable from both the CLI and `@polaris/shared-control-plane-db`.
  *
  * @see docs/implementation/project-config-plan.md §2
- * @see db/migrations/20260813000002_add_destinations_config.sql
+ * @see db/postgres/migrations/20260813000002_add_destinations_config.sql
  */
 
 /**

@@ -180,7 +180,7 @@ REVOKE ON CLUSTER '{cluster}'
 -- without it runs its SELECT as whoever performed the INSERT, and an
 -- INSERT-only role cannot satisfy that — every sink write fails with
 -- ACCESS_DENIED "while pushing to view". See the note on the CREATE
--- statement in sql/clickhouse/21_mv_queue_to_ingest_log.sql.
+-- statement in db/clickhouse/21_mv_queue_to_ingest_log.sql.
 --
 -- Read privileges are deliberately absent rather than merely unused.
 -- A sink that could SELECT would be a full read path into every

@@ -64,7 +64,7 @@ record. The recovery profile is the most aggressive of the three stores:
 
 ### What's in PostgreSQL
 
-Per [`db/migrations/`](../../db/migrations/), the v1 control plane
+Per [`db/postgres/migrations/`](../../db/postgres/migrations/), the v1 control plane
 schema covers:
 
 | Table | Purpose | Retention | Class |
@@ -198,7 +198,7 @@ tables are not — they're rebuilt.
 
 ClickHouse retention is driven by table-level `TTL` clauses, not by
 operator-run delete jobs. Per
-[`sql/clickhouse/`](../../sql/clickhouse/):
+[`db/clickhouse/`](../../db/clickhouse/):
 
 | Table | Engine | TTL | Notes |
 | --- | --- | --- | --- |
@@ -362,10 +362,10 @@ Recovery path:
 1. Confirm `analytics_raw` is current (recent or just restored).
 2. Drop the projection table.
 3. Recreate it from
-   [`sql/clickhouse/projections/`](../../sql/clickhouse/projections/).
+   [`db/clickhouse/projections/`](../../db/clickhouse/projections/).
 4. Run the matching rebuild job through P7-005's
    `replay/rebuild` workflow. The MV defined in
-   `sql/clickhouse/materialized-views/` will pick up new inserts to
+   `db/clickhouse/materialized-views/` will pick up new inserts to
    `analytics_raw`; the historical fill is the rebuild job's
    responsibility.
 

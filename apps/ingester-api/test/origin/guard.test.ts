@@ -26,7 +26,7 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATION_PATH = resolve(
   here,
-  "../../../../db/migrations/20260512000013_create_source_allowed_origins.sql",
+  "../../../../db/postgres/migrations/20260512000013_create_source_allowed_origins.sql",
 );
 
 describe("origin guard public surface", () => {

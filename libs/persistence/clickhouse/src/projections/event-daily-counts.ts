@@ -1,8 +1,8 @@
 /**
  * Typed reader for `polaris.event_daily_counts`.
  *
- * Backing DDL: `sql/clickhouse/projections/40_event_daily_counts.sql`.
- * Feeder MV:   `sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql`.
+ * Backing DDL: `db/clickhouse/projections/40_event_daily_counts.sql`.
+ * Feeder MV:   `db/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql`.
  *
  * The MV already deduped `analytics_raw` via `argMax(_, _version)` and the
  * projection table is a SummingMergeTree, so reads use plain `SELECT` with

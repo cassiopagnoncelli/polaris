@@ -43,7 +43,7 @@ import { UsageError } from "../src/errors.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATION_PATH = resolve(
   here,
-  "../../../db/migrations/20260512000011_create_replay_jobs.sql",
+  "../../../db/postgres/migrations/20260512000011_create_replay_jobs.sql",
 );
 
 describe("polaris replay command group", () => {

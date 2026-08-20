@@ -168,7 +168,7 @@ const ENV_FILES = [
 ];
 
 // Mirrors `source_allowed_origins_origin_format` in
-// db/migrations/20260512000013_create_source_allowed_origins.sql. Checking
+// db/postgres/migrations/20260512000013_create_source_allowed_origins.sql. Checking
 // here turns a typo in POLARIS_DEV_ORIGINS into a readable error instead of
 // a CHECK constraint violation from Postgres.
 const ORIGIN_PATTERN = /^https?:\/\/[A-Za-z0-9.\-:[\]_]+$/;

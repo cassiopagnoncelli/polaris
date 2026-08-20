@@ -13,7 +13,7 @@
  *   - dlq_id is allocated with the polaris_dlq_ prefix
  *
  * @see libs/delivery/destinations/src/db/dlq-records.ts
- * @see db/migrations/20260514000001_create_dlq_records.sql
+ * @see db/postgres/migrations/20260514000001_create_dlq_records.sql
  */
 
 import { describe, expect, it } from "vitest";

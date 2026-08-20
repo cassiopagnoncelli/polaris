@@ -25,7 +25,7 @@
  *
  * @see sync/identity/resolver/v1/src/repository.ts
  * @see sync/enrichment/traits/v1/src/reader.ts
- * @see db/migrations/20260814000001_create_profile_plane.sql
+ * @see db/postgres/migrations/20260814000001_create_profile_plane.sql
  */
 
 import { closeDb, createDb, type Database } from "@polaris/shared-db";

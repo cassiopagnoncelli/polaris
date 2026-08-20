@@ -11,7 +11,7 @@
  * The whole file SKIPS unless `POLARIS_INTEGRATION=1`, matching the other
  * files here — the default `pnpm test` stays Docker-free.
  *
- * Requires the schema in `sql/clickhouse/34_profile_merge_map.sql` to be
+ * Requires the schema in `db/clickhouse/34_profile_merge_map.sql` to be
  * applied (`node scripts/clickhouse-migrate.mjs`).
  */
 

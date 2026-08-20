@@ -3,7 +3,7 @@
 The only sanctioned in-process path to ClickHouse for Polaris services and the
 CLI. Wraps the official [`@clickhouse/client`](https://www.npmjs.com/package/@clickhouse/client)
 package and exposes a role-aware surface that mirrors the database-level
-grants defined in [`sql/clickhouse/roles/`](../../../sql/clickhouse/roles/).
+grants defined in [`db/clickhouse/roles/`](../../../db/clickhouse/roles/).
 
 See [`docs/architecture/07-clickhouse.md`](../../../docs/architecture/07-clickhouse.md)
 for the full architecture and access-control rationale.
@@ -80,9 +80,9 @@ await operator.raw.query("SELECT count() FROM polaris.analytics_raw SETTINGS fin
 
 ## Adding a new projection reader
 
-1. Land the projection DDL under [`sql/clickhouse/projections/`](../../../sql/clickhouse/projections/)
-   and its argMax MV under [`sql/clickhouse/materialized-views/`](../../../sql/clickhouse/materialized-views/).
-2. Add the grant in [`sql/clickhouse/roles/01_grants.sql`](../../../sql/clickhouse/roles/01_grants.sql).
+1. Land the projection DDL under [`db/clickhouse/projections/`](../../../db/clickhouse/projections/)
+   and its argMax MV under [`db/clickhouse/materialized-views/`](../../../db/clickhouse/materialized-views/).
+2. Add the grant in [`db/clickhouse/roles/01_grants.sql`](../../../db/clickhouse/roles/01_grants.sql).
 3. Add a typed reader under `src/projections/<projection_name>.ts` and re-export
    from `src/projections/index.ts`.
 4. Add a unit test that pins the generated SQL shape.

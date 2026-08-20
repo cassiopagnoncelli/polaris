@@ -69,7 +69,7 @@ environment by construction.
 Both reversals land as explicit edits, not carve-outs.
 
 **"PostgreSQL must not store configuration."**
-`db/migrations/20260512000005_create_destinations.sql:44-49` and
+`db/postgres/migrations/20260512000005_create_destinations.sql:44-49` and
 `20260512000006_create_processor_activations.sql:53-59` prohibit
 `config_blob` / `mapping` / `routing` / `field_map` columns, with tests in
 `apps/polaris-cli/test/destinations-commands.test.ts` asserting their absence.
@@ -205,7 +205,7 @@ append-only table would duplicate it and drift.
 
 Destination consumers are not purely project-scoped. `destinations` carries
 `UNIQUE (project_id, environment, vendor, instance_label)`
-(`db/migrations/20260512000005_create_destinations.sql:89`), explicitly so an
+(`db/postgres/migrations/20260512000005_create_destinations.sql:89`), explicitly so an
 operator can run two Meta CAPI instances for the same project and environment —
 two pixels, say — and `resolveFanoutTargets` returns *all* of them for
 delivery. A key of `(project, environment, namespace)` cannot hold two

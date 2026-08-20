@@ -7,7 +7,7 @@
  *   - **Row environments** ({@link POLARIS_ENVIRONMENTS}) are data. Every
  *     `environment` column, every envelope slot, every control-plane scope.
  *     The set is closed at three and mirrors the CHECK constraints in
- *     `db/migrations` (`destinations_environment_allowed` and its siblings).
+ *     `db/postgres/migrations` (`destinations_environment_allowed` and its siblings).
  *   - **Deployment environments** ({@link DEPLOYMENT_ENVIRONMENTS}) are the
  *     domain of `POLARIS_ENV` and nothing else. They add `local` so developer
  *     machines and CI runs have a truthful value to emit.
@@ -31,7 +31,7 @@ import { z } from "zod";
  * The closed set of Polaris row/data environments.
  *
  * Adding a variant here is a platform-wide migration, not an edit: every
- * `environment` CHECK constraint in `db/migrations` would need to widen in
+ * `environment` CHECK constraint in `db/postgres/migrations` would need to widen in
  * lockstep.
  */
 export const POLARIS_ENVIRONMENTS = ["development", "staging", "production"] as const;

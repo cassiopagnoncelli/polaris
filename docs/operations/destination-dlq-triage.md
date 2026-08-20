@@ -15,7 +15,7 @@ and [`apps/polaris-cli/src/commands/dlq/`](../../apps/polaris-cli/src/commands/d
 The matching shared types live in
 [`libs/delivery/destinations/src/db/`](../../libs/delivery/destinations/src/db/).
 The migration creating `dlq_records` is
-[`db/migrations/20260514000001_create_dlq_records.sql`](../../db/migrations/20260514000001_create_dlq_records.sql).
+[`db/postgres/migrations/20260514000001_create_dlq_records.sql`](../../db/postgres/migrations/20260514000001_create_dlq_records.sql).
 
 ## What the tables mean
 

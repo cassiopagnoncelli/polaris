@@ -38,7 +38,7 @@
  * the rest of the platform takes toward the control-plane database.
  *
  * @see docs/architecture/05-processors-and-replay.md "Processor Configuration"
- * @see db/migrations/20260512000006_create_processor_activations.sql
+ * @see db/postgres/migrations/20260512000006_create_processor_activations.sql
  */
 
 import type { Database } from "@polaris/shared-db";

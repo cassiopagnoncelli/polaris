@@ -32,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 function readMigration(): string {
   const path = resolve(
     HERE,
-    "../../../../db/migrations/20260514000004_add_replay_jobs_error_columns.sql",
+    "../../../../db/postgres/migrations/20260514000004_add_replay_jobs_error_columns.sql",
   );
   return readFileSync(path, "utf8");
 }

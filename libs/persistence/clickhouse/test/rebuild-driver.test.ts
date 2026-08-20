@@ -88,9 +88,9 @@ const FIXTURE_SELECT = `SELECT project_id FROM polaris.analytics_raw WHERE _part
 const FIXTURE_PROJECTION: ClickhouseProjectionDescriptor = {
   name: "event_daily_counts",
   qualifiedTable: "polaris.event_daily_counts",
-  sqlFile: "sql/clickhouse/projections/40_event_daily_counts.sql",
-  feederMvFile: "sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
-  rebuildSelectFile: "sql/clickhouse/projections/40_event_daily_counts_rebuild.sql",
+  sqlFile: "db/clickhouse/projections/40_event_daily_counts.sql",
+  feederMvFile: "db/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
+  rebuildSelectFile: "db/clickhouse/projections/40_event_daily_counts_rebuild.sql",
   description: "fixture",
 };
 
@@ -418,7 +418,7 @@ describe("createClickhouseRebuildDriver", () => {
       driver.rebuildPartition({
         qualifiedTable: "polaris.event_daily_counts",
         feederMvFile: FIXTURE_PROJECTION.feederMvFile,
-        rebuildSelectFile: "sql/clickhouse/projections/40_unknown_rebuild.sql",
+        rebuildSelectFile: "db/clickhouse/projections/40_unknown_rebuild.sql",
         partition: "202604",
         sourceRangeFrom: null,
         sourceRangeTo: null,
@@ -476,8 +476,8 @@ describe("createClickhouseRebuildDriver", () => {
     });
     await driver.rebuildPartition({
       qualifiedTable: "polaris.event_daily_counts",
-      feederMvFile: "sql/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
-      rebuildSelectFile: "sql/clickhouse/projections/40_event_daily_counts_rebuild.sql",
+      feederMvFile: "db/clickhouse/materialized-views/41_mv_raw_to_event_daily_counts.sql",
+      rebuildSelectFile: "db/clickhouse/projections/40_event_daily_counts_rebuild.sql",
       partition: "202604",
       sourceRangeFrom: null,
       sourceRangeTo: null,

@@ -18,7 +18,7 @@
  * cannot read a single row of customer data.
  *
  * @see docs/architecture/07-clickhouse.md
- * @see sql/clickhouse/roles/01_grants.sql
+ * @see db/clickhouse/roles/01_grants.sql
  */
 
 import {

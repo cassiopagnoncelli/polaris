@@ -34,7 +34,7 @@
  * projection-registry test asserts both exist.
  *
  * @see libs/persistence/clickhouse/src/rebuild/executor.ts
- * @see sql/clickhouse/projections/40_event_daily_counts_rebuild.sql
+ * @see db/clickhouse/projections/40_event_daily_counts_rebuild.sql
  */
 
 import { readFileSync } from "node:fs";

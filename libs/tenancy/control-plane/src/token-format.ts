@@ -28,7 +28,7 @@
  * exact same shape — there is no second token-format implementation.
  *
  * @see docs/architecture/02-control-plane.md "Operator Identity and Audit Actor"
- * @see db/migrations/20260512000009_create_operator_tokens.sql
+ * @see db/postgres/migrations/20260512000009_create_operator_tokens.sql
  */
 
 /**

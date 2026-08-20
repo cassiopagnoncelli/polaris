@@ -29,7 +29,7 @@
  * `aborted` terminal status from the store's transition guard so
  * the caller's exit code reflects that the run did not complete.
  *
- * @see db/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
+ * @see db/postgres/migrations/20260515000001_create_clickhouse_rebuild_jobs.sql
  * @see libs/persistence/clickhouse/src/rebuild/planner.ts
  */
 

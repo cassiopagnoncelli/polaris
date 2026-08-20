@@ -1826,6 +1826,7 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260514000002_add_destination_replay_opt_in.sql",
     );
@@ -1854,6 +1855,7 @@ describe("schema invariant: no mapping fields on DestinationsTable", () => {
       "..",
       "..",
       "db",
+      "postgres",
       "migrations",
       "20260512000005_create_destinations.sql",
     );

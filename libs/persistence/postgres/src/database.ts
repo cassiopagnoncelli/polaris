@@ -2,7 +2,7 @@
  * Kysely schema view of the Polaris control-plane database.
  *
  * This interface is the typed mirror of the live PostgreSQL schema, which is
- * defined by SQL migrations in `db/migrations/`. The migrations are the
+ * defined by SQL migrations in `db/postgres/migrations/`. The migrations are the
  * source of truth; this file is a hand-maintained typed view that lets
  * Kysely produce typed queries over the real schema.
  *
@@ -44,7 +44,7 @@ import type { ColumnType, Generated } from "kysely";
  * out of scope until they're explicitly added to this union.
  *
  * Mirrors the closed set baked into the `sources_allowed_environments_members`
- * CHECK constraint in `db/migrations/20260512000003_create_sources.sql`.
+ * CHECK constraint in `db/postgres/migrations/20260512000003_create_sources.sql`.
  */
 export type Environment = PolarisEnvironment;
 
@@ -77,7 +77,7 @@ export type SourceStatus = "active" | "disabled";
  * the canonical envelope from the resolved row — producers may not send or
  * override those fields.
  *
- * Schema reference: `db/migrations/20260512000002_create_api_keys.sql`.
+ * Schema reference: `db/postgres/migrations/20260512000002_create_api_keys.sql`.
  */
 export interface ApiKeyTable {
   /** Public prefix on the wire and primary key. UUIDv7 in the v1 issuer. */
@@ -149,7 +149,7 @@ export interface ProjectsTable {
  * `routing`, `transform`, or `field_map`, and must never gain one.
  *
  * Schema reference:
- *   db/migrations/20260813000001_create_project_config.sql
+ *   db/postgres/migrations/20260813000001_create_project_config.sql
  */
 export interface ProjectConfigTable {
   /** Owning project. References `projects(project_id)`, cascades on delete. */
@@ -198,7 +198,7 @@ export interface ProjectConfigTable {
  * configuration, not as an error.
  *
  * Schema reference:
- *   db/migrations/20260813000001_create_project_config.sql
+ *   db/postgres/migrations/20260813000001_create_project_config.sql
  */
 export interface ProjectConfigVersionsTable {
   project_id: string;
@@ -273,7 +273,7 @@ export type DestinationRetryPolicy = "standard" | "aggressive" | "conservative";
  * because the typed schema gives it nowhere to store them, and the
  * migration's column set matches this contract.
  *
- * Schema reference: `db/migrations/20260512000005_create_destinations.sql`.
+ * Schema reference: `db/postgres/migrations/20260512000005_create_destinations.sql`.
  */
 export interface DestinationsTable {
   /** Platform-issued public id, e.g. `polaris_dst_<uuidv7>`. */
@@ -416,7 +416,7 @@ export type ProcessorActivationState = "enabled" | "disabled";
  * contract.
  *
  * Schema reference:
- *   db/migrations/20260512000006_create_processor_activations.sql
+ *   db/postgres/migrations/20260512000006_create_processor_activations.sql
  */
 export interface ProcessorActivationsTable {
   /** Processor catalog name (e.g. `analytics-projector`). */
@@ -457,7 +457,7 @@ export interface ProcessorActivationsTable {
 /**
  * Closed set of `processor_runs.status` values. Mirrors the
  * `processor_runs_status_allowed` CHECK constraint in
- * `db/migrations/20260512000007_create_processor_runs.sql`.
+ * `db/postgres/migrations/20260512000007_create_processor_runs.sql`.
  *
  * Transitions:
  *   - `running` -> `completed` (graceful stop, no fatal error)
@@ -483,7 +483,7 @@ export type ProcessorRunStatus = "running" | "completed" | "failed" | "cancelled
  * the broker.
  *
  * Schema reference:
- *   db/migrations/20260512000007_create_processor_runs.sql
+ *   db/postgres/migrations/20260512000007_create_processor_runs.sql
  */
 export interface ProcessorRunsTable {
   /** Platform-generated UUIDv7. Primary key. */
@@ -536,7 +536,7 @@ export interface ProcessorRunsTable {
 /**
  * Closed set of `identity_links.confidence` values. Mirrors the
  * `identity_links_confidence_allowed` CHECK constraint in
- * `db/migrations/20260512000010_create_identity_links.sql`.
+ * `db/postgres/migrations/20260512000010_create_identity_links.sql`.
  *
  * v1 of `sync/legacy/identity-resolver/v1/` only emits `authoritative` from
  * the explicit-overlap rule. `candidate` is reserved for future heuristic
@@ -558,7 +558,7 @@ export type IdentityLinkConfidence = "authoritative" | "candidate";
  * it — no migration required.
  *
  * Schema reference:
- *   db/migrations/20260512000010_create_identity_links.sql
+ *   db/postgres/migrations/20260512000010_create_identity_links.sql
  *
  * Task reference:
  *   docs/implementation/tasks/P8-002-identity-resolver-v1.md
@@ -572,7 +572,7 @@ export type IdentityLinkConfidence = "authoritative" | "candidate";
  * UPDATE never names them. The `last_*` columns move on every campaign
  * delta.
  *
- * @see db/migrations/20260811000001_create_attribution_touchpoint_chains.sql
+ * @see db/postgres/migrations/20260811000001_create_attribution_touchpoint_chains.sql
  */
 export interface AttributionTouchpointChainsTable {
   /**
@@ -712,7 +712,7 @@ export interface IdentityLinksTable {
  * coordinated change to the constant AND the migration.
  *
  * Schema reference:
- *   db/migrations/20260514000003_create_topic_isolations.sql
+ *   db/postgres/migrations/20260514000003_create_topic_isolations.sql
  */
 export interface TopicIsolationsTable {
   /** Platform-issued UUIDv7 of the activation event. */
@@ -765,7 +765,7 @@ export interface TopicIsolationsTable {
  * message. Resume attaches at `last_offset + 1`.
  *
  * Schema reference:
- *   db/migrations/20260810000001_create_transport_checkpoints.sql
+ *   db/postgres/migrations/20260810000001_create_transport_checkpoints.sql
  */
 export interface TransportCheckpointsTable {
   /**
@@ -807,7 +807,7 @@ export interface TransportCheckpointsTable {
  * path (plus the computed-traits and reverse-ETL writers on the async
  * path); the enrichment stage reads and never writes.
  *
- * See `db/migrations/20260814000001_create_profile_plane.sql`.
+ * See `db/postgres/migrations/20260814000001_create_profile_plane.sql`.
  */
 export interface ProfilesTable {
   /** UUIDv7, application-generated. */
@@ -922,7 +922,7 @@ export interface ProfileMergesTable {
  *
  * The graph is code in `definitions/journeys/`; only this is runtime state.
  * A participant walks the version it entered on to completion — see
- * `db/migrations/20260818000002_create_journey_participants.sql` for why
+ * `db/postgres/migrations/20260818000002_create_journey_participants.sql` for why
  * migrating live participants has no correct answer.
  */
 export interface JourneyParticipantsTable {

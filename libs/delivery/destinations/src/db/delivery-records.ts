@@ -2,7 +2,7 @@
  * Typed Kysely view of the `delivery_records` table plus repository helpers.
  *
  * The table is created by
- * `db/migrations/20260512000010_create_delivery_records.sql`. This module:
+ * `db/postgres/migrations/20260512000010_create_delivery_records.sql`. This module:
  *
  *   1. Mirrors the SQL schema as a `DeliveryRecordsTable` interface.
  *   2. Extends `@polaris/shared-db`'s `Database` interface via module
@@ -30,7 +30,7 @@
  *   - `delivery_id` is UUIDv7. The repository allocates one when the caller
  *     omits it (`uuidv7()`).
  *
- * @see db/migrations/20260512000010_create_delivery_records.sql
+ * @see db/postgres/migrations/20260512000010_create_delivery_records.sql
  * @see libs/delivery/destinations/src/runtime.ts
  */
 

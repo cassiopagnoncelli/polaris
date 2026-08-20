@@ -9,7 +9,7 @@ planner lives in `@polaris/shared-clickhouse/rebuild`.
 ## Why this is a planned workflow
 
 A Polaris projection (`polaris.event_daily_counts`, future projections
-under `sql/clickhouse/projections/`) is a **denormalized OLAP table**
+under `db/clickhouse/projections/`) is a **denormalized OLAP table**
 populated by an argMax-based materialized view reading from
 `polaris.analytics_raw`. See
 [`docs/architecture/07-clickhouse.md`](../architecture/07-clickhouse.md)
@@ -67,21 +67,21 @@ operator escape hatch (`raw.query`) so each one carries a `caller` +
 ## The closed set of rebuildable projections
 
 The rebuild planner accepts a closed set of projection names. Each
-maps to a DDL file under `sql/clickhouse/projections/` and a feeder
-MV under `sql/clickhouse/materialized-views/`. As of P7-005:
+maps to a DDL file under `db/clickhouse/projections/` and a feeder
+MV under `db/clickhouse/materialized-views/`. As of P7-005:
 
 | `--projection`         | DDL file                                            | Engine             |
 | ---------------------- | --------------------------------------------------- | ------------------ |
-| `event_daily_counts`   | `sql/clickhouse/projections/40_event_daily_counts.sql` | SummingMergeTree   |
-| `profile_event_daily_counts` | `sql/clickhouse/projections/44_profile_event_daily_counts.sql` | SummingMergeTree |
+| `event_daily_counts`   | `db/clickhouse/projections/40_event_daily_counts.sql` | SummingMergeTree   |
+| `profile_event_daily_counts` | `db/clickhouse/projections/44_profile_event_daily_counts.sql` | SummingMergeTree |
 
 The canonical list of closed-set names lives in
 [`libs/persistence/clickhouse/src/rebuild/projections.ts`](../../libs/persistence/clickhouse/src/rebuild/projections.ts).
 Adding a projection is a **four-step process**:
 
-1. Land the DDL under `sql/clickhouse/projections/`.
-2. Land the argMax-based MV under `sql/clickhouse/materialized-views/`.
-3. Add the SELECT grant in `sql/clickhouse/roles/01_grants.sql`.
+1. Land the DDL under `db/clickhouse/projections/`.
+2. Land the argMax-based MV under `db/clickhouse/materialized-views/`.
+3. Add the SELECT grant in `db/clickhouse/roles/01_grants.sql`.
 4. Append a row to `REBUILDABLE_CLICKHOUSE_PROJECTIONS`.
 
 The `clickhouse-rebuild-commands` test asserts every registry entry
@@ -218,7 +218,7 @@ operator credentials are absent.
 
 **Cross-month-revision rebuilds aren't pulled by a ranged rebuild.**
 The rebuild SELECT (see
-`sql/clickhouse/projections/40_event_daily_counts_rebuild.sql`)
+`db/clickhouse/projections/40_event_daily_counts_rebuild.sql`)
 filters source rows by `_partition_id` and then projects
 `occurred_date = toDate(argMax(occurred_at, _version))` over that
 filtered set. That works because `analytics_raw` and
@@ -271,13 +271,13 @@ evidence.
 When extending `REBUILDABLE_CLICKHOUSE_PROJECTIONS`, the four-step
 process now includes a fifth file: the rebuild SELECT.
 
-1. DDL under `sql/clickhouse/projections/40_<name>.sql`.
-2. Feeder MV under `sql/clickhouse/materialized-views/41_mv_…_to_<name>.sql`.
-3. Rebuild SELECT under `sql/clickhouse/projections/40_<name>_rebuild.sql`
+1. DDL under `db/clickhouse/projections/40_<name>.sql`.
+2. Feeder MV under `db/clickhouse/materialized-views/41_mv_…_to_<name>.sql`.
+3. Rebuild SELECT under `db/clickhouse/projections/40_<name>_rebuild.sql`
    — the SELECT body the MV uses, plus
    `WHERE _partition_id = {partition:String}` and one terminating
    semicolon.
-4. SELECT grant in `sql/clickhouse/roles/01_grants.sql`.
+4. SELECT grant in `db/clickhouse/roles/01_grants.sql`.
 5. Append a `ClickhouseProjectionDescriptor` to
    `REBUILDABLE_CLICKHOUSE_PROJECTIONS` with all four paths.
 

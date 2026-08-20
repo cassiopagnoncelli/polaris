@@ -43,7 +43,7 @@
  *     `./activation-gate.ts` — nothing here consults it.
  *
  * @see docs/architecture/05-processors-and-replay.md "Processor Model"
- * @see db/migrations/20260512000008_create_processor_runs.sql
+ * @see db/postgres/migrations/20260512000008_create_processor_runs.sql
  */
 
 import type { Database } from "@polaris/shared-db";
