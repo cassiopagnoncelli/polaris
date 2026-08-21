@@ -323,6 +323,7 @@ before it lands. Its chain is every pnpm gate `ci.yml` runs on a bare
 checkout, in the order CI runs them:
 
 ```bash
+node scripts/sync-injected-workspace-copies.mjs --check   # a precondition, not a gate
 pnpm build                 # produces dist/ for every package — typecheck and tests need this
 pnpm typecheck
 pnpm lint                  # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
@@ -332,6 +333,24 @@ pnpm config-schemas:check  # generated config schemas in sync, and additive-only
 pnpm verify:gates          # the meta-gate: prove every check can fail
 pnpm test                  # workspace Vitest + scripts/ Vitest
 ```
+
+The first line is a precondition rather than a gate, and it is why `pnpm
+verify` opens with a `node` invocation instead of a pnpm script.
+[ADR-0008](../adr/0008-inject-workspace-packages-on-deploy.md)'s injection
+makes part of the workspace graph a hard-linked copy taken at install time,
+before anything is built; a tree where that copy is stale fails `pnpm build`
+with `TS2307` naming a package the change never touched. Provisioning normally
+prevents it — `.pm/worktree-setup` and a step in each CI job that installs and
+then builds — but provisioning only ever reaches trees created after it
+landed. Group `31QH`'s worktree predated the hook by four cards and failed its
+land on exactly that phantom error. The check asserts the precondition in
+milliseconds and names both the cause and the one-command repair, so the gate
+reports the tree it was given rather than a defect in innocent code.
+
+It stays outside the pnpm chain deliberately: `lint-gate-parity` below holds
+the pnpm gates in `verify` equal to CI's, and a precondition is not one of
+them. CI enforces the same condition more strongly, by running the repair
+outright.
 
 Keeping that list correct is not left to whoever edits it:
 [`scripts/lint-gate-parity.mjs`](../../scripts/lint-gate-parity.mjs) runs

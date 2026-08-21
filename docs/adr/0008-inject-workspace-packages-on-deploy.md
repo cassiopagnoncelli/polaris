@@ -157,6 +157,17 @@ third latent trap of the kind this record exists to remove.
   runs it in every worktree pm creates, so the cost of this decision is paid
   once in provisioning rather than per worker, per worktree, as a phantom
   error in somebody else's package.
+
+  Provisioning reaches only the trees created after it, which card `X96DD`
+  found the expensive way: group `31QH`'s worktree was cut four cards before
+  the hook learned to sync, so `pm g land` ran `pnpm verify` in a tree the fix
+  had never touched and failed on the same `TS2307`, in `libs/delivery/port`,
+  a package none of its cards had gone near. `pnpm verify` therefore opens
+  with `node scripts/sync-injected-workspace-copies.mjs --check`. It is a
+  precondition rather than a gate — it reports and does not repair, because a
+  gate that mutates the tree it is judging hides the drift instead of
+  reporting it — and it costs milliseconds against the diagnostic cycle a
+  phantom `TS2307` costs.
 - Negative: the setting is recorded in `pnpm-lock.yaml`'s `settings` block, so
   turning it off is a lockfile change and turning it on is one too.
 - Negative: injection interacts with `workspace:*` graph edits — a package

@@ -21,6 +21,13 @@
 # PHYFV and put this file here: paid once, in provisioning, rather than per
 # worker and per worktree in a form that looks like a defect in the code.
 #
+# Paid once here reaches only the worktrees created after it. Group 31QH's own
+# worktree was cut four cards before this file learned to sync, so `pm g land`
+# built in a tree this hook had never run in and failed on the very TS2307 the
+# group had just finished fixing. That is card X96DD, and the answer to it is
+# not here: `pnpm verify` opens by checking the same condition, so a tree this
+# hook never reached says so instead of blaming an untouched package.
+#
 # Keep it POSIX sh and idempotent. pm may run it on a worktree that already
 # has a node_modules, and a hook that is only safe the first time is a hook
 # somebody has to remember the rule for.

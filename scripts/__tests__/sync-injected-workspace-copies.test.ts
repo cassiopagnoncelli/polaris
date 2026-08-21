@@ -27,7 +27,8 @@
  * `--force` that started this.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +46,7 @@ import {
 } from "../sync-injected-workspace-copies.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const SCRIPT = join(ROOT, "scripts", "sync-injected-workspace-copies.mjs");
 
 describe("decoding a virtual-store directory name", () => {
   it("reads the package name and its source path", () => {
@@ -247,7 +249,118 @@ describe("reading a tree", () => {
   });
 });
 
+describe("the check a gate runs before it builds anything", () => {
+  // The reproduction the reach fix is answerable to. Every test above calls
+  // the exported functions; these run the CLI the way `pnpm verify` runs it,
+  // because what failed on `31QH` was not the classification — that was
+  // right — but that nothing consulted it before `pnpm build` spoke first.
+  let dir = "";
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "polaris-injected-gate-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Where pnpm would put an injected copy of `@polaris/bus`. */
+  const COPY = join(VIRTUAL_STORE, "@polaris+bus@file+libs+bus", "node_modules", "@polaris", "bus");
+
+  const plant = (relPath: string, contents: string) => {
+    const full = join(dir, relPath);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, contents);
+  };
+
+  /** A tree holding one injected copy, with either side built or not. */
+  const plantTree = ({ copyBuilt, sourceBuilt }: { copyBuilt: boolean; sourceBuilt: boolean }) => {
+    const manifest = JSON.stringify({ name: "@polaris/bus", types: "./dist/index.d.ts" });
+    plant(join(COPY, "package.json"), manifest);
+    plant("libs/bus/package.json", manifest);
+    if (copyBuilt) plant(join(COPY, "dist", "index.d.ts"), "");
+    if (sourceBuilt) plant("libs/bus/dist/index.d.ts", "");
+  };
+
+  const runCheck = () =>
+    spawnSync(process.execPath, [SCRIPT, "--check"], {
+      encoding: "utf8",
+      env: { ...process.env, POLARIS_INJECTED_SYNC_ROOT: dir },
+    });
+
+  it("fails, and names the package and the repair, on a tree left un-synced", () => {
+    // `31QH`'s worktree, in miniature: provisioned before the hook learned to
+    // sync, so the source is built and the copy the dependent resolves
+    // through is not.
+    plantTree({ copyBuilt: false, sourceBuilt: true });
+
+    const result = runCheck();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("missing files their sources have");
+    expect(result.stderr).toContain("@polaris/bus (from libs/bus)");
+    expect(result.stderr).toContain("missing ./dist/index.d.ts");
+    // The two halves that make it an answer rather than an alarm: what the
+    // operator would otherwise have seen, and the one command that clears it.
+    expect(result.stderr).toContain("TS2307");
+    expect(result.stderr).toContain("node scripts/sync-injected-workspace-copies.mjs");
+  });
+
+  it("fails on a cold tree, and says the source was never built", () => {
+    // The other way a gate meets an un-provisioned tree: `pnpm install` ran
+    // and nothing else did. Reporting this as parity is what an earlier draft
+    // did, and it is the failure mode the whole script exists to not repeat.
+    plantTree({ copyBuilt: false, sourceBuilt: false });
+
+    const result = runCheck();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("whose source has not been built");
+    expect(result.stderr).toContain("@polaris/bus (from libs/bus)");
+  });
+
+  it("passes, and says how many copies it looked at, on a synced tree", () => {
+    // A gate precondition that cannot report success is a gate precondition
+    // nobody leaves switched on.
+    plantTree({ copyBuilt: true, sourceBuilt: true });
+
+    const result = runCheck();
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("1 injected workspace copies in sync");
+  });
+
+  it("passes on a tree with no virtual store at all", () => {
+    // Nothing installed. `pnpm verify` will fail a moment later for reasons
+    // of its own, and it is not this check's place to pre-empt it with a
+    // complaint about injection.
+    const result = runCheck();
+
+    expect(result.status).toBe(0);
+  });
+});
+
 describe("this repository", () => {
+  it("runs the check before the gate builds anything", () => {
+    // The reach fix, asserted where reordering it would be noticed. `pm g
+    // land` runs the group's verify command in a worktree it did not create,
+    // so a tree provisioned before `.pm/worktree-setup` gained the sync
+    // arrives at the gate un-synced. Put `pnpm build` first and the only
+    // thing the operator is told is TS2307 in a package the group never
+    // touched — which is how it presented on `31QH`, four cards after the
+    // fix that was supposed to have ended it.
+    //
+    // Not a pnpm script, deliberately: `lint-gate-parity` holds the pnpm
+    // gates in this chain equal to CI's, and a precondition is not one of
+    // them. CI enforces the same condition by running the repair outright.
+    const manifest: unknown = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+    const scripts = (manifest as { scripts?: Record<string, string> }).scripts ?? {};
+    const chain = (scripts["verify"] ?? "").split("&&").map((piece) => piece.trim());
+
+    expect(chain[0]).toBe("node scripts/sync-injected-workspace-copies.mjs --check");
+    expect(chain).toContain("pnpm build");
+  });
+
   it("names the file whose removal is what forces re-injection", () => {
     // The one command in the docs is only as good as this path. pnpm reads it
     // to decide the workspace is unchanged, which is why `pnpm install` and

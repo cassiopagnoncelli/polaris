@@ -61,7 +61,7 @@
     "check:catalog-sql": "node scripts/check-catalog-sql.mjs",
     "lint:manifest-drift": "node scripts/lint-manifest-drift.mjs",
     "lint:env-example": "node scripts/lint-env-example.mjs",
-    "verify": "pnpm build && pnpm typecheck && pnpm lint && pnpm format:check && pnpm openapi:check && pnpm config-schemas:check && pnpm verify:gates && pnpm test",
+    "verify": "node scripts/sync-injected-workspace-copies.mjs --check && pnpm build && pnpm typecheck && pnpm lint && pnpm format:check && pnpm openapi:check && pnpm config-schemas:check && pnpm verify:gates && pnpm test",
     "verify:gates": "node scripts/verify-gates.mjs",
     "lint:retired-paths": "node scripts/lint-retired-paths.mjs",
     "lint:package-name-congruence": "node scripts/lint-package-name-congruence.mjs",

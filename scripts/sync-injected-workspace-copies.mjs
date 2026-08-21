@@ -87,6 +87,35 @@
 // this one there would invite it into a workflow and then demand it join the
 // gate, and it is provisioning rather than a gate. `images.yml` shells out to
 // `node scripts/...` for the same reason.
+//
+// ## Where it runs, and why the gate runs `--check`
+//
+// The repair runs at provisioning: `.pm/worktree-setup` in every worktree pm
+// creates, and an explicit step in each workflow job that installs and then
+// builds. `--check` runs at the head of `pnpm verify`.
+//
+// That second one is here because provisioning reaches only the trees created
+// after it. Group `31QH`'s worktree was cut four cards before `PHYFV` put this
+// script in the hook, so the hook never ran in it; `pnpm verify` then failed
+// its land with the exact TS2307 the group had just spent four cards fixing,
+// in `libs/profiles` and `libs/delivery/port` — packages none of its cards had
+// touched. The fix was correct and its REACH was the gap, and nothing anywhere
+// said so. A gate that opens with `pnpm build` cannot: the first thing it
+// reports is a compile error in innocent code.
+//
+// So the gate asserts its own precondition, and it REPORTS rather than
+// repairs. Repairing would mean a build and an install inside the gate, which
+// makes `pnpm verify` mutate the tree it is judging and hides the drift that
+// made this invisible for four cards — the operator's remedy is one command,
+// and the check names it. This is also why `--check` treats `unbuilt` as
+// fatal: the tree cannot build in that state either, and calling it parity
+// would put the gate back to reporting a phantom TS2307.
+//
+// It stays a `node` invocation inside `verify` rather than becoming a pnpm
+// script for the reason above: `lint-gate-parity` reads the pnpm scripts out
+// of that chain, and a precondition is not one of the gates the two sides
+// have to hold equal. CI enforces the same condition more strongly, by
+// running the repair.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
