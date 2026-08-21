@@ -30,6 +30,7 @@
  */
 
 import type { AudiencePredicate } from "@polaris/audience-catalog";
+import { evaluatePredicate } from "@polaris/engage-audiences";
 import {
   JOURNEY_EVENT_NAMESPACE,
   type JourneyDefinition,
@@ -88,69 +89,37 @@ export function isForbiddenTrigger(event: string): boolean {
 /**
  * Evaluate a branch or trigger predicate against a trait bag.
  *
- * Named for its dialect rather than for its job, because
- * `@polaris/engage-audiences` exports an `evaluatePredicate` over the same
- * `AudiencePredicate` type that answers differently, and this library and
- * that one now sit in one namespace where a reader would reasonably assume
- * they are the same function.
+ * One line of code, and the line is the point: this IS
+ * `@polaris/engage-audiences`'s `evaluatePredicate`. There is one evaluator
+ * for `AudiencePredicate` in the platform, and both subsystems reach it
+ * through this call.
  *
- * They are not, and the difference is `ne` against an ABSENT trait. The
- * audiences evaluator is three-valued, SQL's reading of NULL: every
- * comparison against a trait nobody has computed is false, so `orders_30d
- * ne 5` excludes an unknown profile. This one is two-valued: `actual` is
- * `undefined`, `undefined !== 5` holds, and the branch takes its matched
- * arm. `exists` and `absent` also read `undefined` and `null` alike here,
- * where the audiences evaluator distinguishes a key that is present and
- * null from one that is missing.
+ * It used to be a second implementation, and the two answered differently.
+ * Against a trait that is ABSENT — missing, or `null` — audiences is
+ * three-valued, SQL's reading of NULL: every comparison is false, `ne`
+ * included. This one was two-valued: `actual` was `undefined`, `undefined
+ * !== 5` held, and the branch took its matched arm. So one profile was OUT
+ * of an audience and down the `matched` arm of a journey on the same
+ * predicate. A second, quieter difference came from reading `traits[key]`
+ * rather than `Object.hasOwn`: `constructor` is a valid trait key under
+ * `definitions/audiences`'s snake_case rule, and it resolved to
+ * `Object.prototype.constructor` on every profile, making `exists` true for
+ * a trait nobody had ever set.
  *
- * Q7COB moved both into `libs/engage` and deliberately did NOT merge them:
- * either merge direction silently re-decides which arm a live participant
- * takes at their next branch, which is a semantic change wearing a
- * refactor's clothes. Whether journeys should adopt the audiences reading
- * is a real question and an ADR's, and it is filed rather than answered
- * here.
+ * Q7COB found the first, moved both into `libs/engage` and deliberately did
+ * NOT merge them, because either merge direction silently re-decides which
+ * arm a live participant takes. ADR-0009 is the answer it filed for: SQL
+ * semantics everywhere, journeys converging onto the audiences reading. The
+ * rollout note lives there.
+ *
+ * The name stays because the call sites are journeys' — a branch's `when`
+ * and an event trigger's `where` — not because the dialect is.
  */
 export function evaluateJourneyPredicate(
   predicate: AudiencePredicate,
   traits: Readonly<Record<string, unknown>>,
 ): boolean {
-  if ("all" in predicate) return predicate.all.every((p) => evaluateJourneyPredicate(p, traits));
-  if ("any" in predicate) return predicate.any.some((p) => evaluateJourneyPredicate(p, traits));
-  if ("not" in predicate) return !evaluateJourneyPredicate(predicate.not, traits);
-
-  const actual = traits[predicate.trait];
-  switch (predicate.op) {
-    case "exists":
-      return actual !== undefined && actual !== null;
-    case "absent":
-      return actual === undefined || actual === null;
-    case "in":
-      return predicate.values.some((v) => v === actual);
-    case "eq":
-      return actual === predicate.value;
-    case "ne":
-      return actual !== predicate.value;
-    default:
-      break;
-  }
-
-  // Ordered comparisons need numbers on both sides. A trait holding a
-  // string compared with `gte` is a definition error, and answering
-  // `false` would hide it in a branch that quietly always takes the
-  // `otherwise` arm.
-  if (typeof actual !== "number" || typeof predicate.value !== "number") return false;
-  switch (predicate.op) {
-    case "gt":
-      return actual > predicate.value;
-    case "gte":
-      return actual >= predicate.value;
-    case "lt":
-      return actual < predicate.value;
-    case "lte":
-      return actual <= predicate.value;
-    default:
-      return false;
-  }
+  return evaluatePredicate(predicate, traits);
 }
 
 /**

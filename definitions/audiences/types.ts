@@ -51,6 +51,34 @@ export type AudienceSource = (typeof AUDIENCE_SOURCES)[number];
  * asking for a trait, not a richer predicate language. A predicate DSL that
  * grows arithmetic and string functions has reinvented SQL without the
  * query planner or the lint.
+ *
+ * ## Against an ABSENT trait, every comparison is false — `ne` included
+ *
+ * A profile has no value for a trait when the key is missing or its value
+ * is `null`, which `definitions/traits` keeps distinct from having the
+ * value zero. Compared against that, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`
+ * and `in` are all FALSE. Only `exists` (false) and `absent` (true) answer
+ * anything about it.
+ *
+ * `ne` is the one that surprises people, so state it plainly:
+ * `{ trait: "orders_30d", op: "ne", value: 5 }` does NOT match a profile
+ * whose `orders_30d` has never been computed. This is SQL's three-valued
+ * reading of NULL — an unknown value compares false to everything — and it
+ * is chosen so that "customers who have not ordered five times" cannot
+ * silently mean "everyone we have never computed", which on a new trait's
+ * first run is nearly the whole population.
+ *
+ * An author who genuinely means absent-or-not-equal writes it, and the
+ * longer form is the one that says what it means:
+ *
+ *   { any: [ { trait: "orders_30d", op: "absent" },
+ *            { trait: "orders_30d", op: "ne", value: 5 } ] }
+ *
+ * This holds wherever an `AudiencePredicate` is evaluated, which is more
+ * places than the name suggests: audience membership, a journey branch's
+ * `when`, and an event trigger's `where` all run the same evaluator in
+ * `libs/engage/audiences`. Journeys read `ne` the other way until
+ * ADR-0009; if you authored a journey before that, re-read its branches.
  */
 export const AUDIENCE_OPERATORS = [
   "eq",

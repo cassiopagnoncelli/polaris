@@ -7,6 +7,12 @@
  * reached rather than at entry, and re-entry policy.
  */
 import {
+  AUDIENCE_OPERATORS,
+  type AudienceOperator,
+  type AudiencePredicate,
+} from "@polaris/audience-catalog";
+import { evaluatePredicate } from "@polaris/engage-audiences";
+import {
   type JourneyDefinition,
   journeyDefinitionSchema,
   welcomeRecentPurchasers,
@@ -194,6 +200,104 @@ describe("advancing a participant", () => {
         ],
       }),
     ).toThrow(/terminates/);
+  });
+});
+
+/**
+ * The whole vocabulary against an absent trait, one case per operator.
+ *
+ * ADR-0009's table, pinned from the journeys side.
+ * `libs/engage/audiences/test/predicate.test.ts` pins the same one from the
+ * other, and the duplication is deliberate: `evaluateJourneyPredicate`
+ * delegates today, and a suite that only tested the delegation would go
+ * green again the moment somebody re-inlined it.
+ *
+ * `ne` is the row this card exists for. It answered TRUE here until
+ * ADR-0009 — `undefined !== 5` — which put a profile out of an audience and
+ * down the `matched` arm of a journey on one predicate.
+ */
+describe("predicate evaluation — every operator against an absent trait", () => {
+  const ABSENT_BAGS: readonly (readonly [string, Readonly<Record<string, unknown>>])[] = [
+    ["a missing key", {}],
+    ["a null value", { orders_30d: null }],
+    ["an undefined value", { orders_30d: undefined }],
+  ];
+
+  const ANSWERS: readonly (readonly [AudienceOperator, AudiencePredicate, boolean])[] = [
+    ["eq", { trait: "orders_30d", op: "eq", value: 5 }, false],
+    ["ne", { trait: "orders_30d", op: "ne", value: 5 }, false],
+    ["gt", { trait: "orders_30d", op: "gt", value: 5 }, false],
+    ["gte", { trait: "orders_30d", op: "gte", value: 5 }, false],
+    ["lt", { trait: "orders_30d", op: "lt", value: 5 }, false],
+    ["lte", { trait: "orders_30d", op: "lte", value: 5 }, false],
+    ["in", { trait: "orders_30d", op: "in", values: [5] }, false],
+    ["exists", { trait: "orders_30d", op: "exists" }, false],
+    ["absent", { trait: "orders_30d", op: "absent" }, true],
+  ];
+
+  it("covers the operator vocabulary exhaustively", () => {
+    expect([...ANSWERS.map(([op]) => op)].sort()).toEqual([...AUDIENCE_OPERATORS].sort());
+  });
+
+  for (const [label, bag] of ABSENT_BAGS) {
+    for (const [op, predicate, expected] of ANSWERS) {
+      it(`${op} is ${String(expected)} against ${label}`, () => {
+        expect(evaluateJourneyPredicate(predicate, bag)).toBe(expected);
+      });
+    }
+  }
+
+  it("agrees with the audiences evaluator on every case", () => {
+    // The defect this card closed, stated directly: one predicate, one
+    // answer, whichever subsystem asks.
+    for (const [, bag] of ABSENT_BAGS) {
+      for (const [, predicate] of ANSWERS) {
+        expect(evaluateJourneyPredicate(predicate, bag)).toBe(evaluatePredicate(predicate, bag));
+      }
+    }
+  });
+
+  it("reads an inherited key as absent", () => {
+    // `constructor` passes the trait-key rule, and `{}.constructor` is a
+    // function rather than nothing. Reading `traits[key]` instead of
+    // `Object.hasOwn` made this trait exist on every profile alive.
+    expect(evaluateJourneyPredicate({ trait: "constructor", op: "exists" }, {})).toBe(false);
+    expect(evaluateJourneyPredicate({ trait: "constructor", op: "absent" }, {})).toBe(true);
+    expect(evaluateJourneyPredicate({ trait: "constructor", op: "ne", value: 5 }, {})).toBe(false);
+  });
+
+  it("sends a participant with an absent trait down the otherwise arm of an ne branch", () => {
+    // The divergence where it was actually reachable: a branch. Before
+    // ADR-0009 this profile took `matched`, and the audience computed from
+    // the same predicate excluded them.
+    const neBranch = {
+      key: "ne_branch",
+      version: 1,
+      description: "branch on ne against a trait that may be absent",
+      trigger: { type: "audience_entered" as const, audience: "recent_purchasers" },
+      reentry: "once" as const,
+      start: "check",
+      steps: [
+        {
+          id: "check",
+          type: "branch" as const,
+          when: { trait: "orders_30d", op: "ne" as const, value: 5 },
+          matched: "not_five",
+          otherwise: "unknown",
+        },
+        { id: "not_five", type: "exit" as const },
+        { id: "unknown", type: "exit" as const },
+      ],
+    } as unknown as JourneyDefinition;
+
+    const result = advance({
+      definition: neBranch,
+      participation: participationAt("check", neBranch),
+      profile: { profile_id: "p", traits: {} },
+      now: NOW,
+    });
+
+    expect(result.effects.at(-1)).toMatchObject({ event: "journey.exited", step_id: "unknown" });
   });
 });
 

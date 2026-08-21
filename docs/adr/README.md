@@ -24,3 +24,4 @@ add it now rather than after.
 | 0006 | [Publish the decision records](./0006-publish-the-decision-records.md) | Accepted | 2026-08-19 |
 | 0007 | [Restructure the repository around six object kinds](./0007-restructure-the-repository-around-six-object-kinds.md) | Accepted | 2026-08-20 |
 | 0008 | [Inject workspace packages into the deploy tree](./0008-inject-workspace-packages-on-deploy.md) | Accepted | 2026-08-20 |
+| 0009 | [One predicate evaluator, SQL semantics for absent traits](./0009-one-predicate-evaluator-sql-semantics-for-absent-traits.md) | Accepted | 2026-08-21 |

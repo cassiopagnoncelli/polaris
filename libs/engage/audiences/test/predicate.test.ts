@@ -7,10 +7,14 @@
  * wrong, and nothing errors.
  */
 
-import type { AudiencePredicate } from "@polaris/audience-catalog";
+import {
+  AUDIENCE_OPERATORS,
+  type AudienceOperator,
+  type AudiencePredicate,
+} from "@polaris/audience-catalog";
 import { describe, expect, it } from "vitest";
 
-import { evaluatePredicate } from "../src/predicate.js";
+import { evaluatePredicate, type TraitBag } from "../src/predicate.js";
 
 const MEMBER = { orders_30d: 3, tier: "gold", churned: false };
 
@@ -91,6 +95,64 @@ describe("evaluatePredicate — absent is not zero", () => {
     expect(evaluatePredicate({ trait: "orders_30d", op: "eq", value: 0 }, zero)).toBe(true);
     expect(evaluatePredicate({ trait: "orders_30d", op: "exists" }, {})).toBe(false);
     expect(evaluatePredicate({ trait: "orders_30d", op: "eq", value: 0 }, {})).toBe(false);
+  });
+});
+
+/**
+ * The whole vocabulary against an absent trait, one case per operator.
+ *
+ * ADR-0009 makes this table the platform's single answer: journeys used to
+ * read `ne` the other way, and `evaluateJourneyPredicate` now delegates
+ * here. `libs/engage/journeys/test/machine.test.ts` pins the same table
+ * from the other side, so the two suites fail independently if this ever
+ * splits again.
+ *
+ * Absence has three spellings and they must agree with each other, which
+ * is why the table runs against all three rather than against `{}` alone.
+ */
+describe("evaluatePredicate — every operator against an absent trait", () => {
+  const ABSENT_BAGS: readonly (readonly [string, TraitBag])[] = [
+    ["a missing key", {}],
+    ["a null value", { orders_30d: null }],
+    ["an undefined value", { orders_30d: undefined }],
+  ];
+
+  // Every comparison is false. Only `absent` answers true, because it is
+  // the operator that asks the question absence actually answers.
+  const ANSWERS: readonly (readonly [AudienceOperator, AudiencePredicate, boolean])[] = [
+    ["eq", { trait: "orders_30d", op: "eq", value: 5 }, false],
+    ["ne", { trait: "orders_30d", op: "ne", value: 5 }, false],
+    ["gt", { trait: "orders_30d", op: "gt", value: 5 }, false],
+    ["gte", { trait: "orders_30d", op: "gte", value: 5 }, false],
+    ["lt", { trait: "orders_30d", op: "lt", value: 5 }, false],
+    ["lte", { trait: "orders_30d", op: "lte", value: 5 }, false],
+    ["in", { trait: "orders_30d", op: "in", values: [5] }, false],
+    ["exists", { trait: "orders_30d", op: "exists" }, false],
+    ["absent", { trait: "orders_30d", op: "absent" }, true],
+  ];
+
+  it("covers the operator vocabulary exhaustively", () => {
+    // The claim in this block's name, enforced rather than asserted:
+    // adding an operator to `AUDIENCE_OPERATORS` without deciding what it
+    // says about an absent trait fails here.
+    expect([...ANSWERS.map(([op]) => op)].sort()).toEqual([...AUDIENCE_OPERATORS].sort());
+  });
+
+  for (const [label, bag] of ABSENT_BAGS) {
+    for (const [op, predicate, expected] of ANSWERS) {
+      it(`${op} is ${String(expected)} against ${label}`, () => {
+        expect(evaluatePredicate(predicate, bag)).toBe(expected);
+      });
+    }
+  }
+
+  it("reads an inherited key as absent", () => {
+    // `constructor` passes the trait-key rule in `definitions/audiences`,
+    // and `{}.constructor` is a function rather than nothing. `Object.hasOwn`
+    // is what keeps a trait nobody set from existing on every profile.
+    expect(evaluatePredicate({ trait: "constructor", op: "exists" }, {})).toBe(false);
+    expect(evaluatePredicate({ trait: "constructor", op: "absent" }, {})).toBe(true);
+    expect(evaluatePredicate({ trait: "constructor", op: "ne", value: 5 }, {})).toBe(false);
   });
 });
 

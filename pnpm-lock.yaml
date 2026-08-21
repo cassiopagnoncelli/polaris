@@ -861,6 +861,9 @@ importers:
       '@polaris/audience-catalog':
         specifier: workspace:*
         version: link:../../../definitions/audiences
+      '@polaris/engage-audiences':
+        specifier: workspace:*
+        version: link:../audiences
       '@polaris/journey-catalog':
         specifier: workspace:*
         version: link:../../../definitions/journeys
