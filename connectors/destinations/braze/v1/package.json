@@ -1,0 +1,46 @@
+{
+  "name": "@polaris/destination-braze-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris Braze destination connector v1. Maps canonical Polaris events (including the audience and journey planes) into Braze's /users/track attributes+events shape and POSTs them to rest.<instance>.braze.com with Bearer auth. Vendor mapping and delivery only: no broker, no database, no deployment identity.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./project-config": {
+      "types": "./dist/project-config.d.ts",
+      "import": "./dist/project-config.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/delivery-destinations": "workspace:*",
+    "@polaris/delivery-normalize": "workspace:*",
+    "@polaris/delivery-port": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@polaris/bus": "workspace:*",
+    "@polaris/observability-logger": "workspace:*"
+  }
+}

@@ -5,7 +5,7 @@
  *
  *   The CLI MUST refuse to write mapping semantics. Mapping semantics
  *   (event-to-vendor field maps) live in versioned consumer code under
- *   `sync/destinations/<vendor>/<version>/src/mapper.ts` — NEVER in PostgreSQL.
+ *   `connectors/destinations/<vendor>/<version>/src/mapper.ts` — NEVER in PostgreSQL.
  *
  * This module enforces that contract before any value reaches the DB
  * repository, for the CLI's flag surface.
@@ -51,7 +51,7 @@ export function rejectMappingArguments(args: Readonly<Record<string, unknown>>):
       throw new UsageError(
         `--${normalised} is not accepted by the destinations CLI. ` +
           "Mapping semantics (event-to-vendor field maps) live in versioned " +
-          "consumer code under sync/destinations/<vendor>/<version>/src/mapper.ts and are NEVER " +
+          "consumer code under connectors/destinations/<vendor>/<version>/src/mapper.ts and are NEVER " +
           "stored in PostgreSQL. To change a destination's runtime knobs, use " +
           "`polaris destinations update-ops` with --max-concurrency, --max-rps, " +
           "--retry-policy, or --dead-letter-threshold.",

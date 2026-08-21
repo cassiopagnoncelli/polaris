@@ -1,12 +1,18 @@
 /**
  * `@polaris/consumer-braze-v1` — public module barrel.
  *
- * The binary entry point lives in `./main.ts`. This barrel exposes the
- * composable building blocks (`buildBrazeApp`, `createBrazeDescriptor`,
- * mappers, deliverer, config loader) so tests, smoke harnesses, and
- * the replay executor can drive the consumer without forking the
- * process.
+ * The binary entry point lives in `./main.ts`. This package is an engine
+ * SHELL: it boots the shared destination runtime against the Braze
+ * connector (`@polaris/destination-braze-v1`) and owns nothing about
+ * Braze itself. Mappers, deliverer, payload types and the
+ * project-config contract all live in the connector; what is left here is
+ * the deployment — broker, database, HTTP port, environment.
  *
+ * The vendor half is re-exported below so a smoke harness or the replay
+ * executor can still reach the descriptor through the thing it boots,
+ * rather than having to know which connector this shell was built against.
+ *
+ * @see connectors/destinations/braze/v1 — the vendor half
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
@@ -26,38 +32,7 @@ export {
   loadBrazeConfig,
 } from "./config.js";
 export {
-  type BuildDelivererOptions,
-  buildBrazeDeliverer,
-  buildUsersTrackUrl,
-  classifyRetryableStatus,
-  isRetryableStatus,
-  parseResolvedSecret,
-} from "./deliverer.js";
-export {
   type CreateBrazeDescriptorOptions,
   createBrazeDescriptor,
-} from "./descriptor.js";
-export {
-  CONSUMER_IDENTITY,
-  CONSUMER_VENDOR,
-  CONSUMER_VERSION,
-  DELIVERER_VERSION,
-  MAPPER_VERSION,
-  NORMALIZE_VERSION,
-} from "./descriptor-identity.js";
-export {
-  BRAZE_EVENT_CHECKOUT_STARTED,
-  CANONICAL_TO_BRAZE_FAMILY,
-  checkoutStartedMapper,
-  paymentApprovedMapper,
-  resolveExternalId,
-  userIdentifiedMapper,
-} from "./mapper.js";
-export type {
-  BrazeAttributeObject,
-  BrazeEventObject,
-  BrazeEventProperties,
-  BrazePayload,
-  BrazePurchaseObject,
-  ResolvedBrazeSecret,
-} from "./types.js";
+  brazeConnector,
+} from "@polaris/destination-braze-v1";

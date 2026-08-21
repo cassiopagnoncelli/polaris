@@ -6,7 +6,7 @@
  *   analytics.events -> subscribe -> NORMALIZE -> MAP -> DELIVER -> RECORD
  *
  * This module owns everything between `subscribe` and `RECORD` for any
- * vendor consumer. Each vendor's `sync/destinations/<vendor>/<version>/` directory
+ * vendor consumer. Each vendor's `connectors/destinations/<vendor>/<version>/` directory
  * supplies the vendor-specific MAP and DELIVER stages through the
  * `DestinationDescriptor` contract; the runtime supplies the rest:
  *

@@ -68,6 +68,12 @@ const PACKAGE_DIR = resolve(REPO_ROOT, "libs", "tenancy", "config-schemas");
  * A component opts in by exporting `PROJECT_CONFIG_NAMESPACE`,
  * `projectConfigSchema` and (destination consumers only) an optional
  * `instanceConfigSchema` from its built entry, then adding a row here.
+ *
+ * The five destinations point at `connectors/`, not `sync/`: P9J7X moved
+ * each vendor's config CONTRACT into its connector, beside the deliverer
+ * that reads the keys. The unit that boots the connector declares nothing
+ * of its own, so a row naming the unit would be a row naming a package with
+ * no `projectConfigSchema` in it.
  */
 export const REGISTRY = [
   // The ingester is the first cutover, not sessionizer as originally planned:
@@ -75,8 +81,8 @@ export const REGISTRY = [
   // candidate is semantic and deliberately ignored. See plan §7.
   {
     namespace: "meta-capi",
-    packageName: "@polaris/consumer-meta-capi-v1",
-    distEntry: "sync/destinations/meta-capi/v1/dist/project-config.js",
+    packageName: "@polaris/destination-meta-capi-v1",
+    distEntry: "connectors/destinations/meta-capi/v1/dist/project-config.js",
   },
   {
     namespace: "ingest",
@@ -85,23 +91,23 @@ export const REGISTRY = [
   },
   {
     namespace: "ga4",
-    packageName: "@polaris/consumer-ga4-v1",
-    distEntry: "sync/destinations/ga4/v1/dist/project-config.js",
+    packageName: "@polaris/destination-ga4-v1",
+    distEntry: "connectors/destinations/ga4/v1/dist/project-config.js",
   },
   {
     namespace: "tiktok",
-    packageName: "@polaris/consumer-tiktok-v1",
-    distEntry: "sync/destinations/tiktok/v1/dist/project-config.js",
+    packageName: "@polaris/destination-tiktok-v1",
+    distEntry: "connectors/destinations/tiktok/v1/dist/project-config.js",
   },
   {
     namespace: "braze",
-    packageName: "@polaris/consumer-braze-v1",
-    distEntry: "sync/destinations/braze/v1/dist/project-config.js",
+    packageName: "@polaris/destination-braze-v1",
+    distEntry: "connectors/destinations/braze/v1/dist/project-config.js",
   },
   {
     namespace: "webhook-sink",
-    packageName: "@polaris/consumer-webhook-sink-v1",
-    distEntry: "sync/destinations/webhook-sink/v1/dist/project-config.js",
+    packageName: "@polaris/destination-webhook-sink-v1",
+    distEntry: "connectors/destinations/webhook-sink/v1/dist/project-config.js",
   },
   // The first non-destination, non-ingest component, and the first whose
   // namespace already existed: `reverse_etl.ingest_api_key` was being

@@ -20,9 +20,11 @@ import {
 import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { TikTokRuntimeConfig } from "./config.js";
-import { createTikTokDescriptor } from "./descriptor.js";
-import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
-import type { TikTokEventPayload } from "./types.js";
+import {
+  createTikTokDescriptor,
+  PROJECT_CONFIG_NAMESPACE,
+  type TikTokEventPayload,
+} from "@polaris/destination-tiktok-v1";
 
 export interface BuildAppOptions extends DestinationHostOverrides<TikTokEventPayload> {
   readonly config: TikTokRuntimeConfig;

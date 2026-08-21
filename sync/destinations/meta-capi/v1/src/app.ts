@@ -20,9 +20,11 @@ import {
 import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { MetaCapiRuntimeConfig } from "./config.js";
-import { createMetaCapiDescriptor } from "./descriptor.js";
-import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
-import type { MetaCapiPayload } from "./types.js";
+import {
+  createMetaCapiDescriptor,
+  PROJECT_CONFIG_NAMESPACE,
+  type MetaCapiPayload,
+} from "@polaris/destination-meta-capi-v1";
 
 export interface BuildAppOptions extends DestinationHostOverrides<MetaCapiPayload> {
   readonly config: MetaCapiRuntimeConfig;

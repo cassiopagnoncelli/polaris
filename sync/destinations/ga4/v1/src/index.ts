@@ -1,12 +1,18 @@
 /**
  * `@polaris/consumer-ga4-v1` — public module barrel.
  *
- * The binary entry point lives in `./main.ts`. This barrel exposes the
- * composable building blocks (`buildGa4App`, `createGa4Descriptor`,
- * mappers, deliverer, config loader) so tests, smoke harnesses, and
- * the replay executor (P7-003) can drive the consumer without forking
- * the process.
+ * The binary entry point lives in `./main.ts`. This package is an engine
+ * SHELL: it boots the shared destination runtime against the GA4
+ * connector (`@polaris/destination-ga4-v1`) and owns nothing about
+ * GA4 itself. Mappers, deliverer, payload types and the
+ * project-config contract all live in the connector; what is left here is
+ * the deployment — broker, database, HTTP port, environment.
  *
+ * The vendor half is re-exported below so a smoke harness or the replay
+ * executor can still reach the descriptor through the thing it boots,
+ * rather than having to know which connector this shell was built against.
+ *
+ * @see connectors/destinations/ga4/v1 — the vendor half
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
@@ -26,40 +32,7 @@ export {
   loadGa4Config,
 } from "./config.js";
 export {
-  type BuildDelivererOptions,
-  buildGa4Deliverer,
-  buildMeasurementProtocolUrl,
-  buildRequestBody,
-  classifyRetryableStatus,
-  isRetryableStatus,
-  parseResolvedSecret,
-} from "./deliverer.js";
-export {
   type CreateGa4DescriptorOptions,
   createGa4Descriptor,
-} from "./descriptor.js";
-export {
-  CONSUMER_IDENTITY,
-  CONSUMER_VENDOR,
-  CONSUMER_VERSION,
-  DELIVERER_VERSION,
-  MAPPER_VERSION,
-  NORMALIZE_VERSION,
-} from "./descriptor-identity.js";
-export {
-  CANONICAL_TO_GA4_EVENT,
-  checkoutStartedMapper,
-  GA4_EVENT_BEGIN_CHECKOUT,
-  GA4_EVENT_LOGIN,
-  GA4_EVENT_PURCHASE,
-  GA4_LOGIN_METHOD_POLARIS,
-  paymentApprovedMapper,
-  userIdentifiedMapper,
-} from "./mapper.js";
-export type {
-  Ga4EventItem,
-  Ga4EventParams,
-  Ga4EventPayload,
-  Ga4RequestBody,
-  ResolvedGa4Secret,
-} from "./types.js";
+  ga4Connector,
+} from "@polaris/destination-ga4-v1";

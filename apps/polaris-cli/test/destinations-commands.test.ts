@@ -1706,10 +1706,12 @@ describe("destinations command dispatcher wiring", () => {
       meta: META,
     });
     expect(code).toBe(ExitCode.Ok);
-    // As in processors-commands.test.ts: this pinned the pre-move path and
-    // so preserved it. Mappers are one file now, not a directory.
+    // As in processors-commands.test.ts: this pins the path so a move cannot
+    // leave the help text pointing at nothing. It has caught two now — the
+    // mappers-directory-to-one-file change, and P9J7X moving the vendor half
+    // out of the unit and under `connectors/`.
     expect(capture.stdout.join("")).toMatch(
-      /sync\/destinations\/<vendor>\/<version>\/src\/mapper\.ts/,
+      /connectors\/destinations\/<vendor>\/<version>\/src\/mapper\.ts/,
     );
   });
 });

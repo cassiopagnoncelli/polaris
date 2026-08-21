@@ -171,11 +171,11 @@ Events without `external_id` AND without a `user_alias`-eligible identity (no em
 ## Test fixtures
 
 ```text
-sync/destinations/braze/v1/test/fixtures/normalized.ts                    builders
-sync/destinations/braze/v1/test/fixtures/checkout-started.input.json      canonical event
-sync/destinations/braze/v1/test/fixtures/checkout-started.output.json     Braze payload (illustrative shape)
-sync/destinations/braze/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (5UCTHNCR)
-sync/destinations/braze/v1/test/fixtures/app-source-purchase.output.json  Braze purchases[] payload with device_id
+connectors/destinations/braze/v1/test/fixtures/normalized.ts                    builders
+connectors/destinations/braze/v1/test/fixtures/checkout-started.input.json      canonical event
+connectors/destinations/braze/v1/test/fixtures/checkout-started.output.json     Braze payload (illustrative shape)
+connectors/destinations/braze/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (5UCTHNCR)
+connectors/destinations/braze/v1/test/fixtures/app-source-purchase.output.json  Braze purchases[] payload with device_id
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. The unit tests assert against computed values so the goldens stay readable without becoming brittle.

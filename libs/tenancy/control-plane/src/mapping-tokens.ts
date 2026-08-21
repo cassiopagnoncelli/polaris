@@ -3,7 +3,7 @@
  *
  * Polaris's central architectural rule is that PostgreSQL never stores
  * event-to-vendor mapping semantics: those live in
- * `sync/destinations/<vendor>/<version>/src/mapper.ts` under review, not in a row an operator
+ * `connectors/destinations/<vendor>/<version>/src/mapper.ts` under review, not in a row an operator
  * can edit. For most of the platform's life that rule was enforced
  * *structurally* — the schema simply had no column to put a mapping in, and
  * `apps/polaris-cli/test/destinations-commands.test.ts` asserts exactly that.
@@ -102,7 +102,7 @@ export class MappingSemanticsError extends Error {
   constructor(token: string, context: string) {
     super(
       `"${token}" is not accepted by ${context}: event-to-vendor mapping semantics live in ` +
-        "sync/destinations/<vendor>/<version>/src/mapper.ts, never in PostgreSQL",
+        "connectors/destinations/<vendor>/<version>/src/mapper.ts, never in PostgreSQL",
     );
     this.name = "MappingSemanticsError";
     this.token = token;

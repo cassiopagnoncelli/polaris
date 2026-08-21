@@ -20,9 +20,11 @@ import {
 import { STREAM_FAMILY_PROFILE_EVENTS, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { BrazeRuntimeConfig } from "./config.js";
-import { createBrazeDescriptor } from "./descriptor.js";
-import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
-import type { BrazePayload } from "./types.js";
+import {
+  createBrazeDescriptor,
+  PROJECT_CONFIG_NAMESPACE,
+  type BrazePayload,
+} from "@polaris/destination-braze-v1";
 
 export interface BuildAppOptions extends DestinationHostOverrides<BrazePayload> {
   readonly config: BrazeRuntimeConfig;

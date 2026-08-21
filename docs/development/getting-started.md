@@ -343,7 +343,7 @@ Polaris is **file-heavy, database-light**. Two halves:
 | Forbidden-field policy (`definitions/policy/forbidden-fields.ts`) | `sources` rows (materialized from `definitions/sources/`)      |
 | Project + source declarations (`definitions/projects/`, `definitions/sources/`) | `destination_instances` rows                             |
 | Processor manifests + code (`{sync,async}/<stage>/<name>/<version>/`)       | `processor_activations` rows (runtime enable/disable)      |
-| Destination consumer mappings + manifests (`sync/destinations/<vendor>/<version>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
+| Destination vendor mappings (`connectors/destinations/<vendor>/<version>/`) + consumer manifests (`sync/destinations/<vendor>/<version>/`) | `processor_runs`, `replay_jobs`, `delivery_records` rows |
 | SQL DDL and migrations (`db/clickhouse/`, `db/postgres/migrations/`) | `audit_records`                                            |
 
 The CLI's `--from-catalog` import path (on `projects list`, `projects show`,

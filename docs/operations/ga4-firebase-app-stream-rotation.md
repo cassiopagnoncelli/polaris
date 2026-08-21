@@ -39,7 +39,7 @@ anything else                  →  ?measurement_id=…&api_secret=…    wrappe
 Polaris will not half-route: an app-source envelope on a credential without
 `firebase_app_id` stays on the web stream, because GA4 Web rejects
 `app_instance_id` requests. See `buildRequestBody` in
-[`sync/destinations/ga4/v1/src/deliverer.ts`](../../sync/destinations/ga4/v1/src/deliverer.ts).
+[`connectors/destinations/ga4/v1/src/deliverer.ts`](../../connectors/destinations/ga4/v1/src/deliverer.ts).
 
 ## 1. Find the Firebase app id
 

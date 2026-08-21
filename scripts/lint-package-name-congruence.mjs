@@ -41,7 +41,11 @@
 //     "processor", and the topology is already in the path.
 //   - `definitions/` names registries by contract type: `definitions/traits`
 //     is `@polaris/trait-catalog`.
-//   - `connectors/` does not exist yet (P9J7X).
+//   - `connectors/` names by family + vendor + version
+//     (`connectors/destinations/ga4/v1` is `@polaris/destination-ga4-v1`).
+//     Congruent, and unchecked for the same reason as the three above:
+//     ADR-0007 states the law for `libs/`, and widening it is an ADR's job.
+//     `connectors/README.md` documents the convention.
 //
 // Checking those here would mean an allowlist with twenty entries in it,
 // which is a list nobody reads and a law nobody is enforcing.

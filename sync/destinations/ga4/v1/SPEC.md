@@ -186,11 +186,11 @@ The canonical `email_sha256` / `phone_sha256` slots are NOT mapped — GA4 has n
 ## Test fixtures
 
 ```text
-sync/destinations/ga4/v1/test/fixtures/normalized.ts                    builders
-sync/destinations/ga4/v1/test/fixtures/checkout-started.input.json      canonical web-stream event
-sync/destinations/ga4/v1/test/fixtures/checkout-started.output.json     GA4 web-stream payload (illustrative shape)
-sync/destinations/ga4/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (KCS3ATPC)
-sync/destinations/ga4/v1/test/fixtures/app-source-purchase.output.json  GA4 Firebase app-stream payload
+connectors/destinations/ga4/v1/test/fixtures/normalized.ts                    builders
+connectors/destinations/ga4/v1/test/fixtures/checkout-started.input.json      canonical web-stream event
+connectors/destinations/ga4/v1/test/fixtures/checkout-started.output.json     GA4 web-stream payload (illustrative shape)
+connectors/destinations/ga4/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (KCS3ATPC)
+connectors/destinations/ga4/v1/test/fixtures/app-source-purchase.output.json  GA4 Firebase app-stream payload
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Tests cover the `payment.approved` → `purchase` purchase-dedupe behaviour (transaction_id preferred over order_id; fallback to event_id when both are absent) directly inside `test/mapper.test.ts` against the in-memory fixture builders so the goldens stay readable without becoming brittle.

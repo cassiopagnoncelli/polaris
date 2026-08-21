@@ -22,7 +22,7 @@
  *
  *   The CLI MUST NOT define event-to-vendor mapping semantics. Mapping
  *   semantics live in versioned consumer code under
- *   `sync/destinations/<vendor>/<version>/src/mapper.ts`. Every command in this group runs
+ *   `connectors/destinations/<vendor>/<version>/src/mapper.ts`. Every command in this group runs
  *   `rejectMappingArguments` against the parsed args before any DB work,
  *   so a flag like `--field-map` or `--event-map` is refused with a usage
  *   error and never reaches PostgreSQL.
@@ -85,7 +85,7 @@ export const destinationsCommand: CommandDefinition = {
     const group = parent
       .command("destinations")
       .description(
-        "Manage runtime destination instances. PostgreSQL stores runtime state only; mapping semantics live in versioned consumer code under sync/destinations/<vendor>/<version>/src/mapper.ts.",
+        "Manage runtime destination instances. PostgreSQL stores runtime state only; mapping semantics live in versioned consumer code under connectors/destinations/<vendor>/<version>/src/mapper.ts.",
       );
     for (const child of CHILDREN) {
       child.register(group, deps);

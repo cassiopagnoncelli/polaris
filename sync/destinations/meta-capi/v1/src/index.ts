@@ -1,12 +1,18 @@
 /**
  * `@polaris/consumer-meta-capi-v1` — public module barrel.
  *
- * The binary entry point lives in `./main.ts`. This barrel exposes the
- * composable building blocks (`buildMetaCapiApp`,
- * `createMetaCapiDescriptor`, mappers, deliverer, config loader) so
- * tests, smoke harnesses, and the future replay executor (P7-003) can
- * drive the consumer without forking the process.
+ * The binary entry point lives in `./main.ts`. This package is an engine
+ * SHELL: it boots the shared destination runtime against the Meta CAPI
+ * connector (`@polaris/destination-meta-capi-v1`) and owns nothing about
+ * Meta CAPI itself. Mappers, deliverer, payload types and the
+ * project-config contract all live in the connector; what is left here is
+ * the deployment — broker, database, HTTP port, environment.
  *
+ * The vendor half is re-exported below so a smoke harness or the replay
+ * executor can still reach the descriptor through the thing it boots,
+ * rather than having to know which connector this shell was built against.
+ *
+ * @see connectors/destinations/meta-capi/v1 — the vendor half
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
@@ -26,41 +32,7 @@ export {
   metaCapiEnvSchema,
 } from "./config.js";
 export {
-  type BuildDelivererOptions,
-  buildGraphUrl,
-  buildMetaCapiDeliverer,
-  classifyRetryableStatus,
-  isRetryableStatus,
-  parseResolvedSecret,
-} from "./deliverer.js";
-export {
   type CreateMetaCapiDescriptorOptions,
   createMetaCapiDescriptor,
-} from "./descriptor.js";
-export {
-  CONSUMER_IDENTITY,
-  CONSUMER_VENDOR,
-  CONSUMER_VERSION,
-  DELIVERER_VERSION,
-  MAPPER_VERSION,
-  META_GRAPH_API_VERSION,
-  NORMALIZE_VERSION,
-} from "./descriptor-identity.js";
-export {
-  buildUserData,
-  CANONICAL_TO_META_EVENT,
-  checkoutStartedMapper,
-  inferActionSource,
-  META_EVENT_INITIATE_CHECKOUT,
-  META_EVENT_LEAD,
-  META_EVENT_PURCHASE,
-  paymentApprovedMapper,
-  userIdentifiedMapper,
-} from "./mapper.js";
-export type {
-  MetaActionSource,
-  MetaCapiCustomData,
-  MetaCapiPayload,
-  MetaCapiUserData,
-  ResolvedMetaCapiSecret,
-} from "./types.js";
+  metaCapiConnector,
+} from "@polaris/destination-meta-capi-v1";

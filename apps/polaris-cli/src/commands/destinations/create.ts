@@ -11,7 +11,7 @@
  *
  * **Mapping rule:** the CLI MUST NOT accept any flag/argument that resembles
  * mapping semantics. Mapping semantics (event-to-vendor field maps) live in
- * versioned consumer code under `sync/destinations/<vendor>/<version>/src/mapper.ts`. The
+ * versioned consumer code under `connectors/destinations/<vendor>/<version>/src/mapper.ts`. The
  * argument validator rejects mapping-shaped flags BEFORE any DB write.
  *
  * Audit trail: when the insert lands, this command writes an `audit_records`
@@ -114,7 +114,7 @@ export const destinationsCreateCommand: CommandDefinition = {
       .description(
         [
           "Create a destination instance. Stores runtime state only.",
-          "Mapping semantics (event-to-vendor maps) live in code under sync/destinations/<vendor>/<version>/src/mapper.ts,",
+          "Mapping semantics (event-to-vendor maps) live in code under connectors/destinations/<vendor>/<version>/src/mapper.ts,",
           "NEVER in PostgreSQL — this CLI refuses any flag that resembles a mapping field.",
         ].join("\n"),
       )

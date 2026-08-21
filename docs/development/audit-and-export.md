@@ -131,7 +131,7 @@ polaris export destinations --project storefront --env production
 ```
 
 Mapping semantics (event-to-vendor field maps) are NOT in the export —
-they live in `sync/destinations/<vendor>/<version>/src/mapper.ts` as versioned code. The
+they live in `connectors/destinations/<vendor>/<version>/src/mapper.ts` as versioned code. The
 schema has nowhere to store them, and the export shape carries only
 operational/runtime fields.
 

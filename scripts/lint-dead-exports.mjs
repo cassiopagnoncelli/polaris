@@ -48,10 +48,11 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  * `connectors/` and `definitions/` are deliberately absent. A root belongs here
  * when a package this check already scans moves INTO it, and neither receives
  * one: `definitions/` receives `catalog/`, which has never been scanned, and
- * `connectors/` is built from scratch by P9J7X. Adding either would be new
- * scanning surface arriving disguised as a rename — and for connectors it would
- * report every one of them dead, since the delivery engine loads a vendor
- * adapter by name rather than importing it.
+ * `connectors/` was built from `sync/destinations/`, which has never been
+ * scanned either. Adding either would be new scanning surface arriving
+ * disguised as a rename — and for connectors it would report every one of them
+ * dead, since the delivery engine loads a vendor adapter by name rather than
+ * importing it.
  */
 const PACKAGE_ROOTS = ["libs", "sdks"];
 

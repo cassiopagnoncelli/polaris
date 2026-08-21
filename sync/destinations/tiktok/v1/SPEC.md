@@ -192,9 +192,9 @@ user.external_id        sha256(lowercased(trimmed(identity.customer_id)))
 ## Test fixtures
 
 ```text
-sync/destinations/tiktok/v1/test/fixtures/normalized.ts                    builders
-sync/destinations/tiktok/v1/test/fixtures/checkout-started.input.json      canonical event
-sync/destinations/tiktok/v1/test/fixtures/checkout-started.output.json     TikTok payload (illustrative shape)
+connectors/destinations/tiktok/v1/test/fixtures/normalized.ts                    builders
+connectors/destinations/tiktok/v1/test/fixtures/checkout-started.input.json      canonical event
+connectors/destinations/tiktok/v1/test/fixtures/checkout-started.output.json     TikTok payload (illustrative shape)
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Hash values in `.output.json` are placeholders illustrating field positions; the unit tests compute hashes against `sha256Hex(...)` and assert against the computed result so the goldens stay readable without becoming brittle.

@@ -122,8 +122,8 @@ If the consumer's identity slot model is complex (Meta CAPI's `user_data` shape,
 Each canonical event the consumer handles has at least one golden fixture pair:
 
 ```text
-sync/destinations/<vendor>/<version>/test/fixtures/<event>.input.json    canonical event
-sync/destinations/<vendor>/<version>/test/fixtures/<event>.output.json   vendor payload after normalize+map
+connectors/destinations/<vendor>/<version>/test/fixtures/<event>.input.json    canonical event
+connectors/destinations/<vendor>/<version>/test/fixtures/<event>.output.json   vendor payload after normalize+map
 ```
 
 Fixtures are deterministic and used by contract tests. The vendor delivery step (network) is not exercised in unit tests; integration tests against vendor sandbox endpoints are documented separately.

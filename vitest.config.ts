@@ -11,11 +11,12 @@ export default defineConfig({
       // ADR-0007's six-kind roots. `definitions/**` is live: 0DIPB moved
       // `catalog/` under it, and those packages are workspace members whose
       // contents are enforcement inputs rather than documentation, so their
-      // registries carry tests like any package. `connectors/**` still matches
-      // nothing, exactly as in `pnpm-workspace.yaml`. The old flat root was
-      // collected alongside these for the length of the transition, so that
-      // each move card could be a pure `git mv`; IJ4NN emptied it and its line
-      // went with it.
+      // registries carry tests like any package. `connectors/**` went live with
+      // P9J7X, and it was listed here BEFORE it matched anything, which is what
+      // let the vendor mapper suites move under a pattern already collecting
+      // them. The old flat root was collected alongside these for the length of
+      // the transition, so that each move card could be a pure `git mv`; IJ4NN
+      // emptied it and its line went with it.
       //
       // A root missing from this list does not fail — the tests under it are
       // simply never collected, and a suite that runs nothing is the one

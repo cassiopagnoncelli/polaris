@@ -1,12 +1,18 @@
 /**
  * `@polaris/consumer-webhook-sink-v1` — public module barrel.
  *
- * The binary entry point lives in `./main.ts`. This barrel exposes the
- * composable building blocks (`buildWebhookSinkApp`,
- * `createWebhookSinkDescriptor`, mapper, deliverer, config loader) so
- * tests, smoke harnesses, and the future replay executor (P7-003) can
- * drive the consumer without forking the process.
+ * The binary entry point lives in `./main.ts`. This package is an engine
+ * SHELL: it boots the shared destination runtime against the webhook-sink
+ * connector (`@polaris/destination-webhook-sink-v1`) and owns nothing about
+ * webhook-sink itself. Mappers, deliverer, payload types and the
+ * project-config contract all live in the connector; what is left here is
+ * the deployment — broker, database, HTTP port, environment.
  *
+ * The vendor half is re-exported below so a smoke harness or the replay
+ * executor can still reach the descriptor through the thing it boots,
+ * rather than having to know which connector this shell was built against.
+ *
+ * @see connectors/destinations/webhook-sink/v1 — the vendor half
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
@@ -25,31 +31,7 @@ export {
   webhookSinkEnvSchema,
 } from "./config.js";
 export {
-  type BuildDelivererOptions,
-  buildWebhookDeliverer,
-  classifyRetryableStatus,
-  enforceTransportPolicy,
-  HEADER_DELIVERY_ATTEMPT,
-  HEADER_DELIVERY_CONSUMER_VERSION,
-  HEADER_DELIVERY_KEY,
-  HEADER_DELIVERY_VENDOR,
-  HEADER_SIGNATURE,
-  isRetryableStatus,
-  parseResolvedSecret,
-  signBody,
-  verifySignature,
-} from "./deliverer.js";
-export {
   type CreateWebhookSinkDescriptorOptions,
   createWebhookSinkDescriptor,
-} from "./descriptor.js";
-export {
-  CONSUMER_IDENTITY,
-  CONSUMER_VENDOR,
-  CONSUMER_VERSION,
-  DELIVERER_VERSION,
-  MAPPER_VERSION,
-  NORMALIZE_VERSION,
-} from "./descriptor-identity.js";
-export { stampDelivery, webhookPassthroughMapper } from "./mapper.js";
-export type { ResolvedWebhookConfig, WebhookPayload } from "./types.js";
+  webhookSinkConnector,
+} from "@polaris/destination-webhook-sink-v1";

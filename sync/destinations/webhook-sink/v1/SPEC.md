@@ -6,7 +6,7 @@
 
 - **Name:** Generic webhook receiver (vendor-agnostic).
 - **API version this consumer targets:** n/a — receivers vary; the contract is set by Polaris, not a vendor.
-- **Documentation:** the receiver-side contract is documented in `docs/architecture/06-destinations.md` "Destination Consumer" and the wire format pinned in `sync/destinations/webhook-sink/v1/src/types.ts` (`WebhookPayload`).
+- **Documentation:** the receiver-side contract is documented in `docs/architecture/06-destinations.md` "Destination Consumer" and the wire format pinned in `connectors/destinations/webhook-sink/v1/src/types.ts` (`WebhookPayload`).
 - **Auth scheme:** Optional HMAC-SHA256 body signature over the JSON request body. Header `X-Polaris-Signature: sha256=<lowercase hex>`. When no signing key is configured, the receiver uses ambient transport security (TLS) alone.
 - **Base URL(s):** Per destination instance. Resolved from the instance's `secret_ref` at delivery time:
   - URL literal — the secret value IS the target URL.

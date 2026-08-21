@@ -186,9 +186,9 @@ user_data.anon_id       sha256(identity.anonymous_id)   // no canonicalization n
 ## Test fixtures
 
 ```text
-sync/destinations/meta-capi/v1/test/fixtures/normalized.ts                    builders
-sync/destinations/meta-capi/v1/test/fixtures/checkout-started.input.json      canonical event
-sync/destinations/meta-capi/v1/test/fixtures/checkout-started.output.json     Meta payload (illustrative shape)
+connectors/destinations/meta-capi/v1/test/fixtures/normalized.ts                    builders
+connectors/destinations/meta-capi/v1/test/fixtures/checkout-started.input.json      canonical event
+connectors/destinations/meta-capi/v1/test/fixtures/checkout-started.output.json     Meta payload (illustrative shape)
 ```
 
 The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Hash values in `.output.json` are placeholders illustrating field positions; the unit tests compute hashes against `sha256Hex(...)` and assert against the computed result so the goldens stay readable without becoming brittle.

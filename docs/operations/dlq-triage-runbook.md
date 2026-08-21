@@ -409,9 +409,9 @@ This is enforced at three layers:
    resolved access token from the vendor response BEFORE writing it
    into `delivery_records.vendor_response_summary` or the matching
    `dlq_records` row. References:
-   - [`sync/destinations/tiktok/v1/src/deliverer.ts`](../../sync/destinations/tiktok/v1/src/deliverer.ts)
+   - [`connectors/destinations/tiktok/v1/src/deliverer.ts`](../../connectors/destinations/tiktok/v1/src/deliverer.ts)
      — `redactToken` defense.
-   - [`sync/destinations/meta-capi/v1/src/deliverer.ts`](../../sync/destinations/meta-capi/v1/src/deliverer.ts)
+   - [`connectors/destinations/meta-capi/v1/src/deliverer.ts`](../../connectors/destinations/meta-capi/v1/src/deliverer.ts)
      — `redactToken` defense.
 
 If a DLQ record's `vendor_response_summary` looks suspicious

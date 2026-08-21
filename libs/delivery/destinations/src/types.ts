@@ -7,7 +7,7 @@
  *   analytics.events -> subscribe -> NORMALIZE -> MAP -> DELIVER -> RECORD
  *
  * This module pins the TypeScript surface for the per-stage contracts that
- * vendor consumers (`sync/destinations/<vendor>/<version>/`) implement. The runtime
+ * vendor connectors (`connectors/destinations/<vendor>/<version>/`) implement. The runtime
  * (`./runtime.ts`) composes those contracts into a single PolarisConsumer
  * loop and writes the resulting delivery_records / DLQ entries.
  *
@@ -246,8 +246,12 @@ export type Deliverer<Payload> = (context: DelivererContext<Payload>) => Promise
  * factory function).
  *
  * The descriptor is the contract between the vendor's
- * `sync/destinations/<vendor>/<version>/` code and the shared runtime. Vendors override
- * mappers / deliverer / required-consent / identity-hashing here.
+ * `connectors/destinations/<vendor>/<version>/` code and the shared runtime. Vendors
+ * override mappers / deliverer / required-consent / identity-hashing here.
+ *
+ * Connectors do not build one by hand: `@polaris/delivery-port` declares the
+ * `DestinationConnector` shape and `toDestinationDescriptor` bridges it onto
+ * this interface, which stays the runtime's.
  */
 export interface DestinationDescriptor<Payload> {
   /** Static identity of the vendor + per-stage versions. */

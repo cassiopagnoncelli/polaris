@@ -246,7 +246,7 @@ export type DestinationStatus = "active" | "paused" | "disabled";
  *   - `test`     no network delivery; used by smoke tests and replay dry runs
  *
  * Modes do not change event-to-vendor mapping behavior. Mapping semantics
- * live in `sync/destinations/<vendor>/<version>/src/mapper.ts`, never here.
+ * live in `connectors/destinations/<vendor>/<version>/src/mapper.ts`, never here.
  */
 export type DestinationMode = "live" | "sandbox" | "test";
 
@@ -267,7 +267,7 @@ export type DestinationRetryPolicy = "standard" | "aggressive" | "conservative";
  *
  * **PostgreSQL DOES NOT store mapping semantics.** Mapping semantics
  * (event-to-vendor field maps) live in versioned consumer code under
- * `sync/destinations/<vendor>/<version>/src/mapper.ts`. This interface intentionally has NO
+ * `connectors/destinations/<vendor>/<version>/src/mapper.ts`. This interface intentionally has NO
  * column resembling `field_map`, `mapping`, `event_map`, `target_field`, or
  * any other field-translation surface. The CLI cannot define mappings
  * because the typed schema gives it nowhere to store them, and the

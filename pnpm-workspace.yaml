@@ -4,9 +4,10 @@ packages:
   - "async/*/*/*"
   - "tests"
 
-  # ADR-0007 six-kind tree. `connectors/*/*/*` still matches nothing, which is
-  # the point: the destination is declared before P9J7X fills it, so the card
-  # that creates the first connector is a pure add.
+  # ADR-0007 six-kind tree. `connectors/*/*/*` was declared here before any
+  # connector existed, which is why P9J7X was a pure add: five packages landed
+  # under a glob that was already waiting for them, with no edit to this file
+  # and therefore no conflict with the two cards moving beside it.
   #
   # The `packages/*` entry that sat above, and the dual-glob transition it
   # opened, are both gone. For the length of programme T both roots were live

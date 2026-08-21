@@ -568,6 +568,116 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  connectors/destinations/braze/v1:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/delivery-port':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/port
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+
+  connectors/destinations/ga4/v1:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/delivery-port':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/port
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+
+  connectors/destinations/meta-capi/v1:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/delivery-port':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/port
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+
+  connectors/destinations/tiktok/v1:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/delivery-port':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/port
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+
+  connectors/destinations/webhook-sink/v1:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/normalize
+      '@polaris/delivery-port':
+        specifier: workspace:*
+        version: link:../../../../libs/delivery/port
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@polaris/bus':
+        specifier: workspace:*
+        version: link:../../../../libs/bus
+      '@polaris/observability-logger':
+        specifier: workspace:*
+        version: link:../../../../libs/observability/logger
+
   definitions/audiences:
     dependencies:
       zod:
@@ -715,6 +825,18 @@ importers:
       '@polaris/spec':
         specifier: workspace:*
         version: link:../../spec
+
+  libs/delivery/port:
+    dependencies:
+      '@polaris/delivery-destinations':
+        specifier: workspace:*
+        version: file:libs/delivery/destinations
+      '@polaris/delivery-normalize':
+        specifier: workspace:*
+        version: link:../normalize
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   libs/governance:
     dependencies:
@@ -1001,6 +1123,9 @@ importers:
       '@polaris/delivery-normalize':
         specifier: workspace:*
         version: link:../../../../libs/delivery/normalize
+      '@polaris/destination-braze-v1':
+        specifier: workspace:*
+        version: link:../../../../connectors/destinations/braze/v1
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1040,6 +1165,9 @@ importers:
       '@polaris/delivery-normalize':
         specifier: workspace:*
         version: link:../../../../libs/delivery/normalize
+      '@polaris/destination-ga4-v1':
+        specifier: workspace:*
+        version: link:../../../../connectors/destinations/ga4/v1
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1079,6 +1207,9 @@ importers:
       '@polaris/delivery-normalize':
         specifier: workspace:*
         version: link:../../../../libs/delivery/normalize
+      '@polaris/destination-meta-capi-v1':
+        specifier: workspace:*
+        version: link:../../../../connectors/destinations/meta-capi/v1
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1118,6 +1249,9 @@ importers:
       '@polaris/delivery-normalize':
         specifier: workspace:*
         version: link:../../../../libs/delivery/normalize
+      '@polaris/destination-tiktok-v1':
+        specifier: workspace:*
+        version: link:../../../../connectors/destinations/tiktok/v1
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1157,6 +1291,9 @@ importers:
       '@polaris/delivery-normalize':
         specifier: workspace:*
         version: link:../../../../libs/delivery/normalize
+      '@polaris/destination-webhook-sink-v1':
+        specifier: workspace:*
+        version: link:../../../../connectors/destinations/webhook-sink/v1
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1839,6 +1976,49 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  '@polaris/bus@file:libs/bus':
+    resolution: {directory: libs/bus, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/delivery-destinations@file:libs/delivery/destinations':
+    resolution: {directory: libs/delivery/destinations, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/delivery-normalize@file:libs/delivery/normalize':
+    resolution: {directory: libs/delivery/normalize, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/governance@file:libs/governance':
+    resolution: {directory: libs/governance, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/observability-logger@file:libs/observability/logger':
+    resolution: {directory: libs/observability/logger, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/persistence-postgres@file:libs/persistence/postgres':
+    resolution: {directory: libs/persistence/postgres, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/pipeline@file:libs/pipeline':
+    resolution: {directory: libs/pipeline, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/runtime-config@file:libs/runtime/config':
+    resolution: {directory: libs/runtime/config, type: directory}
+
+  '@polaris/runtime-environments@file:libs/runtime/environments':
+    resolution: {directory: libs/runtime/environments, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/runtime-secrets@file:libs/runtime/secrets':
+    resolution: {directory: libs/runtime/secrets, type: directory}
+    engines: {node: '>=22.0.0'}
+
+  '@polaris/spec@file:libs/spec':
+    resolution: {directory: libs/spec, type: directory}
+    engines: {node: '>=22.0.0'}
 
   '@rolldown/binding-android-arm64@1.0.0':
     resolution: {integrity: sha512-TWMZnRLMe63C2Lhyicviu7ZHaU4kxa6PS3rofvc9GmcvptzNN11BcfQ4Sl7MwTOsisQoa2keB/EBdNCAnUo8vA==}
@@ -3107,6 +3287,91 @@ snapshots:
   '@oxc-project/types@0.129.0': {}
 
   '@pinojs/redact@0.4.0': {}
+
+  '@polaris/bus@file:libs/bus':
+    dependencies:
+      '@polaris/observability-logger': file:libs/observability/logger
+      '@polaris/persistence-postgres': file:libs/persistence/postgres
+      '@polaris/runtime-config': file:libs/runtime/config
+      amqplib: 2.0.1
+      kysely: 0.29.0
+    transitivePeerDependencies:
+      - pg-native
+
+  '@polaris/delivery-destinations@file:libs/delivery/destinations':
+    dependencies:
+      '@polaris/bus': file:libs/bus
+      '@polaris/delivery-normalize': file:libs/delivery/normalize
+      '@polaris/governance': file:libs/governance
+      '@polaris/observability-logger': file:libs/observability/logger
+      '@polaris/persistence-postgres': file:libs/persistence/postgres
+      '@polaris/pipeline': file:libs/pipeline
+      '@polaris/runtime-secrets': file:libs/runtime/secrets
+      ioredis: 5.10.1(supports-color@7.2.0)
+      kysely: 0.29.0
+      uuid: 14.0.0
+    transitivePeerDependencies:
+      - pg-native
+      - supports-color
+
+  '@polaris/delivery-normalize@file:libs/delivery/normalize':
+    dependencies:
+      '@polaris/governance': file:libs/governance
+      '@polaris/spec': file:libs/spec
+
+  '@polaris/governance@file:libs/governance':
+    dependencies:
+      '@polaris/observability-logger': file:libs/observability/logger
+      '@polaris/spec': file:libs/spec
+      zod: 4.4.3
+
+  '@polaris/observability-logger@file:libs/observability/logger':
+    dependencies:
+      pino: 10.3.1
+
+  '@polaris/persistence-postgres@file:libs/persistence/postgres':
+    dependencies:
+      '@polaris/runtime-environments': file:libs/runtime/environments
+      kysely: 0.29.0
+      pg: 8.20.0
+    transitivePeerDependencies:
+      - pg-native
+
+  '@polaris/pipeline@file:libs/pipeline':
+    dependencies:
+      '@polaris/bus': file:libs/bus
+      '@polaris/observability-logger': file:libs/observability/logger
+      '@polaris/persistence-postgres': file:libs/persistence/postgres
+      '@polaris/runtime-environments': file:libs/runtime/environments
+      '@polaris/spec': file:libs/spec
+      kysely: 0.29.0
+      uuid: 14.0.0
+      yaml: 2.9.0
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - pg-native
+
+  '@polaris/runtime-config@file:libs/runtime/config':
+    dependencies:
+      '@polaris/runtime-environments': file:libs/runtime/environments
+      dotenv: 17.4.2
+      zod: 4.4.3
+
+  '@polaris/runtime-environments@file:libs/runtime/environments':
+    dependencies:
+      zod: 4.4.3
+
+  '@polaris/runtime-secrets@file:libs/runtime/secrets':
+    dependencies:
+      '@node-rs/argon2': 2.0.2
+      '@polaris/observability-logger': file:libs/observability/logger
+      '@polaris/runtime-config': file:libs/runtime/config
+
+  '@polaris/spec@file:libs/spec':
+    dependencies:
+      '@polaris/runtime-environments': file:libs/runtime/environments
+      yaml: 2.9.0
+      zod: 4.4.3
 
   '@rolldown/binding-android-arm64@1.0.0':
     optional: true

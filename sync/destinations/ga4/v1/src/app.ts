@@ -20,9 +20,11 @@ import {
 import { STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { Ga4RuntimeConfig } from "./config.js";
-import { createGa4Descriptor } from "./descriptor.js";
-import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
-import type { Ga4EventPayload } from "./types.js";
+import {
+  createGa4Descriptor,
+  PROJECT_CONFIG_NAMESPACE,
+  type Ga4EventPayload,
+} from "@polaris/destination-ga4-v1";
 
 export interface BuildAppOptions extends DestinationHostOverrides<Ga4EventPayload> {
   readonly config: Ga4RuntimeConfig;

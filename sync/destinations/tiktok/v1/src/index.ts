@@ -1,12 +1,18 @@
 /**
  * `@polaris/consumer-tiktok-v1` — public module barrel.
  *
- * The binary entry point lives in `./main.ts`. This barrel exposes the
- * composable building blocks (`buildTikTokApp`,
- * `createTikTokDescriptor`, mappers, deliverer, config loader) so
- * tests, smoke harnesses, and the future replay executor (P7-003) can
- * drive the consumer without forking the process.
+ * The binary entry point lives in `./main.ts`. This package is an engine
+ * SHELL: it boots the shared destination runtime against the TikTok
+ * connector (`@polaris/destination-tiktok-v1`) and owns nothing about
+ * TikTok itself. Mappers, deliverer, payload types and the
+ * project-config contract all live in the connector; what is left here is
+ * the deployment — broker, database, HTTP port, environment.
  *
+ * The vendor half is re-exported below so a smoke harness or the replay
+ * executor can still reach the descriptor through the thing it boots,
+ * rather than having to know which connector this shell was built against.
+ *
+ * @see connectors/destinations/tiktok/v1 — the vendor half
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
@@ -26,43 +32,7 @@ export {
   tiktokEnvSchema,
 } from "./config.js";
 export {
-  type BuildDelivererOptions,
-  buildEventsApiUrl,
-  buildTikTokDeliverer,
-  classifyRetryableStatus,
-  isRetryableStatus,
-  parseResolvedSecret,
-} from "./deliverer.js";
-export {
   type CreateTikTokDescriptorOptions,
   createTikTokDescriptor,
-} from "./descriptor.js";
-export {
-  CONSUMER_IDENTITY,
-  CONSUMER_VENDOR,
-  CONSUMER_VERSION,
-  DELIVERER_VERSION,
-  MAPPER_VERSION,
-  NORMALIZE_VERSION,
-  TIKTOK_EVENTS_API_VERSION,
-} from "./descriptor-identity.js";
-export {
-  buildUserData,
-  CANONICAL_TO_TIKTOK_EVENT,
-  checkoutStartedMapper,
-  inferEventSource,
-  paymentApprovedMapper,
-  TIKTOK_EVENT_COMPLETE_REGISTRATION,
-  TIKTOK_EVENT_INITIATE_CHECKOUT,
-  TIKTOK_EVENT_PURCHASE,
-  userIdentifiedMapper,
-} from "./mapper.js";
-export type {
-  ResolvedTikTokSecret,
-  TikTokEventContent,
-  TikTokEventPayload,
-  TikTokEventProperties,
-  TikTokEventSource,
-  TikTokPageContext,
-  TikTokUserData,
-} from "./types.js";
+  tiktokConnector,
+} from "@polaris/destination-tiktok-v1";

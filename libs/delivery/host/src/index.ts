@@ -15,7 +15,8 @@
  *   delivery-destinations   the runtime. Delivery, gate, retry, breaker.
  *   delivery-host           the process around it. Postgres, AMQP, Fastify,
  *                           shutdown ordering.
- *   sync/destinations/*     config + descriptor, and nothing else.
+ *   connectors/destinations/*  the vendor: map + deliver, and nothing else.
+ *   sync/destinations/*     config + the wiring that binds one, and nothing else.
  *
  * That split is also the reason the five `app.ts` files were never
  * consolidated before: the obvious home for the code was the runtime

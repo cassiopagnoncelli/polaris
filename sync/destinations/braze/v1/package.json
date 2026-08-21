@@ -29,16 +29,17 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@polaris/runtime-config": "workspace:*",
-    "@polaris/persistence-postgres": "workspace:*",
-    "@polaris/delivery-normalize": "workspace:*",
-    "@polaris/delivery-host": "workspace:*",
+    "@polaris/bus": "workspace:*",
     "@polaris/delivery-destinations": "workspace:*",
+    "@polaris/delivery-host": "workspace:*",
+    "@polaris/delivery-normalize": "workspace:*",
+    "@polaris/destination-braze-v1": "workspace:*",
     "@polaris/observability-logger": "workspace:*",
     "@polaris/observability-metrics": "workspace:*",
-    "@polaris/tenancy-project-config": "workspace:*",
+    "@polaris/persistence-postgres": "workspace:*",
+    "@polaris/runtime-config": "workspace:*",
     "@polaris/runtime-service-bootstrap": "workspace:*",
-    "@polaris/bus": "workspace:*",
+    "@polaris/tenancy-project-config": "workspace:*",
     "kysely": "^0.29.0",
     "zod": "^4.4.3"
   }

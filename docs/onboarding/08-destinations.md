@@ -4,7 +4,7 @@ A **destination** is a vendor pipeline that consumes derived events and
 delivers them to an external system (Meta CAPI, TikTok Events, GA4 Measurement
 Protocol, Braze, etc.). Polaris stores destination *runtime state* in
 PostgreSQL; the actual mapping logic (event-to-vendor field maps) lives in
-versioned consumer code under `sync/destinations/<vendor>/<version>/src/mapper.ts`.
+versioned consumer code under `connectors/destinations/<vendor>/<version>/src/mapper.ts`.
 
 > **The CLI never accepts mapping semantics as arguments.** Flags like
 > `--field-map` or `--event-map` are refused at the validator. Mapping
@@ -168,7 +168,7 @@ The team does NOT:
 - create the destination row
 - handle the vendor secret material
 - write or modify mapper code (that is a separate PR against
-  `sync/destinations/<vendor>/<version>/src/mapper.ts`)
+  `connectors/destinations/<vendor>/<version>/src/mapper.ts`)
 - enable replay opt-in on its own
 
 ## Done when

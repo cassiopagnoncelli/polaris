@@ -99,7 +99,9 @@ definitions/                       declared intent, in git — the control plane
   policy/                          forbidden-field policy and project overrides
   {traits,audiences,journeys,reverse-etl,projects,sources}/
 
-connectors/                        vendor adapters, by family (P9J7X; empty today)
+connectors/                        vendor adapters, by family — uniform ports, not deployables
+  destinations/<vendor>/v1/        braze, ga4, meta-capi, tiktok, webhook-sink
+  {sources,warehouses}/            future homes; land with their first vendor
 
 sync/                              synchronous spine stages
   identity/resolver/v1/            raw.events -> identified.events, mints the profile
@@ -114,13 +116,18 @@ async/                             everything off the hot path
   warehouse/{clickhouse-sink,archiver}/v1/
   reverse-etl/runner/v1/
 
-  Each sync/destinations/<vendor>/v<N>/ ships:
-    SPEC.md            filled from docs/implementation/templates/consumer-spec-template.md
-    normalize/         vendor-specific normalization on top of @polaris/delivery-normalize
-    mappers/           per-canonical-event vendor payload mappers
-    deliver/           vendor client adapter (auth, batching, retry, rate limit)
-    manifest.json      versioning metadata
-    test/fixtures/     golden input/output pairs per canonical event
+  Each sync/destinations/<vendor>/v<N>/ is a SHELL and ships:
+    SPEC.md               filled from docs/implementation/templates/consumer-spec-template.md
+    src/{config,app,main}.ts   env, wiring, entry point — the deployment, not the vendor
+    consumer.manifest.yaml     versioning metadata
+    Dockerfile
+
+  The vendor half is connectors/destinations/<vendor>/v<N>/ and ships:
+    src/mapper.ts         per-canonical-event vendor payload mappers
+    src/deliverer.ts      vendor client adapter (auth, batching, retry, rate limit)
+    src/project-config.ts per-(project, environment) keys the deliverer reads
+    src/connector.ts      the destination.port entry: slug, modes, map, deliver
+    test/fixtures/        golden input/output pairs per canonical event
 
 infra/
   docker/

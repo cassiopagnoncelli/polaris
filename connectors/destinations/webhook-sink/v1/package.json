@@ -1,0 +1,46 @@
+{
+  "name": "@polaris/destination-webhook-sink-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polaris webhook-sink destination connector v1. Passes canonical Polaris events through to an operator-supplied HTTPS receiver with optional HMAC-SHA256 signing. The vendor-agnostic exemplar: the smallest thing that is still a connector.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./project-config": {
+      "types": "./dist/project-config.d.ts",
+      "import": "./dist/project-config.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage .tsbuildinfo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@polaris/delivery-destinations": "workspace:*",
+    "@polaris/delivery-normalize": "workspace:*",
+    "@polaris/delivery-port": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@polaris/bus": "workspace:*",
+    "@polaris/observability-logger": "workspace:*"
+  }
+}

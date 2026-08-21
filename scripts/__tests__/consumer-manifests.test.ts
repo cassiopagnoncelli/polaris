@@ -31,7 +31,7 @@
  */
 
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -40,6 +40,7 @@ import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESTINATIONS = join(ROOT, "sync", "destinations");
+const CONNECTORS = join(ROOT, "connectors", "destinations");
 
 const versionSchema = z.string().regex(/^v[0-9]+(\.[0-9]+){0,2}$/u);
 const consentDimensionSchema = z.object({
@@ -105,20 +106,26 @@ function findConsumerManifests(): ReadonlyArray<{ vendorDir: string; unitDir: st
 const MANIFESTS = findConsumerManifests();
 
 /**
- * A boolean-valued constant a descriptor declares, read out of its source.
+ * A boolean-valued constant a connector declares, read out of its source.
  *
  * Matches `const NAME: Type = Object.freeze({...})` and fills every
  * dimension the caller names, defaulting an omitted one to `false` — the
  * gate's `evaluateConsent` treats absent as not-required, so
  * `{ marketing: true }` and `{ marketing: true, analytics: false }` are the
  * same declaration and must compare equal.
+ *
+ * Reads `connectors/`, not the unit, since P9J7X: the manifest stayed with
+ * the deployment and the declaration went with the vendor. That makes this
+ * a cross-tier check rather than a within-directory one, which is more of
+ * the point than it was before — the two halves can now drift apart without
+ * either file changing beside the other.
  */
-function descriptorFlags(
+function connectorFlags(
   unitDir: string,
   constant: string,
   dimensions: readonly string[],
 ): Record<string, boolean> {
-  const file = join(unitDir, "src", "descriptor.ts");
+  const file = join(CONNECTORS, ...unitDir.split(sep).slice(-2), "src", "connector.ts");
   const source = readFileSync(file, "utf8");
   const body = new RegExp(`${constant}[^=]*=\\s*Object\\.freeze\\(\\{([^}]*)\\}\\)`).exec(
     source,
@@ -132,11 +139,11 @@ function descriptorFlags(
   return out;
 }
 
-const descriptorConsent = (unitDir: string) =>
-  descriptorFlags(unitDir, "REQUIRED_CONSENT", ["marketing", "analytics", "personalization"]);
+const connectorConsent = (unitDir: string) =>
+  connectorFlags(unitDir, "REQUIRED_CONSENT", ["marketing", "analytics", "personalization"]);
 
-const descriptorHashing = (unitDir: string) =>
-  descriptorFlags(unitDir, "IDENTITY_HASHING", ["email", "phone"]);
+const connectorHashing = (unitDir: string) =>
+  connectorFlags(unitDir, "IDENTITY_HASHING", ["email", "phone"]);
 
 function manifestOf(unitDir: string): z.infer<typeof consumerManifestSchema> {
   return consumerManifestSchema.parse(
@@ -174,14 +181,14 @@ describe("every consumer manifest", () => {
   });
 });
 
-describe("the manifest agrees with the descriptor", () => {
+describe("the manifest agrees with the connector", () => {
   it.each(
     MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
   )("%s: required_consent matches what the gate enforces", (vendor, unitDir) => {
     // The compliance question, written in two places. The manifest is
-    // what an operator reads; the descriptor is what drops the event.
+    // what an operator reads; the connector is what drops the event.
     expect(manifestOf(unitDir).required_consent, `${vendor} manifest disagrees`).toEqual(
-      descriptorConsent(unitDir),
+      connectorConsent(unitDir),
     );
   });
 
@@ -189,7 +196,7 @@ describe("the manifest agrees with the descriptor", () => {
     MANIFESTS.map((m) => [m.vendorDir, m.unitDir]),
   )("%s: identity_hashing matches what normalize is told", (vendor, unitDir) => {
     expect(manifestOf(unitDir).identity_hashing, `${vendor} manifest disagrees`).toEqual(
-      descriptorHashing(unitDir),
+      connectorHashing(unitDir),
     );
   });
 

@@ -55,7 +55,7 @@ decided and why; there is no open-questions section.
 The last two are the tell. `apps/ingester-api/src/config.ts:88,176` hand-parses
 `"project=value,project=value"` strings, so adding a project means editing a
 global env var and redeploying, with no validation, no audit, and no per-key
-history. And `sync/destinations/ga4/v1/src/deliverer.ts:232` stuffs `measurement_id`
+history. And `connectors/destinations/ga4/v1/src/deliverer.ts:232` stuffs `measurement_id`
 and `firebase_app_id` — neither of which is a secret — inside the resolved
 secret payload, because the secret store was the only per-`(project,
 environment)` value store that existed.

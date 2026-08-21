@@ -68,8 +68,9 @@ const SCAN_DIRS = [
   // somebody outside the monorepo is the prose that can least afford to name a
   // directory that is not there.
   "blueprints",
-  // ADR-0007's remaining destination. Matches nothing until P9J7X creates it;
-  // listed now so the card that fills it cannot forget the gate.
+  // ADR-0007's vendor registry, filled by P9J7X. Its README is prose written
+  // for somebody adding a vendor, which is exactly the prose a stale path
+  // hurts most.
   "connectors",
   "db",
   "definitions",
@@ -229,7 +230,9 @@ export const RETIRED = [
   {
     id: "consumers-dir",
     pattern: /(?<![\w/.-])consumers\/(?:<[a-z_]+>|[a-z][a-z0-9-]*)\//,
-    hint: "destinations live at `sync/destinations/<vendor>/<version>/` — mappers are `src/mapper.ts`",
+    hint:
+      "destination units live at `sync/destinations/<vendor>/<version>/`; the vendor mapping " +
+      "and delivery behind them are `connectors/destinations/<vendor>/<version>/src/`",
   },
   {
     // Anchored to the eight kind directories rather than to `catalog/` alone,

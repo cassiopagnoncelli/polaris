@@ -163,8 +163,9 @@ const PLANNED_DESTINATIONS: ReadonlyArray<{ card: string; paths: readonly string
     ],
   },
   {
-    // Wave T1 (P9J7X), scaffolded now because the glob costs nothing and a
-    // second workspace edit during the transition costs a conflict.
+    // Wave T1 (P9J7X). The destinations landed; `sources/` and `warehouses/`
+    // stay listed as the `○` homes they are, because this list is the ledger
+    // of what the glob was opened FOR and not of what is on disk today.
     card: "P9J7X — connector registry",
     paths: [
       "connectors/destinations/braze/v1",

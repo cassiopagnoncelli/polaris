@@ -22,9 +22,11 @@ import {
 import { STREAM_FAMILY_PROFILE_EVENTS, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { WebhookSinkRuntimeConfig } from "./config.js";
-import { createWebhookSinkDescriptor } from "./descriptor.js";
-import { PROJECT_CONFIG_NAMESPACE } from "./project-config.js";
-import type { WebhookPayload } from "./types.js";
+import {
+  createWebhookSinkDescriptor,
+  PROJECT_CONFIG_NAMESPACE,
+  type WebhookPayload,
+} from "@polaris/destination-webhook-sink-v1";
 
 export interface BuildAppOptions extends DestinationHostOverrides<WebhookPayload> {
   readonly config: WebhookSinkRuntimeConfig;
