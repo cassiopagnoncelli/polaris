@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1.6
 #
-# Polaris attribution-engine v1 processor production image.
+# Polaris attribution-engine v3 processor production image.
 #
 # Built from the repository root. See `infra/docker/base.Dockerfile` for
 # the canonical template and `infra/docker/README.md` for the build-arg
 # contract.
 #
 # Build:
-#   docker build -f async/computation/attribution-engine/v1/Dockerfile \
+#   docker build -f async/computation/attribution-engine/v3/Dockerfile \
 #     --build-arg POLARIS_BUILD_VERSION=$(git describe --tags --always) \
 #     --build-arg POLARIS_GIT_SHA=$(git rev-parse HEAD) \
 #     --build-arg POLARIS_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-#     -t polaris/processor-attribution-engine-v1:dev .
+#     -t polaris/processor-attribution-engine-v3:dev .
 
 # -----------------------------------------------------------------------------
 # Stage 1: builder
@@ -32,9 +32,9 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-RUN pnpm --filter "@polaris/processor-attribution-engine-v1..." run build
+RUN pnpm --filter "@polaris/processor-attribution-engine-v3..." run build
 
-RUN pnpm --filter "@polaris/processor-attribution-engine-v1" deploy --prod /deploy
+RUN pnpm --filter "@polaris/processor-attribution-engine-v3" deploy --prod /deploy
 
 RUN test -f /deploy/dist/main.js \
     || (echo "missing /deploy/dist/main.js — pnpm build did not emit" && exit 1)
@@ -48,8 +48,8 @@ ARG POLARIS_BUILD_VERSION="0.0.0-dev"
 ARG POLARIS_GIT_SHA="unknown"
 ARG POLARIS_BUILD_TIME="1970-01-01T00:00:00Z"
 
-LABEL org.opencontainers.image.title="polaris-processor-attribution-engine-v1" \
-      org.opencontainers.image.description="Polaris attribution-engine processor v1" \
+LABEL org.opencontainers.image.title="polaris-processor-attribution-engine-v3" \
+      org.opencontainers.image.description="Polaris attribution-engine processor v3" \
       org.opencontainers.image.vendor="Polaris" \
       org.opencontainers.image.licenses="UNLICENSED" \
       org.opencontainers.image.version="${POLARIS_BUILD_VERSION}" \

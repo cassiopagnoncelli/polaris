@@ -107,6 +107,21 @@ control-plane-api). No pnpm, no TypeScript, no devDependencies.
 runtime image needs no workspace awareness and no shared `node_modules`
 directory shared across services.
 
+That replacement is `injectWorkspacePackages: true` in `pnpm-workspace.yaml`,
+not something `deploy` does on its own. Without it, pnpm v10 and later refuse
+the command outright, and the `--legacy` mode that does run leaves the
+`workspace:*` deps as symlinks into `/workspace` — a directory that exists in
+the builder stage and nowhere else, so `COPY --from=builder /deploy /app`
+carries links whose targets it did not copy. The setting is what makes the
+sentence above true, and
+[ADR-0008](../../docs/adr/0008-inject-workspace-packages-on-deploy.md) records
+why injection rather than `--legacy`.
+
+The pnpm version is not written in any Dockerfile. `packageManager` in the
+root `package.json` is its one home and pnpm self-manages to it, so the images
+install it unpinned. Three stale copies of that number have already cost this
+repository a working build.
+
 ### Non-root user, `tini` as PID 1
 
 Every image creates `polaris` (uid 1001, gid 1001) and runs as that user.
@@ -274,6 +289,16 @@ docker stop probe
 ## CI / static checks
 
 `docker build` is a heavy operation and is not part of the workspace gate.
+Two checks that do run in `pnpm lint` cover the parts of an image build that
+are decided outside the Dockerfile, because both had already broken every
+image once without turning anything red:
+
+- `scripts/lint-docker-context.mjs` — no `COPY` names a path `.dockerignore`
+  prunes from the build context.
+- `scripts/lint-docker-deploy.mjs` — injection is on, so `pnpm deploy` runs at
+  all; every deploy filter names the package sitting beside it, so it resolves
+  to something; and no Dockerfile pins a pnpm version.
+
 Static linting of the Dockerfiles (`hadolint`) is left to CI. To run
 locally if you have `hadolint` installed:
 

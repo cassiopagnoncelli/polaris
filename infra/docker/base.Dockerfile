@@ -61,7 +61,12 @@ ARG SERVICE_ENTRY
 # `libc6-compat` lets prebuilt linux-musl native modules (e.g.
 # @node-rs/argon2 used by @polaris/runtime-secrets) load on Alpine.
 RUN apk add --no-cache libc6-compat \
-    && npm install --global pnpm@10.30.0
+    # No version: pnpm reads `packageManager` from the root package.json and
+    # self-manages to it. Pinning here made a THIRD copy of that version --
+    # the workflow's copy going stale is what killed CI for seven days, and
+    # this one was already a major behind, silently downloading pnpm twice
+    # on every image build.
+    && npm install --global pnpm
 
 WORKDIR /workspace
 
@@ -81,6 +86,12 @@ RUN pnpm --filter "${SERVICE_FILTER}..." run build
 # `pnpm deploy --prod` materializes a self-contained production tree under
 # /deploy: the target package's dist plus its full production node_modules
 # with workspace links replaced by real files.
+#
+# "Replaced by real files" is `injectWorkspacePackages: true` in
+# pnpm-workspace.yaml, not something deploy does on its own — without it pnpm
+# v10+ refuses the command outright, and the `--legacy` mode that does run
+# leaves symlinks that the runtime stage's `COPY --from=builder /deploy` cannot
+# follow. See docs/adr/0008-inject-workspace-packages-on-deploy.md.
 RUN pnpm --filter "${SERVICE_FILTER}" deploy --prod /deploy
 
 # Fail loudly if the entrypoint did not land where we expect.

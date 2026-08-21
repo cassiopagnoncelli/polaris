@@ -36,3 +36,31 @@ allowBuilds:
   # links the prebuilt @esbuild/<platform> binary that pnpm already fetched as an
   # optional dep — no network fetch, no codegen — so it is safe to run.
   esbuild: true
+
+# Every Dockerfile assembles its runtime tree with `pnpm deploy --prod /deploy`,
+# and from pnpm v10 on that refuses to run without this key:
+#
+#   [ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE] By default, starting from pnpm v10,
+#   we only deploy from workspaces that have "inject-workspace-packages=true" set
+#
+# Injection is not a formality to get past that message; it is the mode these
+# images need. Every Dockerfile ends with `COPY --from=builder /deploy /app`, and
+# a /deploy whose `workspace:*` deps are symlinks into /workspace does not
+# survive that copy — the links leave the tree they point out of, and the
+# runtime stage has no /workspace to resolve them against. Injected deps are
+# real files inside /deploy, so the tree is self-contained, which is the
+# property a container image requires of anything it copies.
+#
+# `pnpm deploy --legacy` is the other way to clear the error. It keeps the
+# symlinks, i.e. preserves the property that is wrong here, and pnpm documents
+# it as transitional. See docs/adr/0008-inject-workspace-packages-on-deploy.md.
+#
+# The key is camelCase BECAUSE IT IS IN THIS FILE, and that is a trap worth
+# naming: the error message above quotes the `.npmrc` spelling,
+# `inject-workspace-packages`, and writing that spelling here is valid YAML that
+# pnpm reads as an unknown key and ignores. `pnpm install` then succeeds, the
+# lockfile records nothing, and `pnpm deploy` fails with the identical message —
+# the fix looks applied and is not. `scripts/lint-docker-deploy.mjs` asserts the
+# effective value via `pnpm config get`, which is the only form of this check
+# that a misspelling cannot pass.
+injectWorkspacePackages: true
