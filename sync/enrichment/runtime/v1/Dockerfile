@@ -70,10 +70,37 @@ COPY --from=builder --chown=polaris:polaris /deploy /app
 COPY --from=builder --chown=polaris:polaris /workspace/definitions/projects /app/definitions/projects
 
 # The MaxMind database is deliberately NOT baked into the image: it is
-# license-restricted, ~60 MB, and refreshed on its own weekly cadence
-# (infra/geoip/refresh-geoip.sh). Mount it and point
-# POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH at it. Absent, the stage runs
-# fail-open and every geo block reads `source: "no_lookup"`.
+# license-restricted, ~60 MB, and refreshed on its own cadence by
+# infra/geoip/refresh-geoip.sh. It is an operational artifact with a
+# lifecycle of its own — fetched on the host, mounted here.
+#
+# THE MOUNT CONTRACT. The stage reads exactly one path, named by
+# POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH. /etc/polaris/geoip is the
+# directory this image expects it under, and is what `.env.example` and
+# the deployment docs use:
+#
+#   docker run \
+#     -v /srv/polaris/geoip:/etc/polaris/geoip:ro \
+#     -e POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH=/etc/polaris/geoip/GeoLite2-City.mmdb \
+#     polaris/sync-enrichment-runtime-v1:dev
+#
+# Mount the DIRECTORY, not the file. The refresh swaps a new database in
+# with `mv`, which replaces the inode — a bind mount of the file itself
+# would pin the container to the inode that existed when it started, so
+# the container would keep reading the superseded database and nothing
+# would say so. That is the same reason the mount is read-only: nothing
+# in this image ever writes there.
+#
+# The directory is created by the mount, so no RUN mkdir here; declaring
+# it as a VOLUME would be worse than nothing, since it would give a
+# container started WITHOUT the mount an empty anonymous volume instead
+# of the plain absence the stage reports at boot.
+#
+# Absent, the stage runs fail-open: one warning at boot naming the path
+# it tried, `polaris_enrichment_geoip_database_loaded 0` on /metrics, and
+# every geo block reading `source: "no_lookup"`.
+#
+# See docs/operations/runbook-geoip-refresh.md.
 
 USER polaris
 

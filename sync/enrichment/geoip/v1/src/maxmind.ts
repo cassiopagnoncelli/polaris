@@ -42,11 +42,24 @@ import type { GeoResult, IPLookup } from "./lookup.js";
  */
 export class MaxmindIPLookup implements IPLookup {
   public readonly id: string;
+  /**
+   * When MaxMind built this snapshot, or `null` for a database whose
+   * metadata carries no usable build epoch.
+   *
+   * `id` already ends in the same date, so this looks redundant and is
+   * not. The stage publishes the epoch as a metric, which is what makes a
+   * mount that stopped being refreshed ALERTABLE rather than merely
+   * legible on a dashboard — and a number recovered by re-parsing a
+   * display string breaks silently the first time the display changes.
+   * The date travels as a date.
+   */
+  public readonly buildEpoch: Date | null;
   private readonly reader: Reader<CityResponse>;
 
   public constructor(database: Buffer, options: { readonly id?: string } = {}) {
     this.reader = new Reader<CityResponse>(database);
-    this.id = options.id ?? buildSourceId(this.reader);
+    this.buildEpoch = readBuildEpoch(this.reader);
+    this.id = options.id ?? buildSourceId(this.reader.metadata.databaseType, this.buildEpoch);
   }
 
   public lookup(ip: string): GeoResult | null {
@@ -107,9 +120,13 @@ export function mapCityResponse(record: CityResponse, source: string): GeoResult
   return result;
 }
 
-function buildSourceId(reader: Reader<CityResponse>): string {
-  const { databaseType, buildEpoch } = reader.metadata;
-  const day = buildEpoch instanceof Date ? buildEpoch.toISOString().slice(0, 10) : "unknown";
+function readBuildEpoch(reader: Reader<CityResponse>): Date | null {
+  const { buildEpoch } = reader.metadata;
+  return buildEpoch instanceof Date ? buildEpoch : null;
+}
+
+function buildSourceId(databaseType: string, buildEpoch: Date | null): string {
+  const day = buildEpoch === null ? "unknown" : buildEpoch.toISOString().slice(0, 10);
   return `maxmind:${databaseType}:${day}`;
 }
 

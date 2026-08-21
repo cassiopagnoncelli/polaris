@@ -66,6 +66,13 @@ const SEARCH_EXT = new Set([
   ".yaml",
   ".json",
   ".sql",
+  // Operator tooling reads env vars too, and until this entry existed no
+  // shell script counted as a reader anywhere in the repository. So a
+  // variable documented for `infra/geoip/refresh-geoip.sh` — the fetch job
+  // whose whole interface is four env vars — was reported as a knob that
+  // turns nothing, and the only fixes available were to leave the operator
+  // undocumented or to fake a reference from a `.mjs`.
+  ".sh",
 ]);
 
 /**
@@ -120,9 +127,17 @@ export function buildHaystack(root = DEFAULT_ROOT) {
         // Only for code: a `#` in YAML or SQL may be inside a value, and
         // over-stripping there would create false FAILURES, which cost
         // more than the false passes they prevent.
-        return /\.(ts|mts|js|mjs|cjs)$/.test(file)
-          ? source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
-          : source;
+        if (/\.(ts|mts|js|mjs|cjs)$/.test(file)) {
+          return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        }
+        // Shell, same rule as the `//` one above and for the same reason:
+        // `refresh-geoip.sh` documents all four of its variables in its
+        // header, so a scan that kept comments would pass on the header
+        // alone and never notice the read going away. Only WHOLE-line `#`
+        // comments are stripped — a trailing `#` in shell can sit inside a
+        // quoted value or a `${VAR#prefix}` expansion.
+        if (file.endsWith(".sh")) return source.replace(/^\s*#.*$/gm, "");
+        return source;
       } catch {
         return "";
       }

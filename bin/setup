@@ -916,7 +916,38 @@ async function printReceipt(endpoints, keys, startedAt) {
   printNext([
     ["make dev", "run the platform"],
     ["pnpm smoke:vertical-slice", "prove the wire path end to end"],
+    ...geoipNext(),
   ]);
+}
+
+/**
+ * Where `make geoip-refresh` puts the MaxMind database, mirroring the
+ * Makefile's `POLARIS_GEOIP_DB_PATH` default. Two copies of one path is one
+ * copy too many, but the alternative is this script shelling out to `make`
+ * to ask, and a receipt that spawns a build tool to print a hint is worse.
+ */
+const DEFAULT_GEOIP_DB_PATH = resolve(REPO_ROOT, "resources/maxmind/GeoLite2-City.mmdb");
+
+/**
+ * A `Next` entry when geo enrichment is not wired, and nothing when it is.
+ *
+ * This install cannot fetch the database itself and does not try. The file is
+ * license-restricted, so getting one means a MaxMind account — and a local
+ * install that failed for want of a third-party signup would be trading a
+ * supported posture (the stage runs fail-open, every event reads
+ * `geo.source: "no_lookup"`) for a broken one.
+ *
+ * What it can do is stop that posture being a surprise. The symptom is a
+ * field that is null on every event forever, which reads as "we have no geo
+ * data" long before it reads as "nobody ran the fetch".
+ */
+function geoipNext() {
+  const dbPath = process.env["POLARIS_GEOIP_DB_PATH"] ?? DEFAULT_GEOIP_DB_PATH;
+  if (existsSync(resolve(REPO_ROOT, dbPath))) return [];
+  const note = process.env["POLARIS_GEOIP_LICENSE_KEY"]
+    ? "geo reads no_lookup until this runs"
+    : "geo reads no_lookup; needs POLARIS_GEOIP_LICENSE_KEY (maxmind.com/en/geolite2/signup)";
+  return [["make geoip-refresh", note]];
 }
 
 /** Migrations, catalog rows, and allow-list entries, in one round trip. */

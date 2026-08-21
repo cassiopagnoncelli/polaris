@@ -64,6 +64,7 @@ import { createKyselyProfileReader, type ProfileReader } from "@polaris/sync-enr
 import type { Kysely } from "kysely";
 
 import type { SyncEnrichmentRuntimeConfig } from "./config.js";
+import { describeGeoipBackend, geoipBackendSamples } from "./geoip-metrics.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./pins.js";
 import { createPolicyResolver, type ProjectEnrichmentOverride } from "./policy.js";
 import { createRuntime, type EnrichmentStageRuntime, type StageMetricScope } from "./runtime.js";
@@ -182,6 +183,7 @@ export async function buildSyncEnrichmentApp(
 
   // ---- geo backend -----------------------------------------------------
   const lookup = options.lookup ?? openConfiguredLookup(config, processorLogger);
+  const geo = describeGeoipBackend(lookup);
 
   // ---- activation gate -------------------------------------------------
   const gate =
@@ -410,7 +412,20 @@ export async function buildSyncEnrichmentApp(
     installShutdown: options.installShutdown ?? true,
     ...(options.shutdownExit !== undefined ? { shutdownExit: options.shutdownExit } : {}),
     metrics: {
-      producer: () => toPrometheusText(metrics.getSamples()),
+      // The geo backend's samples are appended rather than registered,
+      // because they are not per-event and `ProcessorMetrics` is. They
+      // describe one fact fixed at boot; rebuilding them per scrape from
+      // an immutable status is cheaper than holding a gauge that nothing
+      // will ever update.
+      producer: () =>
+        toPrometheusText([
+          ...metrics.getSamples(),
+          ...geoipBackendSamples(geo, {
+            processor_name: PROCESSOR_NAME,
+            processor_version: PROCESSOR_VERSION,
+            environment: config.service.environment,
+          }),
+        ]),
     },
   });
 

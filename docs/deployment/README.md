@@ -178,7 +178,15 @@ The recovery-objective table is also reproduced in
   was removed when those credentials moved into the database, which
   left it with no callers. Encrypting them at rest, or moving them back
   behind a provider, is honest future work.
-- **GeoIP database.** `POLARIS_GEOIP_DB_PATH` is reserved in
-  `.env.example` but the v1 enricher does not read it (the MaxMind
-  adapter is a future task; see
-  [`sync/enrichment/runtime/v1/src/config.ts`](../../sync/enrichment/runtime/v1/src/config.ts)).
+- **No manifest mounts the GeoIP database.** The contract is settled and
+  documented — fetch with
+  [`infra/geoip/refresh-geoip.sh`](../../infra/geoip/refresh-geoip.sh),
+  mount `/etc/polaris/geoip` read-only, point
+  `POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH` at the file inside it (see
+  [`infra/docker/README.md`](../../infra/docker/README.md) "Mounted data"
+  and the [refresh runbook](../operations/runbook-geoip-refresh.md)) —
+  but with no manifests in this repository there is nothing here to apply
+  it in. Operators wire the volume and the refresh cron through their own
+  tooling. Unmounted is a supported posture, not an outage: the stage
+  runs fail-open and every event reads `geo.source: "no_lookup"`, which
+  `polaris_enrichment_geoip_database_loaded` reports as 0.

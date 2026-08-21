@@ -95,6 +95,14 @@ const HELP_TEXT: Readonly<Record<string, string>> = {
   polaris_processor_handler_duration_ms_last:
     "Most recently observed processor per-message handler duration in milliseconds.",
 
+  // -- enrichment stage (sync/enrichment/runtime/v1/src/geoip-metrics.ts) --
+  polaris_enrichment_geoip_database_loaded:
+    "1 when the enrichment stage booted with a geo database, 0 when it is running fail-open " +
+    '(every event then reads `geo.source: "no_lookup"`). Labelled by `source`.',
+  polaris_enrichment_geoip_database_build_timestamp_seconds:
+    "Unix seconds at which MaxMind built the database this process loaded. Absent when none is " +
+    "loaded. The process holds one snapshot until it restarts, so this is fixed for its lifetime.",
+
   // -- destinations (libs/delivery/destinations/src/metrics.ts) ----
   polaris_destination_events_consumed_total:
     "Count of analytics.events messages consumed by a Polaris destination consumer.",

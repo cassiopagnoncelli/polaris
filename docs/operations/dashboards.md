@@ -29,7 +29,7 @@ Grafana lands at <http://localhost:3000> (admin/admin, local-only).
 | [Polaris — Ingestion](#ingestion) | `polaris-ingestion` | Accept/reject rate, reject reason breakdown, dedupe, origin/rate-limit, redactions, deprecated schema usage | [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — RabbitMQ](#rabbitmq) | `polaris-rabbitmq` | Native broker scrape (`/public_metrics`) + Polaris-side publish-failure proxy | [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml), [`apps/ingester-api/src/metrics/registry.ts`](../../apps/ingester-api/src/metrics/registry.ts) |
 | [Polaris — Processors](#processors) | `polaris-processors` | Per-processor consumed/emitted/failed/retry/DLQ rates + lag/duration gauges | [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
-| [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, and the safeguard/degradation counters both stages fail open into | [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
+| [Polaris — Spine](#spine) | `polaris-spine` | The two spine stages (identity resolution, enrichment): throughput, lag, resolution mix, merge rate, the safeguard/degradation counters both stages fail open into, and the geo database each enrichment process loaded | [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts), [`sync/enrichment/runtime/v1/src/geoip-metrics.ts`](../../sync/enrichment/runtime/v1/src/geoip-metrics.ts) |
 | [Polaris — Destinations](#destinations) | `polaris-destinations` | Per-vendor delivery success/failure, error_class breakdown, drops, delivery duration | [`libs/delivery/destinations/src/metrics.ts`](../../libs/delivery/destinations/src/metrics.ts) |
 | [Polaris — ClickHouse](#clickhouse) | `polaris-clickhouse` | ClickHouse sink ingest lag, MV-failure proxy, MV-failure proxy, escape-hatch audit | [`libs/persistence/clickhouse/src/raw.ts`](../../libs/persistence/clickhouse/src/raw.ts), [`libs/pipeline/src/metrics.ts`](../../libs/pipeline/src/metrics.ts) |
 
@@ -272,6 +272,17 @@ invisible in throughput and error panels and visible only in
 | Merge rate (5m) | the same series filtered to `outcome="merged"` |
 | Enrichment outcomes (5m) | `sum by (outcome) (rate(polaris_processor_outcome_total{processor_name="sync-enrichment-runtime"}[5m]))` — outcome ∈ `traits:resolved|over_cap|empty|missing|unprofiled`, `geo:hit|miss|no_backend|no_ip`. `geo:no_backend` means no database is wired at all (a geo outage); `geo:miss` means a wired database had no record for the address. Conflating them would hide the outage. |
 | Safeguards and degradations (15m) | `sum by (processor_name, reason) (rate(polaris_processor_events_skipped_total{...}[15m]))` — reason ∈ `merge_suspended`, `link_rejected_denylisted`, `link_rejected_identifier_cap`, `traits_over_cap`, `profile_missing` |
+| Geo database wired | `max by (processor_version, source) (polaris_enrichment_geoip_database_loaded{...})` — 1 wired, 0 fail-open |
+| Geo database age | `max by (processor_version, source) ((time() - polaris_enrichment_geoip_database_build_timestamp_seconds{...}) / 86400)` — days since MaxMind built the loaded snapshot |
+
+The last two are **gauges published at boot, not rates**, and they are the
+only panels here that describe the process rather than the traffic. The
+stage reads the mmdb once at startup and holds it, so neither moves when a
+refresh lands on disk — only when the pods cycle. `wired = 0` states the
+`geo:no_backend` outage without needing traffic to state it, and a rising
+age is the one geo failure nothing else on this dashboard can show: a stale
+database answers every lookup and hits on most of them. Runbook:
+[GeoIP refresh](runbook-geoip-refresh.md).
 
 **Known gaps.**
 

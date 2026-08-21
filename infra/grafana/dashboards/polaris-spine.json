@@ -37,7 +37,7 @@
       "id": 1,
       "options": {
         "mode": "markdown",
-        "content": "# Polaris \u2014 Spine\n\nThe two stages of the main pipeline that resolve and enrich every event:\n\n```\nraw.events -> sync-identity-resolver -> identified.events -> sync-enrichment-runtime -> resolved.events\n```\n\n**Read the outcome panels first.** Both stages FAIL OPEN by design \u2014 a missing profile row, an over-size trait snapshot, an absent geo database and an event with no IP all produce a well-formed event with null-ish blocks. None of them raises the failure counter, so a silent degradation is invisible in throughput and error panels and visible only here.\n\n`merge_suspended` on the safeguards panel is the merge-rate breaker tripping: a profile absorbing more merges than policy allows inside its window. It is the signature of a promiscuous identifier (a kiosk device, `customer_id: \"guest\"`, a bot) chain-merging strangers into one person. Alert: `PolarisIdentityMergeBreakerTripped`.\n\nRunbooks: `docs/operations/runbook-processor-lag.md`, `docs/operations/runbook-spine-delivery-verification.md`."
+        "content": "# Polaris \u2014 Spine\n\nThe two stages of the main pipeline that resolve and enrich every event:\n\n```\nraw.events -> sync-identity-resolver -> identified.events -> sync-enrichment-runtime -> resolved.events\n```\n\n**Read the outcome panels first.** Both stages FAIL OPEN by design \u2014 a missing profile row, an over-size trait snapshot, an absent geo database and an event with no IP all produce a well-formed event with null-ish blocks. None of them raises the failure counter, so a silent degradation is invisible in throughput and error panels and visible only here.\n\n`merge_suspended` on the safeguards panel is the merge-rate breaker tripping: a profile absorbing more merges than policy allows inside its window. It is the signature of a promiscuous identifier (a kiosk device, `customer_id: \"guest\"`, a bot) chain-merging strangers into one person. Alert: `PolarisIdentityMergeBreakerTripped`.\n\n**The geo database panels are boot-time facts, not rates.** The stage reads the mmdb once at boot and holds that snapshot until it restarts, so both panels describe what each process LOADED \u2014 a refresh on disk moves neither of them until the pods cycle. `wired = 0` is the `geo:no_backend` outage stated without needing traffic to state it; a rising age is the failure nothing else here can show, because a stale database answers every lookup and hits on most of them. Alerts: `PolarisEnrichmentGeoipDatabaseMissing`, `PolarisEnrichmentGeoipDatabaseStale`; runbook: `docs/operations/runbook-geoip-refresh.md`.\n\nRunbooks: `docs/operations/runbook-processor-lag.md`, `docs/operations/runbook-spine-delivery-verification.md`."
       },
       "pluginVersion": "11.4.0",
       "title": "About this dashboard",
@@ -489,6 +489,134 @@
         }
       ],
       "title": "Safeguards and degradations (15m, ops) \u2014 merge_suspended, link_rejected_*, traits_over_cap, profile_missing",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (processor_version, source) (polaris_enrichment_geoip_database_loaded{environment=\"$environment\"})",
+          "legendFormat": "{{processor_version}} \u2014 {{source}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Geo database wired (1 = loaded, 0 = fail-open on no_lookup)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 7
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "d"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (processor_version, source) ((time() - polaris_enrichment_geoip_database_build_timestamp_seconds{environment=\"$environment\"}) / 86400)",
+          "legendFormat": "{{processor_version}} \u2014 {{source}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Geo database age (days since MaxMind built the loaded snapshot)",
       "type": "stat"
     }
   ],

@@ -229,6 +229,80 @@ groups:
           runbook_url: docs/operations/runbook-dlq-growth.md
 
   # ---------------------------------------------------------------
+  # Enrichment (geo database)
+  # ---------------------------------------------------------------
+  #
+  # Both warn, neither pages. The enrichment stage fails open on purpose:
+  # geo is decoration on the spine event and every destination sits behind
+  # this stage, so a missing city name must never stall the pipeline. The
+  # same argument that keeps the database off the readiness probe keeps it
+  # off the pager — nothing here is an outage, and both are fixed in office
+  # hours by a fetch and a restart.
+  #
+  # These read GAUGES rather than the per-event `geo:no_backend` outcome,
+  # and that is the point of them. An outcome counter needs traffic to
+  # exist, so a stage sitting idle with no database is indistinguishable
+  # from one sitting idle with a good one. And a database that loaded and
+  # then stopped being refreshed raises nothing per event at all: it
+  # answers every lookup, hits on most, and is quietly wrong for every
+  # address reassigned since it was built.
+  - name: polaris-enrichment
+    interval: 30s
+    rules:
+      - alert: PolarisEnrichmentGeoipDatabaseMissing
+        expr: polaris_enrichment_geoip_database_loaded == 0
+        for: 15m
+        labels:
+          severity: warn
+          service: sync-enrichment
+          team: platform-data
+        annotations:
+          summary: "Enrichment stage running without a geo database in {{ $labels.environment }}"
+          description: |
+            The enrichment stage booted with no readable MaxMind database
+            and is running fail-open: every event it emits carries
+            `enrichment.geo.source: "no_lookup"`, meaning nothing was
+            consulted — as distinct from `no_ip` (the event had no address)
+            or a null block with a `maxmind:` source (a genuine miss).
+
+            Usually the volume is not mounted, the path is wrong, or the
+            file is a truncated download. The boot log carries the reason
+            and the path it tried. `for: 15m` rather than firing at once
+            because a rolling restart briefly shows pods that have not
+            finished booting.
+
+            The `for` clause will not save you from the other half: the
+            stage reads the file ONCE at boot, so provisioning it does not
+            clear this until the pods restart.
+          runbook_url: docs/operations/runbook-geoip-refresh.md
+
+      - alert: PolarisEnrichmentGeoipDatabaseStale
+        expr: |
+          (time() - polaris_enrichment_geoip_database_build_timestamp_seconds)
+            > (30 * 24 * 60 * 60)
+        for: 1h
+        labels:
+          severity: warn
+          service: sync-enrichment
+          team: platform-data
+        annotations:
+          summary: "Geo database loaded in {{ $labels.environment }} was built over 30 days ago"
+          description: |
+            The snapshot this process loaded ({{ $labels.source }}) is more
+            than 30 days old. MaxMind republishes twice weekly, so either
+            the refresh job has stopped running or the pods have not
+            restarted since it last did — the stage holds the database it
+            booted with for the life of the process, so a refreshed file on
+            disk does not clear this.
+
+            Nothing is failing. Address blocks are reassigned continuously,
+            so accuracy decays gradually rather than at a cliff, and 30 days
+            is where the drift is worth someone's attention. Geo values
+            emitted meanwhile are not wrong so much as dated, and the
+            `source` stamped on each event says which snapshot produced it.
+          runbook_url: docs/operations/runbook-geoip-refresh.md
+
+  # ---------------------------------------------------------------
   # Destinations
   # ---------------------------------------------------------------
   - name: polaris-destinations

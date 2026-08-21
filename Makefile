@@ -29,7 +29,7 @@ endif
         docker-up docker-down docker-ps docker-logs docker-nuke \
         cli api_key clean \
         db-bootstrap db-migrate db-rollback db-status \
-        clickhouse-bootstrap clickhouse-migrate
+        clickhouse-bootstrap clickhouse-migrate geoip-refresh
 
 # Defaults for `make api_key`, overridable per invocation:
 #
@@ -50,6 +50,20 @@ KEY_PROJECT ?= storefront
 KEY_ENV     ?= development
 KEY_SOURCE  ?= storefront-web
 KEY_TYPE    ?= web
+
+# Where `make geoip-refresh` installs the MaxMind database, and where the
+# enrichment stage's `dev` script looks for it. Gitignored (`resources/maxmind`)
+# because the file is license-restricted and cannot be committed.
+#
+# ABSOLUTE, via $(CURDIR). The stage runs from `sync/enrichment/runtime/v1`
+# under `make dev`, so a relative path here would be read against that
+# directory rather than this one — and the failure would be a boot warning
+# naming a path that looks right.
+#
+# `?=` so `.env.local` wins: it is `include`d above, which defines the variable
+# before this line is reached. That is the documented place to keep a database
+# you store somewhere else.
+POLARIS_GEOIP_DB_PATH ?= $(CURDIR)/resources/maxmind/GeoLite2-City.mmdb
 
 POLARIS_CLI = apps/polaris-cli/dist/bin/polaris.js
 
@@ -115,6 +129,23 @@ destroy: ## Drop every Polaris store (postgres, clickhouse, rabbitmq, redis) wit
 # nothing, and so the one that is safe against a machine you do not want reset.
 seed: build-cli ## Re-run the catalog syncs and the browser origin allow-list (destroys nothing)
 	@./bin/setup --seed $(if $(VERBOSE),--verbose)
+
+# Beside `seed` because it is the same kind of verb: refresh one input the
+# machine reads, destroy nothing else. It is NOT a prerequisite of `setup` and
+# must not become one — the fetch needs a MaxMind account, and a local install
+# that fails for want of a third-party licence key would be a worse trade than
+# running without geo, which the stage supports by design.
+#
+# MaxMind publishes on Tuesdays and Fridays; deployed environments run this
+# from cron. See docs/operations/runbook-geoip-refresh.md.
+#
+# Both variables are passed explicitly rather than left to the `export` above:
+# that export lives inside the `.env.local` conditional, so on a machine with
+# no `.env.local` nothing here would reach the script.
+geoip-refresh: ## Fetch the MaxMind GeoLite2 database for local enrichment (needs POLARIS_GEOIP_LICENSE_KEY)
+	@POLARIS_GEOIP_DB_PATH="$(POLARIS_GEOIP_DB_PATH)" \
+	 POLARIS_GEOIP_LICENSE_KEY="$(POLARIS_GEOIP_LICENSE_KEY)" \
+	 ./infra/geoip/refresh-geoip.sh
 
 install: ## Install pnpm workspace dependencies
 	pnpm install

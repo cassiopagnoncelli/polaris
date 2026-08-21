@@ -195,6 +195,34 @@ Source: [`sync/enrichment/runtime/v1/src/config.ts`](../../sync/enrichment/runti
 
 Reads the profile store; never writes it.
 
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_SYNC_ENRICHMENT_CONSUMER_GROUP` | optional | `polaris-sync-enrichment-v1` |
+| `POLARIS_SYNC_ENRICHMENT_CATALOG_ROOT` | optional | `.` |
+| `POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH` | optional | unset |
+
+`GEOIP_DB_PATH` names the MaxMind `.mmdb` **as the container sees it**,
+conventionally `/etc/polaris/geoip/GeoLite2-City.mmdb`. The file is
+license-restricted and never baked into the image; mount the directory
+read-only and fetch into it with
+[`infra/geoip/refresh-geoip.sh`](../../infra/geoip/refresh-geoip.sh) —
+see [`infra/docker/README.md`](../../infra/docker/README.md) "Mounted
+data" for the volume shape and the [refresh
+runbook](../operations/runbook-geoip-refresh.md) for the cadence.
+
+Leaving it unset, or setting it at a path nothing is mounted on, is a
+**supported posture and not a misconfiguration**: the stage logs one
+warning naming the path it tried, runs fail-open, and stamps
+`geo.source: "no_lookup"` on every event rather than refusing to start.
+Geo is decoration on the spine and every destination sits behind this
+stage. `polaris_enrichment_geoip_database_loaded` reports which of the
+two states a process is in, whether or not any traffic is flowing.
+
+The stage reads the file once at boot and holds that snapshot for the
+life of the process, so a refresh reaches a running deployment only on
+restart — which is what keeps the `source` stamped on its events an
+honest answer to "which database produced this row".
+
 #### sessionizer v1
 
 Source: [`async/computation/sessionizer/v1/src/config.ts`](../../async/computation/sessionizer/v1/src/config.ts).
@@ -227,6 +255,30 @@ manifest and changing it requires a v3. Both versions may be enabled at once
 during a cutover — their touchpoint chains are isolated by `processor_version`
 in `attribution_touchpoint_chains`, and the differing consumer-group defaults
 keep their stream offsets separate.
+
+### jobs
+
+#### geoip refresh
+
+Source: [`infra/geoip/refresh-geoip.sh`](../../infra/geoip/refresh-geoip.sh).
+
+Not a service: a cron job on the host that owns the volume mounted at
+`POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH` above. It composes none of the
+shared blocks — these four variables are its whole interface.
+
+| Variable | Status | Default |
+| --- | --- | --- |
+| `POLARIS_GEOIP_LICENSE_KEY` | **required** | — |
+| `POLARIS_GEOIP_DB_PATH` | **required** | — |
+| `POLARIS_GEOIP_EDITION` | optional | `GeoLite2-City` |
+| `POLARIS_GEOIP_KEEP_PREVIOUS` | optional | `1` |
+
+`POLARIS_GEOIP_DB_PATH` is the path the job **writes on the host**;
+`POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH` is the path the stage **reads in
+the container**. They coincide only when both run on the same
+filesystem — which they do locally, where `make geoip-refresh` defaults
+the first to `resources/maxmind/GeoLite2-City.mmdb` and the enrichment
+stage's `dev` script defaults the second to the same file.
 
 ### consumers (destinations)
 
@@ -307,6 +359,7 @@ deployment's orchestrator injects them at boot.
 | `POLARIS_RABBITMQ_URL` | every service touching RabbitMQ (credentials are in the URL) |
 | `POLARIS_CLICKHOUSE_SERVICE_PASSWORD` | operators / future analytics services |
 | `POLARIS_CLICKHOUSE_OPERATOR_PASSWORD` | operators / replay-rebuild workflows |
+| `POLARIS_GEOIP_LICENSE_KEY` | the geoip refresh cron job (never any service) |
 | `POLARIS_TOKEN` | `polaris` CLI |
 | `POLARIS_OPERATOR_TOKEN` | `polaris` CLI for production mutations |
 
@@ -333,3 +386,7 @@ webhook-sink          x       x       x                x                        
 meta-capi             x       x       x                x                          x      meta
 tiktok                x       x       x                x                          x      tiktok
 ```
+
+The geoip refresh job is deliberately absent from that map: it composes
+none of the shared blocks. It is a cron entry with four variables of its
+own, not a service — see "jobs" above.

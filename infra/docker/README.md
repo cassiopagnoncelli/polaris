@@ -316,8 +316,60 @@ find apps processors consumers -name Dockerfile -print0 \
   | xargs -0 -n1 hadolint
 ```
 
+## Mounted data: the GeoIP database
+
+One image reads a file that is not in it. `sync/enrichment/runtime/v1`
+composes the geo enricher, which needs a MaxMind GeoLite2 `.mmdb` —
+license-restricted, so it cannot be committed or pushed inside an image,
+and ~60 MB refreshed twice a week, so it would be the largest and most
+frequently invalidated layer of an image whose code changes far less
+often. It is fetched on the host by
+[`infra/geoip/refresh-geoip.sh`](../geoip/refresh-geoip.sh) and mounted.
+
+| | |
+| --- | --- |
+| Mount | the **directory** `/etc/polaris/geoip`, read-only |
+| Variable | `POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH=/etc/polaris/geoip/GeoLite2-City.mmdb` |
+| Absent | supported — one boot warning, `geo.source: "no_lookup"` on every event |
+
+```bash
+docker run \
+  -v /srv/polaris/geoip:/etc/polaris/geoip:ro \
+  -e POLARIS_SYNC_ENRICHMENT_GEOIP_DB_PATH=/etc/polaris/geoip/GeoLite2-City.mmdb \
+  polaris/sync-enrichment-runtime-v1:dev
+```
+
+In Kubernetes the same shape is a `hostPath` or a `PersistentVolumeClaim`
+the refresh CronJob writes and the stage mounts `readOnly: true`:
+
+```yaml
+    volumeMounts:
+      - name: geoip
+        mountPath: /etc/polaris/geoip
+        readOnly: true
+volumes:
+  - name: geoip
+    persistentVolumeClaim:
+      claimName: polaris-geoip
+```
+
+**Mount the directory, not the file.** The refresh installs a new
+database with `mv`, which replaces the inode. A bind mount of the file
+pins the container to the inode it started with, so it keeps serving the
+superseded database after every refresh and nothing reports it — the
+`source` stamped on its events would still name the old build date,
+which is the only place it would show.
+
+The stage reads the file once at boot and holds it, so picking up a
+refresh means restarting the pods. See
+[the runbook](../../docs/operations/runbook-geoip-refresh.md) for the
+cadence and for how to check what a running pod actually loaded.
+
 ## Known gaps
 
-- **GeoIP `.mmdb`** files are mounted at runtime, not baked into the image.
-  The geo enricher is composed into `sync/enrichment/runtime/v1`; see its
-  Dockerfile and the operator runbook.
+- **No image runs from a manifest in this repository.** The compose files
+  run the stores and the observability stack; no chart, kustomize base or
+  manifest here starts a Polaris service container, so the mount above is
+  a contract operators apply through their own tooling rather than a file
+  to edit. Tracked with the other deployment gaps in
+  [`docs/deployment/README.md`](../../docs/deployment/README.md).

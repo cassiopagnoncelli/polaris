@@ -25,6 +25,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 /** Metric-family prefix -> the scrape jobs that could carry it. */
 const EMITTED_BY: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["polaris_clickhouse_sink", ["clickhouse-sink"]],
+  ["polaris_enrichment", ["sync-enrichment"]],
   ["polaris_clickhouse_operator", ["control-plane-api"]],
   ["polaris_destination", ["braze", "ga4", "meta-capi", "tiktok", "webhook-sink"]],
   ["polaris_operator", ["control-plane-api"]],

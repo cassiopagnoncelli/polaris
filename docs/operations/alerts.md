@@ -45,6 +45,8 @@ Alertmanager routing tree consumes that label to decide who and how.
 | `PolarisRabbitMQConsumerLagWarn` | warn | rabbitmq | `polaris_processor_lag_ms_last` >5 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
 | `PolarisRabbitMQConsumerLagPage` | page | rabbitmq | `polaris_processor_lag_ms_last` >15 min for 5 min (any pivot) | [Processor Lag](runbook-processor-lag.md) |
 | `PolarisIdentityMergeBreakerTripped` | page | processor | identity merge-rate breaker refusing merges for 5 min | [Identity merge storm](runbook-identity-merge-storm.md) |
+| `PolarisEnrichmentGeoipDatabaseMissing` | warn | sync-enrichment | `polaris_enrichment_geoip_database_loaded == 0` for 15 min | [GeoIP refresh](runbook-geoip-refresh.md) |
+| `PolarisEnrichmentGeoipDatabaseStale` | warn | sync-enrichment | loaded geo snapshot built over 30 days ago, for 1 h | [GeoIP refresh](runbook-geoip-refresh.md) |
 | `PolarisProcessorDLQGrowthWarn` | warn | processor | processor DLQ growth >100/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisProcessorDLQGrowthPage` | page | processor | processor DLQ growth >1000/min for 5 min | [DLQ Growth](runbook-dlq-growth.md) |
 | `PolarisDestinationDeliveryFailureRate` | page | destination | per-instance delivery failure rate >1% over 5 minutes | [Destination API Failure](runbook-destination-api-failure.md) |
