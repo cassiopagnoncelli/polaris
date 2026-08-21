@@ -19,8 +19,9 @@
  *
  * All identifier fields under `user` carry sha256-lowercase-trim values
  * where required by TikTok; the shared normalize layer's email + phone
- * helpers produce the correct shape, and the mapper hashes the canonical
- * `customer_id` for `external_id`.
+ * helpers produce the correct shape, and the mapper hashes the platform's
+ * resolved customer id — falling back to the producer's — for
+ * `external_id`.
  *
  * Optional fields are intentionally `readonly` + optional so the mapper
  * can omit them when the canonical envelope doesn't carry the data.
@@ -39,15 +40,18 @@ export interface TikTokEventPayload {
   /**
    * Hashed + raw identifiers TikTok consumes for matching. `email` /
    * `phone` are required to be sha256-lowercase-trim; `external_id`
-   * carries a sha256 of `customer_id`. `ttp` / `ttclid` are TikTok
-   * tracking cookies passed through unchanged.
+   * carries a sha256 of `identity.canonical_customer_id`, or of
+   * `identity.user_id` on an envelope the spine never resolved. `ttp` /
+   * `ttclid` are TikTok tracking cookies passed through unchanged.
    */
   readonly user: TikTokUserData;
   /** Event-specific properties (currency, value, contents, ...). */
   readonly properties?: TikTokEventProperties;
   /**
    * URL the event happened on. TikTok labels this `page.url` and
-   * recommends populating it for web-source events.
+   * recommends populating it for web-source events. Required in
+   * practice for `Pageview`, which is the one event whose whole
+   * content is the page it names.
    */
   readonly page?: TikTokPageContext;
   /**
@@ -69,7 +73,7 @@ export interface TikTokUserData {
   readonly email?: string;
   /** Hashed phone (E.164 + sha256 hex). */
   readonly phone?: string;
-  /** Hashed external_id — sha256(canonical `customer_id`). */
+  /** Hashed external_id — sha256(`canonical_customer_id` ?? `user_id`). */
   readonly external_id?: string;
   /** Hashed first/last name. v1 does NOT extract these (no canonical slot). */
   readonly first_name?: string;

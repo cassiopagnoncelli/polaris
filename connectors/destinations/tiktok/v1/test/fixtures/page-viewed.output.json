@@ -1,0 +1,17 @@
+{
+  "event": "Pageview",
+  "event_time": 1778760000,
+  "event_id": "evt_01HZZB1PMN0Q4T7F2WXW6RJ5YS",
+  "user": {
+    "email": "72497f475e4f76d0b28f57c73a084ece576d170874eba3ee2609d9afe4b71aab",
+    "phone": "36a2cef4ff9bf7a1abd2a93359136b870393be4106e6c5d19b72ff564f9deca4",
+    "external_id": "606c351caf28966746bcbd66d5a764d5c5a7f7d3683cfd34acb092e6fb91c984",
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US"
+  },
+  "page": {
+    "url": "https://storefront.example/products/widget",
+    "referrer": "https://search.example/?q=widget"
+  }
+}

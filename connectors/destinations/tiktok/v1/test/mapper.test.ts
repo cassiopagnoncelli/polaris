@@ -6,8 +6,9 @@
  *   - per-event vendor name + dedupe_key=event_id
  *   - event_time conversion (ms → s with floor)
  *   - event_source inference (web vs crm)
- *   - user shape: email / phone hashed; external_id = sha256(user_id);
- *     ip + ua passthrough; locale passthrough
+ *   - user shape: email / phone hashed; external_id =
+ *     sha256(canonical_customer_id ?? user_id); ip + ua passthrough;
+ *     locale passthrough
  *   - properties: currency/value (minor → major), num_items sum,
  *     order_id from cart_id (checkout) or order_id/transaction_id (payment);
  *     contents[] per item with content_id + quantity + price
@@ -24,16 +25,92 @@ import {
   CANONICAL_TO_TIKTOK_EVENT,
   checkoutStartedMapper,
   inferEventSource,
+  pageViewedMapper,
   paymentApprovedMapper,
   signupCompletedMapper,
   subscriptionRenewedMapper,
   TIKTOK_EVENT_COMPLETE_REGISTRATION,
   TIKTOK_EVENT_INITIATE_CHECKOUT,
+  TIKTOK_EVENT_PAGEVIEW,
   TIKTOK_EVENT_PURCHASE,
   TIKTOK_EVENT_SUBSCRIBE,
   userIdentifiedMapper,
 } from "../src/mapper.js";
 import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
+
+describe("pageViewedMapper", () => {
+  it("returns Pageview with dedupe_key = event_id", () => {
+    const ctx = fixtureMapperContext({ event: "page.viewed" });
+    const result = pageViewedMapper(ctx);
+
+    expect(result.kind).toBe("mapped");
+    if (result.kind !== "mapped") return;
+    expect(result.payload.event).toBe(TIKTOK_EVENT_PAGEVIEW);
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+    expect(result.payload.event_id).toBe(ctx.normalized.event_id);
+  });
+
+  it("spells the vendor event `Pageview`, not Meta's `PageView`", () => {
+    // The two vendors disagree on the capital and TikTok rejects the name
+    // it does not know, so the literal is pinned rather than inferred.
+    expect(TIKTOK_EVENT_PAGEVIEW).toBe("Pageview");
+  });
+
+  it("carries the page url and referrer", () => {
+    const result = pageViewedMapper(fixtureMapperContext({ event: "page.viewed" }));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.page).toEqual({
+      url: "https://storefront.example/checkout",
+      referrer: "https://storefront.example/cart",
+    });
+  });
+
+  it("emits no properties block", () => {
+    // A view has no currency, value or contents, and the canonical
+    // `path` / `title` / `name` / `category` have no TikTok counterpart
+    // this version reads. An empty `properties` object would claim
+    // otherwise on the wire.
+    const result = pageViewedMapper(fixtureMapperContext({ event: "page.viewed" }));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.properties).toBeUndefined();
+  });
+
+  it("carries the same hashed user block as every other event", () => {
+    const ctx = fixtureMapperContext({ event: "page.viewed" });
+    const result = pageViewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.user).toEqual(buildUserData(ctx.normalized));
+  });
+
+  it("keeps the consent gate: limited_data_use=1 on denied marketing", () => {
+    // The card changes what TikTok is told about, not who is allowed to
+    // tell it. A view is gated exactly as a checkout is.
+    const result = pageViewedMapper(
+      fixtureMapperContext({
+        event: "page.viewed",
+        consent: {
+          status: "granted",
+          dimensions: [{ dimension: "marketing", required: true, granted: false }],
+        },
+      }),
+    );
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.limited_data_use).toBe(1);
+  });
+
+  it("omits page entirely on a view with neither url nor referrer", () => {
+    const normalized = fixtureNormalizedEvent({ event: "page.viewed" });
+    const result = pageViewedMapper({
+      ...fixtureMapperContext(),
+      normalized: {
+        ...normalized,
+        context: { ...normalized.context, page_url: null, page_referrer: null },
+      },
+    });
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.page).toBeUndefined();
+  });
+});
 
 describe("checkoutStartedMapper", () => {
   it("returns InitiateCheckout with dedupe_key = event_id", () => {
@@ -271,11 +348,47 @@ describe("buildUserData", () => {
     expect(ud.phone).toBe(normalized.identity.phone_sha256);
   });
 
-  it("hashes the canonical user_id for external_id", () => {
+  it("hashes the producer's user_id for external_id when nothing resolved", () => {
+    // The unresolved case, and the one that must not move: an envelope
+    // off `analytics.events` has no profile block at all.
     const normalized = fixtureNormalizedEvent();
+    expect(normalized.identity.canonical_customer_id).toBeNull();
     const ud = buildUserData(normalized);
-    const expected = sha256Hex((normalized.identity.user_id ?? "").toLowerCase().trim());
-    expect(ud.external_id).toBe(expected);
+    expect(ud.external_id).toBe(sha256Hex("cust_12345"));
+  });
+
+  it("prefers canonical_customer_id over user_id for external_id", () => {
+    // The join key should be the identity stage's conclusion, not one
+    // producer's spelling — two producers naming the same customer
+    // differently used to reach TikTok as two people.
+    const normalized = fixtureNormalizedEvent({
+      identity: {
+        ...fixtureNormalizedEvent().identity,
+        canonical_customer_id: "cus_canonical",
+        user_id: "cust_12345",
+      },
+    });
+    const ud = buildUserData(normalized);
+    expect(ud.external_id).toBe(sha256Hex("cus_canonical"));
+    expect(ud.external_id).not.toBe(sha256Hex("cust_12345"));
+  });
+
+  it("lowercases and trims whichever id it takes", () => {
+    // Same canonicalization on both branches, which is what keeps the
+    // digest comparable to the ids TikTok already holds.
+    const base = fixtureNormalizedEvent().identity;
+    const canonical = buildUserData(
+      fixtureNormalizedEvent({
+        identity: { ...base, canonical_customer_id: "  CUS_Canonical  " },
+      }),
+    );
+    const producer = buildUserData(
+      fixtureNormalizedEvent({
+        identity: { ...base, canonical_customer_id: null, user_id: "  CUST_12345 " },
+      }),
+    );
+    expect(canonical.external_id).toBe(sha256Hex("cus_canonical"));
+    expect(producer.external_id).toBe(sha256Hex("cust_12345"));
   });
 
   it("passes IP + user-agent + locale through unchanged", () => {
@@ -341,6 +454,7 @@ describe("inferEventSource — app channel (WH7LZ0WZ)", () => {
 
 describe("CANONICAL_TO_TIKTOK_EVENT", () => {
   it("pins the v1.x event matrix", () => {
+    expect(CANONICAL_TO_TIKTOK_EVENT["page.viewed"]).toBe(TIKTOK_EVENT_PAGEVIEW);
     expect(CANONICAL_TO_TIKTOK_EVENT["checkout.started"]).toBe(TIKTOK_EVENT_INITIATE_CHECKOUT);
     expect(CANONICAL_TO_TIKTOK_EVENT["payment.approved"]).toBe(TIKTOK_EVENT_PURCHASE);
     expect(CANONICAL_TO_TIKTOK_EVENT["user.identified"]).toBe(TIKTOK_EVENT_COMPLETE_REGISTRATION);

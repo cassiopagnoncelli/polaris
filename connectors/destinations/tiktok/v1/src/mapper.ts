@@ -13,13 +13,17 @@
  * dedupe key.
  *
  * v1 covers the commerce subset that production TikTok integrations
- * usually start with:
+ * usually start with, plus the top-of-funnel view that gives the
+ * commerce events somebody to attribute to:
  *
- *   - `checkout.started`  → `InitiateCheckout`
- *   - `payment.approved`  → `Purchase`
- *   - `user.identified`   → `CompleteRegistration`
+ *   - `page.viewed`          → `Pageview`
+ *   - `checkout.started`     → `InitiateCheckout`
+ *   - `payment.approved`     → `Purchase`
+ *   - `user.identified`      → `CompleteRegistration`
+ *   - `signup.completed`     → `CompleteRegistration`
+ *   - `subscription.renewed` → `Subscribe`
  *
- * Events outside this set produce `mapped_failed` records at the
+ * Events outside this set produce `skipped_unmapped` records at the
  * runtime layer (no mapper registered).
  *
  * `event_source` (web vs app vs crm) is request-level on TikTok's wire
@@ -59,6 +63,12 @@ export const TIKTOK_EVENT_PURCHASE = "Purchase" as const;
 export const TIKTOK_EVENT_INITIATE_CHECKOUT = "InitiateCheckout" as const;
 export const TIKTOK_EVENT_COMPLETE_REGISTRATION = "CompleteRegistration" as const;
 export const TIKTOK_EVENT_SUBSCRIBE = "Subscribe" as const;
+/**
+ * TikTok spells this one `Pageview` — one capital, unlike Meta's
+ * `PageView`. The vendor rejects an unrecognised event name, so the
+ * casing is part of the contract rather than a style choice.
+ */
+export const TIKTOK_EVENT_PAGEVIEW = "Pageview" as const;
 
 /**
  * Closed-set mapping from canonical event name → TikTok event name. The
@@ -70,6 +80,7 @@ export const TIKTOK_EVENT_SUBSCRIBE = "Subscribe" as const;
  * canonical `event_id` keeps them distinct on the receive side.
  */
 export const CANONICAL_TO_TIKTOK_EVENT = Object.freeze({
+  "page.viewed": TIKTOK_EVENT_PAGEVIEW,
   "checkout.started": TIKTOK_EVENT_INITIATE_CHECKOUT,
   "payment.approved": TIKTOK_EVENT_PURCHASE,
   "user.identified": TIKTOK_EVENT_COMPLETE_REGISTRATION,
@@ -80,6 +91,31 @@ export const CANONICAL_TO_TIKTOK_EVENT = Object.freeze({
 // ---------------------------------------------------------------------------
 // Per-event mappers
 // ---------------------------------------------------------------------------
+
+/**
+ * `page.viewed` → `Pageview`.
+ *
+ * TikTok's top-of-funnel event. Until now the vendor met a visitor for
+ * the first time at `InitiateCheckout`, which is late enough that the
+ * session carrying the view had already been attributed elsewhere.
+ *
+ * No `properties` block: TikTok reads the URL and the referrer off the
+ * payload's `page` slot, which `buildResult` fills from the flat context
+ * for every event alike, and the canonical `properties` of a view
+ * (`path`, `search`, `title`, `name`, `category`) have no counterpart in
+ * TikTok's properties shape. `name` / `category` are the pinned slots
+ * WRKNG added, and the mapper that reads them is a card of its own.
+ *
+ * `event_source` is not decided here. It is request-level on TikTok's
+ * wire shape, so the deliverer stamps it from `inferEventSource`, and a
+ * view carrying a `page_url` therefore lands as `web` on exactly the
+ * rule every other event already uses.
+ */
+export const pageViewedMapper: Mapper<TikTokEventPayload> = (
+  ctx: MapperContext,
+): MapperResult<TikTokEventPayload> => {
+  return buildResult(ctx.normalized, TIKTOK_EVENT_PAGEVIEW, {});
+};
 
 /**
  * `checkout.started` → `InitiateCheckout`.
@@ -243,8 +279,9 @@ export function inferEventSource(normalized: NormalizedEvent): TikTokEventSource
  * Build TikTok's `user` block from the normalized identity + context.
  *
  * Hashed fields (email, phone, external_id) come from the shared
- * normalize layer (sha256-lowercase-trim email; sha256 of E.164 phone;
- * sha256(`customer_id`) for `external_id` when no other slot applies).
+ * normalize layer (sha256-lowercase-trim email; sha256 of E.164 phone),
+ * except `external_id`, which this mapper hashes itself from the most
+ * durable id the platform holds — see the comment on the slot.
  * Raw fields (`ip`, `user_agent`, `locale`) pass through unchanged.
  * `ttp` / `ttclid` (TikTok tracking cookies) are NOT mapped in v1 — they
  * live in `properties` if the SDK passes them through, and a future
@@ -267,8 +304,26 @@ export function buildUserData(normalized: NormalizedEvent): TikTokUserData {
   if (normalized.identity.phone_sha256 !== null) {
     userData.phone = normalized.identity.phone_sha256;
   }
-  if (normalized.identity.user_id !== null) {
-    userData.external_id = sha256Hex(normalized.identity.user_id.toLowerCase().trim());
+  // `external_id` is TikTok's cross-session join key, so it should carry the
+  // most durable id Polaris has for the person. `canonical_customer_id` is
+  // the identity stage's conclusion after reconciling every identifier ever
+  // seen; `user_id` is what this one event's producer happened to send. Two
+  // producers spelling the same customer differently used to land as two
+  // TikTok users and now converge.
+  //
+  // Prior behaviour is preserved exactly when there is no resolution to
+  // use — an envelope off `analytics.events`, or a person the resolver has
+  // not linked to a customer id — so nothing changes for traffic that has
+  // not been through the spine. The hashing is unchanged (lowercased,
+  // trimmed, sha256), which is what keeps the value comparable to the ids
+  // TikTok already holds for this account.
+  //
+  // Meta's mapper reaches this from the same reasoning. The rule belongs to
+  // the identity stage rather than to either vendor, so the two agreeing is
+  // the point, not a coincidence to factor out.
+  const externalIdSource = normalized.identity.canonical_customer_id ?? normalized.identity.user_id;
+  if (externalIdSource !== null) {
+    userData.external_id = sha256Hex(externalIdSource.toLowerCase().trim());
   }
   if (normalized.context.ip !== null) {
     userData.ip = normalized.context.ip;

@@ -13,6 +13,7 @@
  */
 
 import type { NormalizableEnvelope } from "@polaris/delivery-normalize";
+import { hashEmailLower, hashPhoneE164, sha256Hex } from "@polaris/delivery-normalize";
 import {
   createDestinationConsumer,
   InMemoryDeliveryRecordRepository,
@@ -220,14 +221,18 @@ describe("tiktok v1 integration (handleEvent driven)", () => {
       logger,
     });
 
+    // `session.started` stands in for the unmapped case. It used to be
+    // `page.viewed`, which V87AS mapped — an unmapped-event test has to
+    // name an event the matrix genuinely omits, or it passes for the
+    // wrong reason the day somebody maps it.
     const record = await runtime.handleEvent({
-      envelope: fixtureEnvelope({ event: "page.viewed" }),
+      envelope: fixtureEnvelope({ event: "session.started" }),
       destination_id: instance.destination_id,
     });
 
     expect(record?.status).toBe("skipped_unmapped");
     expect(record?.error_class).toBeNull();
-    expect(record?.vendor_response_summary).toContain("page.viewed");
+    expect(record?.vendor_response_summary).toContain("session.started");
     expect(calls).toHaveLength(0);
   });
 
@@ -379,5 +384,188 @@ describe("tiktok v1 integration (handleEvent driven)", () => {
     expect(dlq).toHaveLength(1);
     expect(dlq[0]?.error_class).toBe("auth");
     expect(dlq[0]?.vendor).toBe("tiktok");
+  });
+
+  it("delivers a page.viewed event as Pageview with the page url and referrer", async () => {
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"code":0,"message":"OK","request_id":"req_view"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createTikTokDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_tiktok_view",
+        event: "page.viewed",
+        context: {
+          ip: "203.0.113.42",
+          user_agent: "Mozilla/5.0",
+          page: {
+            url: "https://storefront.example/products/widget",
+            referrer: "https://search.example/?q=widget",
+          },
+        },
+        properties: { path: "/products/widget", search: null, title: "Widget", referrer: null },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.data[0].event).toBe("Pageview");
+    expect(body.data[0].page).toEqual({
+      url: "https://storefront.example/products/widget",
+      referrer: "https://search.example/?q=widget",
+    });
+    // A view carries no commerce properties, and the canonical ones have
+    // no TikTok counterpart this version reads.
+    expect(body.data[0].properties).toBeUndefined();
+    // `event_source` is inferred exactly as it is for every other event.
+    expect(body.event_source).toBe("web");
+  });
+
+  it("still denies a page.viewed event without marketing consent", async () => {
+    // The new mapping widens what TikTok hears about, not who may send
+    // it. The gate is the descriptor's, so this proves the new event did
+    // not arrive with an exemption.
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createTikTokDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event: "page.viewed",
+        consent: { marketing: false, analytics: true, personalization: true },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("dropped_consent");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("sends hashed email and phone from the profile-trait snapshot (1VEL3)", async () => {
+    // The production-path proof. The mapper goldens start from an already
+    // prepared `NormalizedEvent`, so they assert that `user.email` carries
+    // `identity.email_sha256` and never ask where that value came from —
+    // which is exactly how the gap 1VEL3 fixed went unnoticed. This test
+    // starts at the envelope and runs the real normalize stage, so it
+    // fails if identity preparation stops reading the trait snapshot.
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"code":0,"message":"OK","request_id":"req_traits"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createTikTokDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_tiktok_traits",
+        profile: {
+          profile_id: "01930000-0000-7000-8000-0000000000aa",
+          canonical_customer_id: "cus_canonical",
+          traits: { email: "Someone@Example.com", phone: "+14155550123", tier: "gold" },
+          traits_version: 7,
+        },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const user = JSON.parse(calls[0]?.body ?? "").data[0].user;
+    expect(user.email).toBe(hashEmailLower("Someone@Example.com"));
+    expect(user.phone).toBe(hashPhoneE164("+14155550123"));
+    // Neither plaintext reaches the vendor beside its digest.
+    expect(JSON.stringify(user)).not.toContain("Someone@Example.com");
+    expect(JSON.stringify(user)).not.toContain("+14155550123");
+  });
+
+  it("keys external_id on the resolved customer id, not the producer's", async () => {
+    // Two producers spelling one customer differently used to land as two
+    // TikTok users. The envelope below carries both spellings; only the
+    // platform's resolution should reach the wire.
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"code":0,"message":"OK","request_id":"req_ext"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createTikTokDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const resolved = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_tiktok_ext_resolved",
+        identity: { customer_id: "storefront-42", anonymous_id: "anon_int_tiktok" },
+        profile: {
+          profile_id: "01930000-0000-7000-8000-0000000000aa",
+          canonical_customer_id: "cus_canonical",
+        },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(resolved?.status).toBe("accepted");
+    expect(JSON.parse(calls[0]?.body ?? "").data[0].user.external_id).toBe(
+      sha256Hex("cus_canonical"),
+    );
+
+    // And the unresolved envelope — no profile block at all — is unchanged.
+    const unresolved = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_tiktok_ext_unresolved",
+        identity: { customer_id: "storefront-42", anonymous_id: "anon_int_tiktok" },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(unresolved?.status).toBe("accepted");
+    expect(JSON.parse(calls[1]?.body ?? "").data[0].user.external_id).toBe(
+      sha256Hex("storefront-42"),
+    );
   });
 });

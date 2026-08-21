@@ -13,6 +13,7 @@
 ## Supported canonical events
 
 ```text
+page.viewed            →  Pageview
 checkout.started       →  InitiateCheckout
 payment.approved       →  Purchase
 user.identified        →  CompleteRegistration
@@ -23,18 +24,48 @@ subscription.renewed   →  Subscribe
 Both `user.identified` and `signup.completed` map to TikTok's
 `CompleteRegistration` because TikTok does not expose a `Lead` event;
 the canonical `event_id` keeps the two streams distinct on the
-receive side. Events outside this set produce `mapped_failed`
-delivery records with `error_class='mapping'`. The runbook
+receive side.
+
+`page.viewed` was added by V87AS. Without it the vendor met a visitor
+for the first time at `InitiateCheckout`, so a session's own view had
+already been attributed elsewhere by the time TikTok heard about the
+checkout. Note the spelling: TikTok's event is `Pageview`, with one
+capital, where Meta's is `PageView`.
+
+Events outside this set produce `skipped_unmapped` delivery records
+with a null `error_class` (H05QEWIB — a vendor not modelling an event
+is routine operation, not a mapping fault). The runbook
 (`docs/operations/destination-dlq-triage.md`) covers the operator
 path; future minor versions will extend the matrix. Notable
 not-yet-supported events:
 
 ```text
+session.started        no TikTok counterpart; never delivered
 support.ticket.opened  TikTok has no canonical equivalent; never delivered
 polaris.diagnostics.*  internal-only platform telemetry; never delivered
 ```
 
 ## Field mapping
+
+### `page.viewed` → `Pageview`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `identity.*` | `user.*` | same as checkout | see below |
+| `context.page.url` | `page.url` | none | The event's whole subject; TikTok attributes the view to it |
+| `context.page.referrer` | `page.referrer` | none | Omitted when absent |
+
+No `properties` block is populated. A view carries no currency, value or
+contents, and canonical `properties.path` / `search` / `title` / `name` /
+`category` have no counterpart in TikTok's properties shape. `name` and
+`category` are the slots WRKNG pinned on `page.viewed` v2; the mapper that
+reads them is a card of its own.
+
+`event_source` is not decided per-event — it is request-level on TikTok's
+wire shape, so a view with a `page_url` lands as `web` on exactly the rule
+every other event already uses.
 
 ### `checkout.started` → `InitiateCheckout`
 
@@ -182,10 +213,13 @@ identity.phone_sha256   sha256(E.164(envelope.identity.phone))
 The mapper hashes additional TikTok slots:
 
 ```text
-user.external_id        sha256(lowercased(trimmed(identity.customer_id)))
+user.external_id        sha256(lowercased(trimmed(
+                          identity.canonical_customer_id ?? identity.user_id)))
 ```
 
-`first_name` / `last_name` (hashed) are NOT mapped in v1. The canonical envelope doesn't carry a first/last name slot; a future minor version may add a hook on `identityFromProperties` once a producer ships name data.
+`external_id` is TikTok's cross-session join key, so it carries the most durable id the platform holds for the person. `canonical_customer_id` is the identity stage's conclusion after reconciling every identifier ever seen; `user_id` is what this one event's producer happened to send. Two producers spelling one customer differently used to reach TikTok as two users (V87AS). The fallback preserves prior behaviour exactly on an envelope the spine never resolved — `analytics.events` traffic, and any replay of history — and Meta CAPI applies the same rule for the same reason: it belongs to the identity stage, not to either vendor.
+
+`first_name` / `last_name` (hashed) are NOT mapped in v1. `identity.first_name_sha256` / `last_name_sha256` exist as of normalize v3 (1VEL3) but this consumer does not read them yet; widening TikTok's `user` block to the full match set is separate work.
 
 `ttp` / `ttclid` (TikTok tracking cookies) are NOT mapped in v1. They live in `properties` if the SDK passes them through, and a future minor version may add a hook to flatten them into `user.ttp` / `user.ttclid`. TikTok's `ttclid` is functionally analogous to Meta's `fbc`; `ttp` is analogous to `fbp`.
 
@@ -195,9 +229,13 @@ user.external_id        sha256(lowercased(trimmed(identity.customer_id)))
 connectors/destinations/tiktok/v1/test/fixtures/normalized.ts                    builders
 connectors/destinations/tiktok/v1/test/fixtures/checkout-started.input.json      canonical event
 connectors/destinations/tiktok/v1/test/fixtures/checkout-started.output.json     TikTok payload (illustrative shape)
+connectors/destinations/tiktok/v1/test/fixtures/page-viewed.input.json           canonical view, resolved to a profile
+connectors/destinations/tiktok/v1/test/fixtures/page-viewed.output.json          TikTok Pageview payload
 ```
 
-The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Hash values in `.output.json` are placeholders illustrating field positions; the unit tests compute hashes against `sha256Hex(...)` and assert against the computed result so the goldens stay readable without becoming brittle.
+Each `.input.json` / `.output.json` pair documents the wire shape for one mapping. Hash values in the commerce goldens are placeholders illustrating field positions; the unit tests compute hashes against `sha256Hex(...)` and assert against the computed result so the goldens stay readable without becoming brittle.
+
+`page-viewed.*` is the exception, and deliberately: its digests are real. The pair exists to document where a value came from rather than where it sits, and a placeholder cannot show that `external_id` is `sha256("cus_canonical")` — the profile's resolution — rather than `sha256("storefront-42")`, the `customer_id` the same envelope carries. Its `user.email` and `user.phone` are likewise the digests of the profile-trait snapshot, which is the path 1VEL3 opened and which no golden reaches: the mapper fixtures start from an already-prepared `NormalizedEvent`, so they cannot show a trait becoming a match key. `test/integration.test.ts` pins all three end to end, through `createDestinationConsumer` and the real normalize stage, and `test/golden.test.ts` pins this pair itself against that same path — so the file cannot drift from the code it documents. That test is also what found the `event_time` all five goldens carried: `1778587200`, two days off the `occurred_at` they declare. Corrected here for tiktok; the identical error in the meta-capi and ga4 goldens is untouched, and those pairs remain unexecuted.
 
 The vendor delivery step (network) is exercised against a `fetch` stub in `test/deliverer.test.ts` and `test/integration.test.ts`. An end-to-end test against TikTok's Events API debugger (`test_event_code`) is documented operationally but not run by CI — it requires live TikTok credentials.
 

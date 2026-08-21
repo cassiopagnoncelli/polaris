@@ -1,0 +1,42 @@
+{
+  "event_id": "evt_01HZZB1PMN0Q4T7F2WXW6RJ5YS",
+  "event": "page.viewed",
+  "schema_version": 2,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:00.500Z",
+  "source": { "id": "storefront-web", "type": "frontend" },
+  "identity": {
+    "customer_id": "storefront-42",
+    "anonymous_id": "anon_abc"
+  },
+  "profile": {
+    "profile_id": "01930000-0000-7000-8000-0000000000aa",
+    "canonical_customer_id": "cus_canonical",
+    "traits": {
+      "email": "someone@example.com",
+      "phone": "+14155550123",
+      "tier": "gold"
+    },
+    "traits_version": 7
+  },
+  "context": {
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US",
+    "page": {
+      "url": "https://storefront.example/products/widget",
+      "path": "/products/widget",
+      "title": "Widget",
+      "referrer": "https://search.example/?q=widget"
+    }
+  },
+  "properties": {
+    "path": "/products/widget",
+    "search": null,
+    "title": "Widget",
+    "referrer": "https://search.example/?q=widget"
+  },
+  "consent": { "marketing": true, "analytics": true, "personalization": true }
+}

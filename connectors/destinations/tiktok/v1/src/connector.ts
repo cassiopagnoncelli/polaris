@@ -9,9 +9,9 @@
  * it.
  *
  * An explicit canonical → vendor event matrix via a frozen `MapperMap`.
- * Events outside the matrix land as `mapped_failed` records at the runtime
- * layer — operators see the "no mapper registered" reason and route their
- * schema work accordingly.
+ * Events outside the matrix land as `skipped_unmapped` records at the
+ * runtime layer (H05QEWIB) — operators see the "no mapper registered"
+ * reason and route their schema work accordingly.
  *
  *   - identity            pinned vendor + per-stage versions
  *   - map                 per-canonical-event TikTok payload builders
@@ -32,6 +32,7 @@ import { type BuildDelivererOptions, buildTikTokDeliverer } from "./deliverer.js
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import {
   checkoutStartedMapper,
+  pageViewedMapper,
   paymentApprovedMapper,
   signupCompletedMapper,
   subscriptionRenewedMapper,
@@ -48,6 +49,7 @@ const IDENTITY_HASHING: IdentityHashingOptions = Object.freeze({
 });
 
 const MAPPERS: MapperMap<TikTokEventPayload> = Object.freeze({
+  "page.viewed": pageViewedMapper,
   "checkout.started": checkoutStartedMapper,
   "payment.approved": paymentApprovedMapper,
   "user.identified": userIdentifiedMapper,
