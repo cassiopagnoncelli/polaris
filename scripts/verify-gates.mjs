@@ -144,6 +144,28 @@ const BLUEPRINT_LINK_CANARY = `link:../../${"packages"}/node-sdk`;
  */
 const BLUEPRINT_PNPM_CANARY = "pnpm@10.30.0";
 
+/**
+ * The one line that keeps every image buildable.
+ *
+ * The inverse of every canary above: this fault is an ABSENCE, so the
+ * injection removes the repository's own declaration rather than planting a
+ * foreign one. It is commented out rather than deleted, which YAML reads as
+ * identical -- `parse` never sees a commented key, `pnpm config get` resolves
+ * to `undefined`, and `pnpm deploy` refuses with
+ * ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE, the error that made seventeen images
+ * unbuildable from the day the runtime moved to pnpm v10. Commenting keeps the
+ * assertion POSITIVE, and a positive assertion is the one that cannot pass by
+ * accident: were the key ever renamed, the replace would no-op, the commented
+ * line would be absent, and the harness would report an injection that did not
+ * land. Deleting by pattern fails that way silently -- a filter that matches
+ * nothing leaves a clean tree that satisfies "the key is gone".
+ *
+ * Written as a literal. `lint-docker-deploy` reads pnpm-workspace.yaml and
+ * Dockerfiles and nothing else, so a mention in this file cannot be mistaken
+ * for a declaration.
+ */
+const DEPLOY_INJECTION_LINE = "injectWorkspacePackages: true";
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -401,6 +423,42 @@ const GATES = [
       read(".dockerignore")
         .split("\n")
         .some((line) => line === DOCKER_CONTEXT_CANARY),
+  },
+  {
+    // Injected into pnpm-workspace.yaml rather than into a Dockerfile, because
+    // the fault is the repository-level fact the Dockerfiles depend on and
+    // cannot see: `pnpm deploy` refuses to run at all without injection, so
+    // every builder stage that ends in `pnpm deploy --prod /deploy` fails on a
+    // file none of them mention. That is the founding bug -- seventeen images
+    // unbuildable from the day the runtime moved to pnpm v10, found three
+    // times by cards doing something else, because nothing in CI built an
+    // image and nothing in the gate read this line.
+    //
+    // Confirmed to be the fault rather than a likeness of it: with the
+    // declaration commented out, `pnpm --filter "@polaris/..." deploy --prod`
+    // exits on ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE, the same error the
+    // builder stage hits. The check reports both halves of its first rule --
+    // the declaration is gone AND `pnpm config get` resolves to `undefined`.
+    name: "lint:docker-deploy",
+    command: "node scripts/lint-docker-deploy.mjs",
+    files: ["pnpm-workspace.yaml"],
+    inject: () =>
+      write(
+        "pnpm-workspace.yaml",
+        read("pnpm-workspace.yaml").replace(DEPLOY_INJECTION_LINE, `# ${DEPLOY_INJECTION_LINE}`),
+      ),
+    // Two clauses, because each answers a different question. The first is
+    // that the mutation ran; the second is that the manifest now declares
+    // nothing, which is what has to hold for the gate's verdict to mean
+    // anything. The file discusses the setting at length in comments, so
+    // neither clause can be an `includes`.
+    assertInjected: () => {
+      const lines = read("pnpm-workspace.yaml").split("\n");
+      return (
+        lines.some((line) => line.trim() === `# ${DEPLOY_INJECTION_LINE}`) &&
+        !lines.some((line) => line.startsWith(DEPLOY_INJECTION_LINE))
+      );
+    },
   },
   {
     name: "openapi:check",
