@@ -10,12 +10,12 @@
  * test.
  */
 
-import type { NormalizedEvent } from "@polaris/delivery-normalize";
 import type {
   DelivererContext,
   DestinationInstance,
   MapperContext,
 } from "@polaris/delivery-destinations";
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
 
 import type { MetaCapiPayload } from "../../src/types.js";
 
@@ -27,7 +27,10 @@ import type { MetaCapiPayload } from "../../src/types.js";
  * test, and the value a delivery actually saw came from the double. Tests that
  * exercise a malformed or unusual credential pass it in.
  */
-export function fixtureDestinationInstance(secretValue = ""): DestinationInstance {
+export function fixtureDestinationInstance(
+  secretValue = "",
+  config: Readonly<Record<string, unknown>> = {},
+): DestinationInstance {
   return {
     destination_id: "polaris_dst_test_meta",
     project_id: "storefront",
@@ -42,7 +45,7 @@ export function fixtureDestinationInstance(secretValue = ""): DestinationInstanc
     retry_policy: "standard",
     dead_letter_threshold: 8,
     replay_opt_in: true,
-    config: {},
+    config,
   };
 }
 
@@ -107,10 +110,63 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
   return { ...base, ...overrides };
 }
 
-export function fixtureMapperContext(overrides: Partial<NormalizedEvent> = {}): MapperContext {
+/**
+ * `instanceConfig` is the second argument because the mapper now reads one
+ * key off `destinations.config` — the geo-fallback switch. A test that does
+ * not pass it gets `{}`, which is what an instance nobody has configured
+ * looks like and what every pre-FLU7S test assumed.
+ */
+export function fixtureMapperContext(
+  overrides: Partial<NormalizedEvent> = {},
+  instanceConfig: Readonly<Record<string, unknown>> = {},
+): MapperContext {
   return {
     normalized: fixtureNormalizedEvent(overrides),
-    instance: fixtureDestinationInstance(),
+    instance: fixtureDestinationInstance("", instanceConfig),
+  };
+}
+
+/**
+ * A `PreparedIdentity` carrying the whole hashed match set, digests keyed
+ * by field so a test can name the one it is asserting on.
+ *
+ * Distinct per field on purpose: eight copies of the same 64 chars would
+ * let a mapper that read `first_name_sha256` into `ln` pass every test.
+ */
+export const FIXTURE_MATCH_DIGESTS = {
+  first_name: "1".repeat(64),
+  last_name: "2".repeat(64),
+  gender: "3".repeat(64),
+  birthday: "4".repeat(64),
+  city: "5".repeat(64),
+  state: "6".repeat(64),
+  postal_code: "7".repeat(64),
+  country: "8".repeat(64),
+} as const;
+
+/** The extended match set as `prepareIdentity` returns it, all eight present. */
+export function fixtureExtendedIdentity(
+  overrides: Partial<NormalizedEvent["identity"]> = {},
+): NormalizedEvent["identity"] {
+  return {
+    ...fixtureNormalizedEvent().identity,
+    first_name: null,
+    first_name_sha256: FIXTURE_MATCH_DIGESTS.first_name,
+    last_name: null,
+    last_name_sha256: FIXTURE_MATCH_DIGESTS.last_name,
+    gender: null,
+    gender_sha256: FIXTURE_MATCH_DIGESTS.gender,
+    birthday: null,
+    birthday_sha256: FIXTURE_MATCH_DIGESTS.birthday,
+    city: null,
+    city_sha256: FIXTURE_MATCH_DIGESTS.city,
+    state: null,
+    state_sha256: FIXTURE_MATCH_DIGESTS.state,
+    postal_code: null,
+    postal_code_sha256: FIXTURE_MATCH_DIGESTS.postal_code,
+    country: null,
+    country_sha256: FIXTURE_MATCH_DIGESTS.country,
+    ...overrides,
   };
 }
 

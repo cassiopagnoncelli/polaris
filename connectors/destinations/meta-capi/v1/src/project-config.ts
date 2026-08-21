@@ -23,8 +23,8 @@
  * @see docs/implementation/project-config-plan.md §3.1
  */
 
-import { positiveIntSchema } from "@polaris/delivery-port";
 import { ROUTING_GATE_CONFIG_KEY } from "@polaris/delivery-destinations";
+import { positiveIntSchema } from "@polaris/delivery-port";
 import { z } from "zod";
 
 /** Namespace this consumer reads. One slice per component (plan §3.5). */
@@ -81,6 +81,50 @@ export const projectConfigSchema = z.object({
  * `scripts/lint-project-config-keys.mjs` now fails on a declared key its
  * component never reads, so this cannot recur silently.
  */
+
+/**
+ * Per-instance key: may the mapper fill Meta's `ct` / `st` / `country`
+ * from `enrichment.geo` when the person's traits carry no address?
+ *
+ * On `destinations.config`, the narrow half of the precedence chain, and
+ * NOT on `projectConfigSchema` above. Both halves would have been tidier to
+ * declare in one place, and one of them would have been a lie: the mapper
+ * is handed `instance.config` and nothing else, so a value stored under
+ * `project_config['meta-capi']` would show up in `polaris config list`,
+ * render in the admin panel, and change nothing — which is the exact defect
+ * `allow_replay` shipped and `scripts/lint-project-config-keys.mjs` was
+ * written to catch. The declaration lives here rather than in `mapper.ts`
+ * because this module is where this connector's configuration contract is
+ * written down, whichever store a given key rides in.
+ *
+ * Write it with:
+ *
+ *   polaris destinations set-config <destination_id> \
+ *     --config '{"location_from_geo": true}' --reason '<why>'
+ *
+ * DEFAULT OFF, and that is the whole reason it is a switch. Geo is derived
+ * from the connection address: a VPN exit node, a corporate egress or a
+ * mobile carrier's NAT all geolocate somewhere the person is not, and a
+ * wrong `ct` is a hashed match against somebody else rather than a missing
+ * one. Turning it on buys location signal on anonymous traffic and accepts
+ * that some of it is coarse and some of it is wrong — an operator's
+ * trade-off to make per pixel, not the platform's to make for them.
+ */
+export const LOCATION_FROM_GEO_KEY = "location_from_geo";
+
+/**
+ * Read the geo-fallback switch off one instance's config bag.
+ *
+ * Strictly `=== true`. The bag is jsonb an operator hand-writes, so the
+ * string `"true"`, `1` and `"yes"` all reach here; accepting them would
+ * mean guessing that a typo was consent to send coarser location data, and
+ * the honest read of anything that is not the boolean is "not configured".
+ */
+export function locationFromGeoEnabled(
+  instanceValues: Readonly<Record<string, unknown>> | undefined,
+): boolean {
+  return instanceValues?.[LOCATION_FROM_GEO_KEY] === true;
+}
 
 export type MetaCapiProjectConfig = z.infer<typeof projectConfigSchema>;
 

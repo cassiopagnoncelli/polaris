@@ -1,19 +1,36 @@
 {
   "event_name": "Purchase",
-  "event_time": 1778587200,
+  "event_time": 1778760000,
   "event_id": "evt_01HZZD3YJK0M2R8D8VYV4QH6XR",
   "action_source": "app",
   "user_data": {
-    "em": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-    "ph": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
-    "external_id": ["6f12ff3d3a3f5e1b0c5dfde31a4e1c2c6b6f3a23a06d3e8e15f5e30b4f6e3e94"],
-    "anon_id": "bdb78aaa7d51d3c8b6c1a4e9d0c1f3e7e6cdeae5f5e5ac4e8a3b9a2f3a4f8a1b",
+    "em": ["b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72"],
+    "ph": ["468a4b26753815290dc13ee82f453df24fd974c708542d1f3c497c7b4e7e4413"],
+    "external_id": ["231616751e69c983e23c8b70d6b56d5936e3ebeef7235b6fd07d48df8791f54f"],
+    "fn": ["fdee430d40bd57deeac186cd9790033d0f06f909a8806e7ce6e717ab7c7d5029"],
+    "ln": ["fb1e7ec987523d2cb9e022cec1d6ae7c99dc46edfae4fe51254025fe4bea571f"],
+    "ge": ["252f10c83610ebca1a059c0bae8255eba2f95be4d1d7bcfa89d7248a82d9f111"],
+    "db": ["45855c955fad9b905f680eda7ea7cfa7f2592f136686acd67dae3e7732e9154a"],
+    "ct": ["6089854c94ca5454b76be6752c562901a985f64c9a946f62976aeab593b83161"],
+    "st": ["1b7b82ca1453897c4632add7bddcc539ab9ce2bce8544db897715668c51729f0"],
+    "zp": ["6f59bc66ceea0ae113b5bd2ac89060992369e6043ce3616df21b8a855d2708f3"],
+    "country": ["0b407281768f0e833afef47ed464b6571d01ca4d53c12ce5c51d1462f4ad6677"],
     "client_ip_address": "203.0.113.42",
-    "client_user_agent": "Storefront/5.10 (iOS 17; iPhone15,2)"
+    "client_user_agent": "Storefront/5.10 (iOS 17; iPhone15,2)",
+    "anon_id": "21248023c91014cc21dfbad41bcb9a34e264ad08b85472f7817c51471f845291"
   },
   "custom_data": {
     "currency": "USD",
     "value": 49.99,
+    "contents": [
+      {
+        "id": "sku-7",
+        "quantity": 1,
+        "item_price": 49.99
+      }
+    ],
+    "content_ids": ["sku-7"],
+    "content_type": "product",
     "order_id": "ord_42"
   }
 }

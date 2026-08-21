@@ -12,15 +12,16 @@
  * @see docs/architecture/06-destinations.md "Destination Consumer"
  */
 
-import type { NormalizableEnvelope } from "@polaris/delivery-normalize";
+import type { PolarisProducer } from "@polaris/bus";
 import {
   createDestinationConsumer,
   InMemoryDeliveryRecordRepository,
   InMemoryDestinationInstanceReader,
   InMemoryDlqRecordRepository,
 } from "@polaris/delivery-destinations";
+import type { NormalizableEnvelope } from "@polaris/delivery-normalize";
+import { hashEmailLower, hashPhoneE164, sha256Hex } from "@polaris/delivery-normalize";
 import { createLogger } from "@polaris/observability-logger";
-import type { PolarisProducer } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { createMetaCapiDescriptor } from "../src/connector.js";
@@ -91,6 +92,35 @@ function fixtureEnvelope(overrides: Partial<NormalizableEnvelope> = {}): Normali
     ...overrides,
   };
 }
+
+/**
+ * A resolved person, as enrichment stamps one: the identity block carries
+ * no email and `properties` carries none either, so anything Meta matches
+ * on has to come from here.
+ *
+ * The trait names are `user.identified` v1's, which is what makes the
+ * snapshot readable at all — the address keys live inside `address`, and
+ * the four person keys sit at the top of the bag.
+ */
+const TRAIT_PROFILE = {
+  profile_id: "prof_int_meta",
+  canonical_customer_id: "cus_int_meta",
+  traits: {
+    email: "Ada@Example.com",
+    phone: "+15555550123",
+    first_name: "Ada",
+    last_name: "Lovelace",
+    gender: "female",
+    birthday: "1815-12-10",
+    address: {
+      city: "London",
+      state: "Greater London",
+      postal_code: "NW1 5LU",
+      country: "United Kingdom",
+    },
+  },
+  traits_version: 3,
+} as const;
 
 const SECRET = JSON.stringify({
   pixel_id: "1234567890",
@@ -187,6 +217,10 @@ describe("meta-capi v1 integration (handleEvent driven)", () => {
     // the events it models; one it does not model is routine operation, not
     // a mapping fault, and `error_class` stays null so the two remain
     // distinguishable in delivery_records and on the dashboards.
+    //
+    // `page.viewed` was the example here until FLU7S gave it a mapper. It
+    // needs an event this connector genuinely does not model, and
+    // `cart.abandoned` is one.
     const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
     const instance = fixtureDestinationInstance(SECRET);
     const instances = new InMemoryDestinationInstanceReader();
@@ -204,14 +238,164 @@ describe("meta-capi v1 integration (handleEvent driven)", () => {
     });
 
     const record = await runtime.handleEvent({
-      envelope: fixtureEnvelope({ event: "page.viewed" }),
+      envelope: fixtureEnvelope({ event: "cart.abandoned" }),
       destination_id: instance.destination_id,
     });
 
     expect(record?.status).toBe("skipped_unmapped");
     expect(record?.error_class).toBeNull();
-    expect(record?.vendor_response_summary).toContain("page.viewed");
+    expect(record?.vendor_response_summary).toContain("cart.abandoned");
     expect(calls).toHaveLength(0);
+  });
+
+  it("delivers page.viewed as PageView with the source URL and no custom_data", async () => {
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"events_received":1,"fbtrace_id":"trace_pv"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_meta_pv",
+        event: "page.viewed",
+        properties: { title: "Checkout" },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.data[0].event_name).toBe("PageView");
+    expect(body.data[0].event_source_url).toBe("https://storefront.example/checkout");
+    expect(body.data[0].custom_data).toBeUndefined();
+  });
+
+  it("still drops page.viewed when marketing consent is denied", async () => {
+    const { fetch, calls } = makeFetch(() => new Response("{}", { status: 200 }));
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event: "page.viewed",
+        properties: {},
+        consent: { marketing: false, analytics: true, personalization: true },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("dropped_consent");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("carries em / fn / ln and the cart for a trait-fed envelope", async () => {
+    // The production path, not the fixture shortcut: no `properties.email`
+    // anywhere, so every hashed identifier on the wire had to come from the
+    // profile-trait snapshot through `normalizeForDestination`. The mapper
+    // test can be satisfied by a fixture that pre-hashes `em`; this cannot.
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"events_received":1,"fbtrace_id":"trace_traits"}', { status: 200 }),
+    );
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({ event_id: "evt_int_meta_traits", profile: TRAIT_PROFILE }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const userData = JSON.parse(calls[0]?.body ?? "").data[0].user_data;
+    expect(userData.em).toEqual([hashEmailLower("Ada@Example.com")]);
+    expect(userData.ph).toEqual([hashPhoneE164("+15555550123")]);
+    expect(userData.fn).toEqual([sha256Hex("ada")]);
+    expect(userData.ln).toEqual([sha256Hex("lovelace")]);
+    expect(userData.ge).toEqual([sha256Hex("f")]);
+    expect(userData.db).toEqual([sha256Hex("18151210")]);
+    expect(userData.ct).toEqual([sha256Hex("london")]);
+    expect(userData.st).toEqual([sha256Hex("greaterlondon")]);
+    expect(userData.zp).toEqual([sha256Hex("nw15lu")]);
+    expect(userData.country).toEqual([sha256Hex("gb")]);
+    // A website event: Meta defines `anon_id` for app events only.
+    expect(userData.anon_id).toBeUndefined();
+
+    const customData = JSON.parse(calls[0]?.body ?? "").data[0].custom_data;
+    expect(customData.contents).toEqual([{ id: "sku-1", quantity: 2, item_price: 49.99 }]);
+    expect(customData.content_ids).toEqual(["sku-1"]);
+    expect(customData.content_type).toBe("product");
+  });
+
+  it("fills ct / st / country from geo only when the instance config says so", async () => {
+    const geoEnvelope = fixtureEnvelope({
+      event_id: "evt_int_meta_geo",
+      enrichment: { geo: { country: "GB", region: "England", city: "London", source: "maxmind" } },
+    });
+
+    async function deliver(config: Readonly<Record<string, unknown>>): Promise<unknown> {
+      const { fetch, calls } = makeFetch(
+        () => new Response('{"events_received":1}', { status: 200 }),
+      );
+      const instance = fixtureDestinationInstance(SECRET, config);
+      const instances = new InMemoryDestinationInstanceReader();
+      instances.set(instance);
+      const runtime = createDestinationConsumer({
+        descriptor: createMetaCapiDescriptor({ fetch, requestTimeoutMs: 5000 }),
+        consumer: {} as never,
+        producer: NOOP_PRODUCER,
+        instances,
+        records: new InMemoryDeliveryRecordRepository(),
+        logger,
+      });
+      await runtime.handleEvent({
+        envelope: geoEnvelope,
+        destination_id: instance.destination_id,
+      });
+      return JSON.parse(calls[0]?.body ?? "").data[0].user_data;
+    }
+
+    expect(await deliver({})).not.toHaveProperty("ct");
+    expect(await deliver({ location_from_geo: true })).toMatchObject({
+      ct: [sha256Hex("london")],
+      st: [sha256Hex("england")],
+      country: [sha256Hex("gb")],
+    });
   });
 
   it("suppresses replay traffic by default (no delivery, no record)", async () => {

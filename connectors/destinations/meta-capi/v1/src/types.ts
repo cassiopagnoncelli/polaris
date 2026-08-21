@@ -79,17 +79,64 @@ export interface MetaCapiUserData {
   readonly ph?: readonly string[];
   /** Hashed external_id(s) — sha256(canonical `customer_id`). */
   readonly external_id?: readonly string[];
-  /** Hashed first/last name. v1 does NOT extract these (no canonical slot). */
+  /**
+   * The eight further customer-information parameters Meta matches on,
+   * each an array of SHA-256 digests exactly as `em` and `ph` are.
+   *
+   * The canonical form each digest is taken over is the normalize layer's
+   * (`person.ts` / `address.ts`), never this connector's: Meta's published
+   * rule for `ct` is "lowercase, no punctuation, no special characters, no
+   * spaces", and a mapper that lowercased its own would drift from the
+   * next vendor's and stop naming the same person.
+   *
+   * `st` is the one place Polaris knowingly differs from Meta's guidance,
+   * which asks for the two-character ANSI abbreviation in the US. The
+   * platform publishes one rule for every country and sends the spelled-out
+   * name lowercased; see `canonicalizePlaceName` for why.
+   */
   readonly fn?: readonly string[];
   readonly ln?: readonly string[];
+  readonly ge?: readonly string[];
+  readonly db?: readonly string[];
+  readonly ct?: readonly string[];
+  readonly st?: readonly string[];
+  readonly zp?: readonly string[];
+  readonly country?: readonly string[];
   /** Browser tracking cookies — passed through verbatim. */
   readonly fbp?: string;
   readonly fbc?: string;
   /** Client IP + UA (Meta uses these for ad-attribution match). */
   readonly client_ip_address?: string;
   readonly client_user_agent?: string;
-  /** Customer's anonymized id, sha256-hashed. v1 maps from anonymous_id. */
+  /**
+   * Customer's anonymized id, sha256-hashed, mapped from `anonymous_id`.
+   *
+   * App events only. Meta's customer-information reference says of this
+   * parameter, in full, "This parameter is for app events only" — it has no
+   * definition for a website event, so the mapper sends it only when
+   * `action_source` is `app`.
+   *
+   * @see https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/customer-information-parameters/
+   */
   readonly anon_id?: string;
+}
+
+/**
+ * One cart line inside `custom_data.contents[]`.
+ *
+ * Meta's field names, not the canonical ones: `id` is the SKU, and
+ * `item_price` is the UNIT price in the parent event's currency, in major
+ * units — the same conversion `value` gets, since Meta reads both against
+ * the one `currency`.
+ *
+ * Every field is optional because a producer's cart line may be partial,
+ * and a line that yields nothing at all is dropped rather than sent as an
+ * empty object.
+ */
+export interface MetaCapiContent {
+  readonly id?: string;
+  readonly quantity?: number;
+  readonly item_price?: number;
 }
 
 /**
@@ -104,6 +151,17 @@ export interface MetaCapiCustomData {
   /** Free-form receiver-defined slots; v1 omits them. */
   readonly content_name?: string;
   readonly content_category?: string;
+  /**
+   * The cart, three ways. Meta takes the per-line detail in `contents[]`,
+   * the bare id list in `content_ids[]`, and what kind of thing those ids
+   * name in `content_type`; a catalogue join needs all three, and Meta's
+   * own docs send them together.
+   *
+   * `content_type` is `"product"` because `properties.items[]` carries
+   * SKUs — the other accepted value, `product_group`, would claim the ids
+   * are parent groups, which for a cart line they are not.
+   */
+  readonly contents?: readonly MetaCapiContent[];
   readonly content_ids?: readonly string[];
   readonly content_type?: string;
   readonly num_items?: number;

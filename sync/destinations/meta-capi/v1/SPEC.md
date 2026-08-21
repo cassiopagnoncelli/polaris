@@ -18,9 +18,10 @@ payment.approved       →  Purchase
 user.identified        →  Lead
 signup.completed       →  CompleteRegistration
 subscription.renewed   →  Subscribe
+page.viewed            →  PageView
 ```
 
-Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
+Events outside this set produce `skipped_unmapped` delivery records with a null `error_class`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
 
 ```text
 support.ticket.opened  Meta has no canonical equivalent; never delivered
@@ -40,13 +41,24 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `identity.customer_id` | `user_data.external_id[0]` | `sha256(lowercased(trim(value)))` | Meta requires hash for external_id |
 | `identity.email_sha256` | `user_data.em[0]` | (already hashed by normalize) | delivery-normalize handles email sha256 |
 | `identity.phone_sha256` | `user_data.ph[0]` | (already hashed by normalize) | E.164 + sha256 |
-| `identity.anonymous_id` | `user_data.anon_id` | `sha256` | passes anonymized id through hash |
+| `identity.first_name_sha256` | `user_data.fn[0]` | (already hashed by normalize) | NFC, lowercased, letters and digits only |
+| `identity.last_name_sha256` | `user_data.ln[0]` | (already hashed by normalize) | same rule as `fn` |
+| `identity.gender_sha256` | `user_data.ge[0]` | (already hashed by normalize) | `m` / `f`; anything else is refused, not guessed |
+| `identity.birthday_sha256` | `user_data.db[0]` | (already hashed by normalize) | `YYYYMMDD` |
+| `identity.city_sha256` | `user_data.ct[0]` | (already hashed by normalize) | falls back to `enrichment.geo.city` when the instance opts in |
+| `identity.state_sha256` | `user_data.st[0]` | (already hashed by normalize) | falls back to `enrichment.geo.region` when the instance opts in |
+| `identity.postal_code_sha256` | `user_data.zp[0]` | (already hashed by normalize) | first five characters in the US; geo NEVER fills this slot |
+| `identity.country_sha256` | `user_data.country[0]` | (already hashed by normalize) | ISO-3166-1 alpha-2; falls back to `enrichment.geo.country` when the instance opts in |
+| `identity.anonymous_id` | `user_data.anon_id` | `sha256` | App events only — Meta defines the parameter for no other `action_source` |
 | `context.ip` | `user_data.client_ip_address` | passthrough | Meta uses for ad-attribution match |
 | `context.user_agent` | `user_data.client_user_agent` | passthrough | same |
 | `properties.cart_id` | `custom_data.order_id` | none | Meta accepts arbitrary order_id |
 | `properties.total` | `custom_data.value` | `minorToMajor(value, currency)` | Meta wants decimal; minor → major per ISO 4217 exponent |
 | `properties.currency` | `custom_data.currency` | none | ISO 4217 alphabetic |
 | `properties.items[].quantity` (sum) | `custom_data.num_items` | sum + integer-check | When present |
+| `properties.items[]` | `custom_data.contents[]` | `{ id, quantity, item_price }` | `id` from `content_id` then `sku`; `item_price` is the UNIT price in major units |
+| `properties.items[].sku` | `custom_data.content_ids[]` | none | One entry per line that has an id |
+| derived | `custom_data.content_type` | literal `"product"` | Emitted with `content_ids`, never alone |
 
 ### `payment.approved` → `Purchase`
 
@@ -59,6 +71,7 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 | `properties.amount_minor` (or `amount`) | `custom_data.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
 | `properties.currency` | `custom_data.currency` | none | ISO 4217 |
 | `properties.order_id` (or `transaction_id`) | `custom_data.order_id` | none | First-non-null wins |
+| `properties.items[]` | `custom_data.contents[]` + `content_ids[]` + `content_type` | same as checkout | `num_items` is deliberately NOT derived here |
 
 ### `user.identified` → `Lead`
 
@@ -94,6 +107,19 @@ No `custom_data` is populated — `Lead` is a lightweight intent signal.
 | `properties.currency` | `custom_data.currency` | none | ISO 4217 |
 | `properties.predicted_ltv_minor` | `custom_data.predicted_ltv` | `minorToMajor` | Optional |
 | `properties.subscription_id` | `custom_data.order_id` | none | Stable per-cycle id on the renewal |
+
+### `page.viewed` → `PageView`
+
+| Canonical field | Vendor field | Normalization | Notes |
+|---|---|---|---|
+| `event_id` | `event_id` | none | dedupe key — the browser pixel's `PageView` carries the same `eventID` |
+| `occurred_at` | `event_time` | `isoToEpochSeconds` | seconds |
+| `context.page.url` | `event_source_url` | none | The page itself; the reason this event is worth sending |
+| `identity.*` | `user_data.*` | same as checkout | see above |
+
+No `custom_data`. A page view has no cart, no value and no order, and an empty `custom_data` object is a claim about the event rather than silence.
+
+Consent is unchanged: the destination requires `marketing`, so a visitor who declined it produces no `PageView` any more than they produce a `Purchase`.
 
 ## Normalization rules
 
@@ -162,6 +188,7 @@ Access token is redacted from every `vendor_response_summary` before it lands in
   - `POLARIS_META_CAPI_ALLOW_REPLAY` — default `false`
   - `POLARIS_META_CAPI_GRAPH_HOST` — default `graph.facebook.com`
 - **Per-instance knobs (PostgreSQL `destinations` row):** `max_concurrency`, `max_rps`, `retry_policy`, `dead_letter_threshold` — tune per ad account.
+- **Per-instance config (`destinations.config`):** `location_from_geo` (default off) — see "Location from geo" below. Written with `polaris destinations set-config`.
 
 ## Identity field mapping detail
 
@@ -172,26 +199,76 @@ identity.email_sha256   sha256(lowercased(trimmed(envelope.identity.email)))
 identity.phone_sha256   sha256(E.164(envelope.identity.phone))
 ```
 
-The mapper hashes additional Meta slots:
+It prepares the other eight the same way, from the profile-trait snapshot
+`user.identified` v1 pins:
 
 ```text
-user_data.external_id   sha256(lowercased(trimmed(identity.customer_id)))
-user_data.anon_id       sha256(identity.anonymous_id)   // no canonicalization needed
+identity.first_name_sha256   sha256(NFC, lowercased, letters and digits only)
+identity.last_name_sha256    same rule
+identity.gender_sha256       sha256('m' | 'f')
+identity.birthday_sha256     sha256('YYYYMMDD')
+identity.city_sha256         sha256(lowercased, letters and digits only)
+identity.state_sha256        same rule
+identity.postal_code_sha256  sha256(lowercased, no whitespace; first five in the US)
+identity.country_sha256      sha256(ISO-3166-1 alpha-2, lowercased)
 ```
 
-`fn` / `ln` (hashed first/last name) are NOT mapped in v1. The canonical envelope doesn't carry a first/last name slot; a future minor version may add a hook on `identityFromProperties` once a producer ships name data.
+The mapper hashes two further Meta slots itself:
+
+```text
+user_data.external_id   sha256(lowercased(trimmed(canonical_customer_id ?? user_id)))
+user_data.anon_id       sha256(identity.anonymous_id)   // app events only
+```
+
+`anon_id` goes on app events and nowhere else. Meta's customer-information
+reference says of the parameter, in full, "This parameter is for app events
+only", and gives it no definition for a website event; it used to ride every
+payload this connector produced. The mapper now sends it only when
+`action_source` is `app`.
 
 `fbp` / `fbc` (browser tracking cookies) are NOT mapped in v1. They live in `properties` if the SDK passes them through, and a future minor version may add a hook to flatten them into `user_data.fbp` / `user_data.fbc`.
+
+### Location from geo — off unless an instance asks
+
+When the person's traits carry no address, the mapper CAN fill `ct` / `st` /
+`country` from `enrichment.geo`. It does not unless the instance says so:
+
+```sh
+polaris destinations set-config <destination_id> \
+  --config '{"location_from_geo": true}' --reason 'accepting coarse location'
+```
+
+Off by default because geo is derived from the connection address, and a VPN
+exit node, a corporate egress or a carrier NAT all geolocate somewhere the
+person is not — a wrong `ct` is a hashed match against somebody else rather
+than a missing one. Turning it on buys location signal on anonymous traffic
+and accepts that some of it is wrong.
+
+Two rules hold whatever the switch says. A trait always wins over geo, field
+by field: a person whose profile has a city and no state gets the trait's
+`ct` and geo's `st`. And geo never fills `zp` — it resolves an address to a
+city, and there is no postal code in it.
+
+The digests are comparable because the fallback goes back through the same
+`prepareIdentity` the trait path uses: `"London"` from a trait and `"London"`
+from geo are one digest, not two.
 
 ## Test fixtures
 
 ```text
-connectors/destinations/meta-capi/v1/test/fixtures/normalized.ts                    builders
-connectors/destinations/meta-capi/v1/test/fixtures/checkout-started.input.json      canonical event
-connectors/destinations/meta-capi/v1/test/fixtures/checkout-started.output.json     Meta payload (illustrative shape)
+connectors/destinations/meta-capi/v1/test/fixtures/normalized.ts                 builders
+connectors/destinations/meta-capi/v1/test/fixtures/<name>.input.json             canonical event
+connectors/destinations/meta-capi/v1/test/fixtures/<name>.config.json            destinations.config (optional)
+connectors/destinations/meta-capi/v1/test/fixtures/<name>.output.json            the Meta payload, computed
 ```
 
-The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Hash values in `.output.json` are placeholders illustrating field positions; the unit tests compute hashes against `sha256Hex(...)` and assert against the computed result so the goldens stay readable without becoming brittle.
+Every `.input.json` / `.output.json` pair is a golden, checked by `test/goldens.test.ts`: the input runs through the real `normalizeForDestination` and the connector's own mapper, and the result must equal the recorded output byte for byte. Regenerate after an intended mapping change with
+
+```sh
+POLARIS_UPDATE_GOLDENS=1 pnpm --filter @polaris/destination-meta-capi-v1 test
+```
+
+and commit the diff. It was prose until FLU7S — the recorded outputs carried placeholder digests for inputs that had no email or phone anywhere, and an `event_time` two days off the input's `occurred_at`, because nothing compared them.
 
 The vendor delivery step (network) is exercised against a `fetch` stub in `test/deliverer.test.ts` and `test/integration.test.ts`. An end-to-end test against Meta's sandbox (`test_event_code`) is documented operationally but not run by CI — it requires live Meta credentials.
 
@@ -200,6 +277,7 @@ The vendor delivery step (network) is exercised against a `fetch` stub in `test/
 - **Meta requires sha256-lowercased-trimmed email/phone** — canonical events MAY pass raw email and the shared normalize layer hashes them. The Meta consumer never sees raw email/phone; only the `*_sha256` slots are read.
 - **Meta requires `event_time` as Unix seconds** — canonical envelopes carry `occurred_at` as ISO 8601 + `occurred_at_epoch_ms` (milliseconds). The mapper floors `epoch_ms / 1000` to get seconds.
 - **Meta's `value` is decimal** — canonical envelopes carry currency amounts in minor units (per `01-event-contract.md`). The mapper applies `minorToMajor(amount, currency)` with the ISO 4217 exponent. Zero-decimal currencies (JPY, KRW) pass through unchanged.
+- **`st` is the spelled-out state, not the ANSI abbreviation.** Meta's guidance asks for the two-character code in the US. The platform publishes one rule for every country and lowercases the name as given (`"California"` → `"california"`), because a fifty-row abbreviation table is a guess about which `"WA"` a producer means once other countries have states too. A deliberate match-rate cost, taken in `libs/delivery/normalize/src/address.ts`.
 - **Mobile-app sources are detected via `context.app_*`** (G7ZCYLL6): when any of `app_bundle_id` / `app_version` / `app_namespace` / `app_build` / `app_idfa` / `app_idfv` / `app_gaid` is populated on the flat context, the mapper stamps `action_source: "app"`. Backend-emitted events with no `app_*` and no `page_url` continue to land as `system_generated`. SDKs running inside a native webview SHOULD set at least `app_bundle_id` so Meta's attribution model treats the event as mobile rather than web.
 
 ## Vendor API changelog

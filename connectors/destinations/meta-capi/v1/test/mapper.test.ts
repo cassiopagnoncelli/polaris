@@ -6,17 +6,21 @@
  *   - per-event vendor name + dedupe_key=event_id
  *   - event_time conversion (ms → s with floor)
  *   - action_source inference (website vs system_generated)
- *   - user_data shape: em / ph hashed; external_id = sha256(user_id);
- *     anon_id = sha256(anonymous_id); fbp/fbc passthrough when present;
- *     client_ip + ua passthrough
+ *   - user_data shape: em / ph and the eight further customer-information
+ *     parameters hashed; external_id = sha256(user_id); anon_id =
+ *     sha256(anonymous_id) on app events only; fbp/fbc passthrough when
+ *     present; client_ip + ua passthrough
+ *   - the geo fallback for ct / st / country: off unless the instance asks
+ *     for it, and never ahead of a trait
  *   - custom_data: currency/value (minor → major), num_items sum,
+ *     contents[] / content_ids / content_type from items[],
  *     order_id from cart_id (checkout) or order_id/transaction_id (payment)
  *   - data_processing_options=["LDU"] on marketing-denied consent
  *
  * @see connectors/destinations/meta-capi/v1/src/mapper.ts
  */
 
-import { sha256Hex } from "@polaris/delivery-normalize";
+import { prepareIdentity, sha256Hex } from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -27,14 +31,34 @@ import {
   META_EVENT_COMPLETE_REGISTRATION,
   META_EVENT_INITIATE_CHECKOUT,
   META_EVENT_LEAD,
+  META_EVENT_PAGE_VIEW,
   META_EVENT_PURCHASE,
   META_EVENT_SUBSCRIBE,
+  pageViewedMapper,
   paymentApprovedMapper,
   signupCompletedMapper,
   subscriptionRenewedMapper,
   userIdentifiedMapper,
 } from "../src/mapper.js";
-import { fixtureMapperContext, fixtureNormalizedEvent } from "./fixtures/normalized.js";
+import {
+  FIXTURE_MATCH_DIGESTS,
+  fixtureExtendedIdentity,
+  fixtureMapperContext,
+  fixtureNormalizedEvent,
+} from "./fixtures/normalized.js";
+
+/**
+ * The same event arriving from a native app rather than a browser. Meta's
+ * `anon_id` is defined for app events only, so several assertions below
+ * need one.
+ */
+function appEvent(overrides: Parameters<typeof fixtureNormalizedEvent>[0] = {}) {
+  const base = fixtureNormalizedEvent(overrides);
+  return {
+    ...base,
+    context: { ...base.context, page_url: null, app_bundle_id: "com.example.shop" },
+  };
+}
 
 describe("checkoutStartedMapper", () => {
   it("returns InitiateCheckout with dedupe_key = event_id", () => {
@@ -80,14 +104,22 @@ describe("checkoutStartedMapper", () => {
     expect(result.payload.event_source_url).toBeUndefined();
   });
 
-  it("builds custom_data with currency + value (minor → major) + order_id + num_items", () => {
+  it("builds the whole custom_data block for a cart", () => {
     const ctx = fixtureMapperContext();
     const result = checkoutStartedMapper(ctx);
     if (result.kind !== "mapped") throw new Error("expected mapped");
+    // The exhaustive shape, so a field appearing here without a decision
+    // fails this test rather than reaching Meta unnoticed.
     expect(result.payload.custom_data).toEqual({
       currency: "USD",
       value: 199.95,
       num_items: 3,
+      contents: [
+        { id: "sku-1", quantity: 2, item_price: 49.99 },
+        { id: "sku-2", quantity: 1, item_price: 99.97 },
+      ],
+      content_ids: ["sku-1", "sku-2"],
+      content_type: "product",
       order_id: "cart_42",
     });
   });
@@ -303,8 +335,8 @@ describe("buildUserData", () => {
     expect(ud.external_id).toEqual([expected]);
   });
 
-  it("hashes the canonical anonymous_id for anon_id", () => {
-    const normalized = fixtureNormalizedEvent();
+  it("hashes the canonical anonymous_id for anon_id on an app event", () => {
+    const normalized = appEvent();
     const ud = buildUserData(normalized);
     const expected = sha256Hex(normalized.identity.anonymous_id ?? "");
     expect(ud.anon_id).toBe(expected);
@@ -424,7 +456,7 @@ describe("external_id — the resolved customer id (MVKUP64R)", () => {
       ...base,
       identity: { ...base.identity, user_id: "producer_spelling", canonical_customer_id: "cus_1" },
     };
-    const result = checkoutStartedMapper({ normalized } as never);
+    const result = checkoutStartedMapper({ ...fixtureMapperContext(), normalized });
     if (result.kind !== "mapped") throw new Error("expected mapped");
     expect(result.payload.user_data.external_id).toEqual([sha256Hex("cus_1")]);
   });
@@ -437,8 +469,305 @@ describe("external_id — the resolved customer id (MVKUP64R)", () => {
       ...base,
       identity: { ...base.identity, user_id: "producer_spelling", canonical_customer_id: null },
     };
-    const result = checkoutStartedMapper({ normalized } as never);
+    const result = checkoutStartedMapper({ ...fixtureMapperContext(), normalized });
     if (result.kind !== "mapped") throw new Error("expected mapped");
     expect(result.payload.user_data.external_id).toEqual([sha256Hex("producer_spelling")]);
+  });
+});
+
+describe("custom_data.contents — the cart Meta joins to a catalogue", () => {
+  it("emits contents[], content_ids and content_type on InitiateCheckout", () => {
+    const result = checkoutStartedMapper(fixtureMapperContext());
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toEqual([
+      { id: "sku-1", quantity: 2, item_price: 49.99 },
+      { id: "sku-2", quantity: 1, item_price: 99.97 },
+    ]);
+    expect(result.payload.custom_data?.content_ids).toEqual(["sku-1", "sku-2"]);
+    expect(result.payload.custom_data?.content_type).toBe("product");
+  });
+
+  it("leaves num_items exactly as it was", () => {
+    const result = checkoutStartedMapper(fixtureMapperContext());
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.num_items).toBe(3);
+  });
+
+  it("emits contents[] on Purchase, and still no num_items", () => {
+    const ctx = fixtureMapperContext({
+      event: "payment.approved",
+      properties: {
+        order_id: "ord_1",
+        amount_minor: 14996,
+        currency: "USD",
+        items: [{ sku: "sku-1", quantity: 3, unit_price: 4999 }],
+      },
+    });
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toEqual([
+      { id: "sku-1", quantity: 3, item_price: 49.99 },
+    ]);
+    expect(result.payload.custom_data?.content_ids).toEqual(["sku-1"]);
+    expect(result.payload.custom_data?.content_type).toBe("product");
+    expect(result.payload.custom_data?.num_items).toBeUndefined();
+  });
+
+  it("omits all three when the event carries no items[]", () => {
+    const ctx = fixtureMapperContext({
+      properties: { cart_id: "cart_42", total: 19995, currency: "USD" },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toBeUndefined();
+    expect(result.payload.custom_data?.content_ids).toBeUndefined();
+    expect(result.payload.custom_data?.content_type).toBeUndefined();
+  });
+
+  it("omits all three when every line is unreadable", () => {
+    const ctx = fixtureMapperContext({
+      properties: { currency: "USD", items: [null, "sku-1", 7] },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toBeUndefined();
+    expect(result.payload.custom_data?.content_type).toBeUndefined();
+  });
+
+  it("prefers an explicit content_id over the sku, as the TikTok builder does", () => {
+    const ctx = fixtureMapperContext({
+      properties: {
+        currency: "USD",
+        items: [{ sku: "sku-1", content_id: "catalogue-77", quantity: 1 }],
+      },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.content_ids).toEqual(["catalogue-77"]);
+  });
+
+  it("keeps a line that has a quantity but no id, and leaves it out of content_ids", () => {
+    const ctx = fixtureMapperContext({
+      properties: { currency: "USD", items: [{ quantity: 2, unit_price: 500 }] },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toEqual([{ quantity: 2, item_price: 5 }]);
+    expect(result.payload.custom_data?.content_ids).toBeUndefined();
+    expect(result.payload.custom_data?.content_type).toBeUndefined();
+  });
+
+  it("drops item_price when the event carries no currency to convert with", () => {
+    const ctx = fixtureMapperContext({
+      properties: { items: [{ sku: "sku-1", quantity: 1, unit_price: 4999 }] },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toEqual([{ id: "sku-1", quantity: 1 }]);
+  });
+
+  it("refuses a non-integer or non-positive quantity", () => {
+    const ctx = fixtureMapperContext({
+      properties: {
+        currency: "USD",
+        items: [
+          { sku: "sku-1", quantity: 1.5 },
+          { sku: "sku-2", quantity: 0 },
+          { sku: "sku-3", quantity: -2 },
+        ],
+      },
+    });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data?.contents).toEqual([
+      { id: "sku-1" },
+      { id: "sku-2" },
+      { id: "sku-3" },
+    ]);
+  });
+});
+
+describe("user_data — the eight further customer-information parameters", () => {
+  const cases = [
+    ["fn", "first_name"],
+    ["ln", "last_name"],
+    ["ge", "gender"],
+    ["db", "birthday"],
+    ["ct", "city"],
+    ["st", "state"],
+    ["zp", "postal_code"],
+    ["country", "country"],
+  ] as const;
+
+  for (const [wire, field] of cases) {
+    it(`emits ${wire} from ${field}_sha256 when the identity carries it`, () => {
+      const normalized = fixtureNormalizedEvent({ identity: fixtureExtendedIdentity() });
+      const ud = buildUserData(normalized);
+      expect(ud[wire]).toEqual([FIXTURE_MATCH_DIGESTS[field]]);
+    });
+
+    it(`omits ${wire} when ${field}_sha256 is null`, () => {
+      const normalized = fixtureNormalizedEvent({
+        identity: fixtureExtendedIdentity({ [`${field}_sha256`]: null }),
+      });
+      const ud = buildUserData(normalized);
+      expect(ud[wire]).toBeUndefined();
+    });
+  }
+
+  it("omits all eight for an identity that never had them (a bare fixture)", () => {
+    const ud = buildUserData(fixtureNormalizedEvent());
+    for (const [wire] of cases) expect(ud[wire]).toBeUndefined();
+  });
+
+  it("carries them through to the payload, not just the helper", () => {
+    const ctx = fixtureMapperContext({ identity: fixtureExtendedIdentity() });
+    const result = checkoutStartedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.user_data.fn).toEqual([FIXTURE_MATCH_DIGESTS.first_name]);
+    expect(result.payload.user_data.country).toEqual([FIXTURE_MATCH_DIGESTS.country]);
+  });
+});
+
+describe("location from geo — off by default, and never ahead of a trait", () => {
+  const GEO = { country: "BR", region: "São Paulo", city: "São Paulo", source: "maxmind" };
+  // The digests the trait path would produce for the same three values, so
+  // the assertions below prove the fallback is comparable rather than merely
+  // populated.
+  const expected = prepareIdentity({ city: GEO.city, state: GEO.region, country: GEO.country });
+
+  it("sends nothing from geo when the instance has not asked for it", () => {
+    const ud = buildUserData(fixtureNormalizedEvent({ enrichment: { geo: GEO } }));
+    expect(ud.ct).toBeUndefined();
+    expect(ud.st).toBeUndefined();
+    expect(ud.country).toBeUndefined();
+  });
+
+  it("fills ct / st / country when the instance switch is on", () => {
+    const ud = buildUserData(fixtureNormalizedEvent({ enrichment: { geo: GEO } }), {
+      locationFromGeo: true,
+    });
+    expect(ud.ct).toEqual([expected.city_sha256]);
+    expect(ud.st).toEqual([expected.state_sha256]);
+    expect(ud.country).toEqual([expected.country_sha256]);
+  });
+
+  it("never fills zp — geo has no postal code to fall back to", () => {
+    const ud = buildUserData(fixtureNormalizedEvent({ enrichment: { geo: GEO } }), {
+      locationFromGeo: true,
+    });
+    expect(ud.zp).toBeUndefined();
+  });
+
+  it("lets the person's own traits win over geo, field by field", () => {
+    const identity = fixtureExtendedIdentity({ state_sha256: null });
+    const ud = buildUserData(fixtureNormalizedEvent({ identity, enrichment: { geo: GEO } }), {
+      locationFromGeo: true,
+    });
+    // Trait present -> trait. Trait absent -> geo. Both in one payload.
+    expect(ud.ct).toEqual([FIXTURE_MATCH_DIGESTS.city]);
+    expect(ud.country).toEqual([FIXTURE_MATCH_DIGESTS.country]);
+    expect(ud.st).toEqual([expected.state_sha256]);
+  });
+
+  it("sends nothing when enrichment resolved no geo at all", () => {
+    const ud = buildUserData(fixtureNormalizedEvent({ enrichment: { geo: null } }), {
+      locationFromGeo: true,
+    });
+    expect(ud.ct).toBeUndefined();
+  });
+
+  it("skips a geo field the address rules refuse rather than hashing a guess", () => {
+    const ud = buildUserData(
+      fixtureNormalizedEvent({
+        enrichment: { geo: { country: "Korea", region: null, city: "Seoul", source: "maxmind" } },
+      }),
+      { locationFromGeo: true },
+    );
+    // "Korea" is two countries; `canonicalizeCountry` refuses it.
+    expect(ud.country).toBeUndefined();
+    expect(ud.st).toBeUndefined();
+    expect(ud.ct).toEqual([prepareIdentity({ city: "Seoul" }).city_sha256]);
+  });
+
+  it("reads the switch off the instance config, and only the boolean true", () => {
+    const geo = { enrichment: { geo: GEO } };
+    const on = checkoutStartedMapper(fixtureMapperContext(geo, { location_from_geo: true }));
+    const stringy = checkoutStartedMapper(fixtureMapperContext(geo, { location_from_geo: "true" }));
+    const off = checkoutStartedMapper(fixtureMapperContext(geo, {}));
+    if (on.kind !== "mapped" || stringy.kind !== "mapped" || off.kind !== "mapped") {
+      throw new Error("expected mapped");
+    }
+    expect(on.payload.user_data.ct).toEqual([expected.city_sha256]);
+    expect(stringy.payload.user_data.ct).toBeUndefined();
+    expect(off.payload.user_data.ct).toBeUndefined();
+  });
+});
+
+describe("anon_id — app events only", () => {
+  it("is omitted on a website event even though anonymous_id is present", () => {
+    const normalized = fixtureNormalizedEvent();
+    expect(normalized.identity.anonymous_id).not.toBeNull();
+    expect(buildUserData(normalized).anon_id).toBeUndefined();
+  });
+
+  it("is omitted on a system_generated event", () => {
+    const base = fixtureNormalizedEvent();
+    const normalized = { ...base, context: { ...base.context, page_url: null } };
+    expect(buildUserData(normalized).anon_id).toBeUndefined();
+  });
+
+  it("is sent on an app event", () => {
+    const normalized = appEvent();
+    expect(buildUserData(normalized).anon_id).toBe(sha256Hex("anon_abc"));
+  });
+
+  it("reaches the payload of an app-sourced purchase", () => {
+    const ctx = {
+      ...fixtureMapperContext(),
+      normalized: appEvent({ event: "payment.approved", properties: { currency: "USD" } }),
+    };
+    const result = paymentApprovedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.action_source).toBe("app");
+    expect(result.payload.user_data.anon_id).toBe(sha256Hex("anon_abc"));
+  });
+});
+
+describe("pageViewedMapper", () => {
+  it("returns PageView with dedupe_key = event_id and the page URL", () => {
+    const ctx = fixtureMapperContext({ event: "page.viewed", properties: {} });
+    const result = pageViewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.event_name).toBe(META_EVENT_PAGE_VIEW);
+    expect(result.dedupe_key).toBe(ctx.normalized.event_id);
+    expect(result.payload.event_source_url).toBe("https://storefront.example/checkout");
+    expect(result.payload.action_source).toBe("website");
+  });
+
+  it("never carries custom_data, even when the event has properties", () => {
+    const ctx = fixtureMapperContext({
+      event: "page.viewed",
+      properties: { title: "Checkout", currency: "USD", total: 19995 },
+    });
+    const result = pageViewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.custom_data).toBeUndefined();
+  });
+
+  it("still carries the identity Meta matches on", () => {
+    const ctx = fixtureMapperContext({
+      event: "page.viewed",
+      properties: {},
+      identity: fixtureExtendedIdentity(),
+    });
+    const result = pageViewedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    expect(result.payload.user_data.em).toEqual(["a".repeat(64)]);
+    expect(result.payload.user_data.fn).toEqual([FIXTURE_MATCH_DIGESTS.first_name]);
+  });
+
+  it("is in the event matrix", () => {
+    expect(CANONICAL_TO_META_EVENT["page.viewed"]).toBe(META_EVENT_PAGE_VIEW);
   });
 });

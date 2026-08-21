@@ -31,6 +31,7 @@ import { type BuildDelivererOptions, buildMetaCapiDeliverer } from "./deliverer.
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import {
   checkoutStartedMapper,
+  pageViewedMapper,
   paymentApprovedMapper,
   signupCompletedMapper,
   subscriptionRenewedMapper,
@@ -52,6 +53,7 @@ const MAPPERS: MapperMap<MetaCapiPayload> = Object.freeze({
   "user.identified": userIdentifiedMapper,
   "signup.completed": signupCompletedMapper,
   "subscription.renewed": subscriptionRenewedMapper,
+  "page.viewed": pageViewedMapper,
 });
 
 /** Options accepted by `createMetaCapiDescriptor`. */

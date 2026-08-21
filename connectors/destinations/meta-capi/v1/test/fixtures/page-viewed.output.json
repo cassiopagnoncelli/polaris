@@ -1,9 +1,9 @@
 {
-  "event_name": "CompleteRegistration",
+  "event_name": "PageView",
   "event_time": 1778760000,
-  "event_id": "evt_01HZZB1YJK0M2R8D8VYV4QH4ZP",
+  "event_id": "evt_01HZZE4YJK0M2R8D8VYV4QH7XR",
   "action_source": "website",
-  "event_source_url": "https://storefront.example/signup/complete",
+  "event_source_url": "https://storefront.example/checkout",
   "user_data": {
     "em": ["b5fc85e55755f9e0d030a10ab4429b6b2944855f9a0d60077fe832becbc41d72"],
     "ph": ["468a4b26753815290dc13ee82f453df24fd974c708542d1f3c497c7b4e7e4413"],
@@ -18,9 +18,5 @@
     "country": ["0b407281768f0e833afef47ed464b6571d01ca4d53c12ce5c51d1462f4ad6677"],
     "client_ip_address": "203.0.113.42",
     "client_user_agent": "Mozilla/5.0"
-  },
-  "custom_data": {
-    "currency": "USD",
-    "predicted_ltv": 99.99
   }
 }
