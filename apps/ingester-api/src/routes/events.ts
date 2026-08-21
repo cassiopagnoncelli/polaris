@@ -98,9 +98,37 @@ export function registerEventsRoutes(
       auth: request.auth,
       receivedAt: new Date(),
       requestId: request.id,
+      connection: {
+        // `request.socket.remoteAddress` rather than Fastify's `request.ip`.
+        // The two agree today only because `trustProxy` is unset; `request.ip`
+        // would silently change meaning the moment somebody set it, and the
+        // forwarding rules this feature needs are the explicit ones in
+        // `../ingest/client-context.ts` keyed on
+        // `POLARIS_INGEST_FORWARDED_TRUST_DEPTH`. Reading the socket keeps
+        // one place deciding.
+        peerAddress: request.socket.remoteAddress ?? null,
+        forwardedFor: headerText(request.headers["x-forwarded-for"]),
+        userAgent: headerText(request.headers["user-agent"]),
+      },
     });
 
     reply.status(status);
     return body;
   });
+}
+
+/**
+ * Flatten a raw header value to text.
+ *
+ * Node hands back an array when a header arrived more than once. Joining
+ * with a comma is exactly right for `X-Forwarded-For`, which IS a comma
+ * list — a repeated header and a single joined one carry the same chain,
+ * so the trust depth counts the same hops either way. `User-Agent` is a
+ * discard-duplicates header and never arrives as an array; the same helper
+ * covers it rather than a second one that would only differ in theory.
+ */
+function headerText(value: string | string[] | undefined): string | null {
+  if (value === undefined) return null;
+  const text = Array.isArray(value) ? value.join(",") : value;
+  return text.length === 0 ? null : text;
 }

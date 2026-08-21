@@ -23,6 +23,7 @@ import {
  * Label cardinality is bounded:
  *   - `polaris_ingest_redacted_pattern_total`: project × env × {pii_card,pii_secret} × pattern (~5)
  *   - `polaris_ingest_deprecated_schema_version_total`: event × schema_version (small)
+ *   - `polaris_ingest_client_context_total`: project × env × field (2) × outcome (5)
  *
  * Both stay well under any reasonable Prometheus alert threshold.
  *
@@ -72,6 +73,25 @@ export const METRIC_INGEST_VIOLATION_DROPPED_TOTAL = "polaris_ingest_violation_d
 export const METRIC_INGEST_PROJECT_CONFIG_INVALID_TOTAL =
   "polaris_ingest_project_config_invalid_total";
 export const METRIC_INGEST_PUBLISH_SUCCESS_TOTAL = "polaris_ingest_publish_success_total";
+
+/**
+ * What happened to `context.ip` / `context.user_agent` on a browser- or
+ * mobile-typed key: `stamped`, `producer`, `opted_out`, `unavailable` or
+ * `disabled` (see `../ingest/client-context.ts`).
+ *
+ * It counts non-stamps as well as stamps on purpose. A counter that only
+ * counted successes could not tell a misconfigured forwarded-trust-depth
+ * from an environment with no browser traffic — both read as a flat zero —
+ * and that is exactly the failure this feature can have while looking
+ * healthy.
+ *
+ * Backend, server and internal keys never reach it: the stamp does not
+ * apply to them, and counting every server-to-server event here would bury
+ * the rollout under a value that means "nothing to do".
+ *
+ * Cardinality is project × env × 2 fields × 5 outcomes.
+ */
+export const METRIC_INGEST_CLIENT_CONTEXT_TOTAL = "polaris_ingest_client_context_total";
 
 /**
  * Histogram base name for ingester accept latency (per-request wall-clock
@@ -174,6 +194,15 @@ export interface RateLimitLabels {
   readonly environment: string;
 }
 
+export interface ClientContextLabels {
+  readonly project_id: string;
+  readonly environment: string;
+  /** `ip` or `user_agent`. */
+  readonly field: string;
+  /** The `ClientContextOutcome` this event produced for that field. */
+  readonly outcome: string;
+}
+
 export interface PublishSuccessLabels {
   readonly project_id: string;
   readonly environment: string;
@@ -254,6 +283,10 @@ export class IngestMetrics {
 
   incrementRateLimitSkipped(labels: RateLimitLabels): void {
     this.incrementByLabels(METRIC_INGEST_RATE_LIMIT_SKIPPED_TOTAL, toLabelRecord(labels));
+  }
+
+  incrementClientContext(labels: ClientContextLabels): void {
+    this.incrementByLabels(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, toLabelRecord(labels));
   }
 
   incrementPublishSuccess(labels: PublishSuccessLabels): void {

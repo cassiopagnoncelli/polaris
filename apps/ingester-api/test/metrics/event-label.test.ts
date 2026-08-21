@@ -30,7 +30,7 @@ import { createLogger } from "@polaris/observability-logger";
 import { describe, expect, it } from "vitest";
 
 import { createIngestHandler } from "../../src/ingest/handler.js";
-import type { IngestRequestContext } from "../../src/ingest/types.js";
+import { type IngestRequestContext, NO_CLIENT_CONNECTION } from "../../src/ingest/types.js";
 import type { AuthenticatedRequestContext } from "../../src/auth/types.js";
 import { InMemoryDedupeStore } from "../../src/dedupe/index.js";
 import {
@@ -81,6 +81,7 @@ function build() {
     auth: AUTH,
     receivedAt: new Date("2026-08-19T10:00:00.000Z"),
     requestId: "req_test",
+    connection: NO_CLIENT_CONNECTION,
   };
   return { handler, metrics, producer, context };
 }

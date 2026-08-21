@@ -36,7 +36,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Polaris Ingestion\n\nMetrics from `apps/ingester-api/src/metrics/registry.ts`, exposed at the ingester `/metrics` endpoint and scraped by Prometheus (job `polaris-ingester`).\n\n**Reject reasons** are the closed set from `libs/spec/src/reason-codes.ts`:\n\n- `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope` \u2014 schema family\n- `forbidden_field_rejected` \u2014 forbidden-field policy reject tier\n- `duplicate` \u2014 short-window dedupe hit (event is _not_ counted as accepted)\n- `publish_failed` \u2014 accepted but RabbitMQ publish failed; see also `polaris_ingest_publish_failed_total` (MKEF1I9G) for the per-topic counter\n- `invalid_request` \u2014 malformed batch envelope\n\n**Accept-latency panel** uses `polaris_ingest_accept_duration_seconds` histogram (CSH8YAL6). The corresponding `_ms_last` gauge is intentionally retained during the transition for legacy panels; v2 dashboards consume the histogram directly via `histogram_quantile(...)`.\n\n**Body size histogram** is still a gap and tracked separately.",
+        "content": "# Polaris Ingestion\n\nMetrics from `apps/ingester-api/src/metrics/registry.ts`, exposed at the ingester `/metrics` endpoint and scraped by Prometheus (job `polaris-ingester`).\n\n**Reject reasons** are the closed set from `libs/spec/src/reason-codes.ts`:\n\n- `unsupported_schema_version`, `schema_version_sunset`, `unknown_event`, `invalid_properties`, `invalid_envelope` \u2014 schema family\n- `forbidden_field_rejected` \u2014 forbidden-field policy reject tier\n- `duplicate` \u2014 short-window dedupe hit (event is _not_ counted as accepted)\n- `publish_failed` \u2014 accepted but RabbitMQ publish failed; see also `polaris_ingest_publish_failed_total` (MKEF1I9G) for the per-topic counter\n- `invalid_request` \u2014 malformed batch envelope\n\n**Accept-latency panel** uses `polaris_ingest_accept_duration_seconds` histogram (CSH8YAL6). The corresponding `_ms_last` gauge is intentionally retained during the transition for legacy panels; v2 dashboards consume the histogram directly via `histogram_quantile(...)`.\n\n**Body size histogram** is still a gap and tracked separately.\n\n**Client context** (`polaris_ingest_client_context_total`, TDZJI) is the ingester filling `context.ip` / `context.user_agent` from the connection for browser- and mobile-typed keys. See the bottom panel; a rising `unavailable` means `POLARIS_INGEST_FORWARDED_TRUST_DEPTH` does not match the deployment.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -688,6 +688,59 @@
       "title": "Quarantine drops (5m, ops)",
       "type": "timeseries",
       "description": "Violations the ingester could not publish. The publish is fail-open by design \u2014 a broker outage must not become an ingestion outage \u2014 so this counter is the only evidence the governance loop has gone blind. Anything above zero means the panels above understate reality."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (field, outcome) (rate(polaris_ingest_client_context_total{environment=\"$environment\"}[5m]))",
+          "legendFormat": "{{field}} / {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Client context stamping (5m, ops)",
+      "type": "timeseries",
+      "description": "What happened to `context.ip` / `context.user_agent` on browser- and mobile-typed keys (TDZJI). `stamped` is the ingester filling the field from the connection; `producer` is a value the producer sent and the ingester kept (the relay path); `opted_out` is a producer sending `0.0.0.0`; `disabled` is POLARIS_INGEST_STAMP_CLIENT_CONTEXT off for this environment.\n\n`unavailable` is the one to watch. It means the field was eligible and empty and the connection offered nothing usable \u2014 almost always POLARIS_INGEST_FORWARDED_TRUST_DEPTH not matching the number of proxies actually in front, or a front end stripping the header. Without this series a misconfigured depth and an environment with no browser traffic look identical: a flat zero on `stamped`.\n\nBackend, server and internal keys never appear here \u2014 the stamp does not apply to them."
     }
   ],
   "refresh": "30s",
@@ -743,6 +796,6 @@
   "timezone": "utc",
   "title": "Polaris \u2014 Ingestion",
   "uid": "polaris-ingestion",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

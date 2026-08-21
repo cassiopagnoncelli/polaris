@@ -144,6 +144,54 @@ blocks below.
 | `POLARIS_INGEST_REDIS_KEY_PREFIX` | optional | `polaris:ingest:dedupe` |
 | `POLARIS_INGEST_REDIS_OP_TIMEOUT_MS` | optional | `50` |
 | `POLARIS_INGEST_MAX_BATCH_EVENTS` | optional | `1000` |
+| `POLARIS_INGEST_STAMP_CLIENT_CONTEXT` | optional | `true` |
+| `POLARIS_INGEST_FORWARDED_TRUST_DEPTH` | optional | `0` (the socket peer) |
+
+#### Client context: the address and the user agent
+
+A browser cannot know its own public address, so for **browser- and
+mobile-typed API keys** the ingester fills `context.ip` and
+`context.user_agent` from the connection when the producer sent `null`. A
+producer-sent value is always kept, which is what leaves a first-party relay
+(which stamped the address itself) untouched. Backend, server and internal
+keys are never stamped: a server's own address is noise.
+
+`POLARIS_INGEST_FORWARDED_TRUST_DEPTH` is how many trusted proxies sit in
+front of the ingester, and it must match the deployment:
+
+| Depth | Where the address comes from | Use it when |
+| --- | --- | --- |
+| `0` (default) | the socket peer; `X-Forwarded-For` is not read at all | nothing terminates in front of the ingester, or the front end is one you do not control |
+| `1` | the right-most `X-Forwarded-For` entry | exactly one trusted reverse proxy / load balancer |
+| `n` | the n-th `X-Forwarded-For` entry from the right | n trusted hops, all of which append |
+
+The chain is counted from the **right** because each proxy appends the
+address it accepted the connection from. A client that sends its own
+`X-Forwarded-For` only lengthens the untrusted prefix, so a spoofed hop
+cannot move the selection. Set the depth **too high** and nothing is
+stamped at all (a chain shorter than the depth selects nothing, on purpose);
+set it **too low** and you stamp your own proxy's address.
+
+Only `X-Forwarded-For` is honoured. `X-Real-IP` carries one address and no
+hop count, so no trust depth can be expressed against it; `Forwarded`
+(RFC 7239) is a list but its `for=` values may be quoted, port-suffixed or
+obfuscated, and nothing says which header wins when the two disagree. A
+front end that speaks only `X-Real-IP` should run at depth `0`.
+
+Two things turn collection off:
+
+- `POLARIS_INGEST_STAMP_CLIENT_CONTEXT=false` — per environment, for
+  operators who must not collect addresses there. It does **not** disable
+  the opt-out below, which only ever removes data.
+- A producer sending `context.ip: "0.0.0.0"` — Segment's convention for "do
+  not collect". Honoured on every key type, and normalised to `null` so the
+  sentinel never reaches the store.
+
+Watch the rollout on `polaris_ingest_client_context_total`
+(`field` = `ip` / `user_agent`, `outcome` = `stamped`, `producer`,
+`opted_out`, `unavailable`, `disabled`) — the "Client context stamping"
+panel on the Polaris — Ingestion dashboard. A rising `unavailable` is the
+signal that the trust depth does not match the deployment.
 
 #### Removed: the per-project override strings
 

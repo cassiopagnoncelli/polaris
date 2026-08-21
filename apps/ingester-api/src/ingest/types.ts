@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 
 import type { AuthenticatedRequestContext } from "../auth/api-key.js";
+import type { ClientConnection } from "./client-context.js";
 
 /**
  * Request body accepted by `POST /v1/events`.
@@ -35,7 +36,27 @@ export interface IngestRequestContext {
   readonly auth: AuthenticatedRequestContext;
   readonly receivedAt: Date;
   readonly requestId: string;
+  /**
+   * What the ingester observed about the connection itself — the socket
+   * peer, the forwarding chain, the user agent. Required, not optional: it
+   * is the only thing standing in for a browser that cannot know its own
+   * address, and a default of "no connection" would disable the stamp in
+   * production the moment a caller forgot to pass it. A caller with nothing
+   * to report says so explicitly with {@link NO_CLIENT_CONNECTION}.
+   */
+  readonly connection: ClientConnection;
 }
 
+/**
+ * The connection nothing was observed from. For tests and for any caller
+ * invoking the handler off a real request.
+ */
+export const NO_CLIENT_CONNECTION: ClientConnection = Object.freeze({
+  peerAddress: null,
+  forwardedFor: null,
+  userAgent: null,
+});
+
 export type { BatchAcceptedResult, BatchRejectedResult, BatchResponse };
+export type { ClientConnection };
 export { batchResponseSchema };

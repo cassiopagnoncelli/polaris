@@ -23,6 +23,7 @@ import { buildIngesterApp } from "../src/app.js";
 import { InMemoryDedupeStore } from "../src/dedupe/index.js";
 import { IngestMetrics } from "../src/metrics/registry.js";
 import {
+  buildEnvelopePayload,
   buildTestCatalog,
   InMemoryApiKeyRepository,
   RecordingProducer,
@@ -100,6 +101,49 @@ describe("ingester /metrics endpoint (P10-002)", () => {
       );
       // Trailing newline per the spec.
       expect(body.endsWith("\n")).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("exposes the client-context counter after a real browser-key ingest (TDZJI)", async () => {
+    // End-to-end through the app rather than the handler: the key is
+    // resolved by the auth path, so `auth.source.type` is the CONTROL
+    // PLANE's `web` — the value real traffic actually carries — and the
+    // route reads the address off the request rather than a test fixture.
+    const metrics = new IngestMetrics();
+    const { app } = await buildAppWithMetrics(metrics);
+    try {
+      const base = buildEnvelopePayload();
+      const ingest = await app.inject({
+        method: "POST",
+        url: "/v1/events",
+        headers: {
+          "x-polaris-api-key": "test-key-id.secret",
+          "user-agent": "Mozilla/5.0 (MetricsRouteTest)",
+        },
+        remoteAddress: "203.0.113.10",
+        payload: {
+          events: [
+            {
+              ...base,
+              context: { ...(base["context"] as Record<string, unknown>), ip: null, user_agent: null },
+            },
+          ],
+        },
+      });
+      expect(ingest.statusCode).toBe(200);
+
+      const res = await app.inject({ method: "GET", url: "/metrics" });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain("# TYPE polaris_ingest_client_context_total counter");
+      // Both fields stamped, off the injected socket and the real header.
+      expect(res.body).toMatch(
+        /polaris_ingest_client_context_total\{environment="production",field="ip",outcome="stamped",project_id="checkout"\} 1/,
+      );
+      expect(res.body).toMatch(
+        /polaris_ingest_client_context_total\{environment="production",field="user_agent",outcome="stamped",project_id="checkout"\} 1/,
+      );
     } finally {
       await app.close();
     }

@@ -65,16 +65,30 @@ export {
   type InvalidRequestBody,
 } from "./ingest/handler.js";
 export {
+  applyClientContext,
+  CLIENT_CONTEXT_OPT_OUT_IP,
+  type ClientConnection,
+  type ClientContextConfig,
+  type ClientContextField,
+  type ClientContextFieldOutcome,
+  type ClientContextOutcome,
+  type ClientContextResult,
+  selectClientAddress,
+} from "./ingest/client-context.js";
+export {
   type BatchRequest,
   batchRequestSchema,
   type IngestRequestContext,
+  NO_CLIENT_CONNECTION,
 } from "./ingest/types.js";
 export {
+  type ClientContextLabels,
   IngestMetrics,
   METRIC_INGEST_BATCH_ACCEPTED_TOTAL,
   METRIC_INGEST_BATCH_REJECTED_TOTAL,
   METRIC_INGEST_DEDUPE_HIT_TOTAL,
   METRIC_INGEST_DEDUPE_SKIPPED_TOTAL,
+  METRIC_INGEST_CLIENT_CONTEXT_TOTAL,
   METRIC_INGEST_DEPRECATED_SCHEMA_VERSION_TOTAL,
   METRIC_INGEST_REDACTED_PATTERN_TOTAL,
   type MetricSample,

@@ -24,6 +24,7 @@ import type { QuarantineCandidate, QuarantinePublisher } from "../../src/ingest/
 import {
   IngestMetrics,
   METRIC_INGEST_BATCH_ACCEPTED_TOTAL,
+  METRIC_INGEST_CLIENT_CONTEXT_TOTAL,
   METRIC_INGEST_BATCH_REJECTED_TOTAL,
   METRIC_INGEST_DEDUPE_HIT_TOTAL,
   METRIC_INGEST_DEDUPE_SKIPPED_TOTAL,
@@ -33,6 +34,8 @@ import {
 } from "../../src/metrics/registry.js";
 import { createPolicyResolver } from "../../src/policy/loader.js";
 import type { IngestProjectConfigLookup } from "../../src/project-config-lookup.js";
+import type { ClientConnection } from "../../src/ingest/client-context.js";
+import { NO_CLIENT_CONNECTION } from "../../src/ingest/types.js";
 
 import {
   buildEnvelopePayload,
@@ -104,11 +107,14 @@ function deps(
   };
 }
 
-function context(): Parameters<ReturnType<typeof createIngestHandler>["handle"]>[1] {
+function context(
+  connection: ClientConnection = NO_CLIENT_CONNECTION,
+): Parameters<ReturnType<typeof createIngestHandler>["handle"]>[1] {
   return {
     auth: AUTH,
     receivedAt: new Date("2026-05-12T10:00:00.000Z"),
     requestId: "test-request-id",
+    connection,
   };
 }
 
@@ -842,5 +848,309 @@ describe("the quarantine hook", () => {
       context(),
     );
     expect(response.body.rejected).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Client context stamped from the connection (TDZJI)
+// ---------------------------------------------------------------------------
+
+/** The same trusted tuple as {@link AUTH}, with a different source type. */
+function authOfType(type: string): AuthenticatedRequestContext {
+  return { ...AUTH, source: { ...AUTH.source, type } };
+}
+
+function contextFor(
+  auth: AuthenticatedRequestContext,
+  connection: ClientConnection,
+): Parameters<ReturnType<typeof createIngestHandler>["handle"]>[1] {
+  return {
+    auth,
+    receivedAt: new Date("2026-05-12T10:00:00.000Z"),
+    requestId: "test-request-id",
+    connection,
+  };
+}
+
+/** A payload with an empty `context` — what a browser can actually send. */
+function browserPayload(context: Record<string, unknown> = {}): Record<string, unknown> {
+  const base = buildEnvelopePayload();
+  return {
+    ...base,
+    context: { ...(base["context"] as Record<string, unknown>), ip: null, user_agent: null, ...context },
+  };
+}
+
+function publishedContext(producer: RecordingProducer): Record<string, unknown> {
+  const event = producer.publishes[0]?.event;
+  if (event === undefined) throw new Error("expected one published event");
+  return event["context"] as Record<string, unknown>;
+}
+
+function ingestConfigWith(overrides: Partial<IngesterConfig["ingest"]>): IngesterConfig["ingest"] {
+  return { ...testConfig.ingest, ...overrides };
+}
+
+describe("ingest handler — client context", () => {
+  it("stores a browser-key event with the connection address", async () => {
+    const { handler, producer, metrics } = deps();
+    const result = await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(
+        authOfType("browser"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
+      ),
+    );
+
+    expect(result.body.accepted).toHaveLength(1);
+    expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
+    expect(publishedContext(producer)["user_agent"]).toBe("Mozilla/5.0 (Test)");
+    expect(
+      metrics.getCounter(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, {
+        project_id: AUTH.projectId,
+        environment: AUTH.environment,
+        field: "ip",
+        outcome: "stamped",
+      }),
+    ).toBe(1);
+  });
+
+  it("leaves a backend-key event null", async () => {
+    const { handler, producer, metrics } = deps();
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(
+        authOfType("backend"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "curl/8" },
+      ),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBeNull();
+    expect(publishedContext(producer)["user_agent"]).toBeNull();
+    // The counter is scoped to the keys the feature applies to.
+    expect(
+      metrics.getSamples().filter((s) => s.name === METRIC_INGEST_CLIENT_CONTEXT_TOTAL),
+    ).toHaveLength(0);
+  });
+
+  it("keeps a request that already carries a non-null IP", async () => {
+    // The relay path: a first-party server observed the address and sent
+    // it, and the ingester must not overwrite what it stamped.
+    const { handler, producer, metrics } = deps();
+    await handler.handle(
+      { events: [browserPayload({ ip: "198.51.100.99", user_agent: "RelayAgent/2" })] },
+      contextFor(
+        authOfType("browser"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
+      ),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBe("198.51.100.99");
+    expect(publishedContext(producer)["user_agent"]).toBe("RelayAgent/2");
+    expect(
+      metrics.getCounter(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, {
+        project_id: AUTH.projectId,
+        environment: AUTH.environment,
+        field: "ip",
+        outcome: "producer",
+      }),
+    ).toBe(1);
+  });
+
+  it("stamps a key stored with the control plane's `web` source type", async () => {
+    // The regression this guards: `api_keys.source_type` is the control
+    // plane's enum (`web | backend | mobile | webhook | job`), not the
+    // envelope's (`browser | ...`), so every real browser key arrives here
+    // as `web`. Matching only `browser` stamps nothing, forever, silently.
+    const { handler, producer } = deps();
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(authOfType("web"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "Mozilla/5.0 (Test)",
+      }),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
+    expect(publishedContext(producer)["user_agent"]).toBe("Mozilla/5.0 (Test)");
+  });
+
+  it("stamps a mobile key exactly like a browser key", async () => {
+    const { handler, producer } = deps();
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(
+        authOfType("mobile"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "PolarisMobile/1.2" },
+      ),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
+    expect(publishedContext(producer)["user_agent"]).toBe("PolarisMobile/1.2");
+  });
+
+  it("reads the configured hop out of X-Forwarded-For, not the proxy", async () => {
+    const { handler, producer } = deps({ config: ingestConfigWith({ forwardedTrustDepth: 1 }) });
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(authOfType("browser"), {
+        peerAddress: "10.0.0.1",
+        // The head of the chain is whatever the client chose to send.
+        forwardedFor: "1.2.3.4, 203.0.113.10",
+        userAgent: null,
+      }),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
+  });
+
+  it("honours the 0.0.0.0 opt-out end to end", async () => {
+    const { handler, producer, metrics } = deps();
+    await handler.handle(
+      { events: [browserPayload({ ip: "0.0.0.0" })] },
+      contextFor(
+        authOfType("browser"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: null },
+      ),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBeNull();
+    expect(
+      metrics.getCounter(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, {
+        project_id: AUTH.projectId,
+        environment: AUTH.environment,
+        field: "ip",
+        outcome: "opted_out",
+      }),
+    ).toBe(1);
+  });
+
+  it("stamps nothing when the environment switch is off", async () => {
+    const { handler, producer } = deps({
+      config: ingestConfigWith({ stampClientContext: false }),
+    });
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(
+        authOfType("browser"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
+      ),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBeNull();
+    expect(publishedContext(producer)["user_agent"]).toBeNull();
+  });
+
+  it("stamps before policy and redaction, and leaves the redaction rules alone", async () => {
+    // The stamp runs first, so everything below judges the stamped event:
+    // the forbidden-field policy, the redaction pass, then catalog
+    // validation. What this pins is that the two do not interfere — the
+    // PAN in `referrer` is still redacted, and the address the ingester
+    // observed passes through the same pipeline untouched.
+    const { handler, producer } = deps();
+    await handler.handle(
+      {
+        events: [
+          {
+            ...browserPayload(),
+            properties: {
+              path: "/",
+              search: null,
+              title: "leak",
+              referrer: "https://example.com/?card=4111111111111111",
+            },
+          },
+        ],
+      },
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: null,
+      }),
+    );
+
+    const properties = producer.publishes[0]?.event["properties"] as Record<string, unknown>;
+    expect(properties["referrer"]).toBe("[REDACTED:pii_card]");
+    expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
+  });
+
+  it("stamps before validation, so a rejected event still records its outcome", async () => {
+    // The ordering proof that does not depend on a published envelope: a
+    // schema_version the catalog does not know is rejected before the
+    // event reaches the broker, and the client-context counter has still
+    // moved — which can only be true if the stamp ran first.
+    const { handler, metrics } = deps();
+    const result = await handler.handle(
+      { events: [{ ...browserPayload(), schema_version: 99 }] },
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: null,
+      }),
+    );
+
+    expect(result.body.rejected).toHaveLength(1);
+    expect(
+      metrics.getCounter(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, {
+        project_id: AUTH.projectId,
+        environment: AUTH.environment,
+        field: "ip",
+        outcome: "stamped",
+      }),
+    ).toBe(1);
+  });
+
+  it("keeps the stamped address out of the quarantine snapshot", async () => {
+    // The quarantine records the PRODUCER's raw payload. A
+    // platform-observed address must not reach a violation record, which
+    // is stored for governance rather than for delivery.
+    const seen: QuarantineCandidate[] = [];
+    const { handler } = deps({
+      quarantine: {
+        publish: async (candidates) => {
+          seen.push(...candidates);
+        },
+      },
+    });
+
+    await handler.handle(
+      { events: [{ ...browserPayload(), properties: { cvv: "123" } }] },
+      contextFor(
+        authOfType("browser"),
+        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
+      ),
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(seen).toHaveLength(1);
+    const raw = seen[0]?.raw as Record<string, unknown>;
+    expect((raw["context"] as Record<string, unknown>)["ip"]).toBeNull();
+  });
+
+  it("counts the miss when the trust depth does not match the deployment", async () => {
+    // Two proxies configured, one hop arriving. Nothing is stamped, and
+    // the counter is the only thing that says so.
+    const { handler, producer, metrics } = deps({
+      config: ingestConfigWith({ forwardedTrustDepth: 2 }),
+    });
+    await handler.handle(
+      { events: [browserPayload()] },
+      contextFor(authOfType("browser"), {
+        peerAddress: "10.0.0.1",
+        forwardedFor: "203.0.113.10",
+        userAgent: null,
+      }),
+    );
+
+    expect(publishedContext(producer)["ip"]).toBeNull();
+    expect(
+      metrics.getCounter(METRIC_INGEST_CLIENT_CONTEXT_TOTAL, {
+        project_id: AUTH.projectId,
+        environment: AUTH.environment,
+        field: "ip",
+        outcome: "unavailable",
+      }),
+    ).toBe(1);
   });
 });

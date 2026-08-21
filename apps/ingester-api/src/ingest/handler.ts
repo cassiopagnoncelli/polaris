@@ -34,6 +34,7 @@ import { DEDUPE_LEASE_TTL_SEC, type DedupeStore } from "../dedupe/index.js";
 import { eventLabel, type IngestMetrics } from "../metrics/registry.js";
 import type { PolicyResolver } from "../policy/loader.js";
 import type { IngestProjectConfigLookup } from "../project-config-lookup.js";
+import { applyClientContext } from "./client-context.js";
 import type { QuarantineCandidate, QuarantinePublisher } from "./quarantine.js";
 import { batchRequestSchema, type IngestRequestContext } from "./types.js";
 
@@ -225,7 +226,33 @@ async function processOneEvent(
   // we overwrite them from the API key tuple per `01-event-contract.md`
   // "Trusted Metadata". We never trust producer-supplied values for these
   // fields, even if they happen to match — overwriting is unconditional.
-  const stamped = stampTrustedMetadata(raw, context, auth);
+  const trusted = stampTrustedMetadata(raw, context, auth);
+
+  // ---- fill client context from the connection -------------------------
+  // A browser cannot know its own address, so for browser- and mobile-typed
+  // keys the ingester stands in for the producer's edge and fills the two
+  // fields the connection can answer. Producer-sent values are always kept,
+  // which is what leaves the relay path untouched. See ./client-context.ts.
+  //
+  // Placed HERE, and not later: everything below — the forbidden-field
+  // policy, redaction, catalog validation — then sees the stamped value and
+  // judges it exactly as it would a producer-sent one. The quarantine is
+  // unaffected by construction: it snapshots `raw`, so a platform-observed
+  // address never reaches a violation record.
+  const client = applyClientContext(trusted, context.connection, auth.source.type, {
+    stampClientContext: deps.ingestConfig.stampClientContext,
+    forwardedTrustDepth: deps.ingestConfig.forwardedTrustDepth,
+  });
+  const stamped = client.event;
+  for (const { field, outcome } of client.outcomes) {
+    deps.metrics.incrementClientContext({
+      project_id: auth.projectId,
+      environment: auth.environment,
+      field,
+      outcome,
+    });
+  }
+
   const eventIdHint = readStringField(raw, "event_id");
   // Read before validation, because the two rejections below happen before
   // validation. `eventLabel` is what keeps a producer-supplied string from

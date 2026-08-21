@@ -80,6 +80,8 @@ export const testConfig: IngesterConfig = {
     redisKeyPrefix: "polaris:ingest:dedupe",
     redisOpTimeoutMs: 50,
     maxBatchEvents: 1000,
+    stampClientContext: true,
+    forwardedTrustDepth: 0,
   },
   rateLimit: {
     // Tests default to unlimited (perApiKeyRps=0) so existing suites

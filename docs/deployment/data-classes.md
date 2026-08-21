@@ -15,6 +15,7 @@ the recovery procedure for each row of this table lives in
 | Class | What it means | Examples |
 | --- | --- | --- |
 | **PII** | Directly identifies a natural person. | (none in v1 platform tables; producer-supplied PII is application-defined and lives in `properties_json` / `context_json`) |
+| **platform-collected PII** | Observed by Polaris itself rather than sent by the producer. | `context.ip` and `context.user_agent` on events from browser- and mobile-typed API keys |
 | **pseudonymized PII** | Identifiers that map to a person only via an internal lookup. | `identity_links`, `analytics_raw.anonymous_id`, `analytics_raw.session_id`, `analytics_raw.customer_id` |
 | **sensitive** | Credentials, hashes, or secret material. Plaintext is never stored. | `api_keys.hash`, `operator_tokens.hash` |
 | **regulatory** | Held for compliance / audit obligations, not operational need. | `audit_records` |
@@ -50,6 +51,7 @@ the recovery procedure for each row of this table lives in
 | `profile.events` | RabbitMQ | 30 days | transport | Platform operator |
 | Retry topics | RabbitMQ | 7 days | transport | Destination owner |
 | DLQ topics | RabbitMQ | retain unresolved + 30 days after resolution | transport | Destination owner |
+| `context.ip` / `context.user_agent` (browser + mobile keys) | wherever the event goes — RabbitMQ, ClickHouse `analytics_raw`, destination payloads | follows the carrying event | platform-collected PII | Identity / privacy owner |
 | Ingress dedupe window | Redis | 15 min default; up to 24 h on opt-in | ephemeral | Platform operator |
 | Rate-limit counters | Redis | window-scoped TTL | ephemeral | Platform operator |
 | Processor ephemeral state | Redis | processor-specific TTL | ephemeral | Processor owner |
@@ -57,6 +59,32 @@ the recovery procedure for each row of this table lives in
 | Node SDK memory queue | Process memory | process lifetime (unless durable adapter configured) | ephemeral | SDK owner |
 | Per-project secret material | PostgreSQL (`destinations.secret_value`, `project_config`) | lifetime of the row | sensitive | Security operator |
 | App / deployment credentials | Process environment | deployment lifetime | sensitive | Platform operator |
+
+## Client context is collected by the platform, not only by the producer
+
+`context.ip` and `context.user_agent` used to be producer-supplied on every
+path: a first-party relay observed them and sent them, and a direct-from-browser
+event simply arrived without them. That is no longer true. The ingester fills
+both from the connection for **browser- and mobile-typed API keys** (TDZJI), so
+an address now enters the platform on a path where no application code chose to
+put it there.
+
+What that changes for this page:
+
+- the fields are **platform-collected PII**, and their retention is the
+  retention of whatever carries them — the `raw.events` stream (90 days),
+  `analytics_raw` (400 days), and any destination payload built from them. They
+  have no window of their own and no store of their own.
+- a deletion request that covers an event covers these fields with it; there is
+  nothing extra to erase.
+- `enrichment.geo` is **derived** from the address and is a separate row's
+  concern; the address itself is never hashed or stored separately by the geo
+  stage (see `sync/enrichment/geoip/v1/src/ip.ts`).
+
+Two controls turn it off, and both are documented in
+[config-reference](config-reference.md#client-context-the-address-and-the-user-agent):
+`POLARIS_INGEST_STAMP_CLIENT_CONTEXT=false` for a whole environment, and a
+producer sending `context.ip: "0.0.0.0"` for a single event.
 
 ## Owner glossary
 

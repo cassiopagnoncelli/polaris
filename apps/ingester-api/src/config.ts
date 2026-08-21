@@ -1,4 +1,5 @@
 import {
+  booleanFromStringSchema,
   composeConfigSchema,
   durationMsSchema,
   type HttpConfig,
@@ -80,6 +81,12 @@ export const authCacheEnvKeys = [
  *   POLARIS_INGEST_REDIS_KEY_PREFIX            "polaris:ingest:dedupe"
  *   POLARIS_INGEST_REDIS_OP_TIMEOUT_MS         (50)    short SETNX deadline
  *   POLARIS_INGEST_MAX_BATCH_EVENTS            (1000)
+ *   POLARIS_INGEST_STAMP_CLIENT_CONTEXT        (true)  stamp ip + user agent
+ *   POLARIS_INGEST_FORWARDED_TRUST_DEPTH       (0)     trusted proxies in front
+ *
+ * The last two govern the client-context stamp — see
+ * `src/ingest/client-context.ts` for the rules and
+ * `docs/deployment/config-reference.md` for the operator-facing rows.
  */
 export const ingestEnvSchema = z
   .object({
@@ -88,6 +95,11 @@ export const ingestEnvSchema = z
     POLARIS_INGEST_REDIS_KEY_PREFIX: z.string().min(1).default("polaris:ingest:dedupe"),
     POLARIS_INGEST_REDIS_OP_TIMEOUT_MS: durationMsSchema.default(50),
     POLARIS_INGEST_MAX_BATCH_EVENTS: positiveIntSchema.default(1000),
+    POLARIS_INGEST_STAMP_CLIENT_CONTEXT: booleanFromStringSchema.default(true),
+    // `min(0)` rather than `positiveIntSchema`: 0 is the DEFAULT and means
+    // "trust no proxy, use the socket peer", so the value this knob is most
+    // often set to is the one a positive-int schema would reject.
+    POLARIS_INGEST_FORWARDED_TRUST_DEPTH: z.coerce.number().int().min(0).default(0),
   })
   .superRefine((parsed, ctx) => {
     if (
@@ -108,6 +120,8 @@ export const ingestEnvSchema = z
       redisKeyPrefix: parsed["POLARIS_INGEST_REDIS_KEY_PREFIX"],
       redisOpTimeoutMs: parsed["POLARIS_INGEST_REDIS_OP_TIMEOUT_MS"],
       maxBatchEvents: parsed["POLARIS_INGEST_MAX_BATCH_EVENTS"],
+      stampClientContext: parsed["POLARIS_INGEST_STAMP_CLIENT_CONTEXT"],
+      forwardedTrustDepth: parsed["POLARIS_INGEST_FORWARDED_TRUST_DEPTH"],
     };
   });
 
@@ -122,6 +136,20 @@ export interface IngestConfig {
    */
   readonly redisOpTimeoutMs: number;
   readonly maxBatchEvents: number;
+  /**
+   * Whether the ingester fills `context.ip` / `context.user_agent` from the
+   * connection for browser- and mobile-typed keys. On by default; an
+   * operator who must not collect addresses in an environment turns it off
+   * there. It does not disable the `0.0.0.0` opt-out, which only ever
+   * removes data — see `src/ingest/client-context.ts`.
+   */
+  readonly stampClientContext: boolean;
+  /**
+   * How many trusted proxies sit in front of the ingester. `0` (the
+   * default) reads the socket peer and ignores `X-Forwarded-For` entirely;
+   * `n` takes the n-th address from the right of that chain.
+   */
+  readonly forwardedTrustDepth: number;
 }
 
 export const ingestEnvKeys = [
@@ -130,6 +158,8 @@ export const ingestEnvKeys = [
   "POLARIS_INGEST_REDIS_KEY_PREFIX",
   "POLARIS_INGEST_REDIS_OP_TIMEOUT_MS",
   "POLARIS_INGEST_MAX_BATCH_EVENTS",
+  "POLARIS_INGEST_STAMP_CLIENT_CONTEXT",
+  "POLARIS_INGEST_FORWARDED_TRUST_DEPTH",
 ] as const;
 
 /**

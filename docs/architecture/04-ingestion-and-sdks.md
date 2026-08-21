@@ -25,6 +25,7 @@ The ingester does:
 - source/project/environment resolution
 - schema validation
 - canonical envelope construction
+- client context (`context.ip`, `context.user_agent`) stamped from the connection for browser- and mobile-typed keys
 - event size limits
 - timestamp normalization
 - event ID enforcement
@@ -34,7 +35,7 @@ The ingester does:
 
 The ingester must not do:
 
-- GeoIP enrichment
+- GeoIP enrichment (it stamps the address; it never looks one up)
 - identity resolution
 - attribution logic
 - fraud scoring
@@ -42,6 +43,54 @@ The ingester must not do:
 - vendor API calls
 - business workflows
 - analytics aggregation
+
+## Client Context Stamped From the Connection
+
+A browser cannot know its own public address. Before this, every
+direct-from-browser event reached `enrichment.geo` with `ip: null`
+(`source: no_ip`) and reached Meta CAPI and TikTok without
+`client_ip_address` — the signal existed only on the relay path, where a
+first-party server observed the connection and stamped it. So the ingester
+now stands in for the producer's edge, exactly as Segment's API does, and
+fills `context.ip` and `context.user_agent` from the connection.
+
+The rules, in full:
+
+- **Only browser- and mobile-typed keys.** Eligibility reads the API key's
+  `source.type`, never the producer-sent one — neither kind of client can
+  know its own public address. `backend`, `server` and `internal` keys are
+  never stamped: a server's own address is noise, and a relay's address
+  stamped as the end user's would be worse than noise.
+- **A producer-sent value always wins.** The stamp only fills `null`. This
+  is what leaves the relay path untouched.
+- **`context.ip: "0.0.0.0"` means "do not collect"** — Segment's convention,
+  so a migrating producer keeps working. It is normalised to `null` on every
+  key type, so the sentinel never reaches the store where the geo stage
+  would treat it as an address to look up.
+- **One address selection, no parsing.** `X-Forwarded-For` with an explicit
+  trust depth, or the socket peer at depth `0`; the operator-facing rules
+  are in
+  [config-reference](../deployment/config-reference.md#client-context-the-address-and-the-user-agent).
+  No user-agent parsing, no lookups — ingress stays thin (ADR-0001).
+
+### Why this stays in `context` and does not move to `enrichment`
+
+`context` is what the **producer observed**; `enrichment` is what **Polaris
+derived**. Stamping the address here does not blur that line, because the
+ingester is acting as the producer's own edge — the same role the
+first-party relay plays on the other transport, writing into the same field.
+`enrichment.geo` is the derived thing, and it is derived *from* this field.
+
+This is worth stating plainly because the shape invites a later "fix":
+moving `context.ip` into `enrichment` would give the same value two homes
+depending on which transport delivered it, and every consumer would need to
+read both.
+
+The stamp runs before the forbidden-field policy and before catalog
+validation, so a stamped value is judged exactly like a producer-sent one —
+including its envelope limits. It does not reach the quarantine, which
+snapshots the producer's raw payload, so a platform-observed address never
+lands in a violation record.
 
 ## Batch Failure Behavior
 
