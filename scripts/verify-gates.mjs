@@ -311,6 +311,31 @@ const GATES = [
     assertInjected: () => read("libs/governance/package.json").includes(PACKAGE_NAME_CANARY),
   },
   {
+    // The mirror of the congruence gate above: law one says a library sits
+    // where its name says, law two says which way an import may point.
+    //
+    // Injected into `libs/bus` — infrastructure — as an import of
+    // `@polaris/governance`, which is domain. That is the wall the six-kind
+    // tree claims exists and the one nothing else in the repository checks:
+    // the edge typechecks, the tests stay green, and it reviews as ordinary
+    // work.
+    //
+    // A side-effect import, so the fault carries no symbol. The canaries above
+    // are assembled from fragments because `lint-dead-exports` and
+    // `lint-env-example` search `scripts/` and would read a literal here as a
+    // use; this gate cannot make that mistake in either direction — it scans
+    // the six-kind roots and not `scripts/`, and there is no symbol to see.
+    //
+    // `@polaris/bus -> @polaris/governance` is deliberately an edge the
+    // baseline does not carry. A banked edge would inject cleanly and prove
+    // nothing, which is the same shape as a blind gate.
+    name: "lint:import-direction",
+    command: "node scripts/lint-import-direction.mjs",
+    files: [SCRATCH],
+    inject: () => append(SCRATCH, '\nimport "@polaris/governance";\n'),
+    assertInjected: () => read(SCRATCH).includes('import "@polaris/governance"'),
+  },
+  {
     // Injected into the blueprint's own manifest rather than into a fixture:
     // the check reads DECLARED specifiers, and the fault as it actually
     // occurs is a specifier a move left behind. `01-storefront` is the only

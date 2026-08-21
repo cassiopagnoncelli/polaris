@@ -1,0 +1,25 @@
+{
+  "note": "Frozen debt: edges ADR-0007's matrix forbids and the tree still has. Shrink it; do not grow it. Six clusters, and they are not equally hard. (1) `libs/delivery/*` reaching for infrastructure is nine of the twenty, and `delivery-host` is seven of those: it is called host because it IS a shell -- bus, two persistence readers, both loggers and service-bootstrap -- wearing a domain badge. P9J7X puts vendors behind the `libs/delivery` port and will move some of this; the host's own infrastructure edges want a card of their own, and the honest question that card answers is whether `delivery/host` belongs in `libs/` at all rather than beside the units it boots. (2) `@polaris/governance -> @polaris/observability-logger` is one import in one file (`src/metrics.ts`) and is the cheapest entry here to clear -- a domain library that emits its own telemetry is the textbook case for taking the emitter as an argument. (3) The two `libs/archive` edges are smaller than the card that filed them assumed. `archive-writer -> bus` is a TYPE-ONLY import of `Checkpoint` and `CheckpointStore`; `archive-replay -> runtime-environments` is replay's only forbidden edge, and replay does not import the bus at all. The 'replay re-emits onto streams, so give it a port' follow-up has no code under it today: whatever re-emits lives outside this library. (4) The three `@polaris/spec` edges are the kernel not being dependency-free. `runtime-environments` is a layering violation on any reading and should go. `yaml` and `zod` are the live question ADR-0007 does not settle -- whether a schema kernel may import the library it expresses schemas in -- and they are banked HERE, visibly, rather than exempted in the lint, because an ALLOW entry would answer it quietly. If review answers it, the fix is an allow-list in `lint-import-direction.mjs` and these two lines come out. (5) `polaris-cli` imports four `async/` processors to register and emit their work. The CLI wants the registration and emitter logic, not the runnable; those belong in `libs/engage` (Q7COB) and `libs/warehouse`, and this cluster is the clearest evidence for those carve-outs. (6) `sync-enrichment-runtime-v1` imports its geoip and traits siblings, which is one unit composing two others -- the shape 'nothing imports a unit' exists to name. It clears when the enrichment physics moves into a library and the three units stop being a hierarchy.",
+  "edges": [
+    "@polaris/archive-replay -> @polaris/runtime-environments",
+    "@polaris/archive-writer -> @polaris/bus",
+    "@polaris/delivery-destinations -> @polaris/bus",
+    "@polaris/delivery-destinations -> @polaris/observability-logger",
+    "@polaris/delivery-destinations -> @polaris/persistence-postgres",
+    "@polaris/delivery-host -> @polaris/bus",
+    "@polaris/delivery-host -> @polaris/observability-logger",
+    "@polaris/delivery-host -> @polaris/observability-metrics",
+    "@polaris/delivery-host -> @polaris/persistence-postgres",
+    "@polaris/delivery-host -> @polaris/runtime-service-bootstrap",
+    "@polaris/governance -> @polaris/observability-logger",
+    "@polaris/polaris-cli -> @polaris/processor-audiences-v1",
+    "@polaris/polaris-cli -> @polaris/processor-journey-orchestrator-v1",
+    "@polaris/polaris-cli -> @polaris/processor-reverse-etl-v1",
+    "@polaris/polaris-cli -> @polaris/processor-traits-v1",
+    "@polaris/spec -> @polaris/runtime-environments",
+    "@polaris/spec -> yaml",
+    "@polaris/spec -> zod",
+    "@polaris/sync-enrichment-runtime-v1 -> @polaris/sync-enrichment-geoip-v1",
+    "@polaris/sync-enrichment-runtime-v1 -> @polaris/sync-enrichment-traits-v1"
+  ]
+}
