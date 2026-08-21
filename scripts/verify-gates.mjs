@@ -31,7 +31,13 @@
  *
  * Refuses to run on a dirty tree, because restoring is `git checkout`.
  *
- *   node scripts/verify-gates.mjs
+ * Three rosters. The default needs nothing but the checkout, and static
+ * analysis runs it on every push. The other two need something a runner has
+ * to be given, and each is opted into by the workflow that has it:
+ *
+ *   node scripts/verify-gates.mjs                    # the default roster
+ *   node scripts/verify-gates.mjs --with-services    # + a live ClickHouse
+ *   node scripts/verify-gates.mjs --with-docker      # + a Docker daemon
  */
 
 import { execSync } from "node:child_process";
@@ -86,6 +92,22 @@ const CONFIG_KEY_CANARY = `unread_${"canary"}_key`;
  * the gate blind when it is merely being asked the wrong question.
  */
 const DOCKER_CONTEXT_CANARY = "definitions";
+
+/**
+ * A context path no build provides.
+ *
+ * Written as a literal, like `DOCKER_CONTEXT_CANARY` and for the same reason:
+ * `lint-docker-context` reads `.dockerignore` and Dockerfiles and nothing
+ * else, so a mention here cannot be mistaken for a use.
+ *
+ * It is deliberately a path that NO lint can object to. `.dockerignore` does
+ * not prune it -- there is nothing to prune, the path does not exist -- so
+ * `lint-docker-context` passes on the injected file and only the build itself
+ * can notice. That is the whole case for building images in CI: the static
+ * checks around Docker answer questions about the text, and a Dockerfile can
+ * satisfy every one of them and still not build.
+ */
+const DOCKER_BUILD_CANARY = "context-canary-xyz-does-not-exist";
 
 /** A column no ClickHouse table has. Assembled, like every canary here. */
 const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
@@ -401,6 +423,46 @@ const SERVICE_GATES = [
   },
 ];
 
+/**
+ * Gates that need a working Docker daemon, and so cannot run in static
+ * analysis either.
+ *
+ * Separate from SERVICE_GATES rather than merged with it because the two opt
+ * in from different workflows and cost different things: a compose stack in
+ * `integration.yml`, an image build in `images.yml`. `--with-docker` opts in.
+ *
+ * One target rather than the whole per-push set. The set is what CI runs; a
+ * single image is what proves the command goes red, and injecting into a
+ * Dockerfile changes the build context, so every OTHER image in the set would
+ * reinstall the workspace from scratch to reach a verdict this already has.
+ */
+const DOCKER_GATES = [
+  {
+    // The fault is injected BEFORE `COPY . .`, which is deliberate and not
+    // merely thrifty. Everything after that instruction depends on the build
+    // context, and the injection changes the context -- so a fault planted
+    // later would make the build reinstall the entire workspace before
+    // reaching it, turning a seconds-long proof into a minutes-long one.
+    name: "docker:build (needs Docker)",
+    command: "node scripts/docker-build.mjs sync-identity",
+    files: ["sync/identity/resolver/v1/Dockerfile"],
+    inject: () => {
+      const file = "sync/identity/resolver/v1/Dockerfile";
+      write(
+        file,
+        read(file).replace(
+          "WORKDIR /workspace\n\nCOPY . .",
+          `WORKDIR /workspace\n\nCOPY ${DOCKER_BUILD_CANARY} /tmp/canary\n\nCOPY . .`,
+        ),
+      );
+    },
+    assertInjected: () =>
+      read("sync/identity/resolver/v1/Dockerfile").includes(
+        `COPY ${DOCKER_BUILD_CANARY} /tmp/canary`,
+      ),
+  },
+];
+
 function restore(files) {
   sh(`git checkout -- ${files.join(" ")}`);
 }
@@ -413,8 +475,11 @@ function main() {
     return;
   }
 
-  const withServices = process.argv.includes("--with-services");
-  const roster = withServices ? [...GATES, ...SERVICE_GATES] : GATES;
+  const roster = [
+    ...GATES,
+    ...(process.argv.includes("--with-services") ? SERVICE_GATES : []),
+    ...(process.argv.includes("--with-docker") ? DOCKER_GATES : []),
+  ];
 
   const blind = [];
   const unlanded = [];

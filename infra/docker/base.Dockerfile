@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 #
-# Polaris service base Dockerfile (canonical template, reference only).
+# Polaris service base Dockerfile (canonical template).
 #
 # This file is the authoritative shape for every per-service Dockerfile in
 # the repository (apps/*/Dockerfile, processors/*/v*/Dockerfile,
@@ -13,7 +13,22 @@
 #   - The "boring and explicit" rule from
 #     docs/architecture/09-engineering-standards.md is honored.
 #
-# This template is reference material — Docker is not asked to build it.
+# No service is built FROM this file — the per-service Dockerfiles copy its
+# shape rather than chain to it — but Docker is asked to build it, on every
+# push, as part of the representative set in `.github/workflows/images.yml`.
+#
+# It was reference material until card `5OV81`, and that is exactly how it
+# drifted: `719a9d2` took a stale pnpm pin out of the seventeen files this one
+# governs and missed this one, leaving the canonical shape a major version
+# behind the shapes copied from it, with nothing able to say so. A template
+# nothing builds is a template nothing checks.
+#
+# Building it needs a real `SERVICE_FILTER`; the default below matches no
+# package. `scripts/docker-build.mjs` supplies one, and
+# `scripts/__tests__/docker-build.test.ts` holds it against the package that
+# actually ships, so a rename cannot quietly turn this build red for a reason
+# that has nothing to do with the template.
+#
 # When the shape changes (base image bump, install pattern, healthcheck
 # convention), every per-service Dockerfile must be updated in the same
 # commit. Drift between this template and the per-service files is the main

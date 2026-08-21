@@ -1,6 +1,6 @@
 # CI
 
-Polaris uses GitHub Actions. Two workflow files cover the full quality gate
+Polaris uses GitHub Actions. Three workflow files cover the full quality gate
 set documented in
 [`09-engineering-standards.md` "CI Quality Gates"](../architecture/09-engineering-standards.md#ci-quality-gates)
 plus the ClickHouse access enforcement from
@@ -10,6 +10,7 @@ plus the ClickHouse access enforcement from
 | ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)           | every PR and push to `main`, manual dispatch         | typecheck, lint (Biome + ClickHouse import rule + raw-NUL check), format check, tests, build, migration smoke |
 | [`.github/workflows/integration.yml`](../../.github/workflows/integration.yml) | schedule (06:00 UTC), manual dispatch, `integration` PR label | Docker-backed checks against Postgres, Redis, RabbitMQ, ClickHouse                         |
+| [`.github/workflows/images.yml`](../../.github/workflows/images.yml)           | every PR and push to `main` (representative set); schedule (04:00 UTC) for all eighteen | builds production images, so an image that cannot build fails a gate                        |
 
 The integration workflow is opt-in on PRs because the service matrix is slow
 and still stabilising. Once the vertical-slice smoke test is reliable
@@ -19,9 +20,9 @@ the per-service jobs may graduate to required gates.
 
 ## Integration tests (broker + database)
 
-``bash
+```bash
 pnpm test:integration
-``
+```
 
 Runs `tests/integration/` against a live RabbitMQ and PostgreSQL. Skipped
 unless `POLARIS_INTEGRATION=1`, so the default `pnpm test` on every PR
@@ -36,9 +37,9 @@ migration, one of which could only be reproduced against a real broker.
 
 Locally:
 
-``bash
+```bash
 docker compose up -d --wait postgres rabbitmq && pnpm db:migrate && pnpm test:integration
-``
+```
 
 The suite declares its own test-scoped topology and deletes it afterwards,
 so it is safe against a shared dev broker.
@@ -60,6 +61,9 @@ Every PR must pass these jobs in `ci.yml`:
   disposable PostgreSQL 17 service via `pnpm db:migrate`. dbmate does not
   ship a true dry-run mode, so a smoke `up` is the lightest validation
   available.
+- **`representative`** (in `images.yml`) — builds three of the eighteen
+  images and then proves the build can fail. See
+  [Image builds](#image-builds) for why it is three and not eighteen.
 
 ## ClickHouse import-restriction check
 
@@ -93,7 +97,7 @@ and asserts the violation set. The test runs as part of `pnpm test` via
 
 To verify a violation is caught locally:
 
-``bash
+```bash
 # Drop a file outside libs/persistence/clickhouse/ that imports the client...
 echo 'import "@clickhouse/client";' > apps/ingester-api/src/_oops.ts
 
@@ -102,7 +106,7 @@ pnpm lint:clickhouse-imports
 
 # Clean up
 rm apps/ingester-api/src/_oops.ts
-``
+```
 
 ## Raw-NUL-byte check
 
@@ -137,7 +141,7 @@ covers it via `pnpm test:scripts`.
 
 To verify a violation is caught locally:
 
-``bash
+```bash
 # printf expands \0 into a real NUL byte.
 printf 'const k = "a\0b";\n' > libs/persistence/postgres/src/_oops.ts
 
@@ -146,7 +150,7 @@ pnpm lint:nul-bytes
 
 # Clean up
 rm libs/persistence/postgres/src/_oops.ts
-``
+```
 
 ## The declared-but-unread project-config key check
 
@@ -182,16 +186,141 @@ To verify a violation is caught locally, add an unread key to any
 `project-config.ts`, run `pnpm config-schemas`, then
 `pnpm lint:project-config-keys`.
 
+## Image builds
+
+[`images.yml`](../../.github/workflows/images.yml) builds production images.
+Nothing in CI did until card `5OV81`, and the price of that absence is on the
+record twice:
+
+- A `.dockerignore` line pruned `definitions/`, which two runtime stages copy
+  out of their builder. Both images were unbuildable for six days.
+- pnpm v10 made a non-injected `pnpm deploy` an error, and `pnpm deploy` is the
+  last instruction of every builder stage here. All seventeen images and the
+  template were unbuildable for months.
+
+Neither showed up as a red build. Each was found by a card that ran
+`pnpm docker:build` while doing something else.
+
+The static checks around Docker — `lint-docker-context`, `lint-docker-deploy` —
+were each written after one of those incidents, and each asks a question about
+the *text* of a Dockerfile. A Dockerfile can satisfy every one of them and
+still not build. Only a build settles that.
+
+### Why three per push and not eighteen
+
+| Roster           | Trigger                        | Images | Wall clock |
+| ---------------- | ------------------------------ | ------ | ---------- |
+| `representative` | every PR and push to `main`    | 3      | **1 min 50 s** |
+| `full`           | nightly, 04:00 UTC             | 18     | **12 min 35 s** |
+
+Eighteen images cost under seven times three, not six times, because the
+seventeen units present byte-identical instructions over one build context up
+to and including `pnpm install --frozen-lockfile`. The first image pays for
+that layer (~45 s) and the rest reuse it, landing at 16–20 s each. Three
+destinations are the exception at 100–137 s — their `pnpm deploy --prod` pulls
+vendor SDKs the shared layer does not contain. The template shares nothing: its
+`ARG` lines fork the layer chain at the second instruction, so it installs the
+workspace again.
+
+Eighteen on every push buys little over three: both defects above lived in the
+base image or the shared build context, which the representative set reaches on
+the first push rather than the next night. The nightly roster is what covers
+the fifteen the per-push set does not touch.
+
+The per-push set is not a sample of the tree, it is a cover of the ways a unit
+can depend on the shared context:
+
+| Target                 | Why it is in the set                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `sync-identity`        | copies `definitions/projects` out of the builder into its runtime stage — one half of the `.dockerignore` fault |
+| `journey-orchestrator` | depends on the `definitions/*` workspace packages with `workspace:*` — the other half, in the builder rather than the runtime stage |
+| `base`                 | the canonical template the other seventeen are copied from, and the file a fix once missed |
+
+The membership lives in `scripts/docker-build.mjs`, not in the workflow, so
+that `--set representative` runs locally exactly what CI runs. A test holds the
+set to the shape above: dropping the async unit would otherwise narrow the gate
+silently and leave the green tick unchanged.
+
+The three apps (`ingester-api`, `control-plane-api`, `polaris-cli`) build
+nightly only. Widening the per-push set is a one-line edit to `REPRESENTATIVE`.
+
+### The gate proves it can fail
+
+A build gate is the check that most easily becomes decorative: `docker build`
+against a healthy tree looks identical whether the step is wired up or has
+quietly stopped running anything. So `images.yml` breaks a Dockerfile on every
+push, requires the build to fail, and restores it — the same harness, and the
+same rule, as `verify:gates`:
+
+```bash
+node scripts/verify-gates.mjs --with-docker
+```
+
+The injected fault is a `COPY` of a context path that does not exist, placed
+ahead of `COPY . .`. Both halves of that are deliberate. No lint can object to
+it — `.dockerignore` does not prune the path, there is nothing to prune — so
+only the build itself can notice, which is the case for building images at all.
+And a fault planted after `COPY . .` would make the build reinstall the whole
+workspace before reaching it, turning a seconds-long proof into a minutes-long
+one, because injecting into a Dockerfile changes the build context.
+
+### Running it locally
+
+```bash
+pnpm docker:build --set representative   # what every push builds
+pnpm docker:build                        # all eighteen, what the nightly builds
+pnpm docker:build --list                 # every target; * marks the per-push set
+pnpm docker:build sync-identity          # one image
+```
+
+`pnpm docker:build` needs no `pnpm install` first. Each image installs the
+workspace inside its own builder stage from the lockfile in the build context,
+which is also why `images.yml` has no Node dependency cache: a build gate whose
+install layer is restored from a cache stops noticing the class of break that
+made it necessary.
+
+### How these figures were measured
+
+Both rosters were built from a **cold build cache** — pruned immediately
+before each — on an isolated `docker-container` buildx builder, so the numbers
+are what a runner with no warm cache pays. Reproduce with:
+
+```bash
+docker buildx create --name measure --driver docker-container
+docker buildx prune -af --builder measure
+BUILDX_BUILDER=measure pnpm docker:build --set representative
+```
+
+Four things to know before trusting the numbers:
+
+- **The reference machine is faster than a runner.** 10 cores, Docker Desktop
+  on `linux/arm64`. GitHub's `ubuntu-latest` has fewer; expect longer, which is
+  why both jobs carry timeouts far above the measurement rather than near it.
+- **Registry download time is included and dominates the outliers.** A first
+  attempt at this measurement recorded a 196 s install where a later run
+  recorded 11 s, entirely from npm registry stalls. Treat the per-image spread
+  as network noise, not as a property of the image.
+- **No image export.** The `docker-container` driver leaves the result in the
+  build cache unless asked to load it, so the figures cover building an image
+  and not writing it to a local image store. CI asserts buildability and
+  publishes nothing, which is the same shape.
+- **The tree must not change during a run.** Every Dockerfile does `COPY . .`,
+  so editing any file that `.dockerignore` does not prune invalidates the
+  shared install layer mid-roster and inflates the total. The first attempt at
+  this measurement was spoiled exactly that way.
+
+
+
 ## Running the same checks locally
 
-``bash
+```bash
 pnpm install
 pnpm build           # produces dist/ for every package — typecheck and tests need this
 pnpm typecheck
 pnpm lint            # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
 pnpm format:check
 pnpm test            # workspace Vitest + scripts/ Vitest
-``
+```
 
 The Makefile target `make ci` wraps the linter, typecheck, and test
 trio (see [`Makefile`](../../Makefile)) but does not run the build
@@ -200,11 +329,11 @@ mirror CI exactly.
 
 For the migration smoke step, run the local compose stack first:
 
-``bash
+```bash
 docker compose up -d postgres
 pnpm db:migrate
 pnpm db:status
-``
+```
 
 ## Integration-tier checks
 
@@ -231,21 +360,29 @@ against the branch you want to test. No label required.
 The same services live in `docker-compose.yml`. Bring them up with the
 Makefile target:
 
-``bash
+```bash
 make up                          # docker compose up -d --wait
 pnpm db:migrate                  # apply PostgreSQL migrations
 # (real integration test commands land with P4-002 / P5-001)
 make down                        # stop containers
 make nuke                        # stop and wipe volumes
-``
+```
 
 ## Caching
 
-Both workflows use `actions/setup-node`'s built-in `cache: pnpm`,
-which keys on `pnpm-lock.yaml`. The cache restores the pnpm content-
-addressable store; `pnpm install --frozen-lockfile` then links into
-each workspace's `node_modules` from that store. The cache is shared
-across workflow runs on the same branch family.
+`ci.yml` and `integration.yml` use `actions/setup-node`'s built-in
+`cache: pnpm`, which keys on `pnpm-lock.yaml`. The cache restores the
+pnpm content-addressable store; `pnpm install --frozen-lockfile` then
+links into each workspace's `node_modules` from that store. The cache
+is shared across workflow runs on the same branch family.
+
+`images.yml` has no such step and installs nothing on the runner. Its
+only inputs are the checkout and two `.mjs` scripts that import nothing;
+each image installs the workspace inside its own builder stage, from the
+lockfile in the build context. Nothing there is cached between runs,
+which is deliberate — a build gate whose install layer is restored from
+a cache is a gate that stops noticing the class of break that made it
+necessary.
 
 If a CI run mysteriously fails on a fresh install, suspect the cache
 first: re-run the job with **Re-run all jobs with debug logging**
@@ -254,9 +391,23 @@ enabled, which clears the cache for that run.
 ## Node and pnpm versions
 
 - Node major: **22** (current Active LTS, matches the `engines.node`
-  field in [`package.json`](../../package.json)).
-- pnpm: **10.30.0** (matches the `packageManager` field in
-  [`package.json`](../../package.json)).
+  field in [`package.json`](../../package.json)). Pinned via the
+  `NODE_VERSION` env var at the top of each workflow file.
+- pnpm: **not pinned anywhere but
+  [`package.json`](../../package.json)'s `packageManager` field**, which
+  is the copy corepack and every local `pnpm` invocation already read.
 
-Both are pinned via the `NODE_VERSION` / `PNPM_VERSION` env vars at the
-top of each workflow file so version bumps are a one-line change.
+There is no `PNPM_VERSION`, and adding one back would reintroduce a
+seven-day outage. `pnpm/action-setup` refuses to run when its `version`
+input and `packageManager` disagree, and it refuses at the install step —
+before any gate runs, so every job reports a failure that says nothing
+about the code. That is what happened when `a61bf2f` bumped
+`packageManager` and left the workflow's copy behind: 60 consecutive red
+runs, during which typecheck, lint, format and the whole test suite went
+unenforced while each commit claimed them.
+
+The Dockerfiles learned the same lesson separately. None of the eighteen
+pins a pnpm version either — `scripts/lint-docker-deploy.mjs` fails the
+build if one starts to — because a pin in a Dockerfile is a third copy of
+the number, and the template outlived the fix that removed the other
+seventeen.

@@ -12,10 +12,12 @@
  * surface on /health at runtime via the shared service bootstrap.
  *
  * Usage:
- *   node scripts/docker-build.mjs                 # build every service
- *   node scripts/docker-build.mjs ingester-api    # build a single service
+ *   node scripts/docker-build.mjs                 # build all eighteen targets
+ *   node scripts/docker-build.mjs ingester-api    # build a single target
+ *   node scripts/docker-build.mjs --set representative
+ *                                                 # the per-push roster
  *   node scripts/docker-build.mjs --tag v1.2.3    # override image tag
- *   node scripts/docker-build.mjs --list          # list service targets
+ *   node scripts/docker-build.mjs --list          # list build targets
  *   node scripts/docker-build.mjs --help
  *
  * The `pnpm docker:build` script in the root package.json wires this in.
@@ -146,6 +148,76 @@ export const services = [
 ];
 
 /**
+ * The canonical template, built like a service but shipping nothing.
+ *
+ * `infra/docker/base.Dockerfile` is the file every one of the seventeen above
+ * is copied from, and its header says Docker is not asked to build it. That
+ * sentence is why it drifted: `719a9d2` took the stale pnpm pin out of the
+ * seventeen and missed the template, so the file designated as the shape of
+ * every image sat a major version behind the images it governs, and nothing
+ * could say so because nothing built it.
+ *
+ * Building it needs a real `SERVICE_FILTER` — the default is
+ * `@polaris/EXAMPLE`, which matches no package, so an unparameterised build
+ * fails at `pnpm deploy` for a reason that says nothing about the template.
+ * A destination is the cheapest real closure in the tree, and it makes the
+ * per-push set cover a third stage rather than repeat one of the other two.
+ *
+ * The image ships nowhere. `base-template` is named so that anything found
+ * running it is a mistake, not a deployment.
+ */
+export const templates = [
+  {
+    name: "base",
+    dockerfile: "infra/docker/base.Dockerfile",
+    image: "polaris/base-template",
+    buildArgs: {
+      SERVICE_FILTER: "@polaris/consumer-webhook-sink-v1",
+      SERVICE_ENTRY: "main.js",
+    },
+  },
+];
+
+/**
+ * Every buildable target: the seventeen images that ship, plus the template.
+ *
+ * Eighteen is the number `scripts/lint-docker-deploy.mjs` already counts, and
+ * it counts the template among them for the same reason this list does.
+ */
+export const targets = [...services, ...templates];
+
+/**
+ * The per-push roster: one sync unit, one async unit, the template.
+ *
+ * Recorded here rather than in the workflow so that CI and a developer run
+ * the same set by the same name, and so the reasoning for each member sits
+ * with the membership.
+ *
+ * Both defects this gate exists for lived in the shared build context or the
+ * base image, so the set is chosen to cover the ways a unit can depend on
+ * that context rather than to sample the tree evenly:
+ *
+ *   - `sync-identity` COPIES `definitions/projects` out of the builder into
+ *     its runtime stage. That is the half of the `.dockerignore` fault that
+ *     broke it and `sync-enrichment` for six days.
+ *   - `journey-orchestrator` is the async unit that depends on the
+ *     `definitions/*` workspace packages with `workspace:*`, which is the
+ *     other half of the same fault — the builder cannot compile without the
+ *     directory, whatever the runtime stage copies.
+ *   - `base` is the template the other seventeen are copied from.
+ *
+ * The three apps build nightly only. That is the granularity the decision on
+ * `5OV81` chose; widening it is a one-line edit here.
+ */
+export const REPRESENTATIVE = ["sync-identity", "journey-orchestrator", "base"];
+
+/** Named rosters selectable with `--set`. */
+export const SETS = {
+  representative: REPRESENTATIVE,
+  full: targets.map((t) => t.name),
+};
+
+/**
  * Run a synchronous shell command and capture its trimmed stdout, returning
  * the fallback string when the command fails. Used to gather optional build
  * metadata (git sha, version) without making the script brittle.
@@ -170,14 +242,18 @@ function printHelp() {
       "",
       "Options:",
       "  --tag <tag>     image tag suffix (default: 'dev' or POLARIS_BUILD_VERSION)",
+      "  --set <name>    build a named roster: " + Object.keys(SETS).join(", "),
       "  --no-cache      pass --no-cache to docker build",
       "  --pull          pass --pull to docker build (refresh base images)",
-      "  --list          list service targets and exit",
+      "  --list          list build targets and exit",
       "  --dry-run       print the docker build commands without running them",
       "  --help          print this message",
       "",
-      "Services:",
-      ...services.map((s) => `  ${s.name.padEnd(22)}  ${s.dockerfile}`),
+      "Targets (* = in the representative set, built on every push):",
+      ...targets.map(
+        (t) =>
+          `  ${REPRESENTATIVE.includes(t.name) ? "*" : " "} ${t.name.padEnd(22)}  ${t.dockerfile}`,
+      ),
       "",
     ].join("\n"),
   );
@@ -186,6 +262,7 @@ function printHelp() {
 function parseArgs(argv) {
   const args = {
     tag: undefined,
+    set: /** @type {string | undefined} */ (undefined),
     noCache: false,
     pull: false,
     list: false,
@@ -216,6 +293,10 @@ function parseArgs(argv) {
         i += 1;
         args.tag = argv[i];
         break;
+      case "--set":
+        i += 1;
+        args.set = argv[i];
+        break;
       default:
         if (arg?.startsWith("--")) {
           process.stderr.write(`unknown flag: ${arg}\n`);
@@ -227,13 +308,32 @@ function parseArgs(argv) {
   return args;
 }
 
-function selectServices(targets) {
-  if (targets.length === 0) return services;
+/**
+ * Resolve the roster to build.
+ *
+ * Named targets and `--set` resolve against the same list, so `--set
+ * representative` and naming its three members are the same build. An unknown
+ * set name exits rather than falling back to everything: a typo that quietly
+ * built all eighteen would be an expensive surprise, and one that quietly
+ * built none would be a green tick for no work.
+ */
+function selectTargets(names, setName) {
+  if (setName !== undefined) {
+    const set = SETS[setName];
+    if (set === undefined) {
+      process.stderr.write(
+        `unknown set '${setName}'. Available: ${Object.keys(SETS).join(", ")}.\n`,
+      );
+      process.exit(2);
+    }
+    names = [...set, ...names];
+  }
+  if (names.length === 0) return targets;
   const selected = [];
-  for (const name of targets) {
-    const match = services.find((s) => s.name === name);
+  for (const name of names) {
+    const match = targets.find((t) => t.name === name);
     if (!match) {
-      process.stderr.write(`unknown service '${name}'. Run --list to see available targets.\n`);
+      process.stderr.write(`unknown target '${name}'. Run --list to see available targets.\n`);
       process.exit(2);
     }
     selected.push(match);
@@ -260,6 +360,13 @@ function buildOne(service, buildArgs, opts) {
     "--build-arg",
     `POLARIS_BUILD_TIME=${buildArgs.buildTime}`,
   ];
+  // A target's own args, after the three metadata ones so a target can
+  // override a default rather than merely add to it. Only the template uses
+  // this: a unit's filter and entrypoint are written into its Dockerfile,
+  // which is what makes it a unit rather than a parameterised template.
+  for (const [key, value] of Object.entries(service.buildArgs ?? {})) {
+    args.push("--build-arg", `${key}=${value}`);
+  }
   if (opts.noCache) args.push("--no-cache");
   if (opts.pull) args.push("--pull");
   args.push(".");
@@ -280,8 +387,9 @@ async function main() {
     return 0;
   }
   if (args.list) {
-    for (const s of services) {
-      process.stdout.write(`${s.name.padEnd(22)}  ${s.image}  ${s.dockerfile}\n`);
+    for (const t of targets) {
+      const mark = REPRESENTATIVE.includes(t.name) ? "*" : " ";
+      process.stdout.write(`${mark} ${t.name.padEnd(22)}  ${t.image}  ${t.dockerfile}\n`);
     }
     return 0;
   }
@@ -296,13 +404,13 @@ async function main() {
   const buildArgs = { version, gitSha, buildTime };
   const opts = { tag, noCache: args.noCache, pull: args.pull, dryRun: args.dryRun };
 
-  const targets = selectServices(args.targets);
+  const selected = selectTargets(args.targets, args.set);
   process.stdout.write(
-    `Building ${targets.length} image(s)\n  tag=${tag}\n  version=${version}\n  git_sha=${gitSha}\n  build_time=${buildTime}\n`,
+    `Building ${selected.length} image(s)${args.set ? ` (set: ${args.set})` : ""}\n  tag=${tag}\n  version=${version}\n  git_sha=${gitSha}\n  build_time=${buildTime}\n`,
   );
 
   let failures = 0;
-  for (const service of targets) {
+  for (const service of selected) {
     const status = buildOne(service, buildArgs, opts);
     if (status !== 0) {
       failures += 1;
@@ -314,7 +422,15 @@ async function main() {
     process.stderr.write(`\n${failures} build(s) failed\n`);
     return 1;
   }
-  process.stdout.write(`\nAll ${targets.length} image(s) built successfully\n`);
+  // A dry run must not claim the images built. This script is the gate
+  // `images.yml` runs, and "All 18 image(s) built successfully" printed by a
+  // run that invoked docker zero times is precisely the green-for-no-work
+  // this repository keeps having to dig out of its own checks.
+  if (opts.dryRun) {
+    process.stdout.write(`\nDry run: ${selected.length} image(s) NOT built.\n`);
+    return 0;
+  }
+  process.stdout.write(`\nAll ${selected.length} image(s) built successfully\n`);
   return 0;
 }
 

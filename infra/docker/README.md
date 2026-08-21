@@ -57,7 +57,16 @@ Next free port: 4022 (processors), 5005 (destination consumers).
 ### Per-service Dockerfiles, not a chained base image
 
 Each service ships a complete, standalone Dockerfile. `infra/docker/base.Dockerfile`
-is a **reference template**, not a build input. Docker does not build it.
+is a **reference template**: no image is built `FROM` it, and no service depends
+on it at build time.
+
+It is nevertheless built. Since card `5OV81` it is a target in
+`scripts/docker-build.mjs` and a member of the per-push set in
+`.github/workflows/images.yml`, parameterised with a real `SERVICE_FILTER` so
+the build exercises the template's own shape. Being the file every other
+Dockerfile is copied from is precisely why it needs a build of its own: the
+one time the seventeen were fixed and this file was not, nothing noticed for
+months.
 
 This trades a small amount of duplication for two properties the platform
 cares about more:

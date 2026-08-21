@@ -1,0 +1,124 @@
+# Polaris image builds — the gate that makes an unbuildable image fail.
+#
+# Nothing in CI built an image until this file existed, and the cost of that
+# absence is on the record twice. A `.dockerignore` line pruned a directory two
+# runtime stages copy out of the builder, and both images stayed unbuildable
+# for six days. A pnpm major made `pnpm deploy` refuse to run without
+# injection, and all seventeen images plus the template stayed unbuildable for
+# months. Neither surfaced as a red build. Each surfaced when a card happened
+# to run `pnpm docker:build` while doing something else.
+#
+# The static checks around Docker — `lint-docker-context`, `lint-docker-deploy`
+# — were each written after one of those incidents, and each answers a question
+# about the TEXT of a Dockerfile. A Dockerfile can satisfy every one of them and
+# still not build. Only a build settles that.
+#
+# ## Granularity
+#
+# Building all eighteen on every push is the obvious gate and the wrong one:
+# see the cost table in `docs/development/ci.md`. So, per the decision recorded
+# on card `5OV81`:
+#
+#   - EVERY PUSH builds the representative set — one sync unit, one async unit,
+#     and the canonical template. The membership and the reasoning for it live
+#     in `scripts/docker-build.mjs`, not here, so that a developer running
+#     `--set representative` runs what CI runs.
+#   - NIGHTLY builds all eighteen, which is what catches a break in one of the
+#     fifteen the per-push set does not touch.
+#
+# Both defects above lived in the base image or the shared build context, which
+# the representative set reaches on the first push rather than the next night.
+
+name: Images
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 04:00 UTC, ahead of integration.yml's 06:00 — an image that stopped
+    # building is a fact worth having before the slower suite starts.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same major as ci.yml. Only the two .mjs scripts run on the runner; the
+  # images install their own toolchain inside the builder stage.
+  NODE_VERSION: "22"
+  # pnpm is deliberately absent. No step here runs `pnpm install`: the build
+  # context is the checkout, and each Dockerfile's builder stage installs the
+  # workspace itself. Adding a runner-side install would be a second copy of
+  # the toolchain version, which is the mistake documented at length in
+  # ci.yml's env block.
+
+jobs:
+  representative:
+    name: Representative set (per push)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    # `docs/development/ci.md` holds the measured cost and the conditions it
+    # was measured under; it is not restated here, because a number in two
+    # places is the failure this repository keeps re-learning.
+    #
+    # The ceiling is deliberately far above the measurement. A runner has fewer
+    # cores than the machine the figure came from and a slower path to the npm
+    # registry, and a timeout that trips on a slow network reports a broken
+    # image when the image is fine.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # The gate. A non-zero exit from any of the three fails the job; the
+      # script aggregates failures across targets rather than stopping at the
+      # first, so one push reports every broken image rather than the earliest.
+      - name: Build the representative set
+        run: node scripts/docker-build.mjs --set representative
+
+      # And the proof that the line above can go red.
+      #
+      # "A check nobody has watched fail is a check nobody knows works" is this
+      # repository's rule, and a build gate is the check it applies to most
+      # sharply: `docker build` on a tree where everything is fine is
+      # indistinguishable from `docker build` that was never wired up. So break
+      # a Dockerfile, require the build to fail, restore.
+      #
+      # It re-runs the sync unit's build for its clean-tree check, which the
+      # step above has already cached, and injects a fault ahead of the layer
+      # that installs the workspace. Seconds, not minutes.
+      - name: Prove a broken Dockerfile fails this gate
+        run: node scripts/verify-gates.mjs --with-docker
+
+  full-roster:
+    name: All eighteen images (nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Far cheaper than eighteen times one image, and `docs/development/ci.md`
+    # records by how much. The seventeen units present byte-identical
+    # instructions over one context up to and including the install layer, so
+    # the first unit pays for it and the other sixteen reuse it. The template
+    # is the exception: its `ARG` lines fork the chain at the second
+    # instruction, so it shares nothing and pays the install again.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build every image
+        run: node scripts/docker-build.mjs

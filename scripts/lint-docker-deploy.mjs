@@ -13,9 +13,16 @@
 //
 // ## Why a check and not a careful reading
 //
-// Because nothing in CI builds an image, so the feedback for getting either
-// fact wrong is not a red build — it is a green one, and a discovery weeks
-// later by whoever first runs `pnpm docker:build`.
+// Because for most of this repository's life nothing in CI built an image, so
+// the feedback for getting either fact wrong was not a red build — it was a
+// green one, and a discovery weeks later by whoever first ran
+// `pnpm docker:build`.
+//
+// `images.yml` closed that gap on card `5OV81`, and this check still earns its
+// place: it runs in `pnpm lint`, in seconds, against all eighteen Dockerfiles,
+// where the per-push build reaches three of them in minutes. It is the cheap
+// half of the answer, and the fifteen images the per-push set does not build
+// are covered by nothing else until the nightly run.
 //
 // That is the literal history. `9a5da8d` pinned `pnpm@10.30.0` in every
 // Dockerfile while `packageManager` said 11.21.0. `719a9d2` removed the pin
