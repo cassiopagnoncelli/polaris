@@ -17,10 +17,7 @@
  * So this runs the actual normalizer on an actual transition envelope.
  */
 
-import {
-  type NormalizableEnvelope,
-  normalizeForDestination,
-} from "@polaris/delivery-normalize";
+import { type NormalizableEnvelope, normalizeForDestination } from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import { createBrazeDescriptor } from "../src/descriptor.js";

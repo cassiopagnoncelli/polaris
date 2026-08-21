@@ -29,7 +29,10 @@ export const sourcesShowCommand: CommandDefinition = {
       .command("show <source_id>")
       .description("Show one source from PostgreSQL (or the catalog with --from-catalog).")
       .option("--project <project_id>", "Narrow lookup to one project.")
-      .option("--from-catalog", "Read declarations from definitions/sources/ instead of PostgreSQL.")
+      .option(
+        "--from-catalog",
+        "Read declarations from definitions/sources/ instead of PostgreSQL.",
+      )
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",

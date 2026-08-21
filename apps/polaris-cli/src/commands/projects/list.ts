@@ -29,7 +29,10 @@ export const projectsListCommand: CommandDefinition = {
       .description(
         "List projects materialized in PostgreSQL (or in the catalog with --from-catalog).",
       )
-      .option("--from-catalog", "Read declarations from definitions/projects/ instead of PostgreSQL.")
+      .option(
+        "--from-catalog",
+        "Read declarations from definitions/projects/ instead of PostgreSQL.",
+      )
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",

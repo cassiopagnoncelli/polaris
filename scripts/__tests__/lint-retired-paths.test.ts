@@ -97,7 +97,10 @@ describe("scanning a tree", () => {
       "apps/polaris-cli/src/commands/projects/list.ts",
       'import { loadCatalog, resolveCatalogRoot } from "../../catalog/index.js";\n',
     );
-    write("apps/ingester-api/src/app.ts", 'import { loadRuntimeCatalog } from "./catalog/runtime.js";\n');
+    write(
+      "apps/ingester-api/src/app.ts",
+      'import { loadRuntimeCatalog } from "./catalog/runtime.js";\n',
+    );
     write("libs/spec/src/index.ts", 'export * from "./catalog/index.js";\n');
     expect(scan()).toEqual([]);
   });

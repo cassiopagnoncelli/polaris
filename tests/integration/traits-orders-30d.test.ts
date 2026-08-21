@@ -15,7 +15,10 @@
  * neighbours — the default `pnpm test` stays Docker-free.
  */
 
-import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/persistence-clickhouse";
+import {
+  type ClickHouseOperatorClient,
+  createClickHouseClient,
+} from "@polaris/persistence-clickhouse";
 import { ordersThirtyDays } from "@polaris/trait-catalog";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

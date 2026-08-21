@@ -39,16 +39,7 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
 // missing from this list turns the check OFF for everything under it without
 // failing — the driver helper moved to `libs/persistence/clickhouse` and every
 // other package's violations stopped being looked for.
-const SCAN_DIRS = [
-  "apps",
-  "sync",
-  "async",
-  "definitions",
-  "scripts",
-  "libs",
-  "sdks",
-  "connectors",
-];
+const SCAN_DIRS = ["apps", "sync", "async", "definitions", "scripts", "libs", "sdks", "connectors"];
 
 // Path prefixes (relative to root) where the official client is *allowed*.
 // Anything else is a violation.

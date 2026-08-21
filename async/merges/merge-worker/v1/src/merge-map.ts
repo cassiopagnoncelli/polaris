@@ -38,7 +38,10 @@
  * timestamp for exactly that reason.
  */
 
-import type { MergeMapChainEntry as ExistingChain, MergeMapRow } from "@polaris/persistence-clickhouse";
+import type {
+  MergeMapChainEntry as ExistingChain,
+  MergeMapRow,
+} from "@polaris/persistence-clickhouse";
 
 /** One `identity.merged` v2 event, reduced to what the map needs. */
 export interface MergeEvent {
@@ -55,7 +58,10 @@ export interface MergeEvent {
 // The row and chain shapes come from `@polaris/persistence-clickhouse`, which
 // owns the table. Declaring them again here would be a second copy of a
 // DDL's column list, and the two would drift the first time a column moved.
-export type { MergeMapChainEntry as ExistingChain, MergeMapRow } from "@polaris/persistence-clickhouse";
+export type {
+  MergeMapChainEntry as ExistingChain,
+  MergeMapRow,
+} from "@polaris/persistence-clickhouse";
 
 /**
  * Rows to upsert for one merge event.

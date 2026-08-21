@@ -19,10 +19,7 @@
  *   - identityHashing     off (GA4 does not consume hashed identifiers)
  */
 
-import type {
-  IdentityHashingOptions,
-  RequiredConsent,
-} from "@polaris/delivery-normalize";
+import type { IdentityHashingOptions, RequiredConsent } from "@polaris/delivery-normalize";
 import type { DestinationDescriptor, MapperMap } from "@polaris/delivery-destinations";
 
 import { type BuildDelivererOptions, buildGa4Deliverer } from "./deliverer.js";

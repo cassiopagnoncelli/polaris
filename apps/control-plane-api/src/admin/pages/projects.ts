@@ -59,7 +59,10 @@ export function renderProjectsPage(input: {
 
   const rows =
     input.projects.length === 0
-      ? emptyRow(6, "No projects. Add one under definitions/projects/ and run `polaris projects sync`.")
+      ? emptyRow(
+          6,
+          "No projects. Add one under definitions/projects/ and run `polaris projects sync`.",
+        )
       : input.projects.map(
           (project) => html`<tr>
             <td>

@@ -19,10 +19,7 @@ import {
   buildDestinationHost,
   type DestinationHostOverrides,
 } from "@polaris/delivery-host";
-import {
-  STREAM_FAMILY_PROFILE_EVENTS,
-  STREAM_FAMILY_RESOLVED_EVENTS,
-} from "@polaris/bus";
+import { STREAM_FAMILY_PROFILE_EVENTS, STREAM_FAMILY_RESOLVED_EVENTS } from "@polaris/bus";
 
 import type { WebhookSinkRuntimeConfig } from "./config.js";
 import { createWebhookSinkDescriptor } from "./descriptor.js";

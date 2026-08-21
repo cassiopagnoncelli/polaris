@@ -67,15 +67,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
  * emitted from `libs/observability/metrics` go unmatched against the
  * dashboards and rules that graph it.
  */
-const SOURCE_ROOTS = [
-  "apps",
-  "sync",
-  "async",
-  "libs",
-  "sdks",
-  "connectors",
-  "definitions",
-];
+const SOURCE_ROOTS = ["apps", "sync", "async", "libs", "sdks", "connectors", "definitions"];
 /** Where metrics are referenced. */
 const DASHBOARD_DIR = path.join("infra", "grafana", "dashboards");
 const RULE_DIR = path.join("infra", "prometheus", "rules");

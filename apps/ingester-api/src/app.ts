@@ -1,5 +1,10 @@
 import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
-import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/persistence-postgres";
+import {
+  closeDb,
+  createDb,
+  type Database,
+  postgresConnectionString,
+} from "@polaris/persistence-postgres";
 import type { PolarisEnvironment } from "@polaris/runtime-environments";
 import { createLogger, type Logger } from "@polaris/observability-logger";
 import { toPrometheusText } from "@polaris/observability-metrics";

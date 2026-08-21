@@ -183,12 +183,15 @@ see the [Audit and Export runbook](./audit-and-export.md).
 | `pnpm typecheck`         | `tsc --noEmit` against the workspace, scripts, and tests projects.                 |
 | `pnpm lint`              | Biome + `lint:clickhouse-imports` (the workspace-wide import rule).                |
 | `pnpm format:check`      | Biome formatter check (no writes).                                                 |
+| `pnpm verify`            | **The gate.** Every check CI runs on a bare checkout, in CI's order. Run it before you push. |
 | `pnpm test:smoke`        | Docker-gated Vitest wrapper around the vertical-slice smoke (`POLARIS_SMOKE_DOCKER=1` is forced on). |
 | `pnpm smoke:vertical-slice` | The same end-to-end smoke driver, callable directly as a script.                   |
 
 `pnpm test` is what CI's `test` job runs; `pnpm typecheck` / `pnpm lint` /
-`pnpm format:check` are the `static-analysis` job. See [CI](./ci.md) for the
-full gate list and how to opt a PR into integration runs.
+`pnpm format:check` are the `static-analysis` job. `pnpm verify` runs the
+whole set, and a check in `pnpm lint` keeps it equal to what the workflows
+run. See [CI](./ci.md) for the full gate list and how to opt a PR into
+integration runs.
 
 The integration-tier suite (the full vertical-slice smoke under real Docker)
 is covered by the [Vertical-Slice Smoke runbook](../implementation/runbooks/vertical-slice-smoke.md).

@@ -1,11 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  defaultSchemaBindings,
-  type EventCatalog,
-  loadCatalogFromDir,
-} from "@polaris/spec";
+import { defaultSchemaBindings, type EventCatalog, loadCatalogFromDir } from "@polaris/spec";
 
 /**
  * Wrapper around the file-backed event catalog loader.

@@ -166,6 +166,15 @@ const BLUEPRINT_PNPM_CANARY = "pnpm@10.30.0";
  */
 const DEPLOY_INJECTION_LINE = "injectWorkspacePackages: true";
 
+/**
+ * The gate whose absence from the group verify set let a red `main` land.
+ *
+ * Written as a literal. `lint-gate-parity` reads the `scripts` block of
+ * package.json and the workflows, and this file is neither, so a mention here
+ * cannot be mistaken for a declaration.
+ */
+const GATE_PARITY_INJECTION = " && pnpm format:check";
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -458,6 +467,29 @@ const GATES = [
         lines.some((line) => line.trim() === `# ${DEPLOY_INJECTION_LINE}`) &&
         !lines.some((line) => line.startsWith(DEPLOY_INJECTION_LINE))
       );
+    },
+  },
+  {
+    // The fault this whole card is about, re-created exactly: a group gate
+    // that runs four of CI's five checks. `format:check` was the missing one,
+    // the group went green on every card, and `main` turned red on the push
+    // that landed it.
+    //
+    // The injection REMOVES rather than plants, like the deploy-injection
+    // canary above and for the same reason -- a subset gate is an absence,
+    // and planting a foreign gate would prove the mirror rule instead of the
+    // one that has actually bitten this repository.
+    name: "lint:gate-parity",
+    command: "node scripts/lint-gate-parity.mjs",
+    files: ["package.json"],
+    inject: () => write("package.json", read("package.json").replace(GATE_PARITY_INJECTION, "")),
+    // Read out of the parsed `verify` script, not off the file. The string
+    // `format:check` also names the script that DEFINES the gate, which the
+    // injection leaves alone -- so an `includes` on the source would report
+    // an injection that never landed as landed.
+    assertInjected: () => {
+      const verify = JSON.parse(read("package.json")).scripts?.verify ?? "";
+      return !verify.includes("format:check");
     },
   },
   {

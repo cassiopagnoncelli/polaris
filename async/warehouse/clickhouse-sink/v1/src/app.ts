@@ -19,7 +19,10 @@
  * @see async/warehouse/clickhouse-sink/v1/src/runtime.ts
  */
 
-import { type AnalyticsSinkWriter, createAnalyticsSinkWriter } from "@polaris/persistence-clickhouse";
+import {
+  type AnalyticsSinkWriter,
+  createAnalyticsSinkWriter,
+} from "@polaris/persistence-clickhouse";
 import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import { createLogger } from "@polaris/observability-logger";
 import { toPrometheusText } from "@polaris/observability-metrics";

@@ -182,10 +182,7 @@ const MOVED_PACKAGES = new Map([
   ["project-config-schemas", ["libs/tenancy/config-schemas", "@polaris/tenancy-config-schemas"]],
   ["shared-control-plane", ["libs/tenancy/control-plane", "@polaris/tenancy-control-plane"]],
   ["shared-destinations", ["libs/delivery/destinations", "@polaris/delivery-destinations"]],
-  [
-    "shared-destination-normalize",
-    ["libs/delivery/normalize", "@polaris/delivery-normalize"],
-  ],
+  ["shared-destination-normalize", ["libs/delivery/normalize", "@polaris/delivery-normalize"]],
   ["destination-host", ["libs/delivery/host", "@polaris/delivery-host"]],
   ["shared-archive", ["libs/archive/writer", "@polaris/archive-writer"]],
   ["shared-replay", ["libs/archive/replay", "@polaris/archive-replay"]],

@@ -19,10 +19,7 @@
  *   - identityHashing     hash both email + phone (TikTok requires it)
  */
 
-import type {
-  IdentityHashingOptions,
-  RequiredConsent,
-} from "@polaris/delivery-normalize";
+import type { IdentityHashingOptions, RequiredConsent } from "@polaris/delivery-normalize";
 import type { DestinationDescriptor, MapperMap } from "@polaris/delivery-destinations";
 
 import { type BuildDelivererOptions, buildTikTokDeliverer } from "./deliverer.js";

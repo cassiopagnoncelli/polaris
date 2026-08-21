@@ -55,15 +55,7 @@ const DEFAULT_ROOT = resolve(__dirname, "..");
  * those entries would read as promises about files nothing scans — the check
  * would report the repository clean without ever opening a published SDK.
  */
-const SCAN_DIRS = [
-  "apps",
-  "sync",
-  "async",
-  "libs",
-  "sdks",
-  "connectors",
-  "definitions",
-];
+const SCAN_DIRS = ["apps", "sync", "async", "libs", "sdks", "connectors", "definitions"];
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", ".git", "__tests__"]);
 const SOURCE_EXT = new Set([".ts", ".mts"]);
@@ -123,10 +115,7 @@ const ALLOW = new Map([
   ],
 
   // --- published SDKs: a customer's process, not a Polaris service -------
-  [
-    "sdks/node/src/index.ts",
-    "published SDK; the host application's environment is its own",
-  ],
+  ["sdks/node/src/index.ts", "published SDK; the host application's environment is its own"],
   ["sdks/web/src/index.ts", "published SDK; bundler-replaced build flag"],
   ["sdks/web/src/sdk.ts", "published SDK; bundler-replaced build flag"],
 

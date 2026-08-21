@@ -26,10 +26,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Logger } from "@polaris/observability-logger";
-import {
-  type ProjectIdentityOverride,
-  projectIdentityOverrideSchema,
-} from "@polaris/governance";
+import { type ProjectIdentityOverride, projectIdentityOverrideSchema } from "@polaris/governance";
 import { parse as parseYaml } from "yaml";
 
 export interface LoadOverridesOptions {

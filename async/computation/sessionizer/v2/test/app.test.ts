@@ -11,11 +11,7 @@
  */
 
 import { InMemoryProcessorRunRepository, type ProcessorRunHandle } from "@polaris/pipeline";
-import type {
-  PolarisConsumer,
-  PolarisProducer,
-  PublishEventInput,
-} from "@polaris/bus";
+import type { PolarisConsumer, PolarisProducer, PublishEventInput } from "@polaris/bus";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildSessionizerApp } from "../src/app.js";

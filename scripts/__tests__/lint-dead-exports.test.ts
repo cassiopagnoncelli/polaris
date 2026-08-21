@@ -39,22 +39,13 @@ function names(): string[] {
 
 describe("findDeadExports", () => {
   it("reports an exported function nothing calls", () => {
-    seed(
-      "libs/thing/src/helper.ts",
-      "export function neverCalled(): number {\n  return 1;\n}\n",
-    );
+    seed("libs/thing/src/helper.ts", "export function neverCalled(): number {\n  return 1;\n}\n");
     expect(names()).toEqual(["neverCalled"]);
   });
 
   it("does not report a symbol a production file in another package uses", () => {
-    seed(
-      "libs/thing/src/helper.ts",
-      "export function isCalled(): number {\n  return 1;\n}\n",
-    );
-    seed(
-      "apps/some-api/src/app.ts",
-      'import { isCalled } from "@polaris/thing";\nisCalled();\n',
-    );
+    seed("libs/thing/src/helper.ts", "export function isCalled(): number {\n  return 1;\n}\n");
+    seed("apps/some-api/src/app.ts", 'import { isCalled } from "@polaris/thing";\nisCalled();\n');
     expect(names()).toEqual([]);
   });
 
@@ -79,10 +70,7 @@ describe("findDeadExports", () => {
   it("still reports a symbol only its own tests use", () => {
     // The exact shape of every mechanism this check was written for: a unit
     // test proves the helper works, and no production code ever calls it.
-    seed(
-      "libs/thing/src/helper.ts",
-      "export function onlyTested(): number {\n  return 1;\n}\n",
-    );
+    seed("libs/thing/src/helper.ts", "export function onlyTested(): number {\n  return 1;\n}\n");
     seed(
       "libs/thing/test/helper.test.ts",
       "import { onlyTested } from '../src/helper.js';\nonlyTested();\n",
@@ -94,10 +82,7 @@ describe("findDeadExports", () => {
     // A package calling itself proves nothing about whether the platform
     // needs the symbol — that is how a whole subsystem stays internally
     // consistent and externally dead.
-    seed(
-      "libs/thing/src/helper.ts",
-      "export function internalOnly(): number {\n  return 1;\n}\n",
-    );
+    seed("libs/thing/src/helper.ts", "export function internalOnly(): number {\n  return 1;\n}\n");
     seed(
       "libs/thing/src/other.ts",
       'import { internalOnly } from "./helper.js";\ninternalOnly();\n',
@@ -127,10 +112,7 @@ describe("findDeadExports", () => {
   });
 
   it("skips allow-listed packages such as the published SDKs", () => {
-    seed(
-      "sdks/node/src/public.ts",
-      "export function publicApi(): number {\n  return 1;\n}\n",
-    );
+    seed("sdks/node/src/public.ts", "export function publicApi(): number {\n  return 1;\n}\n");
     expect(names()).toEqual([]);
   });
 });

@@ -16,10 +16,7 @@
  * a populated identity would pass while nothing reached the vendor.
  */
 
-import {
-  type NormalizableEnvelope,
-  normalizeForDestination,
-} from "@polaris/delivery-normalize";
+import { type NormalizableEnvelope, normalizeForDestination } from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import { createBrazeDescriptor } from "../src/descriptor.js";

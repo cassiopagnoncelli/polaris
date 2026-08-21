@@ -38,7 +38,12 @@
  */
 
 import { PROJECT_POLICY_OVERRIDES } from "@polaris/policy-catalog";
-import { closeDb, createDb, type Database, postgresConnectionString } from "@polaris/persistence-postgres";
+import {
+  closeDb,
+  createDb,
+  type Database,
+  postgresConnectionString,
+} from "@polaris/persistence-postgres";
 import {
   createDestinationConsumer,
   createDestinationSharedState,

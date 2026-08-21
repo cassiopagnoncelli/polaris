@@ -25,7 +25,10 @@ export const projectsShowCommand: CommandDefinition = {
     const cmd = parent
       .command("show <project_id>")
       .description("Show one project from PostgreSQL (or the catalog with --from-catalog).")
-      .option("--from-catalog", "Read declaration from definitions/projects/ instead of PostgreSQL.")
+      .option(
+        "--from-catalog",
+        "Read declaration from definitions/projects/ instead of PostgreSQL.",
+      )
       .option(
         "--catalog-root <path>",
         "Override the catalog root (defaults to POLARIS_CATALOG_ROOT or repo discovery).",

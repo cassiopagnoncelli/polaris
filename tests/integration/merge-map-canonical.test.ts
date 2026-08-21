@@ -15,7 +15,10 @@
  * applied (`node scripts/clickhouse-migrate.mjs`).
  */
 
-import { type ClickHouseOperatorClient, createClickHouseClient } from "@polaris/persistence-clickhouse";
+import {
+  type ClickHouseOperatorClient,
+  createClickHouseClient,
+} from "@polaris/persistence-clickhouse";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const ENABLED = process.env["POLARIS_INTEGRATION"] === "1";

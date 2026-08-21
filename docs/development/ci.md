@@ -315,17 +315,36 @@ Four things to know before trusting the numbers:
 
 ```bash
 pnpm install
-pnpm build           # produces dist/ for every package — typecheck and tests need this
-pnpm typecheck
-pnpm lint            # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
-pnpm format:check
-pnpm test            # workspace Vitest + scripts/ Vitest
+pnpm verify
 ```
 
+`pnpm verify` **is** the gate, and it is the same command a change group runs
+before it lands. Its chain is every pnpm gate `ci.yml` runs on a bare
+checkout, in the order CI runs them:
+
+```bash
+pnpm build                 # produces dist/ for every package — typecheck and tests need this
+pnpm typecheck
+pnpm lint                  # Biome + ClickHouse imports + raw-NUL + dead exports + process.env + project-config keys
+pnpm format:check
+pnpm openapi:check         # the OpenAPI document still matches the code
+pnpm config-schemas:check  # generated config schemas in sync, and additive-only
+pnpm verify:gates          # the meta-gate: prove every check can fail
+pnpm test                  # workspace Vitest + scripts/ Vitest
+```
+
+Keeping that list correct is not left to whoever edits it:
+[`scripts/lint-gate-parity.mjs`](../../scripts/lint-gate-parity.mjs) runs
+inside `pnpm lint` and fails when `pnpm verify` and the workflows stop
+naming the same set. It exists because they once did. The T0 change group
+verified with `build && typecheck && lint && test`, `ci.yml` also ran
+`pnpm format:check`, nothing compared the two — so a group whose every card
+was green landed thirty-four unformatted files and turned `main` red.
+
 The Makefile target `make ci` wraps the linter, typecheck, and test
-trio (see [`Makefile`](../../Makefile)) but does not run the build
-or format check. Use the explicit pnpm commands above when you want to
-mirror CI exactly.
+trio (see [`Makefile`](../../Makefile)) but does not run the build,
+the format check, or the generated-artifact checks. It is a fast inner-loop
+shortcut and not the gate; `pnpm verify` is.
 
 For the migration smoke step, run the local compose stack first:
 

@@ -8,11 +8,7 @@
  * name, headers, and message payload.
  */
 
-import type {
-  PolarisProducer,
-  PublishToQueueInput,
-  TransportMessagePayload,
-} from "@polaris/bus";
+import type { PolarisProducer, PublishToQueueInput, TransportMessagePayload } from "@polaris/bus";
 import { describe, expect, it } from "vitest";
 
 import { publishToDlq } from "../src/dlq.js";
