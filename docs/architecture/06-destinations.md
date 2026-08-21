@@ -102,6 +102,36 @@ Rules:
 - Normalization is **independently versioned** from mappers. Bumping a hashing rule is `normalize/v1 -> normalize/v2`, not the whole consumer version.
 - Normalization **never calls external services**. It is pure data transform.
 
+#### Where the match keys come from
+
+A destination matches an event to a person on more than the identifiers in the envelope's `identity` block. Those values arrive from two places, and the order between them is fixed:
+
+1. **The connector's `identityFromProperties` hook**, for the `email` and `phone` a producer put in `properties`.
+2. **The profile-trait snapshot** (`envelope.profile.traits`), for those two and for the six further keys the catalog pins on `user.identified` v1.
+
+A producer property wins because it is newer: the snapshot was taken when the event was enriched, and this event may be what changes it. A field the hook does not return falls through to the snapshot rather than being blanked — precedence is not deletion. A destination that declares no hook reads the snapshot alone, which is every connector but Braze.
+
+The snapshot is the fallback that makes the set reachable at all. Enrichment stamps `traits.email` on every resolved event of a known person; the four address keys arrive inside the `address` bag `user.identified` v1 pins, and are read from there.
+
+#### Normalization rules, per field
+
+Each key is canonicalized by its own rule and then hashed with SHA-256 over the canonical form. **A destination receives the canonical value or its digest, never both** — `identityHashing` on the connector declares which, and the same toggle governs the copy of the value in the trait bag. That mutual exclusion is what keeps a vendor from receiving a hashed email in its identity block and the plaintext of the same address one field over.
+
+| Field | Canonical form | Refused when |
+|---|---|---|
+| `email` | trim, lowercase | canonicalizes to empty |
+| `phone` | strict E.164 (`+` and 7-15 digits); never inferred | not already E.164 — the raw is kept for a consumer-specific reformat |
+| `first_name`, `last_name` | NFC, lowercase, letters and digits only (spaces, hyphens and apostrophes removed); accents kept | nothing remains after stripping |
+| `gender` | `m` / `f`, mapped from `m`/`male`/`man` and `f`/`female`/`woman` | any other value, including a non-binary one |
+| `birthday` | `YYYYMMDD` from the catalog's `YYYY-MM-DD` | not a real calendar date, or a datetime — whose midnight it is, is the producer's to know |
+| `city`, `state` | as the name rule. A spelled-out state stays spelled out | nothing remains after stripping |
+| `postal_code` | lowercase, whitespace removed; first five characters when the country is the US | empty |
+| `country` | ISO-3166-1 alpha-2, lowercase; assigned codes pass, common names and abbreviations are mapped | unrecognised — never a guessed code |
+
+A refused value is **dropped, not passed through raw**: it leaves both of its slots null and is removed from the trait bag. The alternative is leaking a plaintext value because it happened to be badly formatted, which is not a trade-off worth making — and for `country` a guess is worse than a gap, since every two-letter string that is not a country code is one letter from being another country's.
+
+`pickBestIdentity` is unaffected by the extended set: its order stays `canonical_customer_id > profile_id > user_id > email_sha256 > phone_sha256 > anonymous_id`. A hashed city is not an identifier, and treating one as a fallback would key a vendor on everyone who lives in the same town.
+
 ### Mapping
 
 Mapping takes the normalized intermediate and produces the vendor's payload schema for a specific event name and consumer version.

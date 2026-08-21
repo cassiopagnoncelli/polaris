@@ -12,6 +12,15 @@
  * email/phone helpers in this package) so a vendor-side bug cannot drift
  * from another vendor's hashing.
  *
+ * Email and phone are the tuple every vendor takes; they are not the
+ * whole set any vendor MATCHES on. Meta's `user_data` also takes first
+ * name, last name, gender, birthday, city, state, postal code and
+ * country, and TikTok, Reddit and Snap take the same eight under their
+ * own spellings. Those are prepared here too, on the canonical forms in
+ * `person.ts` and `address.ts`, for the same reason the first two are: a
+ * vendor mapper that canonicalized its own would drift from the next
+ * one's, and the digests would stop naming the same person.
+ *
  * "Best-available identity" leads with what the platform RESOLVED and falls
  * back to what the producer OBSERVED:
  *
@@ -28,7 +37,10 @@
  * `pickBestIdentity` to get a stable choice.
  */
 
+import { ADDRESS_MATCH_KEYS, normalizeAddress, type RawAddressMatchKeys } from "./address.js";
 import { hashEmailLower } from "./email.js";
+import { sha256Hex } from "./hashing.js";
+import { normalizePerson, PERSON_MATCH_KEYS, type RawPersonMatchKeys } from "./person.js";
 import { hashPhoneE164 } from "./phone.js";
 
 /**
@@ -39,7 +51,7 @@ import { hashPhoneE164 } from "./phone.js";
  * Every field is optional. Empty strings, `null`, and `undefined` are
  * treated as missing.
  */
-export interface RawIdentityInput {
+export interface RawIdentityInput extends RawPersonMatchKeys, RawAddressMatchKeys {
   /**
    * The platform's resolved customer id for this person, from
    * `envelope.profile.canonical_customer_id`.
@@ -70,27 +82,78 @@ export interface RawIdentityInput {
   readonly phone?: string | null | undefined;
 }
 
-/** Per-destination toggles for which PII the normalizer should hash. */
+/**
+ * The eight match keys beyond email and phone, raw as the producer or the
+ * profile-trait snapshot spelled them. Canonicalized by `person.ts` and
+ * `address.ts`; see those modules for the rule each one obeys.
+ *
+ * Split out as its own interface rather than folded into
+ * `RawIdentityInput` because the trait reader and the properties hook
+ * both produce exactly this and nothing else — the four identifiers above
+ * come from the envelope, not from a bag of values.
+ */
+export interface RawMatchKeyInput extends RawPersonMatchKeys, RawAddressMatchKeys {
+  readonly email?: string | null | undefined;
+  readonly phone?: string | null | undefined;
+}
+
+/**
+ * Per-destination toggles for which PII the normalizer should hash.
+ *
+ * Two toggles, for the whole match set. The eight keys beyond email and
+ * phone follow `email`, and that is a statement about what the flag has
+ * always meant rather than a shortcut: a destination sets it to say
+ * whether it takes hashed PII at all — Meta and TikTok require hashes,
+ * Braze requires plaintext, and no vendor wants a hashed email beside a
+ * plaintext first name. Binding the extended set to `email` is what makes
+ * that impossible to configure by accident.
+ *
+ * A vendor that one day needs a split stance gets a toggle of its own
+ * here, added deliberately with the mapper that needs it.
+ */
 export interface IdentityHashingOptions {
-  /** Hash email if present. Default: `true`. */
+  /**
+   * Hash email — and, with it, the eight extended match keys — if
+   * present. Default: `true`.
+   */
   readonly email?: boolean;
   /** Hash phone if present. Default: `true`. */
   readonly phone?: boolean;
 }
 
 /**
- * Prepared identity surface handed to the vendor mapper. Both raw and
- * hashed forms are present where applicable; mappers choose per vendor.
+ * Prepared identity surface handed to the vendor mapper.
  *
- * Hashed fields are populated only when `IdentityHashingOptions` enables
- * them AND a usable raw value was present. A `null` hashed slot means
- * "no usable raw value"; mapper code can rely on the field name to know
- * which producer-supplied data was absent.
+ * Every match key has two slots — the plaintext canonical value and its
+ * SHA-256 — and exactly ONE of them is ever populated. Which one is the
+ * destination's own declaration: `IdentityHashingOptions` says whether
+ * this vendor takes hashed PII, and the answer decides the slot.
  *
- * `phone_sha256` may be `null` when the producer supplied a non-E.164
- * phone — the hash is intentionally not computed in that case, and the
- * raw phone is preserved so a consumer-specific normalize stage can
- * attempt a country-aware reformat before re-hashing.
+ * The mutual exclusion is the rule that matters, and it is what stops a
+ * destination receiving a hashed email in its identity block and the
+ * plaintext of the same address one field over. That claim is made about
+ * the trait bag in `normalize.ts` and would be false here without this:
+ * `webhook-sink` hands the whole prepared identity to its receiver, so a
+ * populated raw slot IS a delivery of plaintext PII.
+ *
+ * A `null` on BOTH slots means the value was absent or the field's rule
+ * refused it; mapper code can rely on the field name to know which
+ * producer-supplied data it did not get.
+ *
+ * The one exception is `phone`, and it is the documented recovery path
+ * rather than a leak: a non-E.164 phone produces no digest at all, so the
+ * trimmed raw is kept instead — that is what lets a consumer-specific
+ * normalize stage attempt a country-aware reformat and re-hash. `email`
+ * has the same branch and it is unreachable, since a value that survives
+ * the empty check always canonicalizes to something.
+ *
+ * The eight extended fields are OPTIONAL on this type and always PRESENT
+ * on anything `prepareIdentity` returns. The optionality is for the
+ * hand-written `NormalizedEvent` literals every connector's tests build:
+ * a fixture pinning mapper behaviour for `em` should not have to
+ * enumerate a match set its mapper does not read. Production code never
+ * sees `undefined` here — but `exactOptionalPropertyTypes` makes a mapper
+ * say so, which is the check that stops `[undefined]` reaching a vendor.
  */
 export interface PreparedIdentity {
   /** Platform-resolved customer id. `null` on an unresolved envelope. */
@@ -103,7 +166,36 @@ export interface PreparedIdentity {
   readonly email_sha256: string | null;
   readonly phone: string | null;
   readonly phone_sha256: string | null;
+
+  /** Canonical first name (`person.ts`); `null` when hashing is on. */
+  readonly first_name?: string | null;
+  readonly first_name_sha256?: string | null;
+  /** Canonical last name (`person.ts`); `null` when hashing is on. */
+  readonly last_name?: string | null;
+  readonly last_name_sha256?: string | null;
+  /** `m` / `f` (`person.ts`); `null` when hashing is on. */
+  readonly gender?: string | null;
+  readonly gender_sha256?: string | null;
+  /** `YYYYMMDD` (`person.ts`); `null` when hashing is on. */
+  readonly birthday?: string | null;
+  readonly birthday_sha256?: string | null;
+  /** Canonical city (`address.ts`); `null` when hashing is on. */
+  readonly city?: string | null;
+  readonly city_sha256?: string | null;
+  /** Canonical state (`address.ts`); `null` when hashing is on. */
+  readonly state?: string | null;
+  readonly state_sha256?: string | null;
+  /** Canonical postal code (`address.ts`); `null` when hashing is on. */
+  readonly postal_code?: string | null;
+  readonly postal_code_sha256?: string | null;
+  /** ISO-3166-1 alpha-2 (`address.ts`); `null` when hashing is on. */
+  readonly country?: string | null;
+  readonly country_sha256?: string | null;
 }
+
+/** The eight extended match keys, person half then address half. */
+const MATCH_KEY_FIELDS = [...PERSON_MATCH_KEYS, ...ADDRESS_MATCH_KEYS] as const;
+type MatchKeyField = (typeof MATCH_KEY_FIELDS)[number];
 
 /** Identifier the `pickBestIdentity` helper actually chose. */
 export type BestIdentityKind =
@@ -126,9 +218,15 @@ export interface BestIdentity {
  *
  * - `email` is lowercased + trimmed before hashing.
  * - `phone` must already be in E.164 (`+` + 7-15 digits). Non-E.164
- *   phones leave both `phone_sha256` populated as `null` and `phone`
- *   carrying the trimmed raw input — a downstream consumer-specific
- *   normalize can re-attempt with country context.
+ *   phones leave `phone_sha256` null and `phone` carrying the trimmed raw
+ *   input — a downstream consumer-specific normalize can re-attempt with
+ *   country context.
+ * - the eight extended match keys are canonicalized by their own rule
+ *   (`person.ts`, `address.ts`) and then hashed. A value the rule
+ *   refuses leaves both of its slots `null`, which is the same thing the
+ *   caller does with an absent one.
+ * - a destination that turns hashing off gets the canonical value on the
+ *   plaintext slot instead. Never both: see `PreparedIdentity`.
  */
 export function prepareIdentity(
   input: RawIdentityInput,
@@ -144,16 +242,16 @@ export function prepareIdentity(
   let email_sha256: string | null = null;
   const rawEmail = nonEmpty(input.email);
   if (rawEmail !== null) {
-    email = rawEmail;
     if (hashEmail) {
       try {
         email_sha256 = hashEmailLower(rawEmail);
       } catch {
-        // Whitespace-only input — canonical form is empty. Leave both
-        // raw and hashed as null; the destination drops on
-        // `no_usable_identity` if nothing else is present.
-        email = null;
+        // Whitespace-only input — canonical form is empty. Both slots
+        // stay null; the destination drops on `no_usable_identity` if
+        // nothing else is present.
       }
+    } else {
+      email = rawEmail;
     }
   }
 
@@ -161,15 +259,17 @@ export function prepareIdentity(
   let phone_sha256: string | null = null;
   const rawPhone = nonEmpty(input.phone);
   if (rawPhone !== null) {
-    phone = rawPhone.trim();
     if (hashPhone) {
       try {
         phone_sha256 = hashPhoneE164(rawPhone);
       } catch {
-        // Non-E.164 — leave `phone` as the trimmed raw so a downstream
-        // consumer-specific normalize stage can attempt a country-aware
-        // reformat. `phone_sha256` remains `null`.
+        // Non-E.164, so there is no digest to send. `phone` carries the
+        // trimmed raw instead, which is what lets a consumer-specific
+        // normalize stage attempt a country-aware reformat and re-hash.
+        phone = rawPhone.trim();
       }
+    } else {
+      phone = rawPhone.trim();
     }
   }
 
@@ -182,7 +282,34 @@ export function prepareIdentity(
     email_sha256,
     phone,
     phone_sha256,
+    ...prepareMatchKeys(input, hashEmail),
   };
+}
+
+/**
+ * Canonicalize and hash the eight extended match keys.
+ *
+ * `hashed` decides which of the two slots each key gets — the digest when
+ * the destination takes hashed PII, the canonical value when it takes
+ * plaintext, never both, exactly as for the email/phone pair above.
+ *
+ * `sha256Hex` is called directly rather than through a per-field helper:
+ * the canonicalization each field needs already happened in `person.ts` /
+ * `address.ts`, and those rules never return an empty string, so the
+ * empty-input guard the email and phone helpers wrap cannot fire here.
+ */
+function prepareMatchKeys(input: RawIdentityInput, hashed: boolean): Record<string, string | null> {
+  const canonical: Record<MatchKeyField, string | null> = {
+    ...normalizePerson(input),
+    ...normalizeAddress(input),
+  };
+  const out: Record<string, string | null> = {};
+  for (const field of MATCH_KEY_FIELDS) {
+    const value = canonical[field];
+    out[field] = hashed ? null : value;
+    out[`${field}_sha256`] = hashed && value !== null ? sha256Hex(value) : null;
+  }
+  return out;
 }
 
 /**

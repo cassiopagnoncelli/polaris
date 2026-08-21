@@ -877,7 +877,12 @@ function browserPayload(context: Record<string, unknown> = {}): Record<string, u
   const base = buildEnvelopePayload();
   return {
     ...base,
-    context: { ...(base["context"] as Record<string, unknown>), ip: null, user_agent: null, ...context },
+    context: {
+      ...(base["context"] as Record<string, unknown>),
+      ip: null,
+      user_agent: null,
+      ...context,
+    },
   };
 }
 
@@ -896,10 +901,11 @@ describe("ingest handler — client context", () => {
     const { handler, producer, metrics } = deps();
     const result = await handler.handle(
       { events: [browserPayload()] },
-      contextFor(
-        authOfType("browser"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
-      ),
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "Mozilla/5.0 (Test)",
+      }),
     );
 
     expect(result.body.accepted).toHaveLength(1);
@@ -919,10 +925,11 @@ describe("ingest handler — client context", () => {
     const { handler, producer, metrics } = deps();
     await handler.handle(
       { events: [browserPayload()] },
-      contextFor(
-        authOfType("backend"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "curl/8" },
-      ),
+      contextFor(authOfType("backend"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "curl/8",
+      }),
     );
 
     expect(publishedContext(producer)["ip"]).toBeNull();
@@ -939,10 +946,11 @@ describe("ingest handler — client context", () => {
     const { handler, producer, metrics } = deps();
     await handler.handle(
       { events: [browserPayload({ ip: "198.51.100.99", user_agent: "RelayAgent/2" })] },
-      contextFor(
-        authOfType("browser"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
-      ),
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "Mozilla/5.0 (Test)",
+      }),
     );
 
     expect(publishedContext(producer)["ip"]).toBe("198.51.100.99");
@@ -980,10 +988,11 @@ describe("ingest handler — client context", () => {
     const { handler, producer } = deps();
     await handler.handle(
       { events: [browserPayload()] },
-      contextFor(
-        authOfType("mobile"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "PolarisMobile/1.2" },
-      ),
+      contextFor(authOfType("mobile"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "PolarisMobile/1.2",
+      }),
     );
 
     expect(publishedContext(producer)["ip"]).toBe("203.0.113.10");
@@ -1009,10 +1018,11 @@ describe("ingest handler — client context", () => {
     const { handler, producer, metrics } = deps();
     await handler.handle(
       { events: [browserPayload({ ip: "0.0.0.0" })] },
-      contextFor(
-        authOfType("browser"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: null },
-      ),
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: null,
+      }),
     );
 
     expect(publishedContext(producer)["ip"]).toBeNull();
@@ -1032,10 +1042,11 @@ describe("ingest handler — client context", () => {
     });
     await handler.handle(
       { events: [browserPayload()] },
-      contextFor(
-        authOfType("browser"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
-      ),
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "Mozilla/5.0 (Test)",
+      }),
     );
 
     expect(publishedContext(producer)["ip"]).toBeNull();
@@ -1116,10 +1127,11 @@ describe("ingest handler — client context", () => {
 
     await handler.handle(
       { events: [{ ...browserPayload(), properties: { cvv: "123" } }] },
-      contextFor(
-        authOfType("browser"),
-        { peerAddress: "203.0.113.10", forwardedFor: null, userAgent: "Mozilla/5.0 (Test)" },
-      ),
+      contextFor(authOfType("browser"), {
+        peerAddress: "203.0.113.10",
+        forwardedFor: null,
+        userAgent: "Mozilla/5.0 (Test)",
+      }),
     );
 
     await new Promise((resolve) => setImmediate(resolve));

@@ -127,7 +127,11 @@ describe("ingester /metrics endpoint (P10-002)", () => {
           events: [
             {
               ...base,
-              context: { ...(base["context"] as Record<string, unknown>), ip: null, user_agent: null },
+              context: {
+                ...(base["context"] as Record<string, unknown>),
+                ip: null,
+                user_agent: null,
+              },
             },
           ],
         },

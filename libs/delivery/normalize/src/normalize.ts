@@ -26,9 +26,22 @@
  *      which consent dimensions it consumes. A `denied` evaluation
  *      surfaces as `{ kind: 'drop', reason: 'consent_not_granted' }`.
  *
- *   3. Identity preparation (`prepareIdentity`). Hashes email/phone here,
- *      not in the vendor mapper. The mapper sees both raw and hashed
- *      forms and picks per vendor.
+ *   3. Identity preparation (`prepareIdentity`). Hashes the vendors'
+ *      match set here, not in the vendor mapper. The mapper sees the
+ *      canonical and hashed forms and picks per vendor.
+ *
+ *      Where the values come from is this module's decision, and it is
+ *      an ordered one: the destination's `identityFromProperties` hook
+ *      first, then the profile-trait snapshot. A producer putting an
+ *      email in `properties` wins over the snapshot because it is newer
+ *      — the snapshot was taken when the event was enriched, and this
+ *      event may be what changes it.
+ *
+ *      The trait fallback is the half that was missing. Enrichment
+ *      stamps `traits.email` on every resolved event of a known person,
+ *      and until it was read here the only destination that ever saw a
+ *      hashed email was one whose connector declared the hook. Meta and
+ *      TikTok mappers emitted `em` / `ph` from slots nothing filled.
  *
  *   4. Best-available identity surfacing (via `pickBestIdentity`).
  *      Missing all four identity fields produces
@@ -51,7 +64,7 @@ import {
   type ProjectPolicyOverride,
   type RedactionAction,
 } from "@polaris/governance";
-
+import { ADDRESS_MATCH_KEYS } from "./address.js";
 import {
   type ConsentEvaluation,
   type EnvelopeConsent,
@@ -66,7 +79,9 @@ import {
   pickBestIdentity,
   prepareIdentity,
   type RawIdentityInput,
+  type RawMatchKeyInput,
 } from "./identity.js";
+import { PERSON_MATCH_KEYS } from "./person.js";
 import { isoToEpochMs } from "./timestamp.js";
 
 /**
@@ -180,7 +195,9 @@ export interface EnvelopeEnrichment {
  *   - `identityFromProperties`
  *                         optional helper that pulls raw email/phone out
  *                         of `properties` when the producer puts them
- *                         there. Default: read from `identity` only.
+ *                         there. Outranks the profile-trait snapshot for
+ *                         the two fields it returns; the other six match
+ *                         keys come from traits alone.
  *   - `projectPolicyOverride`
  *                         project-level override for the second-pass
  *                         redaction. The platform default policy already
@@ -325,17 +342,23 @@ export function normalizeForDestination(
     };
   }
 
-  // 4. Identity preparation. Pull raw email/phone via the destination's
-  // optional `identityFromProperties` hook; default is to read from the
-  // canonical `identity` block only.
+  // 4. Identity preparation. The four identifiers come from the envelope;
+  // the match keys come from the destination's optional
+  // `identityFromProperties` hook, then from the profile-trait snapshot.
   const propsIdentity = options.identityFromProperties?.(redactedEnvelope.properties);
   const profile = redactedEnvelope.profile ?? null;
+  const traitsIdentity = matchKeysFromTraits(profile?.traits ?? null);
   const identityInput: RawIdentityInput = {
     canonical_customer_id: profile?.canonical_customer_id ?? null,
     profile_id: profile?.profile_id ?? null,
     user_id: redactedEnvelope.identity.customer_id ?? null,
     anonymous_id: redactedEnvelope.identity.anonymous_id ?? null,
-    ...(propsIdentity ?? {}),
+    ...traitsIdentity,
+    // Spread second: a producer property on THIS event outranks a
+    // snapshot taken when it was enriched. `nonEmptyOnly` drops the
+    // hook's absent fields first, so a hook returning `{ email:
+    // undefined }` cannot blank a trait that was there.
+    ...nonEmptyOnly(propsIdentity),
   };
   const identity = prepareIdentity(identityInput, options.identityHashing ?? {});
 
@@ -382,12 +405,85 @@ export function normalizeForDestination(
 /**
  * Trait keys carrying PII the identity layer knows how to hash.
  *
- * Deliberately the same two the identity layer handles and no more. A
- * broader guess — hashing anything whose key contains "mail", say — would
- * hash a `mailing_preference` string into noise, and an operator would have
- * no way to tell a hashed trait from a genuinely opaque one.
+ * Named, never guessed. A broader rule — hashing anything whose key
+ * contains "mail", say — would hash a `mailing_preference` string into
+ * noise, and an operator would have no way to tell a hashed trait from a
+ * genuinely opaque one. Which is why the catalog pins these names on
+ * `user.identified` v1: the platform hashes what it can name.
+ *
+ * `email` and `phone` sit at the top of the bag. The four address keys do
+ * not — `user.identified` v1 pins them inside `address`, and reaching
+ * them is the reason this reader knows the trait SHAPE and not just a key
+ * list.
  */
 const HASHABLE_TRAIT_KEYS = { email: "email", phone: "phone" } as const;
+
+/** The trait key holding the pinned postal address. */
+const ADDRESS_TRAIT_KEY = "address";
+
+/**
+ * Read the vendors' match set out of a profile-trait snapshot.
+ *
+ * The names are `user.identified` v1's, which is the contract that makes
+ * this possible: before those slots were pinned, a trait bag could carry
+ * a first name under any spelling a project chose and this reader would
+ * have been guessing. It reads only what the catalog names.
+ *
+ * Feeds two callers with the same values, which is the point rather than
+ * a convenience: identity preparation hashes them into the identity
+ * block, and `normalizeTraits` hashes them in the bag they came from. One
+ * reader means the two cannot disagree about what `traits.address.city`
+ * is, and a vendor cannot receive one hashed and the other in the clear.
+ */
+function matchKeysFromTraits(traits: Readonly<Record<string, unknown>> | null): RawMatchKeyInput {
+  if (traits === null) return {};
+  const address = readRecord(traits, ADDRESS_TRAIT_KEY);
+  return {
+    email: readString(traits, HASHABLE_TRAIT_KEYS.email),
+    phone: readString(traits, HASHABLE_TRAIT_KEYS.phone),
+    first_name: readString(traits, "first_name"),
+    last_name: readString(traits, "last_name"),
+    gender: readString(traits, "gender"),
+    birthday: readString(traits, "birthday"),
+    city: readString(address, "city"),
+    state: readString(address, "state"),
+    postal_code: readString(address, "postal_code"),
+    country: readString(address, "country"),
+  };
+}
+
+function readString(bag: Readonly<Record<string, unknown>> | null, key: string): string | null {
+  if (bag === null) return null;
+  const value = bag[key];
+  return typeof value === "string" ? value : null;
+}
+
+function readRecord(
+  bag: Readonly<Record<string, unknown>>,
+  key: string,
+): Readonly<Record<string, unknown>> | null {
+  const value = bag[key];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Drop the absent fields of an `identityFromProperties` result so the
+ * spread that applies it cannot overwrite a trait with `undefined`.
+ *
+ * A hook returning `{ email: undefined, phone: "+15555550123" }` is the
+ * natural shape for "the producer put a phone in properties and no
+ * email", and spreading it raw would take the email the profile snapshot
+ * had and blank it — precedence turning into deletion.
+ */
+function nonEmptyOnly(source: RawMatchKeyInput | undefined): RawMatchKeyInput {
+  if (source === undefined) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === "string" && value.trim().length > 0) out[key] = value;
+  }
+  return out;
+}
 
 /**
  * Apply the identity layer's hashing rules to a traits snapshot.
@@ -397,8 +493,16 @@ const HASHABLE_TRAIT_KEYS = { email: "email", phone: "phone" } as const;
  * email in its identity block must not receive the plaintext of the same
  * address one field over, which is exactly what a passthrough would do.
  *
- * A value that fails to hash (a non-E.164 phone) is DROPPED from the
- * output rather than passed through raw. Traits are a convenience surface;
+ * That invariant covers the whole match set, not just email — a hashed
+ * `first_name_sha256` in the identity block beside a plaintext
+ * `traits.first_name` is the same hole with a different field name in it.
+ * The address keys are rewritten inside the `address` bag they arrived
+ * in, so a receiver reading `traits.address` finds the same shape with
+ * hashed leaves rather than a flattened one.
+ *
+ * A value that fails to normalize (a non-E.164 phone, a country this
+ * platform cannot resolve to an ISO code) is DROPPED from the output
+ * rather than passed through raw. Traits are a convenience surface;
  * leaking a plaintext phone because it was badly formatted is not a
  * trade-off worth making, and the raw value remains available on
  * `identity.phone` when a mapper genuinely needs to re-attempt it.
@@ -409,23 +513,26 @@ function normalizeTraits(
 ): Readonly<Record<string, unknown>> | null {
   if (traits === null) return null;
 
-  const prepared = prepareIdentity(
-    {
-      email:
-        typeof traits[HASHABLE_TRAIT_KEYS.email] === "string"
-          ? (traits[HASHABLE_TRAIT_KEYS.email] as string)
-          : null,
-      phone:
-        typeof traits[HASHABLE_TRAIT_KEYS.phone] === "string"
-          ? (traits[HASHABLE_TRAIT_KEYS.phone] as string)
-          : null,
-    },
-    hashing,
-  );
+  // The same reader identity preparation used, so the bag and the
+  // identity block cannot disagree about a value or about its digest.
+  const prepared = prepareIdentity(matchKeysFromTraits(traits), hashing);
 
   const out: Record<string, unknown> = { ...traits };
   applyHashedTrait(out, HASHABLE_TRAIT_KEYS.email, prepared.email_sha256, hashing.email !== false);
   applyHashedTrait(out, HASHABLE_TRAIT_KEYS.phone, prepared.phone_sha256, hashing.phone !== false);
+
+  for (const key of PERSON_MATCH_KEYS) {
+    applyMatchKeyTrait(out, key, prepared[key] ?? null, prepared[`${key}_sha256`] ?? null);
+  }
+
+  const address = readRecord(traits, ADDRESS_TRAIT_KEY);
+  if (address !== null) {
+    const addressOut: Record<string, unknown> = { ...address };
+    for (const key of ADDRESS_MATCH_KEYS) {
+      applyMatchKeyTrait(addressOut, key, prepared[key] ?? null, prepared[`${key}_sha256`] ?? null);
+    }
+    out[ADDRESS_TRAIT_KEY] = addressOut;
+  }
   return out;
 }
 
@@ -445,6 +552,33 @@ function applyHashedTrait(
   }
   delete out[key];
   out[`${key}_sha256`] = hashed;
+}
+
+/**
+ * The same rule for an extended match key, decided from the prepared
+ * identity rather than from a toggle.
+ *
+ * It can be, because `prepareIdentity` populates exactly one of the two
+ * slots for these keys: the digest when the destination takes hashed PII,
+ * the canonical value when it takes plaintext. So a digest means
+ * "replace", a canonical value means "this destination reads plaintext,
+ * leave the producer's spelling alone", and neither means the rule
+ * refused the value — which is the conservative branch, and a delete.
+ */
+function applyMatchKeyTrait(
+  out: Record<string, unknown>,
+  key: string,
+  canonical: string | null,
+  hashed: string | null,
+): void {
+  if (out[key] === undefined) return;
+  if (hashed !== null) {
+    delete out[key];
+    out[`${key}_sha256`] = hashed;
+    return;
+  }
+  if (canonical !== null) return;
+  delete out[key];
 }
 
 /**

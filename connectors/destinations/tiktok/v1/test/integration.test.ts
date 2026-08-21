@@ -156,7 +156,7 @@ describe("tiktok v1 integration (handleEvent driven)", () => {
     expect(record?.consumer_version).toBe("v1");
     expect(record?.mapper_version).toBe("v1");
     expect(record?.deliverer_version).toBe("v1");
-    expect(record?.normalize_version).toBe("v2");
+    expect(record?.normalize_version).toBe("v3");
     // Vendor dedupe_key stamped on the record IS the canonical event_id.
     expect(record?.dedupe_key).toBe("evt_int_tiktok_001");
     expect(calls).toHaveLength(1);

@@ -84,6 +84,22 @@ const DOCUMENTED_ADDITIVE_PATHS: readonly string[] = [
  * one. A receiver deduplicating on `best_identity.value` will see its keys
  * change shape at the flip, which is why webhook-sink flips first and alone.
  *
+ * `identity.email_sha256` joined them when identity preparation learned to
+ * read the profile-trait snapshot (1VEL3). Enrichment stamps
+ * `traits.email` on every resolved event of a known person, and until
+ * that was read the slot was null for every destination whose connector
+ * declares no `identityFromProperties` hook — which is all of them but
+ * Braze. So the flip now also changes the answer to "what is the hashed
+ * email of this person": null before, a digest after. That is the fix
+ * rather than a side effect, and it is listed here rather than under
+ * "additive" for the same reason `best_identity` is — the path existed,
+ * and its value moved.
+ *
+ * Its plaintext twin does NOT move: `identity.email` stays null, because
+ * a match key is prepared as the canonical value OR its digest and never
+ * both. A receiver that got no plaintext email before this change still
+ * gets none.
+ *
  * Deliberately NOT suppressed by widening the additive list: a receiver
  * reading this file should meet this fact, not have it filed under
  * "additive" where nobody looks.
@@ -91,6 +107,7 @@ const DOCUMENTED_ADDITIVE_PATHS: readonly string[] = [
 const DOCUMENTED_CHANGED_PATHS: readonly string[] = [
   "event.best_identity.kind",
   "event.best_identity.value",
+  "event.identity.email_sha256",
 ];
 
 function isDocumented(path: string, documented: readonly string[]): boolean {
@@ -271,5 +288,16 @@ describe("webhook-sink: analytics.events vs resolved.events", () => {
     expect(payload.event.traits?.["email"]).toBeUndefined();
     expect(payload.event.traits?.["email_sha256"]).toMatch(/^[a-f0-9]{64}$/);
     expect(payload.event.enrichment.geo?.country).toBe("GB");
+  });
+
+  it("hashes the trait email into the identity block, and nowhere in the clear", async () => {
+    // The other half of the same rule. The trait bag was already hashed;
+    // the identity block was null, so the vendors that read it — Meta's
+    // `em`, TikTok's `email` — got nothing at all for a person the
+    // platform had an email for. Both slots now agree, and neither
+    // carries the address.
+    const payload = await capture(resolved(baseEnvelope()));
+    expect(payload.event.identity.email_sha256).toBe(payload.event.traits?.["email_sha256"]);
+    expect(payload.event.identity.email).toBeNull();
   });
 });

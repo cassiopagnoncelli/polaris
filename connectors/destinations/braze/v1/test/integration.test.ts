@@ -165,7 +165,7 @@ describe("braze v1 integration (handleEvent driven)", () => {
     expect(record?.consumer_version).toBe("v1");
     expect(record?.mapper_version).toBe("v1");
     expect(record?.deliverer_version).toBe("v1");
-    expect(record?.normalize_version).toBe("v2");
+    expect(record?.normalize_version).toBe("v3");
     // Audit-only — Braze ignores the field, but the runtime stamps the
     // canonical event_id onto delivery_records for receiver-side debug.
     expect(record?.dedupe_key).toBe("evt_int_braze_001");

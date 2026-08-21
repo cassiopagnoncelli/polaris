@@ -154,7 +154,7 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(record?.consumer_version).toBe("v1");
     expect(record?.mapper_version).toBe("v1");
     expect(record?.deliverer_version).toBe("v1");
-    expect(record?.normalize_version).toBe("v2");
+    expect(record?.normalize_version).toBe("v3");
     // For begin_checkout, dedupe_key falls through to canonical event_id
     // (GA4 only dedupes purchases via transaction_id).
     expect(record?.dedupe_key).toBe("evt_int_ga4_001");

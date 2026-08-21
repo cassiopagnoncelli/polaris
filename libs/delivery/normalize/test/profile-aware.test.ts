@@ -13,7 +13,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeForDestination, pickBestIdentity, prepareIdentity } from "../src/index.js";
+import {
+  normalizeForDestination,
+  pickBestIdentity,
+  prepareIdentity,
+  sha256Hex,
+} from "../src/index.js";
 
 import { buildEnvelope } from "./fixtures.js";
 
@@ -198,5 +203,208 @@ describe("enrichment", () => {
 
     const unenriched = normalize(buildEnvelope());
     expect(unenriched.enrichment.geo).toBeNull();
+  });
+});
+
+/**
+ * The defect this card exists to close.
+ *
+ * In production Meta and TikTok never received a hashed email or phone.
+ * The mappers emit `em` / `ph` from `identity.email_sha256`; identity
+ * preparation filled that only from a connector's optional
+ * `identityFromProperties` hook, which only Braze declares; and nothing
+ * read the trait snapshot that enrichment stamps on every resolved event
+ * of a known person. Two correct halves with nothing joining them, and no
+ * test in between: the mapper goldens start from a pre-hashed fixture, so
+ * they were green throughout.
+ *
+ * `META_LIKE` is a vendor descriptor's normalize options as Meta and
+ * TikTok declare them — hash everything, no properties hook. Spelled out
+ * here rather than imported, because a library test that reaches into a
+ * connector inverts the dependency the connector layer exists to keep.
+ */
+const META_LIKE = {
+  destinationId: "polaris_dst_test",
+  requiredConsent: {},
+  identityHashing: { email: true, phone: true },
+} as const;
+
+function normalizeAsMeta(envelope: Parameters<typeof normalizeForDestination>[0]) {
+  const outcome = normalizeForDestination(envelope, META_LIKE);
+  if (outcome.kind !== "normalized") throw new Error(`unexpected drop: ${outcome.reason}`);
+  return outcome.normalized;
+}
+
+describe("identity from the profile-trait snapshot", () => {
+  it("hashes an email that arrived only in profile traits, for a destination with no properties hook", () => {
+    const normalized = normalizeAsMeta(
+      buildEnvelope({
+        properties: { amount: 12990, currency: "BRL" },
+        profile: { ...PROFILE, traits: { email: "someone@example.com" } },
+      }),
+    );
+    expect(normalized.identity.email_sha256).toBe(sha256Hex("someone@example.com"));
+  });
+
+  it("hashes a phone that arrived only in profile traits, for a destination with no properties hook", () => {
+    const normalized = normalizeAsMeta(
+      buildEnvelope({ profile: { ...PROFILE, traits: { phone: "+15555550123" } } }),
+    );
+    expect(normalized.identity.phone_sha256).toBe(sha256Hex("+15555550123"));
+  });
+
+  it("fills the whole match set from the pinned trait slots", () => {
+    const normalized = normalizeAsMeta(
+      buildEnvelope({
+        profile: {
+          ...PROFILE,
+          traits: {
+            first_name: "John",
+            last_name: "Smith",
+            gender: "male",
+            birthday: "1990-02-15",
+            address: {
+              street: "1 Hacker Way",
+              city: "Menlo Park",
+              state: "CA",
+              postal_code: "94025-1234",
+              country: "United States",
+            },
+          },
+        },
+      }),
+    );
+    expect(normalized.identity.first_name_sha256).toBe(sha256Hex("john"));
+    expect(normalized.identity.last_name_sha256).toBe(sha256Hex("smith"));
+    expect(normalized.identity.gender_sha256).toBe(sha256Hex("m"));
+    expect(normalized.identity.birthday_sha256).toBe(sha256Hex("19900215"));
+    expect(normalized.identity.city_sha256).toBe(sha256Hex("menlopark"));
+    expect(normalized.identity.state_sha256).toBe(sha256Hex("ca"));
+    expect(normalized.identity.postal_code_sha256).toBe(sha256Hex("94025"));
+    expect(normalized.identity.country_sha256).toBe(sha256Hex("us"));
+  });
+
+  it("leaves the match set empty on an envelope that never reached the spine", () => {
+    // No profile block at all: `analytics.events` traffic and every replay
+    // of history. Nothing to fall back to, and no drop caused by looking.
+    const normalized = normalizeAsMeta(buildEnvelope());
+    expect(normalized.identity.email_sha256).toBeNull();
+    expect(normalized.identity.first_name_sha256).toBeNull();
+  });
+});
+
+describe("identity precedence: properties over the trait snapshot", () => {
+  const envelope = buildEnvelope({
+    properties: { email: "newest@example.com", amount: 1 },
+    profile: { ...PROFILE, traits: { email: "snapshot@example.com" } },
+  });
+
+  it("prefers a producer property over the trait snapshot", () => {
+    // The snapshot was taken when the event was enriched; the property is
+    // on the event itself, and this event may be what changes the profile.
+    const outcome = normalizeForDestination(envelope, {
+      ...META_LIKE,
+      identityFromProperties: (props) => ({ email: props["email"] as string }),
+    });
+    if (outcome.kind !== "normalized") throw new Error("unexpected drop");
+    expect(outcome.normalized.identity.email_sha256).toBe(sha256Hex("newest@example.com"));
+  });
+
+  it("falls to the snapshot for a field the hook did not return", () => {
+    // A hook that found a phone and no email must not blank the email the
+    // snapshot had: precedence is not deletion.
+    const outcome = normalizeForDestination(
+      buildEnvelope({
+        properties: { phone: "+15555550123" },
+        profile: { ...PROFILE, traits: { email: "snapshot@example.com" } },
+      }),
+      {
+        ...META_LIKE,
+        identityFromProperties: (props) => ({ phone: props["phone"] as string }),
+      },
+    );
+    if (outcome.kind !== "normalized") throw new Error("unexpected drop");
+    expect(outcome.normalized.identity.email_sha256).toBe(sha256Hex("snapshot@example.com"));
+    expect(outcome.normalized.identity.phone_sha256).toBe(sha256Hex("+15555550123"));
+  });
+
+  it("falls to the snapshot when the destination declares no hook at all", () => {
+    const normalized = normalizeAsMeta(envelope);
+    expect(normalized.identity.email_sha256).toBe(sha256Hex("snapshot@example.com"));
+  });
+});
+
+describe("traits: the extended match set in the bag it arrived in", () => {
+  function normalizeTraitsOf(traits: Record<string, unknown>) {
+    return normalizeAsMeta(buildEnvelope({ profile: { ...PROFILE, traits } })).traits;
+  }
+
+  it("hashes the person keys in place", () => {
+    const traits = normalizeTraitsOf({ first_name: "John", gender: "male", tier: "gold" });
+    expect(traits?.["first_name"]).toBeUndefined();
+    expect(traits?.["first_name_sha256"]).toBe(sha256Hex("john"));
+    expect(traits?.["gender_sha256"]).toBe(sha256Hex("m"));
+    expect(traits?.["tier"]).toBe("gold");
+  });
+
+  it("hashes the address keys inside the address bag, leaving its shape alone", () => {
+    // A receiver reading `traits.address` finds the same object with
+    // hashed leaves, not a flattened one — and `street`, which no vendor
+    // matches on, is untouched.
+    const traits = normalizeTraitsOf({
+      address: { street: "1 Hacker Way", city: "Menlo Park", country: "United States" },
+    });
+    const address = traits?.["address"] as Record<string, unknown>;
+    expect(address["city"]).toBeUndefined();
+    expect(address["city_sha256"]).toBe(sha256Hex("menlopark"));
+    expect(address["country_sha256"]).toBe(sha256Hex("us"));
+    expect(address["street"]).toBe("1 Hacker Way");
+  });
+
+  it("drops a value its rule refuses rather than passing it through raw", () => {
+    // The conservative branch the phone trait already had, now for every
+    // key: an unresolvable country is not sent in the clear because it
+    // could not be hashed.
+    const traits = normalizeTraitsOf({
+      gender: "prefer not to say",
+      address: { country: "Narnia", city: "Menlo Park" },
+    });
+    expect(traits?.["gender"]).toBeUndefined();
+    expect(traits?.["gender_sha256"]).toBeUndefined();
+    const address = traits?.["address"] as Record<string, unknown>;
+    expect(address["country"]).toBeUndefined();
+    expect(address["country_sha256"]).toBeUndefined();
+  });
+
+  it("leaves the whole set in the clear when the destination takes plaintext", () => {
+    // Braze. The identity block carries the canonical form and the bag
+    // keeps the producer's spelling, which is the one a messaging vendor
+    // renders into a template.
+    const outcome = normalizeForDestination(
+      buildEnvelope({
+        profile: {
+          ...PROFILE,
+          traits: { first_name: "John", address: { city: "Menlo Park" } },
+        },
+      }),
+      {
+        destinationId: "polaris_dst_test",
+        requiredConsent: {},
+        identityHashing: { email: false, phone: false },
+      },
+    );
+    if (outcome.kind !== "normalized") throw new Error("unexpected drop");
+    expect(outcome.normalized.traits?.["first_name"]).toBe("John");
+    expect((outcome.normalized.traits?.["address"] as Record<string, unknown>)["city"]).toBe(
+      "Menlo Park",
+    );
+    expect(outcome.normalized.identity.first_name).toBe("john");
+  });
+
+  it("does not mutate the envelope's address bag", () => {
+    const address = { city: "Menlo Park", country: "United States" };
+    normalizeAsMeta(buildEnvelope({ profile: { ...PROFILE, traits: { address } } }));
+    expect(address.city).toBe("Menlo Park");
+    expect(address.country).toBe("United States");
   });
 });

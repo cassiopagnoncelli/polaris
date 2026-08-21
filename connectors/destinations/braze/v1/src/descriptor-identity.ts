@@ -40,8 +40,23 @@ export const CONSUMER_VERSION = "v1" as const;
  * `analytics.events` envelope there is no profile block, so the new fields
  * are null and the preference falls straight through to `user_id` exactly
  * as before.
+ *
+ * Normalize v3 (1VEL3): identity preparation falls back to the
+ * profile-trait snapshot, and the hashed set widens from email and phone
+ * to the eight further keys the ad platforms match on. Unlike v2 this one
+ * has a visible output change on every consumer that hashes — enrichment
+ * stamps `traits.email` on every resolved event of a known person, and
+ * the slot the mappers emit `em` / `ph` from was null until it was read.
+ *
+ * Bumped on every consumer for v2's reason, and for a second one that v2
+ * did not have: the delivery key is
+ * `SHA-256(destination_id|event_id|normalize_version|...)`, so a stamp
+ * that does not move makes a replay of an event delivered before this
+ * change dedupe against the delivery that was missing the identity. The
+ * fix would land and the traffic it was meant to repair would never be
+ * re-sent.
  */
-export const NORMALIZE_VERSION = "v2" as const;
+export const NORMALIZE_VERSION = "v3" as const;
 export const MAPPER_VERSION = "v1" as const;
 export const DELIVERER_VERSION = "v1" as const;
 

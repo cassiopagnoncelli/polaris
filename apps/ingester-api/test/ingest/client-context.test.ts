@@ -18,7 +18,14 @@ function connection(overrides: Partial<ClientConnection> = {}): ClientConnection
 function event(context: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     event: "page.viewed",
-    context: { ip: null, user_agent: null, locale: "pt-BR", page: null, campaign: null, ...context },
+    context: {
+      ip: null,
+      user_agent: null,
+      locale: "pt-BR",
+      page: null,
+      campaign: null,
+      ...context,
+    },
   };
 }
 
@@ -143,7 +150,12 @@ describe("applyClientContext — eligibility", () => {
     // Such an event fails `invalid_envelope` on its own merits; counting
     // it would put non-candidates on the rollout panel.
     for (const broken of [{ event: "page.viewed" }, { event: "x", context: null }]) {
-      const result = applyClientContext(broken, connection({ peerAddress: "203.0.113.10" }), "browser", ON);
+      const result = applyClientContext(
+        broken,
+        connection({ peerAddress: "203.0.113.10" }),
+        "browser",
+        ON,
+      );
       expect(result.event).toBe(broken);
       expect(result.outcomes).toEqual([]);
     }
