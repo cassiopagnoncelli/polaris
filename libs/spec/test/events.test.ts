@@ -60,6 +60,78 @@ describe("page.viewed v2 (active)", () => {
   });
 });
 
+// ---------------------------------------------------------------------
+// `name` and `category`, added in place on 2026-08-21 so Segment's
+// `page(category, name)` has somewhere to land. The whole point of an
+// in-place addition is that it takes nothing away, so the guarantee is
+// stated as a test rather than left to the changelog.
+// ---------------------------------------------------------------------
+
+describe("page.viewed v2 — name and category (in-place addition)", () => {
+  /** The v2 body exactly as it was before the addition, frozen literally. */
+  const FOUR_KEY_BODY = {
+    path: "/products/sku-1",
+    search: "?ref=email",
+    title: "Product SKU-1",
+    referrer: "https://example.com/",
+  };
+
+  it("still accepts the four-key body that predates the addition", () => {
+    // The in-place guarantee: every previously-valid v2 event stays valid.
+    expect(pageViewedV2PropertiesSchema.safeParse(FOUR_KEY_BODY).success).toBe(true);
+  });
+
+  it("accepts name", () => {
+    const result = pageViewedV2PropertiesSchema.safeParse({
+      ...FOUR_KEY_BODY,
+      name: "Product Detail",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.name).toBe("Product Detail");
+  });
+
+  it("accepts category", () => {
+    const result = pageViewedV2PropertiesSchema.safeParse({
+      ...FOUR_KEY_BODY,
+      category: "Catalog",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe("Catalog");
+  });
+
+  it("accepts null name and null category", () => {
+    // Nullable as well as optional: a producer that always sends the key
+    // and sometimes has no value does not have to omit it conditionally.
+    const result = pageViewedV2PropertiesSchema.safeParse({
+      ...FOUR_KEY_BODY,
+      name: null,
+      category: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty name and an over-long category", () => {
+    expect(pageViewedV2PropertiesSchema.safeParse({ ...FOUR_KEY_BODY, name: "" }).success).toBe(
+      false,
+    );
+    expect(
+      pageViewedV2PropertiesSchema.safeParse({ ...FOUR_KEY_BODY, category: "c".repeat(129) })
+        .success,
+    ).toBe(false);
+  });
+
+  it("keeps previously-invalid bodies invalid", () => {
+    // The other half of the in-place rule. Two ways a v2 body was already
+    // wrong, neither of which the addition may have rescued: an unknown
+    // key (the schema is still strict) and a missing required one.
+    expect(
+      pageViewedV2PropertiesSchema.safeParse({ ...FOUR_KEY_BODY, host: "example.com" }).success,
+    ).toBe(false);
+    const { referrer: _dropped, ...missingReferrer } = FOUR_KEY_BODY;
+    expect(pageViewedV2PropertiesSchema.safeParse(missingReferrer).success).toBe(false);
+  });
+});
+
 describe("checkout.started v1 (active)", () => {
   it("accepts the v1 fixture properties", () => {
     const result = checkoutStartedV1PropertiesSchema.safeParse(checkoutStartedV1Fixture.properties);
@@ -169,6 +241,141 @@ describe("user.identified v1", () => {
     // email/phone feed destination identity hashing, so their shapes are
     // pinned even though passthrough accepts unknown keys.
     expect(userIdentifiedV1PropertiesSchema.safeParse({ email: "not-an-email" }).success).toBe(
+      false,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------
+// The trait slots pinned in place on 2026-08-21. These are the names the
+// ad platforms and Braze match on; before this the normalizer received
+// them as unnamed passthrough keys and could not hash what it could not
+// name. Pinning names a shape — it does not close the set, which is what
+// the passthrough assertions below exist to hold.
+// ---------------------------------------------------------------------
+
+describe("user.identified v1 — pinned trait slots (in-place addition)", () => {
+  /** One well-formed value per pinned slot. Drives a test per slot. */
+  const PINNED: Array<[string, unknown]> = [
+    ["name", "Ada Lovelace"],
+    ["gender", "non-binary"],
+    ["birthday", "1990-02-14"],
+    ["avatar", "https://cdn.example.com/avatars/ada.png"],
+    ["title", "Principal Engineer"],
+    ["username", "ada"],
+    ["website", "https://ada.example.com"],
+    ["created_at", "2026-01-04T09:30:00.000Z"],
+    [
+      "address",
+      {
+        street: "Rua da Consolação 1000",
+        city: "São Paulo",
+        state: "SP",
+        postal_code: "01302-000",
+        country: "BR",
+      },
+    ],
+    [
+      "company",
+      {
+        id: "co_42",
+        name: "Analytical Engines",
+        industry: "software",
+        employee_count: 240,
+        plan: "enterprise",
+      },
+    ],
+  ];
+
+  it.each(PINNED)("accepts %s", (slot, value) => {
+    const result = userIdentifiedV1PropertiesSchema.safeParse({ [slot]: value });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data[slot]).toEqual(value);
+  });
+
+  it.each(PINNED)("accepts a null %s", (slot) => {
+    // Every slot is optional AND nullable: a producer that clears a trait
+    // sends null rather than dropping the key, and both must validate.
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ [slot]: null }).success).toBe(true);
+  });
+
+  it("still accepts the five-key body that predates the addition", () => {
+    // The in-place guarantee, frozen literally: this is what the entry
+    // pinned before today, and it must keep validating unchanged.
+    const result = userIdentifiedV1PropertiesSchema.safeParse({
+      email: "ada@example.com",
+      phone: "+5511999999999",
+      first_name: "Ada",
+      last_name: "Lovelace",
+      locale: "pt-BR",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("still passes unknown project traits through, nested ones included", () => {
+    // Naming ten slots must not have turned the bag into a whitelist.
+    const result = userIdentifiedV1PropertiesSchema.safeParse({
+      name: "Ada Lovelace",
+      ltv_band: "high",
+      address: { city: "São Paulo", complement: "apto 41" },
+      company: { name: "Analytical Engines", crm_id: "sf_991" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data["ltv_band"]).toBe("high");
+      // Nested objects are passthrough for the same reason the parent is:
+      // an address the platform does not model is still the project's.
+      expect(result.data.address).toEqual({ city: "São Paulo", complement: "apto 41" });
+      expect(result.data.company).toEqual({ name: "Analytical Engines", crm_id: "sf_991" });
+    }
+  });
+
+  it("rejects a birthday that never happened", () => {
+    // Shape alone is not enough. Meta's `db` is YYYYMMDD, so a date that
+    // does not exist becomes a match key the vendor silently drops —
+    // which is the expensive place to find out.
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ birthday: "1990-02-30" }).success).toBe(
+      false,
+    );
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ birthday: "2023-02-29" }).success).toBe(
+      false,
+    );
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ birthday: "20/03/1990" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a malformed website and avatar", () => {
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ website: "example.com" }).success).toBe(
+      false,
+    );
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ avatar: "not-a-url" }).success).toBe(false);
+  });
+
+  it("rejects a created_at that is a date rather than a timestamp", () => {
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ created_at: "2026-01-04" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts a created_at carrying an offset", () => {
+    // Deliberately looser than the platform-stamped envelope timestamps:
+    // this value is mirrored from whichever system owned the account
+    // before Polaris, and Segment's `createdAt` routinely carries one.
+    expect(
+      userIdentifiedV1PropertiesSchema.safeParse({ created_at: "2026-01-04T09:30:00+02:00" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects a non-numeric employee_count and an over-long gender", () => {
+    expect(
+      userIdentifiedV1PropertiesSchema.safeParse({ company: { employee_count: "240" } }).success,
+    ).toBe(false);
+    expect(
+      userIdentifiedV1PropertiesSchema.safeParse({ company: { employee_count: 12.5 } }).success,
+    ).toBe(false);
+    expect(userIdentifiedV1PropertiesSchema.safeParse({ gender: "g".repeat(33) }).success).toBe(
       false,
     );
   });

@@ -7,8 +7,8 @@
 # Unlike every other catalog entry this one is `.passthrough()`. Traits are
 # project semantics — a platform-enumerated list would reject any project
 # that declared a trait of its own. The platform pins only the slots it
-# consumes (email, phone) and lets the rest through; the trait snapshot's
-# size guard, not a field whitelist, is what bounds the blast radius.
+# consumes and lets the rest through; the trait snapshot's size guard, not
+# a field whitelist, is what bounds the blast radius.
 name: user.identified
 schema_version: 1
 domain: user
@@ -18,5 +18,81 @@ description: >-
   into the profile store by the identity stage; last-write-wins per key.
 lifecycle: active
 since: "2026-08-14"
+notes: |
+  2026-08-21 — in-place addition (no version bump): `name`, `gender`,
+  `birthday`, `avatar`, `title`, `username`, `website`, `created_at`,
+  `address` and `company` are now pinned, all optional and nullable.
+
+  Why: these are the traits the ad platforms and Braze match on. Before
+  today the entry pinned only `email`, `phone`, `first_name`, `last_name`
+  and `locale`; everything else arrived as an unnamed passthrough key, and
+  the destination normalizer cannot hash, case-fold or reshape what it
+  cannot name. Pinning gives the shape a name and one agreed spelling —
+  it does not close the set. The schema is still `.passthrough()`, and so
+  are the nested `address` and `company` objects, so a project trait rides
+  through here exactly as it did before.
+
+  This is the ADR-0001 #57 justification the `email` / `phone` pins
+  already carry, applied to the rest of the match keys: property style is
+  owner-defined, but the platform names what it consumes at the
+  destination boundary.
+
+  Cost of pinning, stated plainly: a producer that was sending one of
+  these ten names with a value that does not fit the pinned shape — a
+  `birthday` of "20/03/1990", a `website` of "example.com", an
+  `employee_count` as a string — is now rejected at ingest where it was
+  previously accepted and passed through unvalidated. That is a narrowing
+  for those names, and it is the intent of the card: a match key that is
+  malformed fails silently at the vendor, which is the more expensive
+  place to find out. Nothing in this repository emits or maps these names
+  yet, so the narrowing is being taken before there is traffic to break;
+  whoever adds a producer should check its trait spellings against the
+  table below rather than assuming passthrough will absorb them.
+
+  Shapes worth knowing before mapping:
+    - `birthday` is a real calendar date, not just the `YYYY-MM-DD` shape;
+      "1990-02-30" is rejected, because Meta's `db` is `YYYYMMDD` and a
+      fake date becomes a dropped match at the vendor.
+    - `gender` is a capped free string, not an enum. Vendors disagree on
+      the vocabulary (`m`/`f` vs their own tokens) and producers send
+      prose; the normalizer maps it.
+    - `created_at` accepts an ISO 8601 timestamp with or without an
+      offset, unlike the platform-stamped envelope timestamps. It is
+      mirrored from whichever system owned the account before Polaris.
+    - `address.country` stays a free string; ISO-3166-1 alpha-2 is
+      preferred but "Brazil" is normalised downstream, not rejected here.
+
+  Segment reserved-trait correspondence (one-to-one, so the migration
+  mapping in the handbook needs no translation table):
+
+    email                 -> email
+    phone                 -> phone
+    firstName             -> first_name
+    lastName              -> last_name
+    name                  -> name              (added 2026-08-21)
+    gender                -> gender            (added 2026-08-21)
+    birthday              -> birthday          (added 2026-08-21)
+    avatar                -> avatar            (added 2026-08-21)
+    title                 -> title             (added 2026-08-21)
+    username              -> username          (added 2026-08-21)
+    website               -> website           (added 2026-08-21)
+    createdAt             -> created_at        (added 2026-08-21)
+    address.street        -> address.street    (added 2026-08-21)
+    address.city          -> address.city      (added 2026-08-21)
+    address.state         -> address.state     (added 2026-08-21)
+    address.postalCode    -> address.postal_code (added 2026-08-21)
+    address.country       -> address.country   (added 2026-08-21)
+    company.id            -> company.id        (added 2026-08-21)
+    company.name          -> company.name      (added 2026-08-21)
+    company.industry      -> company.industry  (added 2026-08-21)
+    company.employee_count -> company.employee_count (added 2026-08-21)
+    company.plan          -> company.plan      (added 2026-08-21)
+    id                    -> (envelope identity.customer_id)
+    description           -> (unpinned; passes through)
+
+  `locale` is pinned here but is not a Segment reserved trait — Segment
+  carries it in context. A migrating producer that wants it in the profile
+  sends it as a trait; the envelope's `context.locale` is a separate fact
+  about the request.
 schema_module: "@polaris/spec/events/user/identified.v1"
 schema_export: userIdentifiedV1PropertiesSchema

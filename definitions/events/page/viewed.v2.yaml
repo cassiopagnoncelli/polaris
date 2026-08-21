@@ -9,8 +9,34 @@ description: >-
   `context.page`).
 lifecycle: active
 since: "2026-02-15"
-notes: >-
+notes: |
   v1 remains in the catalog until its sunset_at so historical events stay
   replayable.
+
+  2026-08-21 — in-place addition (no version bump): optional `name` and
+  `category`. Segment's `page(category, name)` had nowhere to land in
+  Polaris, so the two arguments every migrating producer already passes
+  were being dropped on the floor; the `page()` SDK helper needs a named
+  home for them. Permitted in place under `01-event-contract.md` §
+  In-place changes: both are optional keys, so every v2 body written
+  before today omits them and stays valid, and no previously-invalid body
+  becomes valid (the schema is still `.strict()`).
+
+  The platform names these two because it consumes them at the
+  destination boundary, which is the same justification the `path` /
+  `referrer` pins carry — ADR-0001 #57 leaves property style to the
+  owner, not property naming to chance.
+
+  Segment correspondence (kept one-to-one so the migration mapping in the
+  handbook needs no translation table):
+
+    analytics.page(category, name, properties)
+      category            -> category      (added 2026-08-21)
+      name                -> name          (added 2026-08-21)
+      properties.path     -> path
+      properties.search   -> search
+      properties.title    -> title
+      properties.referrer -> referrer
+      properties.url      -> (envelope context.page.url)
 schema_module: "@polaris/spec/events/page/viewed.v2"
 schema_export: pageViewedV2PropertiesSchema
