@@ -75,6 +75,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ADR-0008's injection makes part of the workspace graph a hard-linked
+      # COPY under node_modules/.pnpm/<pkg>@file+<path>/ rather than a symlink
+      # to its source. The install above takes that copy BEFORE anything is
+      # built, so it carries no dist/, and the build below fails with
+      #   TS2307: Cannot find module '@polaris/<x>'
+      # in a package the change never touched -- while `pnpm install --force`
+      # reports "Already up to date", truthfully, because the lockfile is
+      # current and freshness was never the problem. A checkout is a freshly
+      # provisioned tree, so every job that installs and then builds is
+      # exposed, not only a pm worktree. Card PHYFV.
+      #
+      # Not a pnpm script deliberately: scripts/lint-gate-parity.mjs holds the
+      # pnpm scripts CI runs equal to the ones `pnpm verify` runs, and this is
+      # provisioning rather than a gate. It installs with --frozen-lockfile,
+      # so it cannot rewrite the lockfile here.
+      - name: Sync injected workspace copies
+        run: node scripts/sync-injected-workspace-copies.mjs
+
       # Many per-package typecheck runs depend on dist/ from their dependencies.
       # `pnpm build` is cheap (tsc only) and matches the production build path.
       - name: Build (tsc emit)
@@ -142,6 +160,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The install above snapshots the injected workspace packages before
+      # anything is built, so the build below would fail with TS2307 in an
+      # untouched package. See ci.yml's static-analysis job, ADR-0008 and
+      # card PHYFV.
+      - name: Sync injected workspace copies
+        run: node scripts/sync-injected-workspace-copies.mjs
 
       # Same rationale as the static-analysis job: workspace tests rely on
       # each package's compiled dist/.

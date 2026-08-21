@@ -97,6 +97,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The install above snapshots the injected workspace packages before
+      # anything is built, so the build below would fail with TS2307 in an
+      # untouched package. See ci.yml's static-analysis job, ADR-0008 and
+      # card PHYFV.
+      - name: Sync injected workspace copies
+        run: node scripts/sync-injected-workspace-copies.mjs
+
       - name: Build (tsc emit)
         run: pnpm build
 
@@ -358,6 +365,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The install above snapshots the injected workspace packages before
+      # anything is built, so the build below would fail with TS2307 in an
+      # untouched package. See ci.yml's static-analysis job, ADR-0008 and
+      # card PHYFV.
+      - name: Sync injected workspace copies
+        run: node scripts/sync-injected-workspace-copies.mjs
 
       - name: Build (tsc emit)
         run: pnpm build

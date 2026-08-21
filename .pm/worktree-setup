@@ -1,0 +1,39 @@
+#!/bin/sh
+# Polaris worktree provisioning.
+#
+# pm runs this in every worktree it creates, with the new worktree as cwd,
+# immediately after `git worktree add` and before anything tries to build or
+# verify. See `agents/pm/AGENT.md` — pm owns the hook point, this repository
+# owns what goes in it.
+#
+# What a fresh worktree is missing is `node_modules`, and installing one is
+# not the whole job. ADR-0008 turned on `injectWorkspacePackages`, under which
+# `pnpm install` snapshots part of the workspace graph into
+# `node_modules/.pnpm/<pkg>@file+<path>/` instead of symlinking it. The
+# snapshot is taken before anything is built, so it carries no `dist/`, and
+# the first `pnpm build` in the worktree fails with
+#
+#   TS2307: Cannot find module '@polaris/<x>'
+#
+# from a package the worker never touched — while `pnpm install --force`
+# reports "Already up to date" and changes nothing. That cost two workers a
+# diagnostic cycle each and failed one group's land, which is what carded
+# PHYFV and put this file here: paid once, in provisioning, rather than per
+# worker and per worktree in a form that looks like a defect in the code.
+#
+# Keep it POSIX sh and idempotent. pm may run it on a worktree that already
+# has a node_modules, and a hook that is only safe the first time is a hook
+# somebody has to remember the rule for.
+set -eu
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "worktree-setup: pnpm is not on PATH; cannot provision this worktree." >&2
+  echo "  Install it (corepack enable) and re-run ./.pm/worktree-setup here." >&2
+  exit 1
+fi
+
+echo "worktree-setup: installing dependencies"
+pnpm install
+
+echo "worktree-setup: syncing injected workspace copies"
+node scripts/sync-injected-workspace-copies.mjs

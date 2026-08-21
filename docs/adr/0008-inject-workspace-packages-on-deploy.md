@@ -113,19 +113,50 @@ third latent trap of the kind this record exists to remove.
   `@polaris/*` dependency. Image size grows by the size of the workspace deps
   in the graph; deduplication across services was never available anyway,
   since each image ships its own tree.
-- Neutral, and worth stating because it was expected to go the other way: the
-  development tree is unchanged. After a clean install the `@polaris/*` entries
-  under a package's `node_modules` are still plain symlinks to their source
-  directories, so editing a library is still visible to its dependents without
-  reinstalling. Injection materialises when `pnpm deploy` assembles a tree, not
-  when `pnpm install` links one.
+- Negative, and CORRECTED ON 2026-08-21 by card `PHYFV`: this bullet asserted
+  the opposite, and being able to read it and still be wrong is what cost two
+  workers a diagnostic cycle each. It said the development tree was unchanged
+  — that after a clean install the `@polaris/*` entries under a package's
+  `node_modules` are all still plain symlinks to their sources, and that
+  injection materialises only when `pnpm deploy` assembles a tree.
+
+  It is true of most of the graph and false exactly where it matters.
+  `pnpm install` injects in the development tree too, for the packages
+  reachable through an injected dependency — eleven of them here, materialised
+  as hard-linked snapshots under `node_modules/.pnpm/<pkg>@file+<path>/`, with
+  each dependent pointed at the snapshot instead of at the source.
+
+  A snapshot is taken at install time and is never updated afterwards. On a
+  fresh worktree that is BEFORE anything is built, so the copy carries no
+  `dist/`; building the source later does not reach the copy; and `tsc`,
+  following the copy's own `"types": "./dist/index.d.ts"`, reports
+  `TS2307: Cannot find module '@polaris/<x>'` from a package the change never
+  touched. Editing a library is still visible to its dependents without
+  reinstalling wherever the link is a symlink. Through an injected copy it is
+  not visible at all.
 - Negative: turning the setting on over an EXISTING `node_modules` leaves a
   half-migrated tree — pnpm writes the injected virtual-store entry without
   populating it, and the dangling link presents as `TS2307: cannot find module
   @polaris/<x>` from a package that plainly has one. `pnpm install` reports
-  "Already up to date" and does not repair it. A clean install does. This cost
-  a diagnostic cycle during the change and will cost one to whoever next
-  changes the setting or first pulls it.
+  "Already up to date" and does not repair it.
+
+  This bullet ended "A clean install does", and CARD `PHYFV` FOUND THAT WRONG
+  TOO, on 2026-08-21. A clean install is not sufficient and is not even the
+  operative half: `rm -rf node_modules` at the root does remove the virtual
+  store, but the install that follows re-snapshots sources that have not been
+  built yet and rebuilds the identical broken tree. It is not staleness. It is
+  ORDER — the copy is taken before the output it is supposed to carry exists,
+  and that is true of a first install as much as of a migrated one. What a
+  clean install has to include under injection is the per-package trees and
+  the virtual store, and what pnpm consults to decide the workspace needs no
+  re-linking is `node_modules/.pnpm-workspace-state-v1.json`.
+
+  So the repair is: build the injected sources, remove that state file,
+  install again. One command does it —
+  `node scripts/sync-injected-workspace-copies.mjs` — and `.pm/worktree-setup`
+  runs it in every worktree pm creates, so the cost of this decision is paid
+  once in provisioning rather than per worker, per worktree, as a phantom
+  error in somebody else's package.
 - Negative: the setting is recorded in `pnpm-lock.yaml`'s `settings` block, so
   turning it off is a lockfile change and turning it on is one too.
 - Negative: injection interacts with `workspace:*` graph edits — a package
