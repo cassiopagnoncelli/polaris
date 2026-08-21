@@ -39,7 +39,7 @@ machine's history. It also means the keys are reissued every run, which is why
 step 2 below is not a step you have to do.
 
 `make seed` re-runs the catalog syncs and the allow-list on their own, without
-destroying anything. Reach for it after changing something under `catalog/`.
+destroying anything. Reach for it after changing something under `definitions/`.
 
 **2. Nothing.** `make setup` already issued the blueprint's two keys — a web
 key sending as `storefront-web`, a backend key sending as `payments-api` — and

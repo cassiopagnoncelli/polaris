@@ -134,6 +134,16 @@ const PACKAGE_NAME_CANARY = `@polaris/${"shared"}-governance`;
  */
 const BLUEPRINT_LINK_CANARY = `link:../../${"packages"}/node-sdk`;
 
+/**
+ * The pnpm the blueprint's install actually ran under while the root pinned
+ * 11.21.0 — the fault re-created rather than one invented for the harness.
+ *
+ * Written as a literal, unlike the assembled canaries above. The only check
+ * that reads a `pnpm@x.y.z` is `lint-docker-deploy`, which reads Dockerfiles
+ * and nothing else, so a mention in this file cannot be mistaken for a pin.
+ */
+const BLUEPRINT_PNPM_CANARY = "pnpm@10.30.0";
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -283,6 +293,24 @@ const GATES = [
     },
     assertInjected: () =>
       read("blueprints/01-storefront/package.json").includes(BLUEPRINT_LINK_CANARY),
+  },
+  {
+    // Injected by rewriting the manifest rather than by a string replace of
+    // the version: a replace spells the root's pin here as a second copy of
+    // it, and the day the root moves the injection silently stops landing.
+    // The field is set to a version that is simply not the root's, whatever
+    // the root's happens to be.
+    name: "lint:blueprint-pnpm",
+    command: "node scripts/lint-blueprint-pnpm.mjs",
+    files: ["blueprints/01-storefront/package.json"],
+    inject: () => {
+      const file = "blueprints/01-storefront/package.json";
+      const manifest = JSON.parse(read(file));
+      manifest.packageManager = BLUEPRINT_PNPM_CANARY;
+      write(file, `${JSON.stringify(manifest, null, 2)}\n`);
+    },
+    assertInjected: () =>
+      read("blueprints/01-storefront/package.json").includes(BLUEPRINT_PNPM_CANARY),
   },
   {
     name: "lint:metric-names (dashboard)",

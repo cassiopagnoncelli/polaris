@@ -245,6 +245,26 @@ describe("scanning a tree", () => {
     expect(scan().map((p) => p.rule)).toContain("processors-dir");
   });
 
+  it("scans the blueprint tier, which nothing else in the gate opens", () => {
+    // The tier sits outside `pnpm-workspace.yaml` and outside
+    // `tsconfig.tests.json` by design, so a root missing from SCAN_DIRS left
+    // `blueprints/` unread by anything at all. That is how the storefront came
+    // to point at `packages/` for months after ADR-0007 emptied it, with every
+    // gate green.
+    write(
+      "blueprints/01-storefront/lib/polaris-node.ts",
+      "// see packages/node-sdk/src/index.ts\n",
+    );
+    expect(scan().map((p) => p.rule)).toContain("packages-dir");
+  });
+
+  it("scans a blueprint's prose, which is the tier's whole product", () => {
+    // A blueprint is read by somebody outside the monorepo, following it
+    // literally, with no `git log` to check a sentence against.
+    write("blueprints/README.md", "Re-run it after editing `catalog/traits/`.\n");
+    expect(scan().map((p) => p.rule)).toContain("catalog-dir");
+  });
+
   it("does not scan generated or vendored output", () => {
     write("libs/a/dist/b.js", "// consumers/<vendor>/v<n>/mappers/\n");
     write("libs/a/node_modules/c/d.ts", "// processors/<name>/v1/\n");

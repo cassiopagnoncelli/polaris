@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.21.0",
   "description": "Polaris blueprint: browser, relayed, and backend events from one Next.js app, sharing one visitor identity.",
   "scripts": {
     "dev": "WATCHPACK_POLLING=true next dev --port 3641",

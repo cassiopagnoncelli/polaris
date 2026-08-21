@@ -59,6 +59,15 @@ const SCAN_DIRS = [
   ".github",
   "apps",
   "async",
+  // The tier that consumes Polaris the way a downstream project does, and the
+  // last root in this repository that no SCAN_DIRS list named. That exemption
+  // is how `I1AD5` came to find the blueprint's `link:` specifiers pointing at
+  // directories ADR-0007 had deleted, months after the move: `blueprints/` is
+  // outside `pnpm-workspace.yaml` and outside `tsconfig.tests.json` by design,
+  // so nothing else in the gate opens the tier either. Prose written for
+  // somebody outside the monorepo is the prose that can least afford to name a
+  // directory that is not there.
+  "blueprints",
   // ADR-0007's remaining destination. Matches nothing until P9J7X creates it;
   // listed now so the card that fills it cannot forget the gate.
   "connectors",
