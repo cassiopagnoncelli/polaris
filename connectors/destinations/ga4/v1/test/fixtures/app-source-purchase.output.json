@@ -1,12 +1,22 @@
 {
-  "app_instance_id": "11111111-2222-3333-4444-555555555555",
+  "app_instance_id": "9F8E7D6C-5B4A-4938-8271-6A5B4C3D2E1F",
+  "user_id": "cust_12345",
+  "timestamp_micros": 1778760000000000,
+  "consent": {
+    "ad_user_data": "GRANTED",
+    "ad_personalization": "GRANTED"
+  },
+  "ip_override": "203.0.113.42",
+  "user_agent": "Storefront/5.10 (iOS 17; iPhone15,2)",
   "events": [
     {
       "name": "purchase",
       "params": {
         "currency": "USD",
         "value": 49.99,
-        "transaction_id": "tx_42"
+        "transaction_id": "tx_42",
+        "engagement_time_msec": 1,
+        "session_id": 71273940559641
       }
     }
   ]

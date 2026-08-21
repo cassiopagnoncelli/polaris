@@ -1,5 +1,19 @@
 # `@polaris/consumer-ga4-v1` changelog
 
+## v1.3.0 — sessions, engagement, consent, page parameters and an unconditional timestamp (1QKDI)
+
+- **GA4 stops receiving sessionless events.** `params.session_id` (derived from `identity.session_id`) and `params.engagement_time_msec` (default `1`, overridable per instance on `destinations.config.engagement_time_msec`) now ride every event. GA4 counts an event towards the standard and realtime reports only when both are present, so the traffic this connector sent had been arriving and appearing nowhere.
+- **`timestamp_micros` is unconditional** inside GA4's 72-hour backdating window. It was previously gated on the mapper having populated `engagement_time_msec` — which no mapper did, so it was never sent and GA4 stamped every event with its delivery time. Outside the window the field is omitted and the reason is prefixed onto `vendor_response_summary`; GA4 accepts an out-of-window timestamp and silently discards the event, so the client must enforce it.
+- **Page parameters on every event** (`page_location`, `page_referrer`, `page_title` from `context.page`), not only on `page_view` — GA4 attributes an event to a page by reading them off the event itself.
+- **Consent Mode v2**: `consent.ad_user_data` from `consent.marketing` and `consent.ad_personalization` from `consent.personalization`, on every request. Absent consent is `GRANTED` per ADR-0001 #54. GA4 still gates on `analytics` alone — forwarding a dimension and gating on it are different jobs.
+- **`user_properties`** from the profile-trait snapshot through an operator-curated allowlist (`plan`, `tier`, `lifecycle_stage`, `address.country`), mirroring Braze's `BRAZE_TRAIT_ATTRIBUTES`. GA4's reserved user-property names are screened independently of the allowlist, because one would reject the whole request.
+- **`user_id` follows the canonical rule** — `profile.canonical_customer_id` then `identity.customer_id`, the same precedence Meta's `external_id` uses.
+- **`page.viewed` → `page_view`.** It previously had no mapper and landed as `skipped_unmapped`. The existing five mappings are unchanged.
+- **`ip_override`, `user_agent` and `user_location`** ride the request, from `context.ip`, `context.user_agent` and `enrichment.geo`. All three postdate GA4's launch; each was verified accepted against `/debug/mp/collect`, which rejects unknown keys outright.
+- **`Ga4EventPayload` now carries one `wrapper` side channel** instead of two loose top-level keys. The deliverer lifts one block and strips it; a request-level field added to the type can no longer be forgotten in the deliverer's destructure and land inside the `events[]` entry, which GA4 rejects wholesale. `Ga4WireEvent` names what actually goes on the wire.
+- The `.output.json` goldens are now asserted end-to-end against the real pipeline rather than being illustrative. A `page-viewed` pair joins them.
+- Depends on two additive widenings of `@polaris/delivery-normalize`: `PreparedIdentity.session_id` and `ConsentEvaluation.observed`. Neither changes existing behaviour.
+
 ## v1.2.0 — mobile-app stream routing via `app_instance_id` (KCS3ATPC)
 
 - The mapper now synthesizes a wrapper-level `app_instance_id` from `context.app_idfv` (preferred) or `context.app_gaid` when the canonical envelope reports an app source. The slot rides on `Ga4EventPayload.app_instance_id` as a Polaris-internal hint that the deliverer lifts to the request wrapper.

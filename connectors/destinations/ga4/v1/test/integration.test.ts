@@ -21,7 +21,9 @@ import {
 } from "@polaris/delivery-destinations";
 import { createLogger } from "@polaris/observability-logger";
 import type { PolarisProducer } from "@polaris/bus";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { readFileSync } from "node:fs";
 
 import { createGa4Descriptor } from "../src/connector.js";
 import { fixtureDestinationInstance } from "./fixtures/normalized.js";
@@ -253,13 +255,13 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     });
 
     const record = await runtime.handleEvent({
-      envelope: fixtureEnvelope({ event: "page.viewed" }),
+      envelope: fixtureEnvelope({ event: "session.started" }),
       destination_id: instance.destination_id,
     });
 
     expect(record?.status).toBe("skipped_unmapped");
     expect(record?.error_class).toBeNull();
-    expect(record?.vendor_response_summary).toContain("page.viewed");
+    expect(record?.vendor_response_summary).toContain("session.started");
     expect(calls).toHaveLength(0);
   });
 
@@ -322,7 +324,7 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(record?.dedupe_key).toBe("evt_int_ga4_signup");
     const body = JSON.parse(calls[0]?.body ?? "");
     expect(body.events[0].name).toBe("sign_up");
-    expect(body.events[0].params).toEqual({ method: "polaris" });
+    expect(body.events[0].params).toMatchObject({ method: "polaris" });
   });
 
   it("delivers a subscription.renewed event as subscription_renewed with currency + value + transaction_id", async () => {
@@ -360,7 +362,7 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(record?.dedupe_key).toBe("evt_int_ga4_sub");
     const body = JSON.parse(calls[0]?.body ?? "");
     expect(body.events[0].name).toBe("subscription_renewed");
-    expect(body.events[0].params).toEqual({
+    expect(body.events[0].params).toMatchObject({
       currency: "USD",
       value: 19.99,
       transaction_id: "sub_42",
@@ -410,5 +412,121 @@ describe("ga4 v1 integration (handleEvent driven)", () => {
     expect(dlq).toHaveLength(1);
     expect(dlq[0]?.error_class).toBe("auth");
     expect(dlq[0]?.vendor).toBe("ga4");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Golden request bodies (1QKDI)
+// ---------------------------------------------------------------------------
+
+/**
+ * The `*.input.json` / `*.output.json` pairs, run through the real
+ * pipeline and compared byte-for-byte.
+ *
+ * They were illustrative until now, asserted by nothing, and they had
+ * drifted into fiction: both showed `user_id` and `timestamp_micros`,
+ * neither of which this connector had ever sent. A golden no test reads
+ * documents what somebody once intended. These are the wire, or they fail.
+ *
+ * The clock is pinned an hour after each fixture's `occurred_at`, because
+ * `timestamp_micros` is withheld outside GA4's 72-hour window — against a
+ * real clock the goldens would encode "an event delivered promptly" this
+ * week and "an event delivered late" next week.
+ */
+describe("golden request bodies", () => {
+  const logger = createLogger({ service: "test", version: "v1", env: "test", level: "fatal" });
+  const SECRET_WEB = JSON.stringify({
+    measurement_id: "G-TEST123456",
+    api_secret: "ga4-golden-api-secret",
+  });
+  const SECRET_APP = JSON.stringify({
+    measurement_id: "G-TEST123456",
+    api_secret: "ga4-golden-api-secret",
+    firebase_app_id: "1:NNN:ios:abcdef",
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function readFixture(name: string): Record<string, unknown> {
+    return JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
+  }
+
+  async function deliverGolden(name: string, secret: string): Promise<unknown> {
+    const envelope = readFixture(`${name}.input.json`) as unknown as NormalizableEnvelope;
+    // Only `Date` is faked: the deliverer arms a real `setTimeout` for its
+    // per-attempt abort, and a fake timer would leave it unfired forever.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse(envelope.occurred_at) + 60 * 60 * 1000);
+
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const instance = {
+      ...fixtureDestinationInstance(secret),
+      destination_id: "polaris_dst_golden",
+    };
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+
+    const runtime = createDestinationConsumer({
+      descriptor: createGa4Descriptor({ fetch, requestTimeoutMs: 5000 }),
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records: new InMemoryDeliveryRecordRepository(),
+      logger,
+    });
+    const record = await runtime.handleEvent({
+      envelope,
+      destination_id: instance.destination_id,
+    });
+    expect(record?.status).toBe("accepted");
+    return JSON.parse(calls[0]?.body ?? "null");
+  }
+
+  for (const [name, secret] of [
+    ["checkout-started", SECRET_WEB],
+    ["page-viewed", SECRET_WEB],
+    ["signup-completed", SECRET_WEB],
+    ["subscription-renewed", SECRET_WEB],
+    ["app-source-purchase", SECRET_APP],
+  ] as const) {
+    it(`${name} matches its golden`, async () => {
+      expect(await deliverGolden(name, secret)).toEqual(readFixture(`${name}.output.json`));
+    });
+  }
+});
+
+describe("ga4 v1 integration — page.viewed (1QKDI)", () => {
+  const logger = createLogger({ service: "test", version: "v1", env: "test", level: "fatal" });
+
+  it("delivers page.viewed as page_view instead of skipping it as unmapped", async () => {
+    const { fetch, calls } = makeFetch(() => new Response(null, { status: 204 }));
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+
+    const runtime = createDestinationConsumer({
+      descriptor: createGa4Descriptor({ fetch, requestTimeoutMs: 5000 }),
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records: new InMemoryDeliveryRecordRepository(),
+      logger,
+    });
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event_id: "evt_int_ga4_page",
+        event: "page.viewed",
+        properties: {},
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const body = JSON.parse(calls[0]?.body ?? "");
+    expect(body.events[0].name).toBe("page_view");
+    expect(body.events[0].params.page_location).toBe("https://storefront.example/checkout");
+    expect(body.events[0].params.engagement_time_msec).toBe(1);
   });
 });

@@ -46,6 +46,7 @@ export {
   type ConsentEvaluation,
   type EnvelopeConsent,
   evaluateConsent,
+  type ObservedConsent,
   type RequiredConsent,
 } from "./consent.js";
 // ---- Context flattening --------------------------------------------------

@@ -6,10 +6,14 @@
   "environment": "production",
   "occurred_at": "2026-05-14T12:00:00.000Z",
   "ingested_at": "2026-05-14T12:00:00.500Z",
-  "source": { "id": "storefront-ios", "type": "mobile" },
+  "source": {
+    "id": "storefront-ios",
+    "type": "mobile"
+  },
   "identity": {
     "customer_id": "cust_12345",
-    "anonymous_id": "anon_abc"
+    "anonymous_id": "anon_abc",
+    "session_id": "sess_app_5150"
   },
   "context": {
     "ip": "203.0.113.42",
@@ -19,7 +23,7 @@
       "bundle_id": "com.example.storefront",
       "version": "5.10.2",
       "build": "5102",
-      "idfv": "11111111-2222-3333-4444-555555555555"
+      "idfv": "9F8E7D6C-5B4A-4938-8271-6A5B4C3D2E1F"
     }
   },
   "properties": {
@@ -28,5 +32,9 @@
     "amount_minor": 4999,
     "currency": "USD"
   },
-  "consent": { "marketing": true, "analytics": true, "personalization": true }
+  "consent": {
+    "marketing": true,
+    "analytics": true,
+    "personalization": true
+  }
 }

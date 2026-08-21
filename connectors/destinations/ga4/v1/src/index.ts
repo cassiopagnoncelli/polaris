@@ -22,8 +22,11 @@ export {
   buildMeasurementProtocolUrl,
   buildRequestBody,
   classifyRetryableStatus,
+  GA4_TIMESTAMP_MAX_AGE_MS,
   isRetryableStatus,
   parseResolvedSecret,
+  resolveTimestampMicros,
+  type TimestampResolution,
 } from "./deliverer.js";
 export {
   CONSUMER_IDENTITY,
@@ -36,11 +39,22 @@ export {
 export {
   CANONICAL_TO_GA4_EVENT,
   checkoutStartedMapper,
+  GA4_DEFAULT_ENGAGEMENT_TIME_MSEC,
+  GA4_ENGAGEMENT_TIME_CONFIG_KEY,
   GA4_EVENT_BEGIN_CHECKOUT,
   GA4_EVENT_LOGIN,
+  GA4_EVENT_PAGE_VIEW,
   GA4_EVENT_PURCHASE,
   GA4_LOGIN_METHOD_POLARIS,
+  GA4_TRAIT_USER_PROPERTIES,
+  pageViewedMapper,
   paymentApprovedMapper,
+  resolveConsent,
+  resolveEngagementTimeMsec,
+  resolveSessionId,
+  resolveUserId,
+  resolveUserLocation,
+  resolveUserProperties,
   userIdentifiedMapper,
 } from "./mapper.js";
 export {
@@ -48,9 +62,16 @@ export {
   projectConfigSchema,
 } from "./project-config.js";
 export type {
+  Ga4ConsentSettings,
+  Ga4ConsentState,
   Ga4EventItem,
   Ga4EventParams,
   Ga4EventPayload,
   Ga4RequestBody,
+  Ga4UserLocation,
+  Ga4UserProperties,
+  Ga4UserProperty,
+  Ga4WireEvent,
+  Ga4WrapperFields,
   ResolvedGa4Secret,
 } from "./types.js";

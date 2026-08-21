@@ -207,3 +207,28 @@ describe("prepareIdentity: the extended match set", () => {
     expect(pickBestIdentity(identity)?.kind).toBe("anonymous_id");
   });
 });
+
+describe("prepareIdentity — the session hint", () => {
+  it("carries `session_id` through verbatim", () => {
+    // Verbatim, not canonicalized: it is a producer-controlled string with
+    // no pinned format, and a vendor that models sessions derives its own
+    // id from it (GA4 hashes it to a number).
+    expect(prepareIdentity({ session_id: "sess_9f2c4a" }).session_id).toBe("sess_9f2c4a");
+  });
+
+  it("treats absent, null and empty alike", () => {
+    expect(prepareIdentity({}).session_id).toBeNull();
+    expect(prepareIdentity({ session_id: null }).session_id).toBeNull();
+    expect(prepareIdentity({ session_id: "   " }).session_id).toBeNull();
+  });
+
+  it("is never picked as an identity — it does not name a person", () => {
+    const identity = prepareIdentity({ session_id: "sess_9f2c4a" });
+    expect(pickBestIdentity(identity)).toBeUndefined();
+  });
+
+  it("does not outrank a real identifier when one is present", () => {
+    const identity = prepareIdentity({ anonymous_id: "anon_1", session_id: "sess_9f2c4a" });
+    expect(pickBestIdentity(identity)).toEqual({ kind: "anonymous_id", value: "anon_1" });
+  });
+});

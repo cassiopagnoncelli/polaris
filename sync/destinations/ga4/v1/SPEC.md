@@ -18,6 +18,7 @@ payment.approved       →  purchase
 user.identified        →  login (method='polaris')
 signup.completed       →  sign_up (method='polaris')
 subscription.renewed   →  subscription_renewed (custom event)
+page.viewed            →  page_view
 ```
 
 GA4 has no recommended event for recurring billing, so v1 emits a snake_case custom event (`subscription_renewed`) for `subscription.renewed`. Per GA4's documented dedupe contract, only `purchase` dedupes cross-channel via `transaction_id`; `subscription_renewed` carries `transaction_id` for triage parity but GA4 will not dedupe it. Events outside this set produce `mapped_failed` delivery records with `error_class='mapping'`. The runbook (`docs/operations/destination-dlq-triage.md`) covers the operator path; future minor versions will extend the matrix. Notable not-yet-supported events:
@@ -33,9 +34,9 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.anonymous_id` | request `client_id` | none | wrapper-level; required by GA4. Falls back to `delivery_key` when canonical `anonymous_id` is absent so retries stay stable. |
-| `identity.customer_id` | request `user_id` | none | wrapper-level; optional. GA4 stitches `user_id` to `client_id` when both are present. |
-| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | GA4 accepts events up to ~72h in the past via `timestamp_micros`. |
+| `identity.anonymous_id` | request `client_id` | `resolveClientId` | wrapper-level; required by GA4. Falls back to `profile_id`, then `best_identity`. NOT `delivery_key` — see "The resolved.events flip". |
+| `profile.canonical_customer_id` (then `identity.customer_id`) | request `user_id` | none | wrapper-level; optional. The platform's resolution outranks the producer's claim, so two producers spelling one customer differently converge on one GA4 user. |
+| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | On EVERY request inside GA4's 72h backdating window; omitted outside it with a diagnostic on `vendor_response_summary`. |
 | inferred | `event.name` | branch on canonical event | `checkout.started` → `begin_checkout` |
 | `properties.total` | `event.params.value` | `minorToMajor(value, currency)` | GA4 wants decimal; minor → major per ISO 4217 exponent |
 | `properties.currency` | `event.params.currency` | none | ISO 4217 alphabetic |
@@ -46,10 +47,10 @@ polaris.diagnostics.*  internal-only platform telemetry; never delivered
 
 | Canonical field | Vendor field | Normalization | Notes |
 |---|---|---|---|
-| `identity.anonymous_id` | request `client_id` | none | wrapper-level; required by GA4 on web-stream requests |
-| `identity.customer_id` | request `user_id` | none | wrapper-level; optional |
+| `identity.anonymous_id` | request `client_id` | `resolveClientId` | wrapper-level; required by GA4 on web-stream requests |
+| `profile.canonical_customer_id` (then `identity.customer_id`) | request `user_id` | none | wrapper-level; optional |
 | `context.app_idfv` (fallback `context.app_gaid`) | request `app_instance_id` | first-non-null wins | wrapper-level; Firebase / app-stream alternative to `client_id` (KCS3ATPC) |
-| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | optional; absent → GA4 stamps receive-time |
+| `occurred_at_epoch_ms` | request `timestamp_micros` | `epoch_ms * 1000` | inside the 72h window; see the every-event table below |
 | inferred | `event.name` | branch on canonical event | `payment.approved` → `purchase` |
 | `properties.amount_minor` (or `amount`) | `event.params.value` | `minorToMajor` | Falls back to `amount` for legacy producers |
 | `properties.currency` | `event.params.currency` | none | ISO 4217 |
@@ -186,16 +187,17 @@ The canonical `email_sha256` / `phone_sha256` slots are NOT mapped — GA4 has n
 ## Test fixtures
 
 ```text
-connectors/destinations/ga4/v1/test/fixtures/normalized.ts                    builders
-connectors/destinations/ga4/v1/test/fixtures/checkout-started.input.json      canonical web-stream event
-connectors/destinations/ga4/v1/test/fixtures/checkout-started.output.json     GA4 web-stream payload (illustrative shape)
-connectors/destinations/ga4/v1/test/fixtures/app-source-purchase.input.json   canonical app-source event (KCS3ATPC)
-connectors/destinations/ga4/v1/test/fixtures/app-source-purchase.output.json  GA4 Firebase app-stream payload
+connectors/destinations/ga4/v1/test/fixtures/normalized.ts                     builders
+connectors/destinations/ga4/v1/test/fixtures/checkout-started.{input,output}.json      profiled + enriched web-stream event
+connectors/destinations/ga4/v1/test/fixtures/page-viewed.{input,output}.json           anonymous page view
+connectors/destinations/ga4/v1/test/fixtures/signup-completed.{input,output}.json      web-stream signup
+connectors/destinations/ga4/v1/test/fixtures/subscription-renewed.{input,output}.json  backend event: no session, no page
+connectors/destinations/ga4/v1/test/fixtures/app-source-purchase.{input,output}.json   Firebase app-stream event (KCS3ATPC)
 ```
 
-The `.input.json` / `.output.json` pair documents the wire shape for the `checkout.started` mapping. Tests cover the `payment.approved` → `purchase` purchase-dedupe behaviour (transaction_id preferred over order_id; fallback to event_id when both are absent) directly inside `test/mapper.test.ts` against the in-memory fixture builders so the goldens stay readable without becoming brittle.
+Each `.output.json` is the request body the connector actually POSTs, asserted end-to-end by `test/integration.test.ts` ("golden request bodies"): the input is driven through the real normalize → map → deliver pipeline and the captured body compared. They were illustrative until 1QKDI and had drifted — both showed a `user_id` and a `timestamp_micros` this connector had never sent. The clock is pinned an hour after each fixture's `occurred_at`, because `timestamp_micros` is withheld outside GA4's 72-hour window and a real clock would make the goldens encode the calendar.
 
-The vendor delivery step (network) is exercised against a `fetch` stub in `test/deliverer.test.ts` and `test/integration.test.ts`. An end-to-end test against GA4's `/debug/mp/collect` endpoint is documented operationally but not run by CI — it requires live GA4 credentials.
+The vendor delivery step (network) is exercised against a `fetch` stub in `test/deliverer.test.ts` and `test/integration.test.ts`. Every golden body was additionally posted by hand to GA4's `/debug/mp/collect` validation endpoint during 1QKDI; CI does not run that check (it needs live credentials).
 
 ## Known divergences from canonical
 
@@ -236,3 +238,58 @@ Resolution order (`resolveClientId`):
 | 3 | `best_identity.value` | Normalize drops an envelope with no usable identity, so this always resolves. |
 
 The synthesis is deleted, not flagged off, and `client_id` is a REQUIRED field on the mapper payload — as an optional slot the deliverer needed a fallback, and the only sane fallback was the old behaviour.
+
+## Sessions, engagement, consent and the every-event block (1QKDI)
+
+Before this, GA4 received **sessionless events**. `session_id` and
+`engagement_time_msec` were in the types and never set, and GA4 counts an event
+towards the standard and realtime reports only when both are present — so the
+Measurement Protocol traffic arrived, stored, and appeared nowhere an operator
+looks. `timestamp_micros` was emitted only when engagement was set, which no
+mapper did, so it was never emitted at all and every event was stamped with its
+delivery time: a backlog drained after an outage reported itself as a spike at
+the moment of recovery.
+
+Six fields now ride **every** event this connector sends, independently of which
+canonical event it is. They live in `buildResult` rather than in six mappers,
+because six mappers each remembering is six chances to ship a sessionless event.
+
+| Vendor slot | Level | Source | Rule |
+|---|---|---|---|
+| `params.engagement_time_msec` | event | constant | Default `1`; per-instance override on `destinations.config.engagement_time_msec`. Measured engagement is QMZPA's. |
+| `params.session_id` | event | `identity.session_id` | First 48 bits of `SHA-256(hint)` as an integer. Deterministic, safe-integer, shape-blind — see `resolveSessionId`. Absent when the envelope has no session. |
+| `params.page_location` / `page_referrer` / `page_title` | event | `context.page_*` | On every event, not only `page_view`: GA4 attributes an event to a page by reading these off the event itself, and does not carry page context forward across Measurement Protocol events the way gtag does in a browser. |
+| `consent.ad_user_data` / `ad_personalization` | request | `consent.marketing` / `consent.personalization` | Neither is a dimension this destination GATES on, so they are read from `consent.observed` rather than the gate's result. Absent → `GRANTED` per ADR-0001 #54. |
+| `user_properties` | request | `traits` | Operator-curated allowlist (`plan`, `tier`, `lifecycle_stage`, `address.country`), mirroring Braze's `BRAZE_TRAIT_ATTRIBUTES`. Reserved GA4 names are screened independently of the list. |
+| `timestamp_micros` | request | `occurred_at_epoch_ms` | Unconditional inside GA4's 72h backdating window. Outside it the field is omitted and the reason is prefixed onto `vendor_response_summary`. |
+
+`ip_override`, `user_agent` and `user_location` also ride the request now, from
+`context.ip`, `context.user_agent` and `enrichment.geo`. All three postdate GA4's
+launch; each was confirmed accepted by posting to `/debug/mp/collect`, which
+rejects an unknown key outright (`no such field`) and so answers the question
+the reference alone left ambiguous. `user_location.region_id` needs ISO-3166-2
+(`US-CO`), composed from `geo.country` + `geo.region`; a subdivision NAME — what
+the geo enricher falls back to for countries whose subdivisions carry no ISO
+code — is rejected by GA4 and is screened out before composing.
+
+`device` is documented by GA4 and deliberately still absent: the S1 context slots
+it needs are NNH85's.
+
+### Two things this required from the shared normalize layer
+
+The card scoped itself to this connector, and two of its fields were not
+reachable from a mapper. Both widenings are additive and are exercised by
+`libs/delivery/normalize`'s own tests:
+
+- **`PreparedIdentity.session_id`.** `envelope.identity.session_id` existed in the
+  spec and was read by `NormalizableEnvelope`, but normalize never carried it onto
+  the normalized event — so no vendor could model a session.
+- **`ConsentEvaluation.observed`.** The evaluation recorded only the dimensions the
+  destination declared REQUIRED, so a GA4 mapper reading it would have seen
+  `analytics` and nothing at all for the two dimensions Consent Mode v2 wants.
+  Gating and forwarding are different jobs.
+
+Both are optional on the type and always present at runtime, following the
+convention the extended match keys set in 1VEL3: connector test fixtures build
+`NormalizedEvent` literals by hand and should not have to restate a block their
+mapper does not read.

@@ -25,11 +25,13 @@ import {
   buildMeasurementProtocolUrl,
   buildRequestBody,
   classifyRetryableStatus,
+  GA4_TIMESTAMP_MAX_AGE_MS,
   isRetryableStatus,
   parseResolvedSecret,
+  resolveTimestampMicros,
 } from "../src/deliverer.js";
 
-import { fixtureDelivererContext } from "./fixtures/normalized.js";
+import { fixtureDelivererContext, fixtureWrapperFields } from "./fixtures/normalized.js";
 
 interface FetchCall {
   readonly url: string;
@@ -84,6 +86,8 @@ describe("buildGa4Deliverer — accepted path", () => {
     if (result.kind !== "accepted") return;
     expect(result.vendor_response_code).toBe("204");
     expect(result.vendor_response_summary).toBe("204 No Content");
+    // No `[polaris]` prefix: the fixture's occurred_at is inside GA4's
+    // backdating window, so nothing was withheld and nothing is noted.
   });
 
   it("maps HTTP 200 (debug endpoint variant) to { kind: 'accepted' }", async () => {
@@ -126,10 +130,13 @@ describe("buildGa4Deliverer — accepted path", () => {
     // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
     // new single-event user on every delivery; the mapper now supplies a
     // stable id from the canonical identity.
-    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).toBe(ctx.payload.wrapper.client_id);
     expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.events).toHaveLength(1);
     expect(body.events[0].name).toBe(ctx.payload.name);
+    // The side channel is lifted, never echoed inside the events[] entry.
+    // GA4 rejects the whole request over an unknown key there.
+    expect(body.events[0]).not.toHaveProperty("wrapper");
   });
 });
 
@@ -337,12 +344,12 @@ describe("buildRequestBody", () => {
     // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
     // new single-event user on every delivery; the mapper now supplies a
     // stable id from the canonical identity.
-    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).toBe(ctx.payload.wrapper.client_id);
     expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.app_instance_id).toBeUndefined();
-    // `client_id` is a side channel: it belongs on the request wrapper and
-    // must not be echoed inside the events[] entry GA4 parses.
-    const { client_id: _client_id, ...wireEvent } = ctx.payload;
+    // `wrapper` is a side channel: it belongs on the request body and must
+    // not be echoed inside the events[] entry GA4 parses.
+    const { wrapper: _wrapper, ...wireEvent } = ctx.payload;
     expect(body.events).toEqual([wireEvent]);
   });
 
@@ -351,8 +358,9 @@ describe("buildRequestBody", () => {
       payload: {
         name: "purchase",
         params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
-        client_id: "anon_int_ga4",
-        app_instance_id: "11111111-2222-3333-4444-555555555555",
+        wrapper: fixtureWrapperFields({
+          app_instance_id: "11111111-2222-3333-4444-555555555555",
+        }),
       },
     });
     const body = buildRequestBody(ctx, {
@@ -364,7 +372,7 @@ describe("buildRequestBody", () => {
     expect(body.app_instance_id).toBe("11111111-2222-3333-4444-555555555555");
     // Polaris-internal hint is stripped from the wire event payload.
     expect(body.events).toHaveLength(1);
-    expect(body.events[0]).not.toHaveProperty("app_instance_id");
+    expect(body.events[0]).not.toHaveProperty("wrapper");
     expect(body.events[0]?.name).toBe("purchase");
   });
 
@@ -373,20 +381,21 @@ describe("buildRequestBody", () => {
       payload: {
         name: "purchase",
         params: { currency: "USD", value: 49.99 },
-        client_id: "anon_int_ga4",
-        app_instance_id: "11111111-2222-3333-4444-555555555555",
+        wrapper: fixtureWrapperFields({
+          app_instance_id: "11111111-2222-3333-4444-555555555555",
+        }),
       },
     });
     const body = buildRequestBody(ctx, { measurement_id: "G-XYZ", api_secret: "s1" });
     // NOT `ctx.delivery_key`. That value is derived per event, so GA4 saw a
     // new single-event user on every delivery; the mapper now supplies a
     // stable id from the canonical identity.
-    expect(body.client_id).toBe(ctx.payload.client_id);
+    expect(body.client_id).toBe(ctx.payload.wrapper.client_id);
     expect(body.client_id).not.toBe(ctx.delivery_key);
     expect(body.app_instance_id).toBeUndefined();
     // The Polaris-internal hint is still stripped from the wire event payload — operators
     // who haven't rotated their secret get a clean web-stream payload, not a half-routed body.
-    expect(body.events[0]).not.toHaveProperty("app_instance_id");
+    expect(body.events[0]).not.toHaveProperty("wrapper");
   });
 });
 
@@ -408,8 +417,9 @@ describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
         payload: {
           name: "purchase",
           params: { currency: "USD", value: 49.99, transaction_id: "tx_42" },
-          client_id: "anon_int_ga4",
-          app_instance_id: "11111111-2222-3333-4444-555555555555",
+          wrapper: fixtureWrapperFields({
+            app_instance_id: "11111111-2222-3333-4444-555555555555",
+          }),
         },
       }),
     );
@@ -422,7 +432,7 @@ describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
     const body = JSON.parse(calls[0]?.body ?? "");
     expect(body.app_instance_id).toBe("11111111-2222-3333-4444-555555555555");
     expect(body.client_id).toBeUndefined();
-    expect(body.events[0].app_instance_id).toBeUndefined();
+    expect(body.events[0].wrapper).toBeUndefined();
   });
 
   it("stays on the web-stream URL when the mapper supplied an app_instance_id but the operator hasn't rotated the secret to add firebase_app_id", async () => {
@@ -433,8 +443,9 @@ describe("buildGa4Deliverer — Firebase app-stream routing (KCS3ATPC)", () => {
         payload: {
           name: "purchase",
           params: { currency: "USD", value: 49.99 },
-          client_id: "anon_int_ga4",
-          app_instance_id: "11111111-2222-3333-4444-555555555555",
+          wrapper: fixtureWrapperFields({
+            app_instance_id: "11111111-2222-3333-4444-555555555555",
+          }),
         },
       }),
     );
@@ -585,5 +596,132 @@ describe("buildGa4Deliverer — per-project request_timeout_ms", () => {
     // worth having, since a silently-ignored timeout override is invisible.
     expect(result.kind).toBe("failed_retryable");
     expect(result.kind === "failed_retryable" ? result.error_class : null).toBe("timeout");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// timestamp_micros (1QKDI)
+// ---------------------------------------------------------------------------
+
+describe("resolveTimestampMicros", () => {
+  const NOW = Date.parse("2026-08-21T12:00:00.000Z");
+
+  it("sends occurred_at as microseconds on an ordinary event", () => {
+    const occurred = NOW - 5_000;
+    expect(resolveTimestampMicros(occurred, NOW)).toEqual({
+      micros: occurred * 1000,
+      diagnostic: null,
+    });
+  });
+
+  it("is unconditional: nothing about the payload can suppress it", () => {
+    // It used to ride on the mapper having populated `engagement_time_msec`,
+    // which no mapper did — so the field was typed, documented and never
+    // once sent, and GA4 stamped every event with its delivery time. There
+    // is no longer a condition to get wrong.
+    expect(resolveTimestampMicros(NOW, NOW).micros).toBe(NOW * 1000);
+  });
+
+  it("keeps sending right up to the 72h edge", () => {
+    const occurred = NOW - GA4_TIMESTAMP_MAX_AGE_MS;
+    expect(resolveTimestampMicros(occurred, NOW).micros).toBe(occurred * 1000);
+  });
+
+  it("withholds it past the edge, and says why", () => {
+    const occurred = NOW - GA4_TIMESTAMP_MAX_AGE_MS - 60_000;
+    const resolution = resolveTimestampMicros(occurred, NOW);
+    expect(resolution.micros).toBeNull();
+    // The endpoint accepts an out-of-window timestamp and silently drops
+    // the event, so the omission is the only thing that keeps it. The
+    // diagnostic is what tells an operator the stamp is GA4's, not ours.
+    expect(resolution.diagnostic).toContain("72h backdating window");
+    expect(resolution.diagnostic).toContain("72h old");
+  });
+
+  it("leaves a future timestamp alone — producer clock skew is normal", () => {
+    const occurred = NOW + 30_000;
+    expect(resolveTimestampMicros(occurred, NOW).micros).toBe(occurred * 1000);
+  });
+});
+
+describe("buildRequestBody — the full wrapper", () => {
+  it("lifts every wrapper field onto the request body", () => {
+    const ctx = fixtureDelivererContext({
+      payload: {
+        name: "page_view",
+        params: { engagement_time_msec: 1, session_id: 123 },
+        wrapper: fixtureWrapperFields({
+          user_id: "cust_canonical",
+          consent: { ad_user_data: "DENIED", ad_personalization: "GRANTED" },
+          user_properties: { plan: { value: "enterprise" } },
+          ip_override: "203.0.113.42",
+          user_agent: "Mozilla/5.0",
+          user_location: { country_id: "US", region_id: "US-CA", city: "Denver" },
+        }),
+      },
+    });
+    const body = buildRequestBody(ctx);
+
+    expect(body.user_id).toBe("cust_canonical");
+    expect(body.consent).toEqual({ ad_user_data: "DENIED", ad_personalization: "GRANTED" });
+    expect(body.user_properties).toEqual({ plan: { value: "enterprise" } });
+    expect(body.ip_override).toBe("203.0.113.42");
+    expect(body.user_agent).toBe("Mozilla/5.0");
+    expect(body.user_location).toEqual({ country_id: "US", region_id: "US-CA", city: "Denver" });
+    expect(body.timestamp_micros).toBe(ctx.payload.wrapper.occurred_at_epoch_ms * 1000);
+    // And none of it inside the events[] entry, which GA4 would reject.
+    expect(Object.keys(body.events[0] ?? {})).toEqual(["name", "params"]);
+  });
+
+  it("sends the consent block on every request, even an all-granted one", () => {
+    const body = buildRequestBody(fixtureDelivererContext());
+    expect(body.consent).toEqual({ ad_user_data: "GRANTED", ad_personalization: "GRANTED" });
+  });
+
+  it("omits timestamp_micros past the window and leaves the rest of the body intact", () => {
+    const ctx = fixtureDelivererContext({
+      payload: {
+        name: "purchase",
+        params: { currency: "USD" },
+        wrapper: fixtureWrapperFields({
+          occurred_at_epoch_ms: Date.now() - GA4_TIMESTAMP_MAX_AGE_MS - 3_600_000,
+        }),
+      },
+    });
+    const body = buildRequestBody(ctx);
+    expect(body.timestamp_micros).toBeUndefined();
+    expect(body.client_id).toBe("anon_int_ga4");
+    expect(body.consent).toBeDefined();
+  });
+});
+
+describe("buildGa4Deliverer — timestamp diagnostic on the delivery record", () => {
+  it("prefixes vendor_response_summary when the timestamp was withheld", async () => {
+    const { fetch } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({ fetch, requestTimeoutMs: 5000 });
+    const result = await deliver(
+      fixtureDelivererContext({
+        payload: {
+          name: "purchase",
+          params: { currency: "USD" },
+          wrapper: fixtureWrapperFields({
+            occurred_at_epoch_ms: Date.now() - GA4_TIMESTAMP_MAX_AGE_MS - 3_600_000,
+          }),
+        },
+      }),
+    );
+    expect(result.kind).toBe("accepted");
+    if (result.kind !== "accepted") return;
+    expect(result.vendor_response_summary).toContain("[polaris] timestamp_micros omitted");
+    // The vendor's own summary is kept alongside it, not replaced.
+    expect(result.vendor_response_summary).toContain("204 No Content");
+  });
+
+  it("leaves the summary alone when the timestamp rode the request", async () => {
+    const { fetch } = makeFetch(() => new Response(null, { status: 204 }));
+    const deliver = buildGa4Deliverer({ fetch, requestTimeoutMs: 5000 });
+    const result = await deliver(fixtureDelivererContext());
+    if (result.kind !== "accepted") throw new Error("expected accepted");
+    expect(result.vendor_response_summary).toBe("204 No Content");
   });
 });

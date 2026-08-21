@@ -1,6 +1,5 @@
 {
   "client_id": "anon_abc",
-  "user_id": "cust_12345",
   "timestamp_micros": 1778760000000000,
   "consent": {
     "ad_user_data": "GRANTED",
@@ -10,14 +9,13 @@
   "user_agent": "Mozilla/5.0",
   "events": [
     {
-      "name": "sign_up",
+      "name": "page_view",
       "params": {
-        "method": "polaris",
-        "page_location": "https://storefront.example/signup/complete",
-        "page_referrer": "https://storefront.example/signup",
-        "page_title": "Welcome",
+        "page_location": "https://storefront.example/products/widget",
+        "page_referrer": "https://storefront.example/",
+        "page_title": "Widget",
         "engagement_time_msec": 1,
-        "session_id": 277186445158824
+        "session_id": 53416520908476
       }
     }
   ]

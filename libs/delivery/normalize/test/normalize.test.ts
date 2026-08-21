@@ -282,3 +282,30 @@ describe("normalizeForDestination — applySecondPassRedactions integration", ()
     expect(outcome.detail).toMatch(/properties\.password/);
   });
 });
+
+describe("normalizeForDestination — the session hint reaches the mapper", () => {
+  it("carries envelope.identity.session_id onto the normalized identity", () => {
+    const outcome = normalizeForDestination(
+      buildEnvelope({
+        identity: {
+          anonymous_id: "anon_1",
+          session_id: "sess_9f2c4a",
+          customer_id: null,
+          device_id: null,
+        },
+      }),
+      baseOptions,
+    );
+    expect(outcome.kind).toBe("normalized");
+    if (outcome.kind !== "normalized") return;
+    // Until this landed the slot existed on the envelope and stopped here,
+    // so a vendor that models sessions had nothing to model them from.
+    expect(outcome.normalized.identity.session_id).toBe("sess_9f2c4a");
+  });
+
+  it("is null on an envelope with no session", () => {
+    const outcome = normalizeForDestination(buildEnvelope(), baseOptions);
+    if (outcome.kind !== "normalized") throw new Error("expected normalized");
+    expect(outcome.normalized.identity.session_id).toBeNull();
+  });
+});

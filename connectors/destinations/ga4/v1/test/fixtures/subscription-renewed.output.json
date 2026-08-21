@@ -1,14 +1,21 @@
 {
   "client_id": "anon_abc",
   "user_id": "cust_12345",
-  "timestamp_micros": 1778587200000000,
+  "timestamp_micros": 1778760000000000,
+  "consent": {
+    "ad_user_data": "GRANTED",
+    "ad_personalization": "GRANTED"
+  },
+  "ip_override": "203.0.113.42",
+  "user_agent": "Mozilla/5.0",
   "events": [
     {
       "name": "subscription_renewed",
       "params": {
         "currency": "USD",
         "value": 19.99,
-        "transaction_id": "sub_42"
+        "transaction_id": "sub_42",
+        "engagement_time_msec": 1
       }
     }
   ]

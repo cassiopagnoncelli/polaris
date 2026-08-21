@@ -1,7 +1,32 @@
 {
   "client_id": "anon_abc",
-  "user_id": "cust_12345",
-  "timestamp_micros": 1778587200000000,
+  "user_id": "cust_canonical_9001",
+  "timestamp_micros": 1778760000000000,
+  "consent": {
+    "ad_user_data": "DENIED",
+    "ad_personalization": "GRANTED"
+  },
+  "user_properties": {
+    "plan": {
+      "value": "enterprise"
+    },
+    "tier": {
+      "value": "gold"
+    },
+    "lifecycle_stage": {
+      "value": "active"
+    },
+    "country": {
+      "value": "US"
+    }
+  },
+  "ip_override": "203.0.113.42",
+  "user_agent": "Mozilla/5.0",
+  "user_location": {
+    "country_id": "US",
+    "region_id": "US-CO",
+    "city": "Denver"
+  },
   "events": [
     {
       "name": "begin_checkout",
@@ -9,9 +34,24 @@
         "currency": "USD",
         "value": 199.95,
         "items": [
-          { "item_id": "sku-1", "item_name": "Widget", "quantity": 2, "price": 49.99 },
-          { "item_id": "sku-2", "item_name": "Gadget", "quantity": 1, "price": 99.97 }
-        ]
+          {
+            "item_id": "sku-1",
+            "item_name": "Widget",
+            "quantity": 2,
+            "price": 49.99
+          },
+          {
+            "item_id": "sku-2",
+            "item_name": "Gadget",
+            "quantity": 1,
+            "price": 99.97
+          }
+        ],
+        "page_location": "https://storefront.example/checkout",
+        "page_referrer": "https://storefront.example/cart",
+        "page_title": "Checkout",
+        "engagement_time_msec": 1,
+        "session_id": 53416520908476
       }
     }
   ]

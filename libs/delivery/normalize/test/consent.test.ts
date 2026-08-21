@@ -64,3 +64,51 @@ describe("evaluateConsent", () => {
     expect(CONSENT_DIMENSIONS).toEqual(["analytics", "marketing", "personalization"]);
   });
 });
+
+describe("evaluateConsent — observed", () => {
+  it("reports every dimension, not only the ones the destination gates on", () => {
+    // The gate is one question and the vendor's consent-mode block is
+    // another: GA4 declares `analytics` and forwards `marketing` /
+    // `personalization` to Google on events it delivers.
+    const result = evaluateConsent(
+      { analytics: true, marketing: false, personalization: true },
+      { analytics: true },
+    );
+    expect(result.status).toBe("granted");
+    expect(result.dimensions).toHaveLength(1);
+    expect(result.observed).toEqual({
+      analytics: true,
+      marketing: false,
+      personalization: true,
+    });
+  });
+
+  it("applies absent-as-true, so an absent block reads as fully granted", () => {
+    expect(evaluateConsent(undefined, {}).observed).toEqual({
+      analytics: true,
+      marketing: true,
+      personalization: true,
+    });
+    expect(evaluateConsent({ marketing: null }, {}).observed?.marketing).toBe(true);
+  });
+
+  it("is present on a denied evaluation too", () => {
+    const result = evaluateConsent({ analytics: false, marketing: false }, { analytics: true });
+    expect(result.status).toBe("denied");
+    expect(result.observed).toEqual({
+      analytics: false,
+      marketing: false,
+      personalization: true,
+    });
+  });
+
+  it("agrees with the gate on every dimension the gate did evaluate", () => {
+    const result = evaluateConsent(
+      { analytics: true, marketing: false, personalization: false },
+      { analytics: true, marketing: true },
+    );
+    for (const dimension of result.dimensions) {
+      expect(result.observed?.[dimension.dimension]).toBe(dimension.granted);
+    }
+  });
+});

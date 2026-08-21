@@ -32,6 +32,7 @@ import { type BuildDelivererOptions, buildGa4Deliverer } from "./deliverer.js";
 import { CONSUMER_IDENTITY } from "./descriptor-identity.js";
 import {
   checkoutStartedMapper,
+  pageViewedMapper,
   paymentApprovedMapper,
   signupCompletedMapper,
   subscriptionRenewedMapper,
@@ -42,10 +43,15 @@ import type { Ga4EventPayload } from "./types.js";
 
 /**
  * GA4 carries analytics payloads — Polaris drops events when the
- * envelope declares analytics=false. Marketing + personalization stay
- * at receiver discretion; GA4 surfaces them through separate consent
- * mode signals on the gtag side that v1 does not yet flatten through
- * the Measurement Protocol.
+ * envelope declares analytics=false.
+ *
+ * Marketing and personalization are NOT gated on, and are not ignored
+ * either: they are forwarded on every request as Consent Mode v2's
+ * `ad_user_data` / `ad_personalization` so Google honours them on its
+ * side. Gating and forwarding are different jobs — an event a receiver
+ * may store but may not use for ads is a delivery, not a drop — which is
+ * why the mapper reads those two off `consent.observed` rather than off
+ * this declaration. See `resolveConsent`.
  */
 const REQUIRED_CONSENT: RequiredConsent = Object.freeze({ analytics: true });
 
@@ -70,6 +76,7 @@ const MAPPERS: MapperMap<Ga4EventPayload> = Object.freeze({
   "user.identified": userIdentifiedMapper,
   "signup.completed": signupCompletedMapper,
   "subscription.renewed": subscriptionRenewedMapper,
+  "page.viewed": pageViewedMapper,
 });
 
 /** Options accepted by `createGa4Descriptor`. */

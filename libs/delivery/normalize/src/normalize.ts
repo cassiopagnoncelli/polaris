@@ -353,6 +353,7 @@ export function normalizeForDestination(
     profile_id: profile?.profile_id ?? null,
     user_id: redactedEnvelope.identity.customer_id ?? null,
     anonymous_id: redactedEnvelope.identity.anonymous_id ?? null,
+    session_id: redactedEnvelope.identity.session_id ?? null,
     ...traitsIdentity,
     // Spread second: a producer property on THIS event outranks a
     // snapshot taken when it was enriched. `nonEmptyOnly` drops the

@@ -24,6 +24,14 @@
  *   - `user.identified`      → `login` (method='polaris')
  *   - `signup.completed`     → `sign_up` (method='polaris')
  *   - `subscription.renewed` → `subscription_renewed` (custom event)
+ *   - `page.viewed`          → `page_view`
+ *
+ * Independently of which event it is, every payload this module builds
+ * carries `engagement_time_msec`, the page parameters, a session id when
+ * the envelope has a session, and a `wrapper` block with the consent
+ * settings, user properties, user id and location. Those are not per-event
+ * decisions — they are what makes an event count in GA4 at all — so they
+ * live in `buildResult` rather than in six copies.
  *
  * GA4 has no recommended event for subscription renewals, so v1 emits
  * a snake_case custom event (`subscription_renewed`) carrying the
@@ -36,11 +44,26 @@
  * runtime layer (no mapper registered).
  */
 
-import type { NormalizedEvent } from "@polaris/delivery-normalize";
-import { hasAppContext, minorToMajor } from "@polaris/delivery-normalize";
-import type { Mapper, MapperContext, MapperResult } from "@polaris/delivery-destinations";
+import type { ConsentEvaluation, FlatContext, NormalizedEvent } from "@polaris/delivery-normalize";
+import { hasAppContext, minorToMajor, sha256Hex } from "@polaris/delivery-normalize";
+import type {
+  DestinationInstance,
+  Mapper,
+  MapperContext,
+  MapperResult,
+} from "@polaris/delivery-destinations";
 
-import type { Ga4EventItem, Ga4EventParams, Ga4EventPayload } from "./types.js";
+import type {
+  Ga4ConsentSettings,
+  Ga4ConsentState,
+  Ga4EventItem,
+  Ga4EventParams,
+  Ga4EventPayload,
+  Ga4UserLocation,
+  Ga4UserProperties,
+  Ga4UserProperty,
+  Ga4WrapperFields,
+} from "./types.js";
 
 /**
  * Mutable build-up shape for `Ga4EventParams`. The mapper assembles it
@@ -67,6 +90,12 @@ export const GA4_EVENT_SIGN_UP = "sign_up" as const;
  * verbatim in the GA4 Events report.
  */
 export const GA4_EVENT_SUBSCRIPTION_RENEWED = "subscription_renewed" as const;
+/**
+ * GA4's recommended page-view event. Automatically collected by gtag on a
+ * browser; the Measurement Protocol has to be told, and until now was not
+ * — `page.viewed` had no mapper at all and landed as `skipped_unmapped`.
+ */
+export const GA4_EVENT_PAGE_VIEW = "page_view" as const;
 
 /**
  * GA4 `method` value the v1 mapper stamps on `login` and `sign_up`.
@@ -86,6 +115,7 @@ export const CANONICAL_TO_GA4_EVENT = Object.freeze({
   "user.identified": GA4_EVENT_LOGIN,
   "signup.completed": GA4_EVENT_SIGN_UP,
   "subscription.renewed": GA4_EVENT_SUBSCRIPTION_RENEWED,
+  "page.viewed": GA4_EVENT_PAGE_VIEW,
 }) as Readonly<Record<string, string>>;
 
 // ---------------------------------------------------------------------------
@@ -126,7 +156,7 @@ export const checkoutStartedMapper: Mapper<Ga4EventPayload> = (
   // (which gets stamped on `delivery_records.dedupe_key`) so operators
   // have a stable Polaris-side handle when triaging duplicate
   // deliveries inside Polaris; on the GA4 side the event just lands.
-  return buildResult(GA4_EVENT_BEGIN_CHECKOUT, params, ctx.normalized.event_id, ctx.normalized);
+  return buildResult(GA4_EVENT_BEGIN_CHECKOUT, params, ctx.normalized.event_id, ctx);
 };
 
 /**
@@ -160,7 +190,7 @@ export const paymentApprovedMapper: Mapper<Ga4EventPayload> = (
   if (transactionId !== null) params.transaction_id = transactionId;
 
   const dedupeKey = transactionId ?? ctx.normalized.event_id;
-  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey, ctx.normalized);
+  return buildResult(GA4_EVENT_PURCHASE, params, dedupeKey, ctx);
 };
 
 /**
@@ -175,7 +205,7 @@ export const userIdentifiedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(GA4_EVENT_LOGIN, params, ctx.normalized.event_id, ctx.normalized);
+  return buildResult(GA4_EVENT_LOGIN, params, ctx.normalized.event_id, ctx);
 };
 
 /**
@@ -192,7 +222,7 @@ export const signupCompletedMapper: Mapper<Ga4EventPayload> = (
   ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> => {
   const params: ParamsBuilder = { method: GA4_LOGIN_METHOD_POLARIS };
-  return buildResult(GA4_EVENT_SIGN_UP, params, ctx.normalized.event_id, ctx.normalized);
+  return buildResult(GA4_EVENT_SIGN_UP, params, ctx.normalized.event_id, ctx);
 };
 
 /**
@@ -224,32 +254,133 @@ export const subscriptionRenewedMapper: Mapper<Ga4EventPayload> = (
   }
   if (subscriptionId !== null) params.transaction_id = subscriptionId;
 
-  return buildResult(
-    GA4_EVENT_SUBSCRIPTION_RENEWED,
-    params,
-    ctx.normalized.event_id,
-    ctx.normalized,
-  );
+  return buildResult(GA4_EVENT_SUBSCRIPTION_RENEWED, params, ctx.normalized.event_id, ctx);
+};
+
+/**
+ * `page.viewed` → `page_view`.
+ *
+ * No event-specific params of its own: `page_location` / `page_referrer`
+ * / `page_title` ride every event this module builds (see
+ * `applyPageParams`), and on this one they are the entire payload. GA4
+ * has no dedupe for `page_view`, so the Polaris-side key stays on the
+ * canonical `event_id`.
+ */
+export const pageViewedMapper: Mapper<Ga4EventPayload> = (
+  ctx: MapperContext,
+): MapperResult<Ga4EventPayload> => {
+  return buildResult(GA4_EVENT_PAGE_VIEW, {}, ctx.normalized.event_id, ctx);
 };
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Finish a per-event mapper's work.
+ *
+ * The per-event mappers supply only what is specific to their event; this
+ * adds everything that rides EVERY GA4 event and then assembles the
+ * payload. The split matters because the fields added here are the ones
+ * that decide whether GA4 counts the event at all, and six mappers each
+ * remembering to set them is six chances to ship a sessionless event.
+ *
+ * `params` is never empty as a result, so the payload always carries one.
+ */
 function buildResult(
   eventName: string,
   params: ParamsBuilder,
   dedupeKey: string,
-  normalized: NormalizedEvent,
+  ctx: MapperContext,
 ): MapperResult<Ga4EventPayload> {
-  const appInstanceId = resolveAppInstanceId(normalized);
+  const { normalized } = ctx;
+  applyPageParams(params, normalized.context);
+  params.engagement_time_msec = resolveEngagementTimeMsec(ctx.instance);
+  const sessionId = resolveSessionId(normalized);
+  if (sessionId !== null) params.session_id = sessionId;
+
   const payload: Ga4EventPayload = {
     name: eventName,
-    ...(Object.keys(params).length > 0 ? { params: freezeParams(params) } : {}),
-    ...(appInstanceId !== null ? { app_instance_id: appInstanceId } : {}),
-    client_id: resolveClientId(normalized),
+    params: freezeParams(params),
+    wrapper: buildWrapperFields(ctx),
   };
   return { kind: "mapped", payload, dedupe_key: dedupeKey };
+}
+
+/** Assemble the request-level half. See `Ga4WrapperFields`. */
+function buildWrapperFields(ctx: MapperContext): Ga4WrapperFields {
+  const { normalized } = ctx;
+  const appInstanceId = resolveAppInstanceId(normalized);
+  const userId = resolveUserId(normalized);
+  const userProperties = resolveUserProperties(normalized);
+  const userLocation = resolveUserLocation(normalized);
+  const ip = normalized.context.ip;
+  const userAgent = normalized.context.user_agent;
+
+  return Object.freeze({
+    client_id: resolveClientId(normalized),
+    ...(appInstanceId !== null ? { app_instance_id: appInstanceId } : {}),
+    ...(userId !== null ? { user_id: userId } : {}),
+    occurred_at_epoch_ms: normalized.occurred_at_epoch_ms,
+    consent: resolveConsent(normalized.consent),
+    ...(userProperties !== null ? { user_properties: userProperties } : {}),
+    // Loose null checks: `FlatContext` is fully populated by
+    // `flattenContext`, but the hand-built literals in connector tests
+    // predate some of its slots and omit them outright.
+    ...(ip != null ? { ip_override: ip } : {}),
+    ...(userAgent != null ? { user_agent: userAgent } : {}),
+    ...(userLocation !== null ? { user_location: userLocation } : {}),
+  });
+}
+
+/**
+ * The GA4 `session_id` param, derived from the envelope's session hint.
+ *
+ * GA4's own session ids are numeric — gtag mints the session's start time
+ * in Unix seconds — and while the Measurement Protocol accepts a string,
+ * a property whose server-side events carry `sess_9f2c…` and whose
+ * browser events carry `1755800000` reports two shapes of the same thing.
+ * So the hint is HASHED to a number rather than sent as it arrived.
+ *
+ * The derivation is the first 48 bits of `SHA-256(session_id)`, read as an
+ * unsigned integer. Three properties are load-bearing:
+ *
+ *   - **deterministic** — the same session produces the same id on every
+ *     event in it and on every retry of each, which is the whole point:
+ *     GA4 stitches a session by equality of this number.
+ *   - **48 bits** — below `Number.MAX_SAFE_INTEGER`, so the value
+ *     survives JSON round-tripping exactly. A 64-bit hash would not.
+ *   - **shape-blind** — the hint is a producer-controlled string with no
+ *     pinned format (`sess_<hex>` from the sessionizer, a UUID from one
+ *     SDK, whatever a backend sends), so reading digits out of it would
+ *     work for one producer and collapse to a constant for the next.
+ *
+ * Collisions are birthday-bounded at 2^24 concurrent sessions, which is
+ * not a scale a single GA4 property reaches.
+ *
+ * Returns `null` when the envelope has no session — a backend event
+ * usually does not, and GA4 treats a sessionless event as such rather
+ * than inventing one.
+ */
+export function resolveSessionId(normalized: NormalizedEvent): number | null {
+  const sessionId = normalized.identity.session_id;
+  if (sessionId === undefined || sessionId === null) return null;
+  return Number.parseInt(sha256Hex(sessionId).slice(0, 12), 16);
+}
+
+/**
+ * GA4's `user_id`: the platform's resolution first, the producer's claim
+ * second. Same rule as Meta's `external_id` — `canonical_customer_id` is
+ * what the identity stage concluded after reconciling every identifier
+ * ever seen for the person, where `user_id` is what this one event's
+ * producer happened to send, so two producers spelling the same customer
+ * differently converge on one GA4 user instead of two.
+ *
+ * Unhashed, unlike Meta's: GA4 consumes `user_id` as an opaque string and
+ * matches it against the id the site's own gtag sets.
+ */
+export function resolveUserId(normalized: NormalizedEvent): string | null {
+  return normalized.identity.canonical_customer_id ?? normalized.identity.user_id;
 }
 
 /**
@@ -298,6 +429,219 @@ export function resolveClientId(normalized: NormalizedEvent): string {
 export function resolveAppInstanceId(normalized: NormalizedEvent): string | null {
   if (!hasAppContext(normalized.context)) return null;
   return normalized.context.app_idfv ?? normalized.context.app_gaid ?? null;
+}
+
+/**
+ * Page parameters, on every event.
+ *
+ * GA4 attributes an event to a page by reading `page_location` off the
+ * event itself. An event without it is attributed to `(not set)` even
+ * when a `page_view` for the same session carried the URL one event
+ * earlier — GA4 does not carry page context forward across Measurement
+ * Protocol events the way gtag does in a browser. So these ride
+ * everything, which is also what Segment's GA4 cloud destination does.
+ *
+ * Absent on a backend event with no page context, and that is correct:
+ * `page_location` is a claim about where the user was.
+ */
+function applyPageParams(params: ParamsBuilder, context: FlatContext): void {
+  // Loose null checks throughout: see the note in `buildWrapperFields`.
+  if (context.page_url != null) params.page_location = context.page_url;
+  if (context.page_referrer != null) params.page_referrer = context.page_referrer;
+  if (context.page_title != null) params.page_title = context.page_title;
+}
+
+/** Default engagement claim, in milliseconds. See `Ga4EventParams`. */
+export const GA4_DEFAULT_ENGAGEMENT_TIME_MSEC = 1;
+
+/**
+ * Per-instance override key for the engagement default.
+ *
+ * On `destinations.config` rather than in the project-config slice, and
+ * the reason is a boundary rather than a preference: `engagement_time_msec`
+ * is an event PARAM, so it is the mapper that sets it, and the mapper's
+ * context carries the destination instance and no project configuration
+ * at all. `MapperContext` is deliberately narrow — widening it to carry a
+ * config slice is a shared-runtime decision, not this connector's.
+ *
+ * Two GA4 properties in one project are two instances and may want
+ * different values, which is the case `destinations.config` exists for.
+ */
+export const GA4_ENGAGEMENT_TIME_CONFIG_KEY = "engagement_time_msec";
+
+/**
+ * Resolve the engagement claim for one delivery.
+ *
+ * Anything that is not a non-negative integer falls back to the default
+ * rather than failing the mapping: the value is operator-supplied, and
+ * dropping a producer's events over a typo in a tuning knob is the wrong
+ * trade — the same stance `parseGa4ProjectConfig` takes on its slice.
+ */
+export function resolveEngagementTimeMsec(instance: DestinationInstance): number {
+  const configured = instance.config[GA4_ENGAGEMENT_TIME_CONFIG_KEY];
+  if (typeof configured === "number" && Number.isInteger(configured) && configured >= 0) {
+    return configured;
+  }
+  return GA4_DEFAULT_ENGAGEMENT_TIME_MSEC;
+}
+
+/**
+ * GA4 Consent Mode v2 settings from the envelope's consent block.
+ *
+ * `ad_user_data` reads `consent.marketing` and `ad_personalization` reads
+ * `consent.personalization` — neither is a dimension this destination
+ * GATES on, which is exactly why they are read from `consent.observed`
+ * and not from the gate's own result. GA4 declares `analytics` and drops
+ * on it; the other two are forwarded so Google can honour them.
+ *
+ * An absent dimension is GRANTED, per ADR-0001 #54 (normalize's
+ * absent-as-true rule): a producer that has not wired consent signalling
+ * is not making a negative statement, and `observed` has already applied
+ * that rule. The `?? true` covers a `ConsentEvaluation` literal built by
+ * hand before the field existed, and resolves the same way.
+ */
+export function resolveConsent(consent: ConsentEvaluation): Ga4ConsentSettings {
+  const observed = consent.observed;
+  return Object.freeze({
+    ad_user_data: toConsentState(observed?.marketing ?? true),
+    ad_personalization: toConsentState(observed?.personalization ?? true),
+  });
+}
+
+function toConsentState(granted: boolean): Ga4ConsentState {
+  return granted ? "GRANTED" : "DENIED";
+}
+
+/**
+ * Profile traits GA4 accepts as user properties.
+ *
+ * An ALLOWLIST, not a passthrough, and for the reason Braze's
+ * `BRAZE_TRAIT_ATTRIBUTES` is one: a GA4 property's user-property space
+ * is a namespace an operator curates, capped at 25 registered
+ * dimensions, and forwarding every trait would let a new field in the
+ * profile store silently consume one. Adding a trait here is that
+ * decision.
+ *
+ * `country` is read from the pinned `traits.address.country` slot rather
+ * than from the top level — `user.identified` v1 pins the address keys
+ * inside `address`, so that is where the canonical value is.
+ */
+export const GA4_TRAIT_USER_PROPERTIES: readonly string[] = Object.freeze([
+  "plan",
+  "tier",
+  "lifecycle_stage",
+]);
+
+/** The trait key holding the pinned postal address. */
+const ADDRESS_TRAIT_KEY = "address";
+
+/** Address sub-keys forwarded as user properties, under their own names. */
+const GA4_ADDRESS_USER_PROPERTIES: readonly string[] = Object.freeze(["country"]);
+
+/**
+ * User-property names GA4 reserves. A request naming one is rejected
+ * whole (`NAME_RESERVED`), taking the event with it, so the screen runs
+ * independently of the allowlist above: a mistake in curating that list
+ * must not become a delivery outage. GA4 also reserves the `google_`,
+ * `ga_` and `firebase_` prefixes.
+ */
+const GA4_RESERVED_USER_PROPERTY_NAMES: readonly string[] = Object.freeze([
+  "first_open_time",
+  "first_visit_time",
+  "last_deep_link_referrer",
+  "user_id",
+  "first_open_after_install",
+]);
+const GA4_RESERVED_USER_PROPERTY_PREFIXES: readonly string[] = Object.freeze([
+  "google_",
+  "ga_",
+  "firebase_",
+]);
+
+/**
+ * Build `user_properties` from the profile-trait snapshot.
+ *
+ * `null` traits — no snapshot, or one over the size guard — produce no
+ * block at all, which is what makes this safe on an envelope that has
+ * never been through the spine. Values are forwarded as the profile
+ * holds them (GA4 takes strings, numbers and booleans); anything
+ * structured is skipped rather than stringified, because a trait that
+ * lands in a GA4 report as `[object Object]` is worse than an absent one.
+ */
+export function resolveUserProperties(normalized: NormalizedEvent): Ga4UserProperties | null {
+  const traits = normalized.traits;
+  if (traits === null) return null;
+
+  const out: Record<string, Ga4UserProperty> = {};
+  for (const key of GA4_TRAIT_USER_PROPERTIES) {
+    applyUserProperty(out, key, traits[key]);
+  }
+  const address = readRecord(traits, ADDRESS_TRAIT_KEY);
+  if (address !== null) {
+    for (const key of GA4_ADDRESS_USER_PROPERTIES) {
+      applyUserProperty(out, key, address[key]);
+    }
+  }
+  return Object.keys(out).length > 0 ? Object.freeze(out) : null;
+}
+
+function applyUserProperty(
+  out: Record<string, Ga4UserProperty>,
+  name: string,
+  value: unknown,
+): void {
+  if (isReservedUserPropertyName(name)) return;
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return;
+  if (typeof value === "string" && value.trim().length === 0) return;
+  out[name] = Object.freeze({ value });
+}
+
+function isReservedUserPropertyName(name: string): boolean {
+  if (GA4_RESERVED_USER_PROPERTY_NAMES.includes(name)) return true;
+  return GA4_RESERVED_USER_PROPERTY_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+
+/**
+ * ISO-3166-2 subdivision codes are one to three alphanumerics (`CA`,
+ * `ENG`, `13`). The geo enricher falls back to the subdivision NAME for
+ * countries whose subdivisions carry no code, and GA4 rejects a name
+ * outright (`region_id [California] is invalid`) — taking the request
+ * with it. So the shape is screened before the code is used.
+ */
+const ISO_SUBDIVISION_CODE = /^[A-Za-z0-9]{1,3}$/;
+
+/**
+ * GA4's structured geo from what the enrichment stage resolved.
+ *
+ * Reads `enrichment.geo` rather than re-deriving from an IP, which is
+ * the point of the enrichment block: the address may already have been
+ * redacted by the time a mapper runs.
+ *
+ * `region_id` wants the full ISO-3166-2 form (`US-CA`) while
+ * `enrichment.geo.region` holds the bare subdivision code (`CA`), so the
+ * two are composed — and only when a country is known to compose with.
+ */
+export function resolveUserLocation(normalized: NormalizedEvent): Ga4UserLocation | null {
+  const geo = normalized.enrichment.geo;
+  if (geo === null || geo === undefined) return null;
+
+  const out: { city?: string; region_id?: string; country_id?: string } = {};
+  const country = geo.country;
+  if (country != null) out.country_id = country;
+  if (country != null && geo.region != null && ISO_SUBDIVISION_CODE.test(geo.region)) {
+    out.region_id = `${country}-${geo.region}`;
+  }
+  if (geo.city != null) out.city = geo.city;
+  return Object.keys(out).length > 0 ? Object.freeze(out) : null;
+}
+
+function readRecord(
+  bag: Readonly<Record<string, unknown>>,
+  key: string,
+): Readonly<Record<string, unknown>> | null {
+  const value = bag[key];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Readonly<Record<string, unknown>>;
 }
 
 /**

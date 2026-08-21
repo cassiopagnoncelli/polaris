@@ -62,6 +62,29 @@ export type RequiredConsent = {
   readonly [K in ConsentDimension]?: boolean;
 };
 
+/**
+ * Every dimension's value after absent-as-true, whether or not this
+ * destination requires it.
+ *
+ * `dimensions` below answers "did the gate pass"; this answers "what did
+ * the producer declare", and the two are not the same question. A vendor
+ * that forwards a consent-mode block — GA4's `ad_user_data` /
+ * `ad_personalization`, and the equivalents the ad platforms are adding —
+ * has to send a value for a dimension it does NOT gate on, because the
+ * event still goes and the receiver still has to be told. Reading the
+ * gate's result for that would say `granted` for the one dimension the
+ * destination declared and nothing at all for the other two.
+ *
+ * Absent collapses into `true` here exactly as it does for the gate, per
+ * ADR-0001 #54: a producer that has not wired consent signalling is not
+ * making a negative statement.
+ */
+export interface ObservedConsent {
+  readonly analytics: boolean;
+  readonly marketing: boolean;
+  readonly personalization: boolean;
+}
+
 /** A single per-dimension consent evaluation. */
 export interface ConsentDimensionResult {
   readonly dimension: ConsentDimension;
@@ -70,14 +93,29 @@ export interface ConsentDimensionResult {
   readonly granted: boolean;
 }
 
-/** Outcome of `evaluateConsent`. */
+/**
+ * Outcome of `evaluateConsent`.
+ *
+ * `observed` is OPTIONAL on the type and always PRESENT on anything
+ * `evaluateConsent` returns, for the reason the extended match keys on
+ * `PreparedIdentity` are: the hand-written `NormalizedEvent` literals in
+ * every connector's tests predate it, and a fixture pinning one mapper's
+ * behaviour should not have to restate a consent block it does not read.
+ * A mapper reading it must therefore treat `undefined` as absent — which,
+ * under absent-as-true, is the same GRANTED it would have read anyway.
+ */
 export type ConsentEvaluation =
-  | { readonly status: "granted"; readonly dimensions: readonly ConsentDimensionResult[] }
+  | {
+      readonly status: "granted";
+      readonly dimensions: readonly ConsentDimensionResult[];
+      readonly observed?: ObservedConsent;
+    }
   | {
       readonly status: "denied";
       readonly dimensions: readonly ConsentDimensionResult[];
       /** The first dimension whose required value was not granted. */
       readonly deniedBy: ConsentDimension;
+      readonly observed?: ObservedConsent;
     };
 
 /**
@@ -96,18 +134,24 @@ export function evaluateConsent(
   const dimensions: ConsentDimensionResult[] = [];
   let firstDenial: ConsentDimension | undefined;
 
+  const observed: ObservedConsent = {
+    analytics: readConsentDimension(envelopeConsent, "analytics"),
+    marketing: readConsentDimension(envelopeConsent, "marketing"),
+    personalization: readConsentDimension(envelopeConsent, "personalization"),
+  };
+
   for (const dim of CONSENT_DIMENSIONS) {
     const required = requiredConsent[dim];
     if (required !== true) continue;
-    const granted = readConsentDimension(envelopeConsent, dim);
+    const granted = observed[dim];
     dimensions.push({ dimension: dim, required: true, granted });
     if (!granted && firstDenial === undefined) firstDenial = dim;
   }
 
   if (firstDenial !== undefined) {
-    return { status: "denied", dimensions, deniedBy: firstDenial };
+    return { status: "denied", dimensions, deniedBy: firstDenial, observed };
   }
-  return { status: "granted", dimensions };
+  return { status: "granted", dimensions, observed };
 }
 
 /**

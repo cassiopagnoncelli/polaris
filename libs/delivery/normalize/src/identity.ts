@@ -76,6 +76,15 @@ export interface RawIdentityInput extends RawPersonMatchKeys, RawAddressMatchKey
   readonly user_id?: string | null | undefined;
   /** SDK-issued anonymous id (browser cookie / SDK-generated). */
   readonly anonymous_id?: string | null | undefined;
+  /**
+   * The producer's session hint, from `envelope.identity.session_id`.
+   *
+   * Not an identity of a person and never treated as one — it is here
+   * because it arrives on the envelope's identity block and because the
+   * vendors that model sessions need it in the mapper, which sees only
+   * what this function returns. `pickBestIdentity` does not consider it.
+   */
+  readonly session_id?: string | null | undefined;
   /** Raw email (will be canonicalized + hashed). */
   readonly email?: string | null | undefined;
   /** Raw phone in strict E.164 (will be hashed). Refused if not E.164. */
@@ -162,6 +171,15 @@ export interface PreparedIdentity {
   readonly profile_id: string | null;
   readonly user_id: string | null;
   readonly anonymous_id: string | null;
+  /**
+   * The producer's session hint, carried through verbatim. `null` when the
+   * envelope has no session — a backend event usually does not.
+   *
+   * Optional on the type for the reason the extended match keys are: the
+   * hand-written `NormalizedEvent` literals in every connector's tests
+   * predate it. `prepareIdentity` always populates it.
+   */
+  readonly session_id?: string | null;
   readonly email: string | null;
   readonly email_sha256: string | null;
   readonly phone: string | null;
@@ -237,6 +255,7 @@ export function prepareIdentity(
 
   const user_id = nonEmpty(input.user_id);
   const anonymous_id = nonEmpty(input.anonymous_id);
+  const session_id = nonEmpty(input.session_id);
 
   let email: string | null = null;
   let email_sha256: string | null = null;
@@ -278,6 +297,7 @@ export function prepareIdentity(
     profile_id: nonEmpty(input.profile_id),
     user_id,
     anonymous_id,
+    session_id,
     email,
     email_sha256,
     phone,

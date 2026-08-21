@@ -17,7 +17,7 @@ import type {
   MapperContext,
 } from "@polaris/delivery-destinations";
 
-import type { Ga4EventPayload } from "../../src/types.js";
+import type { Ga4EventPayload, Ga4WrapperFields } from "../../src/types.js";
 
 /**
  * A destination instance for the runtime under test.
@@ -65,6 +65,7 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
       profile_id: null,
       user_id: "cust_12345",
       anonymous_id: "anon_abc",
+      session_id: "sess_9f2c4a",
       email: null,
       email_sha256: null,
       phone: null,
@@ -102,15 +103,57 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
         { sku: "sku-2", name: "Gadget", quantity: 1, unit_price: 9997 },
       ],
     },
-    consent: { status: "granted", dimensions: [] },
+    consent: {
+      status: "granted",
+      dimensions: [],
+      // What the producer declared, for every dimension rather than only
+      // the one GA4 gates on. The mapper builds `ad_user_data` /
+      // `ad_personalization` from the two it does NOT gate on.
+      observed: { analytics: true, marketing: true, personalization: true },
+    },
   };
   return { ...base, ...overrides };
 }
+
+/**
+ * The GA4 session id the fixture's `sess_9f2c4a` hint derives to.
+ *
+ * A literal rather than a re-computation, deliberately: a test that
+ * derives the expectation the same way the code does asserts only that
+ * the code is self-consistent, and would keep passing through a change
+ * to the derivation — which is exactly the change that must not go
+ * unnoticed, because it re-buckets every session GA4 already holds. See
+ * `resolveSessionId`.
+ */
+export const FIXTURE_SESSION_ID = 53_416_520_908_476;
 
 export function fixtureMapperContext(overrides: Partial<NormalizedEvent> = {}): MapperContext {
   return {
     normalized: fixtureNormalizedEvent(overrides),
     instance: fixtureDestinationInstance(),
+  };
+}
+
+/**
+ * A `Ga4WrapperFields` block with the fields every request carries, for
+ * tests that build a payload by hand. Overrides merge shallowly.
+ */
+export function fixtureWrapperFields(overrides: Partial<Ga4WrapperFields> = {}): Ga4WrapperFields {
+  return {
+    // GA4 reads `client_id` as the browser instance, so the fixture
+    // carries the envelope's anonymous_id rather than the per-event
+    // delivery_key the deliverer used to synthesize.
+    client_id: "anon_int_ga4",
+    // The clock, not the fixture date the rest of this file uses, and
+    // that difference is deliberate. `timestamp_micros` is withheld when
+    // `occurred_at` is more than 72 hours before the SEND, so a pinned
+    // date makes every deliverer test exercise the withheld path 72 hours
+    // after somebody wrote it — a fixture that rots on a calendar. The
+    // default here is the ordinary case (an event delivered promptly);
+    // tests of the window pass an explicit age.
+    occurred_at_epoch_ms: Date.now(),
+    consent: { ad_user_data: "GRANTED", ad_personalization: "GRANTED" },
+    ...overrides,
   };
 }
 
@@ -120,14 +163,11 @@ export function fixtureDelivererContext(
   const base: DelivererContext<Ga4EventPayload> = {
     payload: {
       name: "begin_checkout",
-      // The mapper's side channel. GA4 reads this as the browser instance,
-      // so the fixture carries the envelope's anonymous_id rather than the
-      // per-event delivery_key the deliverer used to synthesize.
-      client_id: "anon_int_ga4",
       params: {
         currency: "USD",
         value: 199.95,
       },
+      wrapper: fixtureWrapperFields(),
     },
     instance: fixtureDestinationInstance(),
     secret: JSON.stringify({

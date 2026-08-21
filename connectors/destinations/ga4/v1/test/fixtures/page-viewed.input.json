@@ -1,7 +1,7 @@
 {
-  "event_id": "evt_01HZZB1YJK0M2R8D8VYV4QH4ZP",
-  "event": "signup.completed",
-  "schema_version": 1,
+  "event_id": "evt_01HZZD3YJK0M2R8D8VYV4QH6XR",
+  "event": "page.viewed",
+  "schema_version": 2,
   "project_id": "storefront",
   "environment": "production",
   "occurred_at": "2026-05-14T12:00:00.000Z",
@@ -11,24 +11,22 @@
     "type": "frontend"
   },
   "identity": {
-    "customer_id": "cust_12345",
+    "customer_id": null,
     "anonymous_id": "anon_abc",
-    "session_id": "sess_signup_77"
+    "session_id": "sess_9f2c4a"
   },
   "context": {
     "ip": "203.0.113.42",
     "user_agent": "Mozilla/5.0",
     "locale": "en-US",
     "page": {
-      "url": "https://storefront.example/signup/complete",
-      "path": "/signup/complete",
-      "title": "Welcome",
-      "referrer": "https://storefront.example/signup"
+      "url": "https://storefront.example/products/widget",
+      "path": "/products/widget",
+      "title": "Widget",
+      "referrer": "https://storefront.example/"
     }
   },
-  "properties": {
-    "registration_method": "email"
-  },
+  "properties": {},
   "consent": {
     "marketing": true,
     "analytics": true,
