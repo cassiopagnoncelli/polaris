@@ -1,0 +1,140 @@
+{
+  "note": "A fixture stream for the audience signal determinism check. Six runs over one population, chosen so every branch of the diff appears at least once: first entry, silence, exit, re-entry, a version bump that restamps without emitting, and a projection-sourced audience alongside a trait-sourced one.",
+  "projectId": "storefront",
+  "environment": "production",
+  "runs": [
+    {
+      "runId": "run_1",
+      "at": "2026-08-01T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 3 } },
+        { "profileId": "p2", "traits": { "orders_30d": 0 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": []
+    },
+    {
+      "runId": "run_2",
+      "at": "2026-08-02T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 3 } },
+        { "profileId": "p2", "traits": { "orders_30d": 0 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": []
+    },
+    {
+      "runId": "run_3",
+      "at": "2026-08-03T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 0 } },
+        { "profileId": "p2", "traits": { "orders_30d": 2 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": []
+    },
+    {
+      "runId": "run_4",
+      "at": "2026-08-04T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 4 } },
+        { "profileId": "p2", "traits": { "orders_30d": 2 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": []
+    },
+    {
+      "runId": "run_5",
+      "at": "2026-08-05T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 2,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 4 } },
+        { "profileId": "p2", "traits": { "orders_30d": 2 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": []
+    },
+    {
+      "runId": "run_6",
+      "at": "2026-08-06T00:00:00.000Z",
+      "audiences": [
+        {
+          "key": "recent_purchasers",
+          "version": 2,
+          "description": "Profiles with at least one completed order in the last 30 days",
+          "source": "traits",
+          "predicate": { "trait": "orders_30d", "op": "gte", "value": 1 }
+        },
+        {
+          "key": "vip_customers",
+          "version": 1,
+          "description": "Population the warehouse names directly",
+          "source": "projection",
+          "sql": "SELECT profile_id FROM profile_traits WHERE project = {project:String} AND environment = {environment:String}"
+        }
+      ],
+      "profiles": [
+        { "profileId": "p1", "traits": { "orders_30d": 4 } },
+        { "profileId": "p2", "traits": { "orders_30d": 2 } },
+        { "profileId": "p3", "traits": { "lifetime_value": 900 } },
+        { "profileId": "p4", "traits": { "orders_30d": "5" } },
+        { "profileId": "p5", "traits": { "orders_30d": null } }
+      ],
+      "projection": [{ "profile_id": "p3" }, { "profile_id": "p1" }]
+    }
+  ]
+}

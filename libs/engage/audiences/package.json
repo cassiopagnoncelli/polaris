@@ -1,0 +1,35 @@
+{
+  "name": "@polaris/engage-audiences",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What an audience MEANS: predicate evaluation over a trait bag, the population a definition selects, and the entered/exited signals a run produces against stored membership. Pure — no store, no broker, no clock. The runtime that fetches traits, writes membership and publishes the signals is async/computation/audiences/v1.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@polaris/audience-catalog": "workspace:*"
+  }
+}

@@ -22,6 +22,7 @@
  * somebody remembered to add.
  */
 
+import type { OutgoingEffect, ProfileSnapshot } from "@polaris/engage-journeys";
 import { JOURNEY_DEFINITIONS, type JourneyDefinition } from "@polaris/journey-catalog";
 import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import { createLogger, type Logger } from "@polaris/observability-logger";
@@ -53,14 +54,8 @@ import {
   PROCESSOR_COMPONENT,
   PROCESSOR_SERVICE_NAME,
 } from "./config.js";
-import type { ProfileSnapshot } from "./engine.js";
 import { createKyselyJourneyRepository, type JourneyRepository } from "./repository.js";
-import {
-  handleEvent,
-  type IncomingEvent,
-  type OutgoingEffect,
-  PROCESSOR_VERSION,
-} from "./runtime.js";
+import { handleEvent, type IncomingEvent, PROCESSOR_VERSION } from "./runtime.js";
 import { definitionKey, sweep } from "./sweep.js";
 
 export interface BuildJourneyOrchestratorOptions {

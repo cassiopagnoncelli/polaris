@@ -1,0 +1,35 @@
+{
+  "name": "@polaris/engage-activation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The membership-delta contract every audience kind exits through on its way to a vendor: what a computed or linked audience says changed, and the sink port async/activation/audience-sync will implement over connectors/destinations list operations. Types and interfaces only — no runtime.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage"
+  },
+  "devDependencies": {
+    "@polaris/engage-audiences": "workspace:*"
+  }
+}

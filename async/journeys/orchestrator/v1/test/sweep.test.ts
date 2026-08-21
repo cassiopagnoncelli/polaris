@@ -1,6 +1,12 @@
 /**
  * The sweep is the entire scheduler, so its edge cases are the ones that
  * strand or duplicate a participant.
+ *
+ * What it decides about a PARTICIPATION — where an elapsed wait resumes, a
+ * definition that is gone, a wait with no `next` — moved to
+ * `@polaris/engage-journeys` and is tested there against values. What is
+ * left here is what only the sweep can get wrong: the claim bound, the
+ * writes it makes, and the fact that it publishes nothing.
  */
 import { welcomeRecentPurchasers } from "@polaris/journey-catalog";
 import { describe, expect, it } from "vitest";
@@ -52,11 +58,25 @@ const DEFINITIONS = new Map([
 ]);
 
 describe("journeys sweep", () => {
-  it("resumes at the wait's `next`, not at the wait itself", () => {
-    // The bug this guards: resuming at `participant.step_id` would re-enter
-    // the wait step, park the participant for another day, and repeat
-    // forever — a journey that never finishes and never errors.
-    expect(welcomeRecentPurchasers.steps[0]).toMatchObject({ id: "settle", type: "wait" });
+  it("does not read a profile for a row whose graph is gone", async () => {
+    // The traits are read for a branch, and an orphaned row will never
+    // reach one. A profile query per stranded participant is a database
+    // round trip bought for a value nothing looks at.
+    const { repository } = fakeRepository([participant({ journey_version: 99 })]);
+    let reads = 0;
+
+    await sweep({
+      repository,
+      definitions: DEFINITIONS,
+      readProfile: async () => {
+        reads += 1;
+        return { profile_id: "p", traits: {} };
+      },
+      environment: "development",
+      now: NOW,
+    });
+
+    expect(reads).toBe(0);
   });
 
   it("walks a due participant through to its exit", async () => {

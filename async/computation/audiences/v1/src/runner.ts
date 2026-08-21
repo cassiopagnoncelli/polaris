@@ -5,6 +5,12 @@
  * resulting population against stored membership, write only the changes,
  * and emit one event per transition.
  *
+ * What an audience MEANS — the predicate, the population a definition
+ * selects, which membership changes count as signals — is
+ * `@polaris/engage-audiences`, and it is pure. This file is the runtime
+ * around it: it holds the four seams, asks the library to decide, and
+ * performs the decision in the order the decision requires.
+ *
  * ## Why a cron job and not a consumer
  *
  * The same argument the traits runner makes, one layer up. An audience over
@@ -33,9 +39,14 @@
 
 import type { AudienceDefinition } from "@polaris/audience-catalog";
 import { traitsReferenced } from "@polaris/audience-catalog";
-
-import { type AudienceTransition, diffAudience, type StoredMembership } from "./diff.js";
-import { evaluatePredicate, type TraitBag } from "./predicate.js";
+import {
+  type AudienceSummary,
+  type AudienceTransition,
+  membersMatching,
+  planAudience,
+  type StampedMembership,
+  type TraitBag,
+} from "@polaris/engage-audiences";
 
 /** Reads a projection-sourced audience's SQL against the warehouse. */
 export interface AudienceQueryRunner {
@@ -69,7 +80,7 @@ export interface AudienceMembershipStore {
     readonly projectId: string;
     readonly environment: string;
     readonly audience: string;
-  }): Promise<ReadonlyArray<StoredMembership & { readonly audienceVersion: number }>>;
+  }): Promise<readonly StampedMembership[]>;
   /** Open a membership (insert, or reopen an exited row). */
   enter(input: {
     readonly projectId: string;
@@ -137,19 +148,12 @@ export interface AudienceRunInput {
 }
 
 export interface AudienceRunResult {
-  readonly perAudience: ReadonlyArray<{
-    readonly key: string;
-    readonly version: number;
-    readonly members: number;
-    readonly entered: number;
-    readonly exited: number;
-    readonly restamped: number;
-  }>;
+  readonly perAudience: readonly AudienceSummary[];
   readonly transitions: number;
 }
 
 export async function runAudiences(input: AudienceRunInput): Promise<AudienceRunResult> {
-  const perAudience: AudienceRunResult["perAudience"][number][] = [];
+  const perAudience: AudienceSummary[] = [];
   let transitions = 0;
 
   for (const definition of input.audiences) {
@@ -160,25 +164,14 @@ export async function runAudiences(input: AudienceRunInput): Promise<AudienceRun
       environment: input.environment,
       audience: definition.key,
     });
-    const storedVersions = new Map(stored.map((row) => [row.profileId, row.audienceVersion]));
 
-    const diff = diffAudience({
-      desired,
-      stored,
-      version: definition.version,
-      storedVersions,
-    });
+    const plan = planAudience({ definition, desired, stored });
 
-    let entered = 0;
-    let exited = 0;
-
-    for (const transition of diff.transitions) {
+    for (const transition of plan.transitions) {
       await applyTransition(transition, definition, input);
-      if (transition.kind === "entered") entered += 1;
-      else exited += 1;
     }
 
-    if (diff.restamp.length > 0) {
+    if (plan.restamp.length > 0) {
       // No events: the membership did not change, only the definition
       // version that last confirmed it.
       await input.memberships.restamp({
@@ -186,24 +179,25 @@ export async function runAudiences(input: AudienceRunInput): Promise<AudienceRun
         environment: input.environment,
         audience: definition.key,
         audienceVersion: definition.version,
-        profileIds: diff.restamp,
+        profileIds: plan.restamp,
       });
     }
 
-    transitions += diff.transitions.length;
-    perAudience.push({
-      key: definition.key,
-      version: definition.version,
-      members: desired.size,
-      entered,
-      exited,
-      restamped: diff.restamp.length,
-    });
+    transitions += plan.transitions.length;
+    perAudience.push(plan.summary);
   }
 
   return { perAudience, transitions };
 }
 
+/**
+ * The population, by whichever of the two routes the definition declares.
+ *
+ * The projection route is I/O and stays here; the trait route hands the
+ * rows it fetched to the library, which decides who among them qualifies.
+ * `traitsReferenced` is what bounds the fetch, and it is the catalog's so
+ * that the narrowing is stated once, beside the predicate it narrows.
+ */
 async function computePopulation(
   definition: AudienceDefinition,
   input: AudienceRunInput,
@@ -222,19 +216,12 @@ async function computePopulation(
     return new Set(rows.map((row) => row.profile_id));
   }
 
-  const keys = traitsReferenced(definition.predicate);
   const profiles = await input.profiles.profilesWithTraits({
     projectId: input.projectId,
     environment: input.environment,
-    keys,
+    keys: traitsReferenced(definition.predicate),
   });
-  const members = new Set<string>();
-  for (const profile of profiles) {
-    if (evaluatePredicate(definition.predicate, profile.traits)) {
-      members.add(profile.profileId);
-    }
-  }
-  return members;
+  return membersMatching(definition.predicate, profiles);
 }
 
 /**

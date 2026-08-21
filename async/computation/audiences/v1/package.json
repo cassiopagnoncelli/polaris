@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Polaris audiences runner v1. Evaluates the definitions in definitions/audiences/ against computed traits (or a sanctioned projection), diffs the resulting population against audience_memberships, and emits audience.entered / audience.exited on profile.events for transitions only. No long-lived service: `polaris audiences compute` is the entrypoint.",
+  "description": "Polaris audiences runner v1. The runtime shell around @polaris/engage-audiences: reads traits (or a sanctioned projection), asks the library which membership changes the run produces, writes them to audience_memberships and emits audience.entered / audience.exited on profile.events for transitions only. No long-lived service: `polaris audiences compute` is the entrypoint.",
   "license": "UNLICENSED",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,6 +24,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@polaris/audience-catalog": "workspace:*"
+    "@polaris/audience-catalog": "workspace:*",
+    "@polaris/engage-audiences": "workspace:*"
   }
 }

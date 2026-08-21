@@ -1,14 +1,15 @@
 /**
- * The journey engine: what happens to one participant, decided in memory.
+ * The journey machine: what happens to one participant, decided in memory.
  *
- * No database, no broker, no clock of its own. The engine takes a
+ * No database, no broker, no clock of its own. The machine takes a
  * participant's current position, the graph it entered on, and a snapshot
  * of what is true of the profile, and returns the effects to apply. Every
  * rule the card cares about — the loop guard, entry idempotency, wait
  * semantics, finishing on the entry version — is decided here, where it
  * can be tested without infrastructure.
  *
- * The orchestrator around it does I/O and nothing else.
+ * `async/journeys/orchestrator/v1` is the shell around it, and does I/O
+ * and nothing else.
  *
  * ## Advancing runs to a resting point, not one step
  *
@@ -30,7 +31,6 @@
 
 import type { AudiencePredicate } from "@polaris/audience-catalog";
 import {
-  edgesOf,
   JOURNEY_EVENT_NAMESPACE,
   type JourneyDefinition,
   type JourneyStep,
@@ -85,14 +85,38 @@ export function isForbiddenTrigger(event: string): boolean {
   return event.startsWith(JOURNEY_EVENT_NAMESPACE);
 }
 
-/** Evaluate an audience predicate against a trait bag. */
-export function evaluatePredicate(
+/**
+ * Evaluate a branch or trigger predicate against a trait bag.
+ *
+ * Named for its dialect rather than for its job, because
+ * `@polaris/engage-audiences` exports an `evaluatePredicate` over the same
+ * `AudiencePredicate` type that answers differently, and this library and
+ * that one now sit in one namespace where a reader would reasonably assume
+ * they are the same function.
+ *
+ * They are not, and the difference is `ne` against an ABSENT trait. The
+ * audiences evaluator is three-valued, SQL's reading of NULL: every
+ * comparison against a trait nobody has computed is false, so `orders_30d
+ * ne 5` excludes an unknown profile. This one is two-valued: `actual` is
+ * `undefined`, `undefined !== 5` holds, and the branch takes its matched
+ * arm. `exists` and `absent` also read `undefined` and `null` alike here,
+ * where the audiences evaluator distinguishes a key that is present and
+ * null from one that is missing.
+ *
+ * Q7COB moved both into `libs/engage` and deliberately did NOT merge them:
+ * either merge direction silently re-decides which arm a live participant
+ * takes at their next branch, which is a semantic change wearing a
+ * refactor's clothes. Whether journeys should adopt the audiences reading
+ * is a real question and an ADR's, and it is filed rather than answered
+ * here.
+ */
+export function evaluateJourneyPredicate(
   predicate: AudiencePredicate,
   traits: Readonly<Record<string, unknown>>,
 ): boolean {
-  if ("all" in predicate) return predicate.all.every((p) => evaluatePredicate(p, traits));
-  if ("any" in predicate) return predicate.any.some((p) => evaluatePredicate(p, traits));
-  if ("not" in predicate) return !evaluatePredicate(predicate.not, traits);
+  if ("all" in predicate) return predicate.all.every((p) => evaluateJourneyPredicate(p, traits));
+  if ("any" in predicate) return predicate.any.some((p) => evaluateJourneyPredicate(p, traits));
+  if ("not" in predicate) return !evaluateJourneyPredicate(predicate.not, traits);
 
   const actual = traits[predicate.trait];
   switch (predicate.op) {
@@ -211,7 +235,7 @@ export function advance(input: {
         // Evaluated NOW, against what is true of the profile at the moment
         // the branch is reached — not at entry. A day may have passed in a
         // wait, and re-reading is the whole reason a branch is a step.
-        const taken = evaluatePredicate(step.when, input.profile.traits)
+        const taken = evaluateJourneyPredicate(step.when, input.profile.traits)
           ? step.matched
           : step.otherwise;
         previousId = step.id;
@@ -272,30 +296,3 @@ export function advance(input: {
 
   return { effects, restingStepId: null };
 }
-
-/**
- * Whether a completed participant may enter again.
- *
- * `lastExitedAt` is null when they have never been through. The default is
- * `once` in the catalog, and this is the reading that makes it safe.
- */
-export function mayReenter(input: {
-  readonly definition: JourneyDefinition;
-  readonly lastExitedAt: Date | null;
-  readonly now: Date;
-}): boolean {
-  if (input.lastExitedAt === null) return true;
-  const policy = input.definition.reentry;
-  if (policy === "once") return false;
-  if (policy === "always") return true;
-  const elapsedDays = (input.now.getTime() - input.lastExitedAt.getTime()) / 86_400_000;
-  return elapsedDays >= policy.after_days;
-}
-
-/** Steps a definition declares, for a caller checking a stored position. */
-export function stepIds(definition: JourneyDefinition): ReadonlySet<string> {
-  return new Set(definition.steps.map((step) => step.id));
-}
-
-/** Re-exported so a caller need not reach into the catalog for one helper. */
-export { edgesOf };

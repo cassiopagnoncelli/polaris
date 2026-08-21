@@ -2,9 +2,9 @@
  * The orchestrator's message loop.
  *
  * Consumes `resolved.events` and `profile.events`, decides whether each
- * one admits a profile to a journey, and publishes what the engine says
- * happened. It owns no journey semantics: the engine decides, the
- * repository stores, this moves bytes between them.
+ * one admits a profile to a journey, and publishes what the machine says
+ * happened. It owns no journey semantics: `@polaris/engage-journeys`
+ * decides, the repository stores, this moves bytes between them.
  *
  * ## It subscribes to the profile plane, which is where the loop guard bites
  *
@@ -22,7 +22,7 @@
  *
  * ## Effects are published after state is written
  *
- * The engine returns effects; the repository is updated first, then the
+ * The machine returns effects; the repository is updated first, then the
  * events go out. The ordering matters and only one direction is
  * recoverable: publishing first and crashing would emit
  * `journey.step_advanced` for a move that never persisted, and a
@@ -31,17 +31,23 @@
  * the participant's row still says where it is.
  */
 
-import type { JourneyDefinition } from "@polaris/journey-catalog";
-import type { Logger } from "@polaris/observability-logger";
-import { v7 as uuidv7 } from "uuid";
-import type { ProfileSnapshot } from "./engine.js";
 import {
   advance,
-  evaluatePredicate,
+  evaluateJourneyPredicate,
   isForbiddenTrigger,
   type JourneyEffect,
   mayReenter,
-} from "./engine.js";
+  type OutgoingEffect,
+  type ProfileSnapshot,
+  repositoryActionFor,
+  toOutgoing,
+  triggerLabel,
+  triggerMatches,
+} from "@polaris/engage-journeys";
+import type { JourneyDefinition } from "@polaris/journey-catalog";
+import type { Logger } from "@polaris/observability-logger";
+import { v7 as uuidv7 } from "uuid";
+
 import type { JourneyRepository } from "./repository.js";
 
 export const PROCESSOR_NAME = "journey-orchestrator" as const;
@@ -56,15 +62,6 @@ export interface IncomingEvent {
   readonly occurred_at: string;
   readonly profile?: { readonly profile_id?: string } | undefined;
   readonly properties?: Record<string, unknown> | undefined;
-}
-
-/** One `journey.*` event to publish, already addressed to a profile. */
-export interface OutgoingEffect {
-  readonly event: string;
-  readonly project_id: string;
-  readonly environment: string;
-  readonly profile_id: string;
-  readonly properties: Record<string, unknown>;
 }
 
 export interface HandleEventDeps {
@@ -90,24 +87,6 @@ export interface HandleEventResult {
     | "already_participating"
     | "reentry_refused";
   readonly published: readonly OutgoingEffect[];
-}
-
-/**
- * Whether this event admits a profile to this journey.
- *
- * `audience_entered` matches `audience.entered` carrying the named
- * audience. An `event` trigger matches the event name, and its optional
- * `where` predicate is evaluated by the caller against the profile's
- * traits — not here, because reading traits costs a query and most events
- * match no journey at all.
- */
-export function triggerMatches(definition: JourneyDefinition, event: IncomingEvent): boolean {
-  const trigger = definition.trigger;
-  if (trigger.type === "audience_entered") {
-    if (event.event !== "audience.entered") return false;
-    return event.properties?.["audience"] === trigger.audience;
-  }
-  return event.event === trigger.event;
 }
 
 export async function handleEvent(
@@ -151,7 +130,7 @@ export async function handleEvent(
   for (const definition of candidates) {
     if (definition.trigger.type === "event" && definition.trigger.where !== undefined) {
       const snapshot = await profileOnce();
-      if (!evaluatePredicate(definition.trigger.where, snapshot.traits)) continue;
+      if (!evaluateJourneyPredicate(definition.trigger.where, snapshot.traits)) continue;
     }
 
     const lastExitedAt = await deps.repository.lastExitedAt({
@@ -214,10 +193,7 @@ export async function handleEvent(
           definition,
           profileId,
           run_id: deps.run_id,
-          triggerLabel:
-            definition.trigger.type === "audience_entered"
-              ? definition.trigger.audience
-              : definition.trigger.event,
+          triggerLabel: triggerLabel(definition),
           reEntry: lastExitedAt !== null,
         }),
       );
@@ -228,7 +204,7 @@ export async function handleEvent(
   return { published };
 }
 
-/** Persist what the engine decided about one participant. */
+/** Persist what the machine decided about one participant. */
 export async function applyToRepository(input: {
   readonly repository: JourneyRepository;
   readonly participantId: string;
@@ -236,72 +212,23 @@ export async function applyToRepository(input: {
   readonly restingStepId: string | null;
   readonly now: Date;
 }): Promise<void> {
-  const park = input.effects.find((effect) => effect.kind === "park");
-  const exited = input.effects.find((effect) => effect.kind === "exit");
+  const action = repositoryActionFor({
+    effects: input.effects,
+    restingStepId: input.restingStepId,
+  });
+  if (action === null) return;
 
-  if (exited !== undefined) {
+  if (action.kind === "exit") {
     await input.repository.exit({
       id: input.participantId,
-      reason: exited.reason,
+      reason: action.reason,
       at: input.now,
     });
     return;
   }
-  if (park !== undefined) {
-    await input.repository.moveTo({
-      id: input.participantId,
-      step_id: park.step_id,
-      wait_until: park.wait_until,
-    });
-    return;
-  }
-  if (input.restingStepId !== null) {
-    await input.repository.moveTo({
-      id: input.participantId,
-      step_id: input.restingStepId,
-      wait_until: null,
-    });
-  }
-}
-
-/** Shape an engine effect into the event this service publishes. */
-export function toOutgoing(input: {
-  readonly effect: Extract<JourneyEffect, { kind: "emit" }>;
-  readonly event: Pick<IncomingEvent, "project_id" | "environment">;
-  readonly definition: JourneyDefinition;
-  readonly profileId: string;
-  readonly run_id: string;
-  readonly triggerLabel: string;
-  readonly reEntry: boolean;
-}): OutgoingEffect {
-  const base = {
-    journey: input.definition.key,
-    journey_version: input.definition.version,
-    profile_id: input.profileId,
-    step_id: input.effect.step_id,
-    run_id: input.run_id,
-  };
-
-  const properties: Record<string, unknown> =
-    input.effect.event === "journey.entered"
-      ? { ...base, trigger: input.triggerLabel, re_entry: input.reEntry }
-      : input.effect.event === "journey.exited"
-        ? { ...base, reason: input.effect.reason ?? "completed" }
-        : {
-            ...base,
-            ...(input.effect.from_step_id !== undefined
-              ? { from_step_id: input.effect.from_step_id }
-              : {}),
-            ...(input.effect.properties !== undefined
-              ? { properties: input.effect.properties }
-              : {}),
-          };
-
-  return {
-    event: input.effect.event,
-    project_id: input.event.project_id,
-    environment: input.event.environment,
-    profile_id: input.profileId,
-    properties,
-  };
+  await input.repository.moveTo({
+    id: input.participantId,
+    step_id: action.step_id,
+    wait_until: action.kind === "park" ? action.wait_until : null,
+  });
 }

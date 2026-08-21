@@ -1,9 +1,11 @@
 /**
- * Trigger matching and admission.
+ * Admission: the message loop, from an arriving event to a written row.
  *
  * The loop-guard test here is the important one: this service consumes the
  * plane it publishes to, so its own `journey.*` output arrives back at its
- * own input on every run.
+ * own input on every run. Whether an event MATCHES a definition's trigger
+ * is `@polaris/engage-journeys`' question and is tested there; this is
+ * about what the loop does with the answer.
  */
 import { welcomeRecentPurchasers } from "@polaris/journey-catalog";
 import { describe, expect, it } from "vitest";
@@ -13,7 +15,6 @@ import {
   type IncomingEvent,
   type JourneyRepository,
   type ParticipantRow,
-  triggerMatches,
 } from "../src/index.js";
 
 const PROFILE = "019ffe00-0000-7000-8000-00000000f001";
@@ -80,18 +81,6 @@ describe("the loop guard, where it actually bites", () => {
     }
     // Not even a repository read: the guard is before any work.
     expect(calls.enters).toBe(0);
-  });
-});
-
-describe("trigger matching", () => {
-  it("matches an audience trigger only for its own audience", () => {
-    expect(triggerMatches(welcomeRecentPurchasers, event())).toBe(true);
-    expect(
-      triggerMatches(welcomeRecentPurchasers, event({ properties: { audience: "other" } })),
-    ).toBe(false);
-    expect(triggerMatches(welcomeRecentPurchasers, event({ event: "payment.approved" }))).toBe(
-      false,
-    );
   });
 });
 

@@ -297,6 +297,9 @@ importers:
       '@polaris/audience-catalog':
         specifier: workspace:*
         version: link:../../../../definitions/audiences
+      '@polaris/engage-audiences':
+        specifier: workspace:*
+        version: link:../../../../libs/engage/audiences
 
   async/computation/sessionizer/v1:
     dependencies:
@@ -420,6 +423,9 @@ importers:
       '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/engage-journeys':
+        specifier: workspace:*
+        version: link:../../../../libs/engage/journeys
       '@polaris/journey-catalog':
         specifier: workspace:*
         version: link:../../../../definitions/journeys
@@ -837,6 +843,27 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  libs/engage/activation:
+    devDependencies:
+      '@polaris/engage-audiences':
+        specifier: workspace:*
+        version: link:../audiences
+
+  libs/engage/audiences:
+    dependencies:
+      '@polaris/audience-catalog':
+        specifier: workspace:*
+        version: link:../../../definitions/audiences
+
+  libs/engage/journeys:
+    dependencies:
+      '@polaris/audience-catalog':
+        specifier: workspace:*
+        version: link:../../../definitions/audiences
+      '@polaris/journey-catalog':
+        specifier: workspace:*
+        version: link:../../../definitions/journeys
 
   libs/governance:
     dependencies:

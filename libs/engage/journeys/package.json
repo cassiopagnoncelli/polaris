@@ -1,0 +1,36 @@
+{
+  "name": "@polaris/engage-journeys",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What a journey MEANS: the step machine a participant walks, the rules governing one participation (re-entry, resuming an elapsed wait, what a sweep owes the store), and the transitions in and out — trigger matching and the journey.* event a step emits. Pure — no database, no broker, no clock. The runtime shell is async/journeys/orchestrator/v1.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@polaris/audience-catalog": "workspace:*",
+    "@polaris/journey-catalog": "workspace:*"
+  }
+}

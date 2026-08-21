@@ -31,20 +31,17 @@
  * duplicated vendor action is not.
  */
 
+import type { ParticipantRow } from "@polaris/engage-journeys";
 import type { Database } from "@polaris/persistence-postgres";
 import { type Kysely, sql } from "kysely";
 
-/** A participant as the orchestrator reads it. */
-export interface ParticipantRow {
-  readonly id: string;
-  readonly project_id: string;
-  readonly environment: string;
-  readonly journey: string;
-  readonly journey_version: number;
-  readonly profile_id: string;
-  readonly step_id: string;
-  readonly wait_until: Date | null;
-}
+/**
+ * A participant's position is `@polaris/engage-journeys`' shape, not this
+ * table's. The row is what the machine reasons about; the columns below
+ * are how it happens to be stored, and only this file should care about
+ * the difference.
+ */
+export type { ParticipantRow };
 
 export interface EnterInput {
   readonly id: string;

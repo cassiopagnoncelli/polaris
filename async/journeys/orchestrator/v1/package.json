@@ -33,6 +33,7 @@
     "@polaris/observability-metrics": "workspace:*",
     "@polaris/pipeline": "workspace:*",
     "@polaris/runtime-service-bootstrap": "workspace:*",
-    "@polaris/bus": "workspace:*"
+    "@polaris/bus": "workspace:*",
+    "@polaris/engage-journeys": "workspace:*"
   }
 }

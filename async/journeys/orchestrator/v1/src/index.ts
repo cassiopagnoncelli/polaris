@@ -5,25 +5,32 @@
  * through the graphs in `definitions/journeys/`, and emits `journey.*` onto the
  * profile plane. It makes no vendor calls: an action's event travels the
  * ordinary destination path like any other.
+ *
+ * What a journey MEANS — the machine, one participation's rules, trigger
+ * matching and the shape of an emitted event — is
+ * `@polaris/engage-journeys`. This package is the shell: config, a Postgres
+ * repository, a consumer, a producer and a sweep timer. The library's
+ * surface is re-exported here so the CLI's `journeys sweep` reaches one
+ * package rather than two.
  */
 
 export {
   type AdvanceResult,
   advance,
-  edgesOf,
-  evaluatePredicate,
+  evaluateJourneyPredicate,
   isForbiddenTrigger,
   type JourneyEffect,
   mayReenter,
+  type OutgoingEffect,
+  type ParticipantRow,
   type Participation,
   type ProfileSnapshot,
-  stepIds,
-} from "./engine.js";
+  triggerMatches,
+} from "@polaris/engage-journeys";
 export {
   createKyselyJourneyRepository,
   type EnterInput,
   type JourneyRepository,
-  type ParticipantRow,
 } from "./repository.js";
 export {
   applyToRepository,
@@ -31,11 +38,8 @@ export {
   type HandleEventResult,
   handleEvent,
   type IncomingEvent,
-  type OutgoingEffect,
   PROCESSOR_NAME,
   PROCESSOR_VERSION,
-  toOutgoing,
-  triggerMatches,
 } from "./runtime.js";
 export { definitionKey, type SweepInput, type SweepResult, sweep } from "./sweep.js";
 export { buildJourneyOrchestratorApp } from "./app.js";

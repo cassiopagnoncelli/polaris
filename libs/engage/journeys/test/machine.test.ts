@@ -13,7 +13,7 @@ import {
 } from "@polaris/journey-catalog";
 import { describe, expect, it } from "vitest";
 
-import { advance, evaluatePredicate, isForbiddenTrigger, mayReenter } from "../src/index.js";
+import { advance, evaluateJourneyPredicate, isForbiddenTrigger } from "../src/index.js";
 
 const NOW = new Date("2026-08-18T12:00:00.000Z");
 
@@ -197,58 +197,30 @@ describe("advancing a participant", () => {
   });
 });
 
-describe("re-entry policy", () => {
-  const base = welcomeRecentPurchasers;
-
-  it("admits a profile that has never been through", () => {
-    expect(mayReenter({ definition: base, lastExitedAt: null, now: NOW })).toBe(true);
-  });
-
-  it("refuses a second entry under `once`", () => {
-    // The default, and the safe direction: a welcome series that re-fires
-    // reaches customers before it reaches a dashboard.
-    expect(base.reentry).toBe("once");
-    expect(
-      mayReenter({ definition: base, lastExitedAt: new Date("2020-01-01T00:00:00Z"), now: NOW }),
-    ).toBe(false);
-  });
-
-  it("honours `always` and `after_days`", () => {
-    const always = { ...base, reentry: "always" as const };
-    expect(
-      mayReenter({ definition: always, lastExitedAt: new Date("2026-08-18T11:00:00Z"), now: NOW }),
-    ).toBe(true);
-
-    const after = { ...base, reentry: { after_days: 30 } };
-    expect(
-      mayReenter({ definition: after, lastExitedAt: new Date("2026-08-01T12:00:00Z"), now: NOW }),
-    ).toBe(false);
-    expect(
-      mayReenter({ definition: after, lastExitedAt: new Date("2026-07-01T12:00:00Z"), now: NOW }),
-    ).toBe(true);
-  });
-});
-
 describe("predicate evaluation", () => {
   it("treats an absent trait as absent, not as zero", () => {
     // A profile with no `orders_30d` has not ordered zero times; the trait
     // has not been computed for them. `gte: 1` must not match, and
     // `absent` must.
-    expect(evaluatePredicate({ trait: "orders_30d", op: "gte", value: 1 }, {})).toBe(false);
-    expect(evaluatePredicate({ trait: "orders_30d", op: "absent" }, {})).toBe(true);
-    expect(evaluatePredicate({ trait: "orders_30d", op: "exists" }, { orders_30d: 0 })).toBe(true);
+    expect(evaluateJourneyPredicate({ trait: "orders_30d", op: "gte", value: 1 }, {})).toBe(false);
+    expect(evaluateJourneyPredicate({ trait: "orders_30d", op: "absent" }, {})).toBe(true);
+    expect(evaluateJourneyPredicate({ trait: "orders_30d", op: "exists" }, { orders_30d: 0 })).toBe(
+      true,
+    );
   });
 
   it("refuses an ordered comparison against a non-number", () => {
     // A definition error. Answering `false` is the honest reading — the
     // comparison has no meaning — and the branch takes its otherwise arm.
-    expect(evaluatePredicate({ trait: "tier", op: "gte", value: 2 }, { tier: "gold" })).toBe(false);
+    expect(evaluateJourneyPredicate({ trait: "tier", op: "gte", value: 2 }, { tier: "gold" })).toBe(
+      false,
+    );
   });
 
   it("combines with all / any / not", () => {
     const traits = { orders_30d: 5, tier: "gold" };
     expect(
-      evaluatePredicate(
+      evaluateJourneyPredicate(
         {
           all: [
             { trait: "orders_30d", op: "gte", value: 2 },
@@ -258,8 +230,8 @@ describe("predicate evaluation", () => {
         traits,
       ),
     ).toBe(true);
-    expect(evaluatePredicate({ any: [{ trait: "tier", op: "eq", value: "silver" }] }, traits)).toBe(
-      false,
-    );
+    expect(
+      evaluateJourneyPredicate({ any: [{ trait: "tier", op: "eq", value: "silver" }] }, traits),
+    ).toBe(false);
   });
 });

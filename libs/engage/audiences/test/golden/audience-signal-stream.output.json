@@ -1,0 +1,194 @@
+{
+  "trace": [
+    {
+      "step": "write",
+      "op": "enter",
+      "audience": "recent_purchasers",
+      "profileId": "p1"
+    },
+    {
+      "step": "emit",
+      "event": "audience.entered",
+      "audience": "recent_purchasers",
+      "audience_version": 1,
+      "profile_id": "p1",
+      "re_entry": false,
+      "run_id": "run_1"
+    },
+    {
+      "step": "write",
+      "op": "enter",
+      "audience": "recent_purchasers",
+      "profileId": "p2"
+    },
+    {
+      "step": "emit",
+      "event": "audience.entered",
+      "audience": "recent_purchasers",
+      "audience_version": 1,
+      "profile_id": "p2",
+      "re_entry": false,
+      "run_id": "run_3"
+    },
+    {
+      "step": "write",
+      "op": "exit",
+      "audience": "recent_purchasers",
+      "profileId": "p1"
+    },
+    {
+      "step": "emit",
+      "event": "audience.exited",
+      "audience": "recent_purchasers",
+      "audience_version": 1,
+      "profile_id": "p1",
+      "entered_at": "2026-08-01T00:00:00.000Z",
+      "run_id": "run_3"
+    },
+    {
+      "step": "write",
+      "op": "enter",
+      "audience": "recent_purchasers",
+      "profileId": "p1"
+    },
+    {
+      "step": "emit",
+      "event": "audience.entered",
+      "audience": "recent_purchasers",
+      "audience_version": 1,
+      "profile_id": "p1",
+      "re_entry": true,
+      "run_id": "run_4"
+    },
+    {
+      "step": "write",
+      "op": "restamp",
+      "audience": "recent_purchasers",
+      "profileIds": ["p1", "p2"]
+    },
+    {
+      "step": "write",
+      "op": "enter",
+      "audience": "vip_customers",
+      "profileId": "p3"
+    },
+    {
+      "step": "emit",
+      "event": "audience.entered",
+      "audience": "vip_customers",
+      "audience_version": 1,
+      "profile_id": "p3",
+      "re_entry": false,
+      "run_id": "run_6"
+    },
+    {
+      "step": "write",
+      "op": "enter",
+      "audience": "vip_customers",
+      "profileId": "p1"
+    },
+    {
+      "step": "emit",
+      "event": "audience.entered",
+      "audience": "vip_customers",
+      "audience_version": 1,
+      "profile_id": "p1",
+      "re_entry": false,
+      "run_id": "run_6"
+    }
+  ],
+  "perRun": [
+    {
+      "runId": "run_1",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "members": 1,
+          "entered": 1,
+          "exited": 0,
+          "restamped": 0
+        }
+      ],
+      "transitions": 1
+    },
+    {
+      "runId": "run_2",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "members": 1,
+          "entered": 0,
+          "exited": 0,
+          "restamped": 0
+        }
+      ],
+      "transitions": 0
+    },
+    {
+      "runId": "run_3",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "members": 1,
+          "entered": 1,
+          "exited": 1,
+          "restamped": 0
+        }
+      ],
+      "transitions": 2
+    },
+    {
+      "runId": "run_4",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 1,
+          "members": 2,
+          "entered": 1,
+          "exited": 0,
+          "restamped": 0
+        }
+      ],
+      "transitions": 1
+    },
+    {
+      "runId": "run_5",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 2,
+          "members": 2,
+          "entered": 0,
+          "exited": 0,
+          "restamped": 2
+        }
+      ],
+      "transitions": 0
+    },
+    {
+      "runId": "run_6",
+      "perAudience": [
+        {
+          "key": "recent_purchasers",
+          "version": 2,
+          "members": 2,
+          "entered": 0,
+          "exited": 0,
+          "restamped": 0
+        },
+        {
+          "key": "vip_customers",
+          "version": 1,
+          "members": 2,
+          "entered": 2,
+          "exited": 0,
+          "restamped": 0
+        }
+      ],
+      "transitions": 2
+    }
+  ]
+}
