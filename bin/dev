@@ -94,10 +94,14 @@ async function main() {
 /**
  * Build the shared libraries so the services can import them.
  *
- * The ADR-0007 library roots `libs/*`, `libs/*/*` and `sdks/*` are all
- * named: both epochs are live until IJ4NN, and a filter that misses a root
- * leaves those packages with no dist behind their `@polaris/*` imports.
+ * Every ADR-0007 library root is named — one segment under `libs`, two
+ * segments under `libs`, and `sdks` — because a filter that misses a root
+ * leaves those packages with no dist behind their `@polaris/...` imports.
  * Keep this in step with `build-packages` in the Makefile and with `bin/setup`.
+ *
+ * The two-segment root is spelled out in prose rather than as a glob on
+ * purpose: written literally it ends a block comment, which is how this file
+ * came to be unparseable for a while.
  *
  * Workspace packages export `./dist/*` only, and the services run from source
  * under `tsx watch` — so without this the first import fails with a bare
