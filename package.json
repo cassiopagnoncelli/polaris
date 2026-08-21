@@ -12,7 +12,7 @@
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && pnpm -r --if-present run typecheck",
-    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql && pnpm lint:manifest-drift && pnpm lint:retired-paths && pnpm lint:package-name-congruence && pnpm lint:import-direction && pnpm lint:env-example && pnpm lint:docker-context && pnpm lint:blueprint-links && pnpm lint:blueprint-pnpm && pnpm lint:docker-deploy && pnpm lint:gate-parity",
+    "lint": "biome lint . && pnpm lint:clickhouse-imports && pnpm lint:nul-bytes && pnpm lint:dead-exports && pnpm lint:process-env && pnpm lint:project-config-keys && pnpm lint:metric-names && pnpm lint:trait-sql && pnpm lint:manifest-drift && pnpm lint:retired-paths && pnpm lint:package-name-congruence && pnpm lint:import-direction && pnpm lint:env-example && pnpm lint:docker-context && pnpm lint:blueprint-links && pnpm lint:blueprint-pnpm && pnpm lint:docker-deploy && pnpm lint:gate-parity && pnpm lint:executable-parse",
     "lint:fix": "biome lint --write .",
     "lint:clickhouse-imports": "node scripts/lint-clickhouse-imports.mjs",
     "lint:nul-bytes": "node scripts/lint-nul-bytes.mjs",
@@ -71,6 +71,7 @@
     "lint:blueprint-pnpm": "node scripts/lint-blueprint-pnpm.mjs",
     "lint:docker-deploy": "node scripts/lint-docker-deploy.mjs",
     "lint:gate-parity": "node scripts/lint-gate-parity.mjs",
+    "lint:executable-parse": "node scripts/lint-executable-parse.mjs",
     "check:catalog-sql:ci": "node scripts/check-catalog-sql.mjs --require-clickhouse",
     "verify:gates:services": "node scripts/verify-gates.mjs --with-services"
   },

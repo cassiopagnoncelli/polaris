@@ -175,6 +175,20 @@ const DEPLOY_INJECTION_LINE = "injectWorkspacePackages: true";
  */
 const GATE_PARITY_INJECTION = " && pnpm format:check";
 
+// The glob that ended the comment explaining it.
+//
+// `bin/dev` named the ADR-0007 library roots in a JSDoc block and wrote the
+// two-segment one as a literal glob. That glob contains the sequence that ends
+// a block comment, so the comment ended ninety lines early, the prose after it
+// became code, and `make dev` exited 2 before starting anything -- for days, on
+// a repository whose lint, typecheck and tests were green.
+//
+// Written as a plain literal, which is safe HERE and was not safe there: the
+// sequence is inert inside a string and lethal inside a comment. That is why
+// every line of this note is a `//` line, and why the commit that fixed
+// `bin/dev` spells the root out in prose instead.
+const EXECUTABLE_PARSE_CANARY = "libs/*/*";
+
 const sh = (cmd) => execSync(cmd, { cwd: ROOT, stdio: "pipe" }).toString();
 const read = (file) => readFileSync(join(ROOT, file), "utf8");
 const write = (file, body) => writeFileSync(join(ROOT, file), body);
@@ -516,6 +530,29 @@ const GATES = [
       const verify = JSON.parse(read("package.json")).scripts?.verify ?? "";
       return !verify.includes("format:check");
     },
+  },
+  {
+    // The founding fault, re-created rather than invented: a doc comment in
+    // `bin/dev` that ends itself. `bin/` is the instance, but the class is
+    // every file the toolchain never opens -- extensionless scripts, shell
+    // scripts, anything reached by being run instead of imported.
+    //
+    // Injected into `bin/dev` because that is the file it happened to, and
+    // because it is the one an operator reaches by typing `make dev`. The
+    // append lands at the end of the file, so the SyntaxError is the last
+    // thing in it rather than the first -- which is how the original arrived
+    // too, halfway down a file nobody was editing.
+    name: "lint:executable-parse",
+    command: "node scripts/lint-executable-parse.mjs",
+    files: ["bin/dev"],
+    inject: () => append("bin/dev", `\n/**\n * Roots: ${EXECUTABLE_PARSE_CANARY}\n */\n`),
+    // Asserts the text landed, not that the file stopped parsing. Parsing it
+    // here would be running the gate to decide whether the gate is worth
+    // running, and this harness's whole claim rests on those two being
+    // separate questions. `endsWith` rather than `includes`, because the
+    // injection is an append and a match anywhere else would not be one.
+    assertInjected: () =>
+      read("bin/dev").endsWith(`\n/**\n * Roots: ${EXECUTABLE_PARSE_CANARY}\n */\n`),
   },
   {
     name: "openapi:check",
