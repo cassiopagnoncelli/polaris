@@ -38,10 +38,16 @@ const sdk = await PolarisWebSdk.create({
   source: { id: "checkout-app" },
 });
 
-await sdk.track("page.viewed", {
-  path: window.location.pathname,
-  title: document.title,
-});
+await sdk.track(
+  "page.viewed",
+  {
+    path: window.location.pathname,
+    search: window.location.search || null,
+    title: document.title,
+    referrer: document.referrer || null,
+  },
+  { schemaVersion: 2 },
+);
 ```
 
 ### Node

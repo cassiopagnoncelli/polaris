@@ -134,7 +134,13 @@ The canonical envelope includes optional `consent` and `privacy` blocks:
 The SDK accepts these via `TrackOptions.consent` and `TrackOptions.privacy`:
 
 ```ts
-await sdk.track("page.viewed", { path: "/home" }, {
+await sdk.track("page.viewed", {
+  path: "/home",
+  search: null,
+  title: "Home",
+  referrer: null,
+}, {
+  schemaVersion: 2,
   consent: { analytics: true, marketing: false, personalization: true },
   privacy: { classification: "internal" },
 });

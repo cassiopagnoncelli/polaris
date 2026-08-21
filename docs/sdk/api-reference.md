@@ -297,7 +297,7 @@ The Web SDK exposes a `close()` method too (used for SPA teardown), but the arch
 
 ## What does **not** exist
 
-- No `page()` helper. Page views are explicit `track("page.viewed", ...)` calls. See [Explicit `page.viewed`](./explicit-events.md).
+- No `page()` helper. Page views are explicit `track("page.viewed", ...)` calls. Because `schemaVersion` defaults to 1 and the catalog's active `page.viewed` version is 2, those calls must pass `{ schemaVersion: 2 }` along with all four v2 properties — a `page()` helper that fills in both is a future task. See [Explicit `page.viewed`](./explicit-events.md).
 - No `group()`, `alias()`, or `screen()` methods.
 - No autocapture (clicks, forms, scroll depth).
 - No automatic identify-event emission.

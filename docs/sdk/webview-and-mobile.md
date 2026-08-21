@@ -59,7 +59,11 @@ Because storage may not persist, **capture campaign/click IDs every visit**. The
 const url = new URL(window.location.href);
 await sdk.track("page.viewed", {
   path: url.pathname,
+  search: url.search || null,
+  title: document.title,
+  referrer: document.referrer || null,
 }, {
+  schemaVersion: 2,
   context: {
     campaign: {
       source: url.searchParams.get("utm_source"),

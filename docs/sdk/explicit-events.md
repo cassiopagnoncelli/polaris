@@ -20,12 +20,16 @@ You fire it. Call `track("page.viewed", { ... })` at the moment in your applicat
 
 ```ts
 // In your shared site bootstrap.
-await sdk.track("page.viewed", {
-  path: window.location.pathname,
-  title: document.title,
-  url: window.location.href,
-  referrer: document.referrer || null,
-});
+await sdk.track(
+  "page.viewed",
+  {
+    path: window.location.pathname,
+    search: window.location.search || null,
+    title: document.title,
+    referrer: document.referrer || null,
+  },
+  { schemaVersion: 2 },
+);
 ```
 
 ### SPA (React Router, Vue Router, etc.)
@@ -33,12 +37,18 @@ await sdk.track("page.viewed", {
 Hook into your router's navigation event:
 
 ```ts
-router.afterEach((to, from) => {
-  void sdk.track("page.viewed", {
-    path: to.fullPath,
-    title: document.title,
-    previous_path: from.fullPath,
-  });
+router.afterEach((to) => {
+  void sdk.track(
+    "page.viewed",
+    {
+      // v2 keeps the query out of `path`; your router exposes them apart.
+      path: to.path,
+      search: window.location.search || null,
+      title: document.title,
+      referrer: document.referrer || null,
+    },
+    { schemaVersion: 2 },
+  );
 });
 ```
 
@@ -68,8 +78,11 @@ Campaign parameters travel in `context.campaign`, not in `properties`. Your appl
 const url = new URL(window.location.href);
 await sdk.track("page.viewed", {
   path: url.pathname,
+  search: url.search || null,
   title: document.title,
+  referrer: document.referrer || null,
 }, {
+  schemaVersion: 2,
   context: {
     campaign: {
       source: url.searchParams.get("utm_source"),
@@ -89,10 +102,16 @@ You can wire it yourself in a few lines:
 ```ts
 let lastPath = window.location.pathname;
 const fire = () => {
-  void sdk.track("page.viewed", {
-    path: window.location.pathname,
-    title: document.title,
-  });
+  void sdk.track(
+    "page.viewed",
+    {
+      path: window.location.pathname,
+      search: window.location.search || null,
+      title: document.title,
+      referrer: document.referrer || null,
+    },
+    { schemaVersion: 2 },
+  );
 };
 
 // Fire on first load.

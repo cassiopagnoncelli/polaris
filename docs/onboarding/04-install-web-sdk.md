@@ -49,10 +49,16 @@ in lockstep makes diagnostics trivial.
 
 ```ts
 // Anonymous traffic — track() works before identify().
-await sdk.track("page.viewed", {
-  path: window.location.pathname,
-  title: document.title,
-});
+await sdk.track(
+  "page.viewed",
+  {
+    path: window.location.pathname,
+    search: window.location.search || null,
+    title: document.title,
+    referrer: document.referrer || null,
+  },
+  { schemaVersion: 2 },
+);
 
 // User logs in.
 sdk.identify("cus_123");
