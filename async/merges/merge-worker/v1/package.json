@@ -39,6 +39,7 @@
     "@polaris/bus": "workspace:*",
     "ioredis": "^5.4.2",
     "uuid": "^14.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@polaris/identity-components": "workspace:*"
   }
 }

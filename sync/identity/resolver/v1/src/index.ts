@@ -7,10 +7,16 @@
  * unnoticed — the first consumer (the spine's integration suite) is what
  * turned a dead pointer into a build error.
  *
- * What travels is the stage's contract: the repository behind which all
- * profile-store writes happen, the policy resolver, and the app builder.
- * The runtime internals (`emit`, `transform`) stay private — they are
- * how this stage does its job, not what another package may depend on.
+ * What travels is what this UNIT is: its config, its boot-time override
+ * loader, its app builder, its runtime, and the Postgres store behind
+ * which all profile-store writes happen. The physics moved out — a
+ * caller wanting the resolution rules, the graph, merge semantics or the
+ * profile aggregate imports `@polaris/identity-rules`,
+ * `@polaris/identity-graph`, `@polaris/identity-merge` or
+ * `@polaris/profiles` directly, rather than through a version directory
+ * that only ever forwarded them. The runtime internals (`emit`) stay
+ * private: they are how this stage does its job, not what another
+ * package may depend on.
  */
 
 export { type BuildAppOptions, type BuiltSyncIdentityApp, buildSyncIdentityApp } from "./app.js";
@@ -23,24 +29,7 @@ export {
   syncIdentityEnvKeys,
 } from "./config.js";
 export { loadProjectIdentityOverrides } from "./overrides.js";
-export {
-  createPolicyResolver,
-  IdentityPolicyError,
-  MANIFEST_BOUNDS,
-  MANIFEST_DEFAULTS,
-  type ProjectIdentityOverride,
-  resolveIdentityPolicy,
-} from "./policy.js";
-export {
-  type BoundIdentifier,
-  createKyselyProfileRepository,
-  type MergeOutcome,
-  type ProfileRepository,
-  type RejectedIdentifier,
-  type ResolutionKind,
-  type ResolutionResult,
-  type ResolveInput,
-} from "./repository.js";
+export { createKyselyProfileRepository } from "./repository.js";
 export {
   createRuntime,
   handleEvent,
@@ -49,4 +38,3 @@ export {
   type IdentityStageRuntime,
   type IdentityStageRuntimeDeps,
 } from "./runtime.js";
-export type { IdentityPolicy, StrongIdentityKind } from "./transform.js";

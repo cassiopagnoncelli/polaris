@@ -183,6 +183,9 @@ importers:
       '@polaris/governance':
         specifier: workspace:*
         version: link:../../libs/governance
+      '@polaris/identity-merge':
+        specifier: workspace:*
+        version: link:../../libs/identity/merge
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../libs/observability/logger
@@ -450,6 +453,9 @@ importers:
       '@polaris/bus':
         specifier: workspace:*
         version: link:../../../../libs/bus
+      '@polaris/identity-components':
+        specifier: workspace:*
+        version: link:../../../../libs/identity/components
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -722,6 +728,35 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  libs/identity/components: {}
+
+  libs/identity/graph:
+    dependencies:
+      '@polaris/identity-merge':
+        specifier: workspace:*
+        version: link:../merge
+      '@polaris/identity-rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@polaris/profiles':
+        specifier: workspace:*
+        version: link:../../profiles
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
+
+  libs/identity/merge:
+    dependencies:
+      '@polaris/identity-rules':
+        specifier: workspace:*
+        version: link:../rules
+
+  libs/identity/rules:
+    dependencies:
+      '@polaris/governance':
+        specifier: workspace:*
+        version: link:../../governance
+
   libs/observability/logger:
     dependencies:
       pino:
@@ -811,6 +846,15 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  libs/profiles:
+    dependencies:
+      '@polaris/identity-merge':
+        specifier: workspace:*
+        version: link:../identity/merge
+      '@polaris/identity-rules':
+        specifier: workspace:*
+        version: link:../identity/rules
 
   libs/runtime/config:
     dependencies:
@@ -1209,6 +1253,15 @@ importers:
       '@polaris/governance':
         specifier: workspace:*
         version: link:../../../../libs/governance
+      '@polaris/identity-graph':
+        specifier: workspace:*
+        version: link:../../../../libs/identity/graph
+      '@polaris/identity-merge':
+        specifier: workspace:*
+        version: link:../../../../libs/identity/merge
+      '@polaris/identity-rules':
+        specifier: workspace:*
+        version: link:../../../../libs/identity/rules
       '@polaris/observability-logger':
         specifier: workspace:*
         version: link:../../../../libs/observability/logger
@@ -1221,6 +1274,9 @@ importers:
       '@polaris/pipeline':
         specifier: workspace:*
         version: link:../../../../libs/pipeline
+      '@polaris/profiles':
+        specifier: workspace:*
+        version: link:../../../../libs/profiles
       '@polaris/runtime-config':
         specifier: workspace:*
         version: link:../../../../libs/runtime/config

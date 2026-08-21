@@ -17,13 +17,14 @@
  *     them.
  */
 
+import { bindingKey } from "@polaris/identity-graph";
+import type { MergeOutcome, RejectedIdentifier } from "@polaris/identity-merge";
+import type { BoundIdentifier } from "@polaris/profiles";
 import {
   type CanonicalEnvelopeInput,
   deriveEventId,
   stampProcessorMetadata,
 } from "@polaris/pipeline";
-
-import type { BoundIdentifier, MergeOutcome, RejectedIdentifier } from "./repository.js";
 
 /**
  * The stage handles envelopes as loose records because the transport
@@ -181,10 +182,10 @@ export function buildIdentityLinkedEvent(args: {
     schemaVersion: 2,
     // One slot per bound identifier, so binding two identifiers on one
     // event yields two stable, distinct derived ids.
-    slot: `linked:${args.identifier.kind}:${args.identifier.value}`,
+    slot: `linked:${bindingKey(args.identifier)}`,
     properties: {
       profile_id: args.profileId,
-      identifier: `${args.identifier.kind}:${args.identifier.value}`,
+      identifier: bindingKey(args.identifier),
       profile_created: args.profileCreated,
       link_id: args.linkId,
       evidence_type: "explicit_overlap",
@@ -232,10 +233,10 @@ export function buildLinkRejectedEvent(args: {
     source: args.source,
     event: "identity.link_rejected",
     schemaVersion: 1,
-    slot: `rejected:${args.rejected.kind}:${args.rejected.value}`,
+    slot: `rejected:${bindingKey(args.rejected)}`,
     properties: {
       profile_id: args.profileId,
-      identifier: `${args.rejected.kind}:${args.rejected.value}`,
+      identifier: bindingKey(args.rejected),
       reason: args.rejected.reason,
       ...(args.rejected.existingBindingCount !== undefined
         ? { existing_binding_count: args.rejected.existingBindingCount }

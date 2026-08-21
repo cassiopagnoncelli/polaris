@@ -2,23 +2,36 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPolicyResolver,
-  IdentityPolicyError,
+  type IdentityPolicy,
   MANIFEST_DEFAULTS,
-  resolveIdentityPolicy,
-} from "../src/policy.js";
+  type ProjectIdentityOverride,
+} from "../src/index.js";
+
+/**
+ * Policy comes through the per-project resolver, because that is the
+ * entry point the stage boots with. The single-project helper underneath
+ * it is module-internal: reaching past the resolver would be testing a
+ * surface nothing calls.
+ */
+function policyFor(override: ProjectIdentityOverride | undefined): IdentityPolicy {
+  const overrides = override === undefined ? new Map() : new Map([["p", override]]);
+  return createPolicyResolver(overrides)("p", "development");
+}
+
+const OUT_OF_BOUNDS = /outside the manifest bounds/;
 
 describe("identity policy", () => {
   it("falls back to manifest defaults for a project that declared nothing", () => {
     // Which is every project until someone has a reason to think about
     // identity bounds — the defaults must be safe on their own.
-    const policy = resolveIdentityPolicy(undefined);
+    const policy = policyFor(undefined);
     expect(policy.maxIdentifiersPerKind).toBe(MANIFEST_DEFAULTS.maxIdentifiersPerKind);
     expect(policy.maxMergesPerWindow).toBe(MANIFEST_DEFAULTS.maxMergesPerWindow);
     expect(policy.denylist).toEqual({});
   });
 
   it("accepts a project narrowing a bound", () => {
-    const policy = resolveIdentityPolicy({ max_identifiers_per_kind: 10 });
+    const policy = policyFor({ max_identifiers_per_kind: 10 });
     expect(policy.maxIdentifiersPerKind).toBe(10);
   });
 
@@ -26,17 +39,13 @@ describe("identity policy", () => {
     // Silently clamping would leave the project believing it got what it
     // asked for, and the mismatch would only surface in an audit of
     // emitted events.
-    expect(() => resolveIdentityPolicy({ max_identifiers_per_kind: 0 })).toThrow(
-      IdentityPolicyError,
-    );
-    expect(() => resolveIdentityPolicy({ max_identifiers_per_kind: 99_999 })).toThrow(
-      IdentityPolicyError,
-    );
-    expect(() => resolveIdentityPolicy({ merge_window_seconds: 1 })).toThrow(IdentityPolicyError);
+    expect(() => policyFor({ max_identifiers_per_kind: 0 })).toThrow(OUT_OF_BOUNDS);
+    expect(() => policyFor({ max_identifiers_per_kind: 99_999 })).toThrow(OUT_OF_BOUNDS);
+    expect(() => policyFor({ merge_window_seconds: 1 })).toThrow(OUT_OF_BOUNDS);
   });
 
   it("builds a denylist set per identifier kind", () => {
-    const policy = resolveIdentityPolicy({
+    const policy = policyFor({
       denylist: { customer_id: ["guest", "anonymous"], anonymous_id: ["kiosk-shared"] },
     });
     expect(policy.denylist.customer_id?.has("guest")).toBe(true);
@@ -63,7 +72,7 @@ describe("identity policy", () => {
     // retry tiers into the DLQ over a configuration mistake. Deploy-time
     // inputs fail the deploy.
     expect(() => createPolicyResolver(new Map([["storefront", { max_traits_bytes: 1 }]]))).toThrow(
-      IdentityPolicyError,
+      OUT_OF_BOUNDS,
     );
     expect(() => createPolicyResolver(new Map([["storefront", { max_traits_bytes: 1 }]]))).toThrow(
       /project "storefront"/,

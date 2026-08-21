@@ -1,0 +1,38 @@
+{
+  "name": "@polaris/identity-graph",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The identity graph: the id-graph model, how identifiers traverse to a profile, the storage port every profile-store write goes through, and the one-transaction-per-event resolution the identity stage runs against it.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/identity-merge": "workspace:*",
+    "@polaris/identity-rules": "workspace:*",
+    "@polaris/profiles": "workspace:*",
+    "uuid": "^14.0.0"
+  }
+}

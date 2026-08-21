@@ -2,9 +2,11 @@
  * Identity stage runtime: consume `raw.events`, resolve, publish.
  *
  * The per-message pipeline is deliberately small, because the hard parts
- * live elsewhere: identifier collection is pure (`transform.ts`), the
- * resolution decision is one transaction (`repository.ts`), and envelope
- * construction is pure (`emit.ts`). What this module owns is ORDER.
+ * live elsewhere: identifier collection is pure
+ * (`@polaris/identity-rules`), the resolution decision is one
+ * transaction over `@polaris/identity-graph` (`repository.ts` supplies
+ * the Postgres store), and envelope construction is pure (`emit.ts`).
+ * What this module owns is ORDER.
  *
  * The ordering rule, stated once so it is never re-litigated in a review:
  *
@@ -25,6 +27,14 @@
 
 import type { Logger } from "@polaris/observability-logger";
 import {
+  collectIdentifiers,
+  type CollectedIdentifier,
+  type IdentityEnvelope,
+  type IdentityPolicy,
+} from "@polaris/identity-rules";
+import { bindingKey } from "@polaris/identity-graph";
+import { extractTraits, type ProfileRepository, type ResolutionResult } from "@polaris/profiles";
+import {
   buildProfilePartitionKey,
   STREAM_FAMILY_IDENTIFIED_EVENTS,
   STREAM_FAMILY_IDENTITY_EVENTS,
@@ -40,13 +50,6 @@ import {
   buildProfileUpdatedEvent,
   buildSpineEvent,
 } from "./emit.js";
-import type { ProfileRepository, ResolutionResult } from "./repository.js";
-import {
-  collectIdentifiers,
-  extractTraits,
-  type IdentityPolicy,
-  type IdentityStageEvent,
-} from "./transform.js";
 
 /**
  * The producer surface this stage uses.
@@ -179,7 +182,7 @@ export async function handleEvent(
   const now = deps.now();
   const runId = deps.runId();
 
-  const event = raw as unknown as IdentityStageEvent;
+  const event = raw as unknown as IdentityEnvelope;
   const collected = collectIdentifiers(event, policy);
   const { traits, overCap } = extractTraits(event, policy);
 
@@ -265,7 +268,7 @@ async function publishDerived(
   deps: IdentityStageDeps,
   raw: Record<string, unknown>,
   resolution: ResolutionResult,
-  denylisted: readonly { kind: "customer_id" | "anonymous_id"; value: string }[],
+  denylisted: readonly CollectedIdentifier[],
   policy: IdentityPolicy,
   runId: string | null,
   now: Date,
@@ -311,7 +314,7 @@ async function publishDerived(
           profileId: resolution.profileId,
           identifier: bound,
           profileCreated: resolution.kind === "created",
-          linkId: `${bound.kind}:${bound.value}`,
+          linkId: bindingKey(bound),
           runId,
           now,
         }),

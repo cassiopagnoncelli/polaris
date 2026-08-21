@@ -13,11 +13,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { MANIFEST_DEFAULTS } from "@polaris/identity-rules";
 import { loadProcessorManifest, validateProcessorFixtures } from "@polaris/pipeline";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
-
-import { MANIFEST_DEFAULTS } from "../src/policy.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const UNIT_DIR = resolve(HERE, "..");

@@ -17,10 +17,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sharedOnlyIsolationLookup } from "@polaris/bus";
+import type { IdentityPolicy } from "@polaris/identity-rules";
 import { describe, expect, it } from "vitest";
 
 import { handleEvent } from "../src/runtime.js";
-import type { IdentityPolicy } from "../src/transform.js";
 import { InMemoryProfileRepository, RecordingProducer, silentLogger } from "./fakes.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

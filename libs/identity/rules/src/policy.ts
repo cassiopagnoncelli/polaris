@@ -1,12 +1,12 @@
 /**
- * Resolve the identity policy for a project.
+ * The cardinality bounds, and how a project narrows them.
  *
- * Semantic parameters come from the manifest's declared defaults; a
- * project may NARROW them — and declare its identifier denylist — in the
- * `identity:` block of `definitions/projects/<id>.yaml`, but never widen
- * them past the manifest's bounds. The block's shape is pinned by
- * `@polaris/governance` so the CLI's catalog validation and this
- * stage's boot loader (`overrides.ts`) cannot drift.
+ * Semantic parameters come from the resolver manifest's declared
+ * defaults; a project may NARROW them — and declare its identifier
+ * denylist — in the `identity:` block of `definitions/projects/<id>.yaml`,
+ * but never widen them past the manifest's bounds. The block's shape is
+ * pinned by `@polaris/governance` so the CLI's catalog validation and the
+ * stage's boot loader cannot drift.
  *
  * These are deploy-time, file-backed inputs — not `project_config`.
  * Changing the cap or the denylist changes which events the stage emits,
@@ -14,11 +14,21 @@
  * (`docs/architecture/05-processors-and-replay.md`). It also means the
  * value that produced a given output is recoverable from a git sha,
  * which is what makes a rebuild reproducible.
+ *
+ * ## Why the numbers live here and in a manifest
+ *
+ * The constants below are the ones `sync/identity/resolver/v1`'s
+ * `processor.manifest.yaml` declares, and the two are held equal by that
+ * unit's `manifest.test.ts` rather than by one reading the other. The
+ * manifest is an operator-facing document under the immutability rule;
+ * this is the code path. A loader would make the numbers depend on a file
+ * being shipped next to the binary, which is exactly the coupling the
+ * carve-out removes.
  */
 
 import type { ProjectIdentityOverride } from "@polaris/governance";
 
-import type { IdentityPolicy, StrongIdentityKind } from "./transform.js";
+import type { IdentityPolicy, StrongIdentityKind } from "./identifiers.js";
 
 export type { ProjectIdentityOverride };
 
@@ -38,7 +48,7 @@ export const MANIFEST_BOUNDS = {
   maxTraitsBytes: { min: 1_024, max: 1_048_576 },
 } as const;
 
-export class IdentityPolicyError extends Error {
+class IdentityPolicyError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "IdentityPolicyError";
@@ -71,9 +81,7 @@ function clampToBounds(
  * Absent means manifest defaults, which is the correct behaviour for
  * every project that has not thought about identity bounds yet.
  */
-export function resolveIdentityPolicy(
-  overrides: ProjectIdentityOverride | undefined,
-): IdentityPolicy {
+function resolveIdentityPolicy(overrides: ProjectIdentityOverride | undefined): IdentityPolicy {
   const denylist: Partial<Record<StrongIdentityKind, ReadonlySet<string>>> = {};
   for (const [kind, values] of Object.entries(overrides?.denylist ?? {})) {
     if (values !== undefined && values.length > 0) {

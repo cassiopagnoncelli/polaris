@@ -50,6 +50,7 @@
  * and the only remedy is another rebuild.
  */
 
+import { REBUILD_STEPS, type RebuildStep } from "@polaris/identity-merge";
 import type { Command } from "commander";
 import { v7 as uuidv7 } from "uuid";
 
@@ -58,9 +59,16 @@ import { UsageError } from "../../errors.js";
 import { renderAccordingTo } from "../../output.js";
 import { buildRegisteredRebuildDriver } from "./rebuild-registration.js";
 
-/** Steps, in the order they must run. */
-export const REBUILD_STEPS = ["pause", "truncate", "replay", "resume"] as const;
-export type RebuildStep = (typeof REBUILD_STEPS)[number];
+/**
+ * Steps, in the order they must run.
+ *
+ * Re-exported rather than declared: the ORDER is identity semantics —
+ * `@polaris/identity-merge` states why three of the four orderings are
+ * wrong and two of them quietly — and what this command owns is the
+ * operator surface around it. Callers of the CLI's own module keep
+ * naming it here.
+ */
+export { REBUILD_STEPS, type RebuildStep };
 
 export interface ProfilesRebuildArgs {
   readonly project?: string;

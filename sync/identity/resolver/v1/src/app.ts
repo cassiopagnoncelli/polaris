@@ -22,6 +22,8 @@
 
 import { hostname } from "node:os";
 
+import { createPolicyResolver, type ProjectIdentityOverride } from "@polaris/identity-rules";
+import type { ProfileRepository } from "@polaris/profiles";
 import { closeDb, createDb, type Database } from "@polaris/persistence-postgres";
 import { createLogger, type Logger } from "@polaris/observability-logger";
 import { toPrometheusText } from "@polaris/observability-metrics";
@@ -68,8 +70,7 @@ import type { Kysely } from "kysely";
 
 import type { SyncIdentityRuntimeConfig } from "./config.js";
 import { PROCESSOR_IDENTITY, PROCESSOR_NAME, PROCESSOR_VERSION } from "./emit.js";
-import { createPolicyResolver, type ProjectIdentityOverride } from "./policy.js";
-import { createKyselyProfileRepository, type ProfileRepository } from "./repository.js";
+import { createKyselyProfileRepository } from "./repository.js";
 import { createRuntime, type IdentityStageRuntime, type StageMetricScope } from "./runtime.js";
 
 export interface BuildAppOptions {

@@ -1,0 +1,35 @@
+{
+  "name": "@polaris/identity-merge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Merge semantics for the identity graph: winner selection, the merge-rate breaker, the safeguard vocabulary behind identity.link_rejected and identity.merge_suspended, and the unmerge-as-replay-rebuild contract. Pure — no clock, no I/O, no database.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/identity-rules": "workspace:*"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@polaris/identity-rules",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Identity resolution rules: which identifiers count, in what order they are taken, which values are blocked, and the cardinality bounds a project may narrow. Pure — no clock, no I/O, no database.",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src test",
+    "format": "biome format --write src test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@polaris/governance": "workspace:*"
+  }
+}
