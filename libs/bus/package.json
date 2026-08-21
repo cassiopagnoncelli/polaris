@@ -38,10 +38,6 @@
     "./topology": {
       "types": "./dist/topology.d.ts",
       "import": "./dist/topology.js"
-    },
-    "./stream-range-reader": {
-      "types": "./dist/stream-range-reader.d.ts",
-      "import": "./dist/stream-range-reader.js"
     }
   },
   "files": [

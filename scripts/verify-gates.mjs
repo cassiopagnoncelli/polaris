@@ -125,6 +125,22 @@ const SQL_COLUMN_CANARY = `no_such_${"column"}_xyz`;
 const PACKAGE_NAME_CANARY = `@polaris/${"shared"}-governance`;
 
 /**
+ * A subpath `@polaris/bus` promises and no source emits.
+ *
+ * Written as a literal. `lint-declared-entrypoints` reads package.json
+ * manifests and tsconfigs and nothing else, so a mention in this file cannot
+ * be mistaken for a declaration -- and there is no symbol here for the checks
+ * that search `scripts/` to see.
+ *
+ * `libs/bus` is where the founding instance was: it advertised
+ * `./stream-range-reader` for as long as that module has been called
+ * `partition-stream-readers.ts`. This re-creates the fault in the package it
+ * happened to, rather than in a fixture, because the manifest and the sources
+ * disagreeing is the whole of it.
+ */
+const UNEMITTED_SUBPATH_CANARY = "./dist/stream-range-reader.js";
+
+/**
  * A blueprint link target ADR-0007 deleted, assembled like the rest.
  *
  * `lint-retired-paths` does not match this spelling as it stands — its
@@ -323,6 +339,26 @@ const GATES = [
       write(file, read(file).replace('"@polaris/governance"', `"${PACKAGE_NAME_CANARY}"`));
     },
     assertInjected: () => read("libs/governance/package.json").includes(PACKAGE_NAME_CANARY),
+  },
+  {
+    // A subpath the manifest advertises and no source file emits. Injected
+    // into `libs/bus`'s manifest -- the package the fault was found in -- by
+    // ADDING the export back, which is the shape it arrives in: somebody
+    // renames the module and the manifest keeps the old name.
+    //
+    // Nothing has to import it for the gate to go red, and that is the point.
+    // The class is invisible until somebody writes the import, so a check that
+    // needed a caller would be a check that fires after the damage.
+    name: "lint:declared-entrypoints",
+    command: "node scripts/lint-declared-entrypoints.mjs",
+    files: ["libs/bus/package.json"],
+    inject: () => {
+      const file = "libs/bus/package.json";
+      const manifest = JSON.parse(read(file));
+      manifest.exports["./stream-range-reader"] = { import: UNEMITTED_SUBPATH_CANARY };
+      write(file, `${JSON.stringify(manifest, null, 2)}\n`);
+    },
+    assertInjected: () => read("libs/bus/package.json").includes(UNEMITTED_SUBPATH_CANARY),
   },
   {
     // The mirror of the congruence gate above: law one says a library sits

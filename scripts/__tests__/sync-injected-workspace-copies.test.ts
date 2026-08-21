@@ -158,10 +158,15 @@ describe("telling the three kinds of missing file apart", () => {
   });
 
   it("calls it never-produced when the source built everything except this", () => {
-    // `@polaris/bus` really does declare `./stream-range-reader`, and no
-    // source file emits it. Re-injection cannot fix that, so reporting it as
-    // an injection failure would make the script unable to report success on
-    // a tree it had just correctly repaired.
+    // `@polaris/bus` really did declare `./stream-range-reader`, and no
+    // source file emitted it — this is the case that found it. 3OLBM dropped
+    // the declaration and put the general check behind
+    // `pnpm lint:declared-entrypoints`, so the bucket now describes a fault
+    // that fails a gate rather than one nobody was watching. It stays: this
+    // script cannot assume the gate ran, and re-injection cannot fix a file
+    // nothing emits, so reporting it as an injection failure would make the
+    // script unable to report success on a tree it had just correctly
+    // repaired.
     write("source/dist/index.d.ts");
     write("copy/dist/index.d.ts");
 

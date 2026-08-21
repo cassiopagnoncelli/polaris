@@ -67,7 +67,9 @@
 //     defect in the package, not in the injection; no amount of re-injecting
 //     produces it, so it is reported as a note and does not fail. Failing on
 //     one would leave this script unable to report success on a tree it had
-//     just correctly repaired.
+//     just correctly repaired. `pnpm lint:declared-entrypoints` is where that
+//     defect does fail, and it exists because this bucket found the first
+//     one — `@polaris/bus` advertising a module renamed out from under it.
 //
 // The repair itself is unconditional. An earlier draft checked first and
 // skipped the work when nothing looked stale — on a cold tree, where neither
@@ -333,7 +335,8 @@ function reportNeverProduced(neverProduced) {
   console.log(
     "\nNote — entrypoints a package declares and its build does not emit, so they are\n" +
       "  absent from the source as well as from its copy. Not an injection problem and\n" +
-      "  not repairable by one; an importer of these subpaths would fail everywhere:",
+      "  not repairable by one; an importer of these subpaths would fail everywhere.\n" +
+      "  `pnpm lint:declared-entrypoints` fails on these:",
   );
   reportCopies(neverProduced, (line) => {
     console.log(line);
