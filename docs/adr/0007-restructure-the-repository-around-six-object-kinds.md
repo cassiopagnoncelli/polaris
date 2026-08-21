@@ -6,7 +6,7 @@ date: 2026-08-20
 deciders: architect
 supersedes:
 superseded_by:
-related_card: U2ED, B2YJ
+related_card: U2ED, B2YJ, WNGW6
 ---
 
 ## Context and Problem Statement
@@ -146,11 +146,11 @@ connectors/
   warehouses/clickhouse/v1 …       # → / ○
 
 libs/
-  spec/                            # ← shared-schemas — imports nothing
+  spec/                            # ← shared-schemas — no @polaris import
   contracts/                       # inter-stage shapes, job payloads
-  tenancy/                         # ← shared-project-config, project-config-schemas,
-                                   #   shared-control-plane
-  auth/                            # ← polaris-idp
+  tenancy/                         # domain ← shared-project-config,
+                                   #   project-config-schemas, shared-control-plane
+  auth/                            # infrastructure ← polaris-idp
   identity/{graph,rules,components,merge}/   # the decomposed subsystem
   profiles/                        # profile aggregate, external IDs, trait model
   governance/                      # ← shared-policy + violation vocabulary
@@ -160,7 +160,7 @@ libs/
   warehouse/                       # RETL extract/diff/map/load; profiles-sync materialization
   archive/{writer,replay}/         # ← shared-archive, shared-replay
   privacy/                         # ○ suppression, deletion, selective-sync
-  pipeline/                        # ← shared-processor
+  pipeline/                        # infrastructure ← shared-processor
   bus/                             # ← shared-transport
   persistence/{postgres,clickhouse,control-plane}/
   observability/{logger,metrics}/
@@ -179,17 +179,70 @@ db/{postgres,clickhouse}/          # ← db/migrations + sql/clickhouse
    name-path congruence lint (`libs/<domain>[/<name>]` ↔
    `@polaris/<domain>[-<name>]`, allowlisted exceptions carry reasons)
    and retired-path entries for `packages/` and `catalog/`.
-2. **The kernel imports nothing.** `libs/spec` has no dependencies;
-   layering is enforced by an import-direction lint: contracts import
-   spec; domain libs import spec, contracts and each other, never
-   infrastructure; infrastructure libs never import domain; units compose
-   both; nothing imports a unit; connectors import spec and their port.
+2. **The kernel imports no Polaris package.** `libs/spec` sits at the
+   bottom of the Polaris graph, not of the dependency graph; layering is
+   enforced by an import-direction lint: contracts import spec; domain
+   libs import spec, contracts and each other, never infrastructure;
+   infrastructure libs never import domain; units compose both; nothing
+   imports a unit; connectors import spec and their port. (As first
+   written this law said "the kernel imports nothing" — amended
+   2026-08-21, below.)
 3. **A version directory contains only what the version changed.**
    Version-invariant physics lives in `libs/`; `vN` trends toward
    manifest plus wiring. The counterweight is the determinism discipline:
    a semantic change to an extracted library takes a new entrypoint or
    major version, never an edit in place, because `resolver/vN` replay
    output is a correctness contract (unmerge is replay-rebuild).
+
+### Amendments
+
+**2026-08-21 — the second law, made precise (`WNGW6`).** The
+import-direction lint (`LYAFL`) shipped enforcing what this record
+actually said and refusing to guess the rest. It left two questions,
+and both are answered here.
+
+*The kernel law is about the Polaris graph.* `libs/spec` expresses
+every event, envelope and catalog type as a `zod` schema and parses the
+`definitions/` tree with `yaml`. Read literally, "imports nothing" made
+those two edges debt, and a debt list is an invitation: somebody would
+eventually spend a week hand-rolling a validator to pay off something
+that was never owed. A schema kernel importing the notation it
+expresses schemas in is design. So the law is restated as "the kernel
+imports no Polaris package", and `zod` and `yaml` move from the
+burn-down baseline to a named allow-list in
+`scripts/lint-import-direction.mjs`, each with its reason at the entry.
+
+The allow-list rather than a blanket third-party exemption is the other
+half of the ruling, and it costs one line per package: `@polaris/spec ->
+axios` must still stop a build, because a schema kernel making HTTP
+calls is what this law is for. The Polaris half has no exceptions at
+all — not the allow-list, not the type-only devDependency carve-out —
+so `@polaris/spec -> @polaris/runtime-environments` is unaffected and
+stays debt. That edge is the law's actual subject.
+
+*The three unplaced libraries are placed.* `libs/tenancy` is **domain**:
+which project, which environment, which write key is declared intent,
+and the tree lists it beside `contracts` rather than in the shells.
+`libs/pipeline` is **infrastructure**: manifests, run lifecycle, the DLQ
+ledger and transport hooks are the machinery that carries meaning, not
+the meaning, and the tree above already groups it with the
+infrastructure block — only the lint's enumeration left it out.
+`libs/auth` is **infrastructure**: a client of an external identity
+provider, whose sole dependency is `jose`. The matrix now places every
+library and the lint's `UNCLASSIFIED` set is empty; the mechanism stays
+for a library that genuinely cannot be placed yet, and an entry costs a
+written reason.
+
+Classifying tenancy as domain is the expensive answer and is taken
+anyway. It banks six edges of debt — `tenancy-project-config` and
+`tenancy-control-plane` reaching for `persistence-postgres`,
+`observability-logger`, `runtime-environments` and `runtime-secrets`,
+and `persistence-control-plane` reaching back for
+`tenancy-control-plane`'s validation and masking rules. Calling tenancy
+infrastructure would have banked one edge instead of six by making the
+other five legal by definition, which is an argument for the
+classification and not against it: the edges are real either way, and
+only one of the two answers writes them down.
 
 ### Boundary rules
 

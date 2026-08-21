@@ -1,11 +1,12 @@
 /**
  * The import-direction check is what makes ADR-0007's second law permanent.
  *
- * "The kernel imports nothing" is a sentence in an ADR, and a sentence does
- * not fail a build. Nothing else in this repository has an opinion about
- * layering: a domain library that imports a Postgres pool typechecks, tests
- * green, and reviews as ordinary work — which is how `libs/delivery/host`
- * came to hold seven forbidden edges without anybody deciding it should.
+ * "The kernel imports no Polaris package" is a sentence in an ADR, and a
+ * sentence does not fail a build. Nothing else in this repository has an
+ * opinion about layering: a domain library that imports a Postgres pool
+ * typechecks, tests green, and reviews as ordinary work — which is how
+ * `libs/delivery/host` came to hold five forbidden edges in one file without
+ * anybody deciding it should.
  *
  * So these assertions are about the check being worth trusting, and the shape
  * is deliberate: each rule class is shown REFUSING a violation AND leaving the
@@ -31,6 +32,7 @@ import {
   edgeId,
   findViolations,
   INFRASTRUCTURE,
+  KERNEL_THIRD_PARTY,
   kindOf,
   RULES,
   readBaseline,
@@ -78,11 +80,50 @@ function edges(): string[] {
 
 describe("the matrix, one rule class at a time", () => {
   it("refuses an import out of the kernel, and allows a node builtin", () => {
-    seedPackage("libs/spec", "@polaris/spec", 'import { z } from "zod";\nexport const s = z;\n');
-    expect(rules()).toEqual(["kernel-imports-nothing"]);
+    seedPackage(
+      "libs/spec",
+      "@polaris/spec",
+      'import { get } from "axios";\nexport const g = get;\n',
+    );
+    expect(rules()).toEqual(["kernel-imports-no-polaris-package"]);
 
     seed("libs/spec/src/index.ts", 'import { join } from "node:path";\nexport const j = join;\n');
     expect(rules()).toEqual([]);
+  });
+
+  it("lets the kernel import its notation, and no other third-party package", () => {
+    // ADR-0007's 2026-08-21 amendment: the law is about the POLARIS graph, and
+    // a schema kernel importing the notation it expresses schemas in is design
+    // rather than debt. The allow-list is where that decision is recorded, so
+    // an unnamed package is still a violation — a schema kernel making HTTP
+    // calls is exactly what the rule is for, and the pair is what tells the
+    // ruling apart from a blanket exemption.
+    seedPackage("libs/spec", "@polaris/spec", 'import { z } from "zod";\nexport const s = z;\n');
+    expect(rules()).toEqual([]);
+
+    seed("libs/spec/src/index.ts", 'import { parse } from "yaml";\nexport const p = parse;\n');
+    expect(rules()).toEqual([]);
+
+    seed("libs/spec/src/index.ts", 'import { get } from "axios";\nexport const g = get;\n');
+    expect(rules()).toEqual(["kernel-imports-no-polaris-package"]);
+  });
+
+  it("holds the Polaris half of the kernel rule against both carve-outs", () => {
+    // Neither exception reaches a workspace package: the allow-list is
+    // third-party by construction, and the devDependency carve-out is for the
+    // vitest-shaped case. `@polaris/spec -> @polaris/runtime-environments` is
+    // the edge the law exists for, and a type-only spelling of it is the same
+    // layering fact — spec cannot be built without that package existing.
+    seedPackage("libs/runtime/environments", "@polaris/runtime-environments");
+    seed(
+      "libs/spec/package.json",
+      '{ "name": "@polaris/spec", "devDependencies": { "@polaris/runtime-environments": "*" } }\n',
+    );
+    seed(
+      "libs/spec/src/index.ts",
+      'import type { E } from "@polaris/runtime-environments";\nexport type Env = E;\n',
+    );
+    expect(rules()).toEqual(["kernel-imports-no-polaris-package"]);
   });
 
   it("spares the kernel a type-only devDependency, and only a type-only one", () => {
@@ -96,7 +137,7 @@ describe("the matrix, one rule class at a time", () => {
     expect(rules()).toEqual([]);
 
     seed("libs/spec/src/index.ts", 'import { vi } from "vitest";\nexport const v = vi;\n');
-    expect(rules()).toEqual(["kernel-imports-nothing"]);
+    expect(rules()).toEqual(["kernel-imports-no-polaris-package"]);
   });
 
   it("lets contracts import spec, and nothing else", () => {
@@ -189,20 +230,57 @@ describe("what the check refuses to guess", () => {
     expect(unclassifiedLibraries(root)).toEqual([{ dir: "libs/telepathy", domain: "telepathy" }]);
   });
 
-  it("says nothing about the three libraries the matrix does not place", () => {
-    // Stated as a test because it is a hole, and a hole nobody has written
-    // down is indistinguishable from a rule. `libs/pipeline` importing a
-    // domain library passes here, deliberately.
+  it("places every library, so the matrix has no hole left to step over", () => {
+    // This assertion used to run the other way: `libs/tenancy`, `libs/auth`
+    // and `libs/pipeline` were UNCLASSIFIED, and a test pinned the hole open
+    // because a hole nobody has written down is indistinguishable from a rule.
+    // ADR-0007's 2026-08-21 amendment placed all three, so what is pinned now
+    // is the absence of the hole — re-opening one has to be a deliberate act
+    // with a reason attached, not a package quietly added to a Map.
+    expect([...UNCLASSIFIED.keys()]).toEqual([]);
+  });
+
+  it("enforces the three libraries the matrix used to skip", () => {
+    // The same fixture that passed deliberately before the amendment. Each of
+    // the three is shown breaking the rule its new layer gives it, because a
+    // classification that changes no verdict has not been applied.
     seedPackage("libs/governance", "@polaris/governance");
     seedPackage("libs/pipeline", "@polaris/pipeline", imports("@polaris/governance"));
-    expect(rules()).toEqual([]);
-    expect(unclassifiedLibraries(root)).toEqual([]);
+    expect(rules()).toEqual(["infrastructure-never-domain"]);
+
+    rmSync(join(root, "libs/pipeline"), { recursive: true, force: true });
+    seedPackage("libs/auth", "@polaris/auth", imports("@polaris/governance"));
+    expect(rules()).toEqual(["infrastructure-never-domain"]);
+
+    rmSync(join(root, "libs/auth"), { recursive: true, force: true });
+    seedPackage("libs/bus", "@polaris/bus");
+    seedPackage(
+      "libs/tenancy/project-config",
+      "@polaris/tenancy-project-config",
+      imports("@polaris/bus"),
+    );
+    expect(rules()).toEqual(["domain-never-infrastructure"]);
   });
 
   it("gives every unplaced library a reason", () => {
+    // Vacuous today, and kept for the day it is not: an entry exempts a
+    // library from the domain/infrastructure rules, so the reason is the only
+    // thing standing between "undecided" and "unenforced".
     for (const [domain, reason] of UNCLASSIFIED) {
       expect(reason, `libs/${domain} has no reason`).toBeTruthy();
       expect(reason.length, `libs/${domain}`).toBeGreaterThan(30);
+    }
+  });
+
+  it("gives every allow-listed kernel dependency a reason", () => {
+    // The same discipline one layer down. An allow-list entry answers a
+    // question ADR-0007 argued about; an entry with no reason answers it
+    // quietly, which is the outcome the baseline note refused to accept when
+    // `zod` and `yaml` were still banked as debt.
+    expect(KERNEL_THIRD_PARTY.size).toBeGreaterThan(0);
+    for (const [pkg, reason] of KERNEL_THIRD_PARTY) {
+      expect(reason, `${pkg} has no reason`).toBeTruthy();
+      expect(reason.length, pkg).toBeGreaterThan(30);
     }
   });
 
@@ -223,6 +301,9 @@ describe("what the check refuses to guess", () => {
     expect(kindOf("libs/spec").kind).toBe("spec");
     expect(kindOf("libs/persistence/postgres").kind).toBe("infrastructure");
     expect(kindOf("libs/delivery/host").kind).toBe("domain");
+    expect(kindOf("libs/tenancy/project-config").kind).toBe("domain");
+    expect(kindOf("libs/pipeline").kind).toBe("infrastructure");
+    expect(kindOf("libs/auth").kind).toBe("infrastructure");
     expect(kindOf("async/computation/sessionizer/v1").kind).toBe("unit");
     expect(kindOf("connectors/destinations/braze/v1").kind).toBe("connector");
     expect(kindOf("sdks/web").kind).toBe("sdk");

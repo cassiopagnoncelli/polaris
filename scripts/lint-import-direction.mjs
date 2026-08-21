@@ -1,29 +1,31 @@
 #!/usr/bin/env node
 // Polaris import-direction check.
 //
-// ADR-0007's second law: **the kernel imports nothing.** The six-kind tree
-// claims that a directory says what a thing IS, and layering is the half of
-// that claim which is not visible in `ls`. `libs/governance` sitting beside
-// `libs/bus` says they are different kinds of object; only an import graph
-// says one of them may not reach for the other. Without a gate the law is a
-// paragraph in an ADR, and the first package to break it breaks it silently —
-// there is no type error in a domain library importing a Postgres pool, and no
-// test fails.
+// ADR-0007's second law: **the kernel imports no Polaris package.** The
+// six-kind tree claims that a directory says what a thing IS, and layering is
+// the half of that claim which is not visible in `ls`. `libs/governance`
+// sitting beside `libs/bus` says they are different kinds of object; only an
+// import graph says one of them may not reach for the other. Without a gate
+// the law is a paragraph in an ADR, and the first package to break it breaks
+// it silently — there is no type error in a domain library importing a
+// Postgres pool, and no test fails.
 //
 // So this check derives the actual import graph and diffs it against the
 // matrix ADR-0007 states.
 //
 // ## The matrix, in ADR-0007's vocabulary
 //
-//   libs/spec           the kernel. Imports NOTHING — node builtins and
-//                       type-only imports of devDependencies excepted.
+//   libs/spec           the kernel. Imports NO `@polaris/*` package. Third
+//                       party is by allow-list, one named entry per package
+//                       with its reason; node builtins and type-only
+//                       devDependencies are free.
 //   libs/contracts      imports spec, and nothing else.
 //   domain libs         identity, profiles, governance, engage, delivery,
-//                       warehouse, data-graph, privacy, archive. Import spec,
-//                       contracts and each other; never bus, persistence,
-//                       observability or runtime.
-//   infrastructure libs bus, persistence, observability, runtime. Never import
-//                       a domain lib.
+//                       warehouse, data-graph, privacy, archive, tenancy.
+//                       Import spec, contracts and each other; never bus,
+//                       persistence, observability, runtime, auth or pipeline.
+//   infrastructure libs bus, persistence, observability, runtime, auth,
+//                       pipeline. Never import a domain lib.
 //   units               `sync/`, `async/`, `apps/`. Compose both — a unit may
 //                       import anything. Nothing may import a unit.
 //   connectors          import spec and their `libs/delivery` port. Vendor
@@ -38,7 +40,7 @@
 // acquired a meaning. Each direction is a different way of losing the same
 // property.
 //
-// ## Four decisions this file had to make, and the reasoning
+// ## Five decisions this file had to make, and the reasoning
 //
 // **`libs/archive` is domain.** The card that added this check left the
 // decision open — replay re-emits onto streams, so archive is either
@@ -66,20 +68,53 @@
 // nothing at runtime — and it is still a layering fact: `archive/writer` cannot
 // be built, typechecked or reasoned about without `bus` existing, and its own
 // vocabulary is defined in bus's terms. The matrix is about which packages a
-// package needs, and a type import needs the package. The one carve-out is the
-// kernel's, below, and it is for devDependencies rather than for workspace
-// packages.
+// package needs, and a type import needs the package. Both carve-outs are the
+// kernel's, below, and neither reaches a workspace package: one is for
+// type-only devDependencies, the other for the allow-listed notation.
 //
-// **`libs/tenancy`, `libs/auth` and `libs/pipeline` are unclassified.** The
-// matrix does not place them, and this file does not place them for it. They
-// are declared in UNCLASSIFIED, which means the check knows they exist and
-// enforces nothing about them beyond "nothing imports a unit". Stated plainly
-// because it is a real hole: today a domain library may import
-// `@polaris/tenancy-project-config` and `libs/pipeline` may import
-// `@polaris/delivery-destinations`, and this check says nothing. `pipeline` is
-// the sharpest of the three — ADR-0007's tree groups it with the
-// infrastructure block, and only the card's enumeration leaves it out — but
-// promoting it is widening the matrix, which is an ADR's job and not a lint's.
+// **`libs/tenancy` is domain; `libs/auth` and `libs/pipeline` are
+// infrastructure.** All three sat in UNCLASSIFIED when this check landed —
+// the check knew they existed and enforced nothing about them — because
+// widening the matrix is an ADR's job and not a lint's. It went to the
+// architect as `WNGW6`, and the ruling is ADR-0007's amendment of 2026-08-21.
+//
+// `tenancy` is meaning: which project, which environment, which write key.
+// ADR-0007's tree lists it beside `contracts`, above the domain block, and
+// what it holds is declared intent rather than a mechanism for carrying it.
+// This is the expensive answer and it is taken anyway — it banks six edges of
+// debt where calling tenancy infrastructure would have banked one and made
+// the other five legal by definition.
+//
+// `pipeline` is plumbing, and the graph says so louder than the tree does:
+// manifests, run lifecycle, the DLQ ledger and transport hooks, with every
+// one of `bus`, `persistence-postgres`, `observability-logger` and
+// `runtime-environments` imported to do it. Calling it domain would bank
+// those four as debt against a library whose whole subject is the machinery.
+//
+// `auth` is a vendored IdP — JWKS, id-token verification, refresh — and its
+// only dependency is `jose`. It draws no `@polaris/*` edge in either
+// direction, so the graph is silent and the tree decides: a client of an
+// external identity provider is infrastructure.
+//
+// **The kernel law is about the POLARIS graph.** ADR-0007 said "the kernel
+// imports nothing", and `@polaris/spec -> zod` and `-> yaml` were banked as
+// debt against the literal reading. They are not debt. Every event, envelope
+// and catalog type in `libs/spec` IS a zod schema, and `catalog/loader.ts`
+// parses the `definitions/` tree those types describe; a schema kernel
+// importing the notation it expresses schemas in is design, and leaving it on
+// a list titled debt invites somebody to spend a week hand-rolling a
+// validator to pay off something that was never owed. So the law is that spec
+// sits at the bottom of the Polaris graph, not at the bottom of the
+// dependency graph.
+//
+// The allow-list rather than a blanket "third party is fine" is the second
+// half of that ruling and it costs one line per package. `@polaris/spec ->
+// axios` should still stop a build — a schema kernel making HTTP calls is
+// exactly what this rule is for — so the notation is legitimate without the
+// kernel's dependency surface going unwatched. `@polaris/spec ->
+// @polaris/runtime-environments` is unaffected and stays debt: that one is
+// the law's actual subject, and no allow-list reaches it, because the
+// Polaris half of the rule has no exceptions at all.
 //
 // **A library in no list at all is a hard failure.** Not a violation, not
 // baselineable: the run refuses. An enumeration that silently ignores what it
@@ -141,13 +176,16 @@ export const UNIT_ROOTS = ["sync", "async", "apps"];
 /**
  * The domain block of ADR-0007's `libs/` tree.
  *
- * Six of these nine have no directory yet — `contracts`, `identity`,
- * `profiles`, `engage`, `warehouse`, `data-graph` and `privacy` are carried by
- * later cards. They are listed anyway, exactly as `pnpm-workspace.yaml` declares
- * the three-deep connector glob before a connector exists: a destination
- * declared in advance makes the card that fills it a pure add, where a
- * destination discovered late makes it a pure add PLUS an argument about
- * layering.
+ * Three of these ten have no directory yet — `warehouse`, `data-graph` and
+ * `privacy` are carried by later cards, as is the separately-kinded
+ * `contracts`. They are listed anyway, exactly as `pnpm-workspace.yaml`
+ * declares the three-deep connector glob before a connector exists: a
+ * destination declared in advance makes the card that fills it a pure add,
+ * where a destination discovered late makes it a pure add PLUS an argument
+ * about layering.
+ *
+ * `tenancy` is the tenth, placed by ADR-0007's 2026-08-21 amendment; the
+ * header says why.
  */
 export const DOMAIN = [
   "identity",
@@ -159,40 +197,67 @@ export const DOMAIN = [
   "data-graph",
   "privacy",
   "archive",
+  "tenancy",
 ];
 
-/** The infrastructure block: shells, drivers, transport, telemetry. */
-export const INFRASTRUCTURE = ["bus", "persistence", "observability", "runtime"];
+/**
+ * The infrastructure block: shells, drivers, transport, telemetry — and, since
+ * ADR-0007's 2026-08-21 amendment, the processor machinery and the IdP client.
+ */
+export const INFRASTRUCTURE = [
+  "bus",
+  "persistence",
+  "observability",
+  "runtime",
+  "auth",
+  "pipeline",
+];
 
 /**
  * Libraries the matrix does not place, each with why it is not placed.
  *
- * An entry here is narrower than it looks: it exempts the library from the
- * domain/infrastructure rules and from nothing else. Deleting an entry by
- * moving the library into DOMAIN or INFRASTRUCTURE is the intended end state
- * for all three, and each needs a decision this check is not entitled to make.
+ * Empty since ADR-0007's 2026-08-21 amendment, which placed the three that
+ * were here. The mechanism stays because the next library that genuinely
+ * cannot be placed yet needs somewhere to wait that is not silence: an entry
+ * exempts a library from the domain/infrastructure rules and from nothing
+ * else, and it is the only way to say "undecided" out loud rather than by
+ * omission. It is a hole in the matrix, so it costs a written reason, and the
+ * test that reads those reasons is what keeps the cost from being zero.
  */
-export const UNCLASSIFIED = new Map([
+export const UNCLASSIFIED = new Map();
+
+/**
+ * Third-party packages the kernel may import, each with why.
+ *
+ * The list is the record of a decision, not a convenience. ADR-0007's
+ * 2026-08-21 amendment rules that "the kernel imports nothing" is about the
+ * Polaris graph — `libs/spec` sits at its bottom — and that the notation a
+ * schema kernel expresses schemas in is design rather than debt. What it does
+ * NOT rule is that any third-party dependency is fine, so each one is named
+ * here and a package that is not named is still a violation.
+ */
+export const KERNEL_THIRD_PARTY = new Map([
   [
-    "tenancy",
-    "project config is declared intent — the control plane of record — and " +
-      "ADR-0007's tree puts it between the kernel and the domain block rather " +
-      "than in either",
+    "zod",
+    "the schema notation itself: every event, envelope and catalog type in " +
+      "this package IS a zod schema, so dropping it would not remove a " +
+      "dependency, it would trade one for a hand-rolled validator",
   ],
-  ["auth", "the principal's identity, which the matrix places in neither block"],
   [
-    "pipeline",
-    "ADR-0007's tree groups it with infrastructure; the matrix's enumeration " +
-      "of infrastructure does not name it, and widening the matrix is an ADR's job",
+    "yaml",
+    "the on-disk notation for `definitions/`: `catalog/loader.ts` parses the " +
+      "declared intent that the catalog types in this package describe, and a " +
+      "parser and the schema it feeds belong to the same layer",
   ],
 ]);
 
 /** One rule class each, in the vocabulary the header states them in. */
 export const RULES = {
-  "kernel-imports-nothing": "libs/spec imports nothing: node builtins and type-only dev deps only",
+  "kernel-imports-no-polaris-package":
+    "libs/spec imports no @polaris package at all; third-party by allow-list only",
   "contracts-import-spec-only": "libs/contracts imports libs/spec and nothing else",
   "domain-never-infrastructure":
-    "a domain lib never imports bus, persistence, observability or runtime",
+    "a domain lib never imports bus, persistence, observability, runtime, auth or pipeline",
   "infrastructure-never-domain": "an infrastructure lib never imports a domain lib",
   "nothing-imports-a-unit": "nothing imports a unit under sync/, async/ or apps/",
   "connectors-import-spec-and-their-port":
@@ -480,8 +545,14 @@ function judge({ from, fromKind, targetName, targetKind, typeOnly }) {
 
   switch (fromKind.kind) {
     case "spec":
+      // The Polaris half has no exceptions — not for a type-only import, not
+      // for a devDependency. That half IS the law, and the allow-list below
+      // deliberately cannot reach it: `@polaris/spec ->
+      // @polaris/runtime-environments` is the edge this rule exists for.
+      if (targetName.startsWith("@polaris/")) return "kernel-imports-no-polaris-package";
+      if (KERNEL_THIRD_PARTY.has(targetName)) return null;
       if (typeOnly && from.devDeps.has(targetName)) return null;
-      return "kernel-imports-nothing";
+      return "kernel-imports-no-polaris-package";
     case "contracts":
       if (targetKind?.kind === "spec") return null;
       // The kernel's dev-dep exception, extended one package. Reading
@@ -505,8 +576,9 @@ function judge({ from, fromKind, targetName, targetKind, typeOnly }) {
       if (targetKind?.kind === "domain" && targetKind.domain === "delivery") return null;
       return "connectors-import-spec-and-their-port";
     default:
-      // Units compose both. SDKs, definitions and the unclassified libraries
-      // are outside the matrix, and this check does not invent a rule for them.
+      // Units compose both. SDKs, definitions and anything parked in
+      // UNCLASSIFIED are outside the matrix, and this check does not invent a
+      // rule for them.
       return null;
   }
 }
