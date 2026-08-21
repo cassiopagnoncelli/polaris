@@ -1,5 +1,15 @@
 # `@polaris/consumer-braze-v1` changelog
 
+## v1.3.0 — the pinned traits reach the profile, and `mapper_version` moves (STHB0)
+
+- `user.identified` now fills Braze's standard profile fields from the trait snapshot: `dob` (from `birthday`, reformatted `YYYYMMDD` → Braze's `YYYY-MM-DD`), `gender` (`m`/`f` → `M`/`F`), `country` (ISO-3166-1 alpha-2, upper case), `home_city`, `first_name`, `last_name`, and `image_url` (from `avatar`).
+- Names and URLs are read from the trait bag, which keeps the producer's spelling; codes are read from the canonical identity block, which is where the shared normalizer put the one agreed form. `identity.first_name` is `"obrien"` — a hash input, not a greeting — and `traits.address.country` is `"Brazil"` where every other vendor gets `"BR"`.
+- `BRAZE_TRAIT_ATTRIBUTES` widened to the rest of `user.identified` v1's pinned slots that Braze does not reserve: `name`, `title`, `username`, `website`, `created_at`, and the `company` bag flattened to `company_id` / `company_name` / `company_industry` / `company_employee_count` / `company_plan`. It is now a map from trait path to attribute name, because flattening a nested bag is a rename and a rename belongs beside the trait it renames.
+- `BRAZE_RESERVED_ATTRIBUTE_KEYS` widened from the eight slots this mapper wrote to every attribute name Braze itself publishes. A custom attribute colliding with a standard field does not fail — it writes the standard field — so the guard now answers "is this name Braze's?" rather than "does this mapper use it?".
+- New per-instance switch `location_from_geo` in `destinations.config`, OFF by default: when set, `country` and `home_city` fall back to `enrichment.geo` for a profile whose address carries neither. The profile's own address always wins, and a geo country that is not two letters is dropped rather than sent.
+- `mapper_version` moves `v1` → `v2` — the first time it has. It changes every Braze delivery key, so a replay of traffic delivered before this lands is re-sent with the fields rather than deduped against the delivery that was missing them. `normalize_version` is recorded as `v3` in the manifest, catching it up with the connector after 1VEL3.
+- `test/golden.test.ts` is new and drives every `test/fixtures/*.input.json` through the real consumer. The recorded bodies were written with the consumer and executed by nothing until now; the first run found that `app-source-purchase`'s placeholder IDFV contains a Luhn-valid digit run and was being replaced with `[REDACTED:pii_card]` before it reached Braze. The fixture now carries a hex UUID, as a device would.
+
 ## v1.2.0 — mobile-app `device_id` anchoring (5UCTHNCR)
 
 - The mapper now stamps `device_id` on `events[]` / `purchases[]` / `attributes[]` entries when the canonical envelope reports an app source. The value is the first non-null of `context.app_idfv` → `context.app_gaid` → `context.app_idfa` (iOS Vendor Identifier preferred — UUID format).

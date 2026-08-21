@@ -75,12 +75,19 @@ mode: streaming
 # what keys a profile-plane delivery, since the orchestrator and the
 # audience emitter both publish with `identity: {}`.
 #
-# `mapper_version` stays v1 across the journey mappers, as it did across
+# v3 (1VEL3): identity preparation falls back to the profile-trait
+# snapshot, so `traits.email` reaches a mapper that had only ever seen the
+# producer's `properties`.
+#
+# `mapper_version` stayed v1 across the journey mappers, as it did across
 # the audience ones: adding a mapper for a previously-unmapped event
 # changes no existing delivery. It moves when what this consumer sends for
-# an event it ALREADY mapped changes.
-normalize_version: v2
-mapper_version: v1
+# an event it ALREADY mapped changes — which STHB0 is the first to do,
+# giving `user.identified` Braze's standard profile fields (`dob`,
+# `gender`, `country`, `home_city`, `first_name`, `last_name`,
+# `image_url`) and the rest of the pinned traits as custom attributes.
+normalize_version: v3
+mapper_version: v2
 deliverer_version: v1
 
 required_consent:

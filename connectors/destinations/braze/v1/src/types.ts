@@ -75,6 +75,21 @@ export interface BrazeAttributeObject {
   readonly country?: string;
   readonly language?: string;
   readonly time_zone?: string;
+  /**
+   * The standard profile fields the trait snapshot fills (STHB0). Declared
+   * here rather than left to the custom-attribute bag because Braze OWNS
+   * these names: `dob` is `YYYY-MM-DD`, `gender` is one of `M`/`F`/`O`/`N`/
+   * `P`, `home_city` is a city name and `image_url` is the profile picture
+   * the dashboard renders. A value of the wrong shape in one of them is a
+   * vendor 400, not a junk custom attribute, so the shape belongs in the
+   * type.
+   */
+  readonly first_name?: string;
+  readonly last_name?: string;
+  readonly dob?: string;
+  readonly gender?: string;
+  readonly home_city?: string;
+  readonly image_url?: string;
 }
 
 /**

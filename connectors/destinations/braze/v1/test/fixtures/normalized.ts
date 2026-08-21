@@ -31,8 +31,16 @@ import type { BrazePayload } from "../../src/types.js";
  * it used to be a `provider:ref` pointer here and a resolver double in the
  * test, and the value a delivery actually saw came from the double. Tests that
  * exercise a malformed or unusual credential pass it in.
+ *
+ * `config` is the per-instance bag, defaulting to empty — which is what an
+ * instance nobody has configured looks like, and what every assertion about a
+ * switch's DEFAULT has to be written against. `location_from_geo` is the one
+ * the mapper reads (STHB0).
  */
-export function fixtureDestinationInstance(secretValue = ""): DestinationInstance {
+export function fixtureDestinationInstance(
+  secretValue = "",
+  config: Readonly<Record<string, unknown>> = {},
+): DestinationInstance {
   return {
     destination_id: "polaris_dst_test_braze",
     project_id: "storefront",
@@ -47,7 +55,7 @@ export function fixtureDestinationInstance(secretValue = ""): DestinationInstanc
     retry_policy: "standard",
     dead_letter_threshold: 8,
     replay_opt_in: true,
-    config: {},
+    config,
   };
 }
 
@@ -113,10 +121,13 @@ export function fixtureNormalizedEvent(overrides: Partial<NormalizedEvent> = {})
   return { ...base, ...overrides };
 }
 
-export function fixtureMapperContext(overrides: Partial<NormalizedEvent> = {}): MapperContext {
+export function fixtureMapperContext(
+  overrides: Partial<NormalizedEvent> = {},
+  instanceConfig: Readonly<Record<string, unknown>> = {},
+): MapperContext {
   return {
     normalized: fixtureNormalizedEvent(overrides),
-    instance: fixtureDestinationInstance(),
+    instance: fixtureDestinationInstance("", instanceConfig),
   };
 }
 

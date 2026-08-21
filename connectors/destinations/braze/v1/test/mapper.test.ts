@@ -13,14 +13,22 @@
  *   - dedupe_key = canonical event_id (audit-only — Braze ignores it)
  *   - user.identified emits raw email/phone (NOT hashed) +
  *     _update_existing_only=false
+ *   - the standard profile fields (dob, gender, country, home_city,
+ *     first_name, last_name, image_url) and which side of the normalized
+ *     event each is read from
+ *   - `location_from_geo`: off by default, traits ahead of geo when on
+ *   - the widened custom-attribute allowlist, including the flattened
+ *     company bag
  *
  * @see connectors/destinations/braze/v1/src/mapper.ts
  */
 
+import type { NormalizedEvent } from "@polaris/delivery-normalize";
 import { describe, expect, it } from "vitest";
 
 import {
   BRAZE_EVENT_CHECKOUT_STARTED,
+  BRAZE_TRAIT_ATTRIBUTES,
   CANONICAL_TO_BRAZE_FAMILY,
   checkoutStartedMapper,
   paymentApprovedMapper,
@@ -725,5 +733,250 @@ describe("trait attributes (MVKUP64R)", () => {
     if (result.kind !== "mapped") throw new Error("expected mapped");
     const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
     expect(attribute["tier"]).toBeUndefined();
+  });
+});
+
+describe("standard profile attributes (STHB0)", () => {
+  /**
+   * A `user.identified` context whose profile carries the pinned traits.
+   *
+   * Both halves are supplied, because the production shape has both and the
+   * mapper reads each from a different one: the trait bag keeps the
+   * producer's spelling, and the identity block carries what `person.ts` /
+   * `address.ts` canonicalized out of the same values. A fixture that set
+   * only one would let a mapper reading the wrong side still pass.
+   */
+  function identified(
+    traits: Readonly<Record<string, unknown>> | null,
+    identity: Partial<NormalizedEvent["identity"]> = {},
+    extras: Partial<NormalizedEvent> = {},
+    instanceConfig: Readonly<Record<string, unknown>> = {},
+  ) {
+    const base = fixtureNormalizedEvent();
+    return fixtureMapperContext(
+      {
+        event: "user.identified",
+        traits,
+        identity: { ...base.identity, ...identity },
+        ...extras,
+      },
+      instanceConfig,
+    );
+  }
+
+  function attributeOf(ctx: ReturnType<typeof identified>): Record<string, unknown> {
+    const result = userIdentifiedMapper(ctx);
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    return result.payload.attributes?.[0] as Record<string, unknown>;
+  }
+
+  it("writes dob, gender, country and home_city from the trait snapshot", () => {
+    const attribute = attributeOf(
+      identified(
+        { first_name: "José", last_name: "O'Brien", address: { city: "Menlo Park" } },
+        { birthday: "19900320", gender: "f", country: "br" },
+      ),
+    );
+    // Braze's dob is YYYY-MM-DD; the canonical form every other vendor
+    // hashes is YYYYMMDD, and this is the same day reformatted rather than
+    // a second reading of the trait.
+    expect(attribute["dob"]).toBe("1990-03-20");
+    expect(attribute["gender"]).toBe("F");
+    // ISO-3166-1 alpha-2, upper case, whichever source answered.
+    expect(attribute["country"]).toBe("BR");
+    // The city NAME, not the hash-canonical "menlopark".
+    expect(attribute["home_city"]).toBe("Menlo Park");
+  });
+
+  it("keeps the producer's spelling for the name and avatar slots", () => {
+    // `identity.first_name` is "josé" — lowercased with punctuation
+    // stripped, because it is a hash input. A Braze profile built from it
+    // would greet "O'Brien" as "obrien".
+    const attribute = attributeOf(
+      identified(
+        {
+          first_name: "José",
+          last_name: "O'Brien",
+          avatar: "https://cdn.storefront.example/a.png",
+        },
+        { first_name: "josé", last_name: "obrien" },
+      ),
+    );
+    expect(attribute["first_name"]).toBe("José");
+    expect(attribute["last_name"]).toBe("O'Brien");
+    expect(attribute["image_url"]).toBe("https://cdn.storefront.example/a.png");
+  });
+
+  it("omits gender when the canonical form refused the producer's value", () => {
+    // `person.ts` maps onto `m` / `f` and refuses the rest, so Braze's `O`
+    // and `P` are unreachable — an omitted slot rather than a guessed one.
+    const attribute = attributeOf(identified({ gender: "non-binary" }, { gender: null }));
+    expect(attribute["gender"]).toBeUndefined();
+  });
+
+  it("omits dob when the identity carries no birthday", () => {
+    const attribute = attributeOf(identified({ tier: "gold" }));
+    expect(attribute["dob"]).toBeUndefined();
+  });
+
+  it("writes none of them for an envelope with no traits", () => {
+    const attribute = attributeOf(identified(null));
+    expect(attribute["dob"]).toBeUndefined();
+    expect(attribute["gender"]).toBeUndefined();
+    expect(attribute["country"]).toBeUndefined();
+    expect(attribute["home_city"]).toBeUndefined();
+    expect(attribute["first_name"]).toBeUndefined();
+  });
+});
+
+describe("location_from_geo (STHB0)", () => {
+  const GEO = {
+    geo: { country: "PT", region: "Lisboa", city: "Lisbon", source: "maxmind-city:1" },
+  } satisfies NormalizedEvent["enrichment"];
+
+  function attributeOf(
+    traits: Readonly<Record<string, unknown>> | null,
+    identity: Partial<NormalizedEvent["identity"]>,
+    instanceConfig: Readonly<Record<string, unknown>>,
+  ): Record<string, unknown> {
+    const base = fixtureNormalizedEvent();
+    const result = userIdentifiedMapper(
+      fixtureMapperContext(
+        {
+          event: "user.identified",
+          traits,
+          identity: { ...base.identity, ...identity },
+          enrichment: GEO,
+        },
+        instanceConfig,
+      ),
+    );
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    return result.payload.attributes?.[0] as Record<string, unknown>;
+  }
+
+  it("is off by default — geo never reaches the profile unasked", () => {
+    // Geo is where the DEVICE was. Defaulting it into `home_city` would
+    // move a traveller out of a campaign for a week and back after.
+    const attribute = attributeOf({ tier: "gold" }, {}, {});
+    expect(attribute["country"]).toBeUndefined();
+    expect(attribute["home_city"]).toBeUndefined();
+  });
+
+  it("fills country and home_city from geo when the instance opts in", () => {
+    const attribute = attributeOf({ tier: "gold" }, {}, { location_from_geo: true });
+    expect(attribute["country"]).toBe("PT");
+    expect(attribute["home_city"]).toBe("Lisbon");
+  });
+
+  it("lets the profile's own address win over geo", () => {
+    const attribute = attributeOf(
+      { address: { city: "Menlo Park" } },
+      { country: "br" },
+      { location_from_geo: true },
+    );
+    expect(attribute["country"]).toBe("BR");
+    expect(attribute["home_city"]).toBe("Menlo Park");
+  });
+
+  it("treats a non-boolean switch value as off", () => {
+    const attribute = attributeOf({ tier: "gold" }, {}, { location_from_geo: "yes" });
+    expect(attribute["country"]).toBeUndefined();
+  });
+
+  it("drops a geo country that is not an alpha-2 code", () => {
+    // The envelope's geo slot is capped at eight characters, not two. A
+    // country is the field where a guess puts a person in another
+    // country's audience.
+    const base = fixtureNormalizedEvent();
+    const result = userIdentifiedMapper(
+      fixtureMapperContext(
+        {
+          event: "user.identified",
+          traits: { tier: "gold" },
+          identity: base.identity,
+          enrichment: { geo: { country: "PRT", region: null, city: null, source: "s" } },
+        },
+        { location_from_geo: true },
+      ),
+    );
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    const attribute = result.payload.attributes?.[0] as Record<string, unknown>;
+    expect(attribute["country"]).toBeUndefined();
+  });
+});
+
+describe("the widened trait allowlist (STHB0)", () => {
+  function attributeOf(traits: Readonly<Record<string, unknown>>): Record<string, unknown> {
+    const result = userIdentifiedMapper(fixtureMapperContext({ event: "user.identified", traits }));
+    if (result.kind !== "mapped") throw new Error("expected mapped");
+    return result.payload.attributes?.[0] as Record<string, unknown>;
+  }
+
+  it("forwards the pinned slots Braze does not reserve", () => {
+    const attribute = attributeOf({
+      name: "José O'Brien",
+      title: "Head of Widgets",
+      username: "jobrien",
+      website: "https://jobrien.example",
+      created_at: "2024-01-05T09:30:00-03:00",
+    });
+    expect(attribute["name"]).toBe("José O'Brien");
+    expect(attribute["title"]).toBe("Head of Widgets");
+    expect(attribute["username"]).toBe("jobrien");
+    expect(attribute["website"]).toBe("https://jobrien.example");
+    expect(attribute["created_at"]).toBe("2024-01-05T09:30:00-03:00");
+  });
+
+  it("flattens the company bag rather than sending a nested object", () => {
+    // Braze's nested custom attributes are an account feature, not a
+    // given; a flat `company_name` is accepted by every workspace.
+    const attribute = attributeOf({
+      company: { id: "co_42", name: "Widget Co", industry: "Retail", employee_count: 120 },
+    });
+    expect(attribute["company"]).toBeUndefined();
+    expect(attribute["company_id"]).toBe("co_42");
+    expect(attribute["company_name"]).toBe("Widget Co");
+    expect(attribute["company_industry"]).toBe("Retail");
+    expect(attribute["company_employee_count"]).toBe(120);
+  });
+
+  it("ignores a company key nobody pinned", () => {
+    const attribute = attributeOf({ company: { internal_segment: "whale" } });
+    expect(attribute["internal_segment"]).toBeUndefined();
+    expect(attribute["company_internal_segment"]).toBeUndefined();
+  });
+
+  it("survives a company trait that is not an object", () => {
+    const attribute = attributeOf({ company: "Widget Co", tier: "gold" });
+    expect(attribute["company_name"]).toBeUndefined();
+    expect(attribute["tier"]).toBe("gold");
+  });
+
+  it("never targets a name Braze owns", () => {
+    // The guard is a runtime `continue`, so a reserved target would be
+    // silently dropped rather than caught. This is what catches it.
+    const reserved = new Set([
+      "external_id",
+      "user_alias",
+      "braze_id",
+      "device_id",
+      "_update_existing_only",
+      "country",
+      "dob",
+      "email",
+      "first_name",
+      "gender",
+      "home_city",
+      "image_url",
+      "language",
+      "last_name",
+      "phone",
+      "push_tokens",
+      "time_zone",
+    ]);
+    for (const name of Object.values(BRAZE_TRAIT_ATTRIBUTES)) {
+      expect(reserved.has(name), `${name} is a Braze standard field`).toBe(false);
+    }
   });
 });

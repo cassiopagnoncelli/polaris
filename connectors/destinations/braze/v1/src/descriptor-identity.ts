@@ -57,7 +57,25 @@ export const CONSUMER_VERSION = "v1" as const;
  * re-sent.
  */
 export const NORMALIZE_VERSION = "v3" as const;
-export const MAPPER_VERSION = "v1" as const;
+/**
+ * Mapper v2 (STHB0): `user.identified` gained Braze's standard profile
+ * fields — `dob`, `gender`, `country`, `home_city`, `first_name`,
+ * `last_name`, `image_url` — and the custom-attribute allowlist widened to
+ * the rest of `user.identified` v1's pinned traits.
+ *
+ * The first move this stamp has made, and it is the rule the manifest
+ * already wrote down: adding a mapper for an event nobody mapped changes no
+ * existing delivery, so the audience and journey mappers left it alone;
+ * changing what an ALREADY-mapped event sends is what moves it. A stamp
+ * that stayed at v1 would put a false claim on every `delivery_records`
+ * row — mapper/v1 against a body v1 never produced — and 1VEL3 names the
+ * second cost directly above: the delivery key is
+ * `SHA-256(destination_id|event_id|normalize_version|mapper_version|...)`,
+ * so a replay of an event delivered before this change would dedupe
+ * against the delivery that was missing the fields, and the profiles this
+ * card exists to fill would never be filled.
+ */
+export const MAPPER_VERSION = "v2" as const;
 export const DELIVERER_VERSION = "v1" as const;
 
 export const CONSUMER_IDENTITY: ConsumerIdentity = {

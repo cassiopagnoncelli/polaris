@@ -1,0 +1,29 @@
+{
+  "attributes": [
+    {
+      "_update_existing_only": false,
+      "external_id": "cust_12345",
+      "email": "buyer@storefront.example",
+      "phone": "+15555550199",
+      "language": "en-US",
+      "first_name": "José",
+      "last_name": "O'Brien",
+      "image_url": "https://cdn.storefront.example/avatars/jobrien.png",
+      "dob": "1990-03-20",
+      "gender": "F",
+      "country": "BR",
+      "home_city": "Menlo Park",
+      "tier": "gold",
+      "name": "José O'Brien",
+      "title": "Head of Widgets",
+      "username": "jobrien",
+      "website": "https://jobrien.example",
+      "created_at": "2024-01-05T09:30:00-03:00",
+      "company_id": "co_42",
+      "company_name": "Widget Co",
+      "company_industry": "Retail",
+      "company_employee_count": 120,
+      "company_plan": "enterprise"
+    }
+  ]
+}

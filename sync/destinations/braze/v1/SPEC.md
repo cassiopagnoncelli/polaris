@@ -67,6 +67,13 @@ If `currency`, `amount`/`amount_minor`, or a derivable `product_id` is missing t
 | `identity.email` | `email` | passthrough | RAW (NOT hashed) — Braze hashes server-side |
 | `identity.phone` | `phone` | passthrough | RAW (NOT hashed) — Braze hashes server-side |
 | `context.locale` | `language` | passthrough | Braze stores locale on the user profile |
+| `traits.first_name` | `first_name` | producer's spelling | Braze's standard field. Read from the trait bag, not `identity.first_name` — that slot is canonicalized for hashing (`"O'Brien"` → `"obrien"`) and would greet the person by a mangled name |
+| `traits.last_name` | `last_name` | producer's spelling | as above |
+| `traits.avatar` | `image_url` | passthrough | Segment's `avatar` is Braze's `image_url`; the profile picture the dashboard renders |
+| `identity.birthday` | `dob` | `YYYYMMDD` → `YYYY-MM-DD` | Reformatted from the canonical value rather than re-read from `traits.birthday`, so Braze stores the day Meta matched on. `person.ts` has already refused a date that is not a real day |
+| `identity.gender` | `gender` | `m` → `M`, `f` → `F` | Braze accepts `M`/`F`/`O`/`N`/`P`; only two are reachable, because the shared canonical form maps onto `m`/`f` and refuses the rest. A non-binary or withheld value omits the slot rather than guessing |
+| `identity.country` (fallback `enrichment.geo.country`) | `country` | ISO-3166-1 alpha-2, upper case | Traits win; geo only when the instance sets `location_from_geo` |
+| `traits.address.city` (fallback `enrichment.geo.city`) | `home_city` | producer's spelling | The city NAME, so the trait bag again rather than `identity.city` (`"menlopark"`). Traits win; geo only when the instance sets `location_from_geo` |
 | n/a (constant) | `_update_existing_only` | constant `false` | Braze creates the profile when one does not already exist (first-touch identification). The same `_update_existing_only=false` applies on app-channel attribute updates so Braze auto-stitches the device-anchored stub profile into the identified profile when an `external_id` later arrives |
 
 ## Normalization rules
@@ -95,6 +102,7 @@ Braze-specific rules (in `src/mapper.ts`):
 - **`product_id` resolution (purchases)** — first non-null of `properties.cart_id` → `properties.order_id` → `properties.transaction_id`. Braze requires `product_id` on every purchase entry; missing slots produce a `skip` outcome.
 - **`name` (events)** — constant per canonical event mapping. v1 emits `checkout_started`; future canonical events get a stable underscore-snake-case Braze name agreed with the receiver.
 - **`_update_existing_only=false` (attributes)** — first-touch identification: Braze creates the user profile when one does not already exist. A future minor may surface a per-instance override (e.g. data-engineering-owned destinations may want strict update-only semantics).
+- **`location_from_geo` (per-instance, off by default)** — a key in `destinations.config`, read by the mapper, that lets `country` and `home_city` fall back to the geo enrichment when the profile's own address carries neither. Off unless an instance sets it, because geo is derived from the request IP and says where the DEVICE was: someone on holiday is `PT` for a week, and a Braze segment written on `home_city` would move them out of a campaign and back again next month. A brand that prefers approximate location to none opts in per destination; nobody acquires it by upgrading. The profile's own address always wins when it has the value, and a geo country that is not two letters is dropped rather than sent.
 
 ## Vendor dedupe
 
@@ -211,22 +219,38 @@ n/a — v1 is the initial release.
 
 Braze reads `resolved.events`. One delta.
 
-**`user.identified` forwards profile traits as custom attributes**, from an allowlist:
+**`user.identified` forwards profile traits as custom attributes**, from an allowlist keyed by trait path:
 
-| Attribute | |
-|---|---|
-| `tier` | |
-| `plan` | |
-| `lifecycle_stage` | |
-| `lifetime_value` | |
-| `first_purchase_at` | |
-| `last_purchase_at` | |
-| `total_orders` | |
+| Trait | Braze attribute | |
+|---|---|---|
+| `tier` | `tier` | |
+| `plan` | `plan` | |
+| `lifecycle_stage` | `lifecycle_stage` | |
+| `lifetime_value` | `lifetime_value` | |
+| `first_purchase_at` | `first_purchase_at` | |
+| `last_purchase_at` | `last_purchase_at` | |
+| `total_orders` | `total_orders` | |
+| `name` | `name` | STHB0. The unsplit full name; Braze keys personalization on `first_name` / `last_name` and has no standard slot for this one |
+| `title` | `title` | STHB0 |
+| `username` | `username` | STHB0 |
+| `website` | `website` | STHB0 |
+| `created_at` | `created_at` | STHB0. The account's age in the system that owned it before Polaris, not `date_of_first_session` — which is Braze's own observation and Braze's to write |
+| `company.id` | `company_id` | STHB0 |
+| `company.name` | `company_name` | STHB0 |
+| `company.industry` | `company_industry` | STHB0 |
+| `company.employee_count` | `company_employee_count` | STHB0 |
+| `company.plan` | `company_plan` | STHB0 |
 
 An allowlist rather than a passthrough because Braze's attribute space is a shared namespace an operator curates: forwarding every trait would let a new field in the profile store silently create an attribute in Braze, which is how a vendor account fills with junk nobody can attribute to a decision. Adding a trait to `BRAZE_TRAIT_ATTRIBUTES` is that decision.
 
-Reserved slots — `external_id`, `user_alias`, `device_id`, `email`, `phone`, `country`, `language`, `_update_existing_only` — are set from the canonical identity and context, and a trait can never write one. That guard is enforced independently of the allowlist, so a mistake in the list cannot become an identity mistake.
+The `company` bag is FLATTENED rather than sent as a nested object. Braze's nested custom attributes are an account feature rather than a given, and a flat `company_name` is accepted by every workspace. Flattening is a rename, which is why the table is a map from trait path to attribute name rather than the list it was through MVKUP64R.
 
-Traits arrive already redacted and hashed by normalize on the same rules as `properties`, so a `traits.email` would be `email_sha256` before it ever reached here. It is on the reserved list regardless.
+Reserved slots are everything Braze itself names — the identifier and control slots (`external_id`, `user_alias`, `braze_id`, `device_id`, `_update_existing_only`) and every standard user-profile field it documents (`country`, `current_location`, `date_of_first_session`, `date_of_last_session`, `dob`, `email`, the four `email_*` subscription flags, `facebook`, `first_name`, `gender`, `home_city`, `image_url`, `language`, `last_name`, `marked_email_as_spam_at`, `phone`, `push_subscribe`, `push_tokens`, `subscription_groups`, `time_zone`, `twitter`). A trait can never write one through the allowlist path. The whole published set rather than the subset this mapper writes, because a custom attribute that collides with a Braze standard field does not fail — it writes the standard field, with whatever the profile store happened to hold. The mapper fills the standard slots it owns itself, from the table under `user.identified` above.
+
+Traits reach a mapper redacted on the same rules as `properties`, and hashed on the destination's own `identityHashing` toggle. Braze's is off, so `traits.email` arrives RAW — which is what its REST API consumes, and what puts `email` on the attribute object for a resolved event whose `properties` carry none (1VEL3). A destination that hashes would see `email_sha256` in its place. `email` is on the reserved list regardless: the mapper sets it from the prepared identity, where `identityFromProperties` has already given a newer producer-supplied address precedence over the snapshot.
 
 An envelope with `traits: null` — not enriched, or a snapshot over the size guard — produces exactly the attribute it produced before the flip.
+
+### What is not mapped
+
+`address.street`, `address.state` and `address.postal_code` are pinned traits with no Braze standard field and no entry in the allowlist. Braze's postal geography is `home_city` and `country`, plus a `current_location` lat/long pair no canonical slot feeds. Sending the remaining three as custom attributes is a namespace decision nobody has asked for; it is one row each in `BRAZE_TRAIT_ATTRIBUTES` when somebody does.

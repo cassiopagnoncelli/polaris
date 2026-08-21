@@ -1,0 +1,65 @@
+{
+  "event_id": "evt_01HZZC0YJK0M2R8D8VYV4QH6XR",
+  "event": "user.identified",
+  "schema_version": 1,
+  "project_id": "storefront",
+  "environment": "production",
+  "occurred_at": "2026-05-14T12:00:00.000Z",
+  "ingested_at": "2026-05-14T12:00:00.500Z",
+  "source": { "id": "storefront-web", "type": "frontend" },
+  "identity": {
+    "customer_id": "cust_12345",
+    "anonymous_id": "anon_abc"
+  },
+  "context": {
+    "ip": "203.0.113.42",
+    "user_agent": "Mozilla/5.0",
+    "locale": "en-US"
+  },
+  "properties": {
+    "tier": "gold"
+  },
+  "profile": {
+    "profile_id": "8f1d6c2e-3b4a-4d5e-9f01-2a3b4c5d6e7f",
+    "canonical_customer_id": "cust_12345",
+    "traits_version": 7,
+    "traits": {
+      "email": "buyer@storefront.example",
+      "phone": "+15555550199",
+      "first_name": "José",
+      "last_name": "O'Brien",
+      "gender": "female",
+      "birthday": "1990-03-20",
+      "name": "José O'Brien",
+      "title": "Head of Widgets",
+      "username": "jobrien",
+      "website": "https://jobrien.example",
+      "avatar": "https://cdn.storefront.example/avatars/jobrien.png",
+      "created_at": "2024-01-05T09:30:00-03:00",
+      "address": {
+        "city": "Menlo Park",
+        "state": "California",
+        "postal_code": "94025",
+        "country": "Brazil"
+      },
+      "company": {
+        "id": "co_42",
+        "name": "Widget Co",
+        "industry": "Retail",
+        "employee_count": 120,
+        "plan": "enterprise"
+      },
+      "tier": "gold",
+      "internal_risk_score": 0.93
+    }
+  },
+  "enrichment": {
+    "geo": {
+      "country": "PT",
+      "region": "Lisboa",
+      "city": "Lisbon",
+      "source": "maxmind-city:20260801"
+    }
+  },
+  "consent": { "marketing": true, "analytics": true, "personalization": true }
+}

@@ -98,11 +98,18 @@ const MAPPERS: MapperMap<BrazePayload> = Object.freeze({
  * them up at the destination boundary so the mapper sees a uniform
  * `PreparedIdentity` regardless of where the producer placed the data.
  *
- * Returns `undefined` when neither slot is present; the normalize
- * layer leaves the identity slots `null`. The mapper then emits
- * `attributes[]` entries without `email` / `phone` fields, which
- * Braze accepts (it just updates the profile with `external_id` +
- * `language` + `_update_existing_only=false`).
+ * It is no longer the ONLY source, and is kept because it is still the
+ * better one. Since 1VEL3 the normalizer falls back to the profile-trait
+ * snapshot for the whole match set, which is what fills `email` on the
+ * ordinary resolved event of a known person — this hook covers the event
+ * that carries a NEWER address than the snapshot taken when it was
+ * enriched, and `normalizeForDestination` spreads it second so it wins.
+ *
+ * Returns `undefined` when neither slot is present, and the two sources
+ * being absent together is what leaves the identity slots `null`. The
+ * mapper then emits `attributes[]` entries without `email` / `phone`
+ * fields, which Braze accepts (it just updates the profile with
+ * `external_id` + `language` + `_update_existing_only=false`).
  */
 function identityFromProperties(
   properties: Readonly<Record<string, unknown>>,

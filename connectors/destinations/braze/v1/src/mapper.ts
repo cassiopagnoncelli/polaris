@@ -35,7 +35,12 @@
 
 import type { NormalizedEvent } from "@polaris/delivery-normalize";
 import { hasAppContext, minorToMajor } from "@polaris/delivery-normalize";
-import type { Mapper, MapperContext, MapperResult } from "@polaris/delivery-destinations";
+import type {
+  DestinationInstance,
+  Mapper,
+  MapperContext,
+  MapperResult,
+} from "@polaris/delivery-destinations";
 
 import type {
   BrazeAttributeObject,
@@ -268,7 +273,8 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
 };
 
 /**
- * Profile traits Braze accepts as custom attributes.
+ * Profile traits Braze accepts as CUSTOM attributes: the trait path the
+ * catalog pins, mapped to the Braze attribute name it writes.
  *
  * An ALLOWLIST, not a passthrough, and the reason is that Braze's attribute
  * space is a shared namespace an operator curates: forwarding every trait
@@ -276,63 +282,310 @@ export const paymentApprovedMapper: Mapper<BrazePayload> = (
  * in Braze, which is how a vendor account fills with junk nobody can
  * attribute to a decision. Adding a trait here is that decision.
  *
- * Reserved Braze keys are NOT forwardable through this path even if a trait
- * shares the name — `email`, `phone`, `country` and `language` are set from
- * the canonical identity and context above, and a trait must not be able to
- * overwrite them. `applyTraitAttributes` enforces that independently of
- * this list, so a mistake here cannot become an identity mistake.
+ * A map rather than the list it was, because the widening to
+ * `user.identified` v1's pinned slots brought two things a list cannot
+ * say. The catalog pins `company` as a nested bag, and Braze's nested
+ * custom attributes are an account feature rather than a given — so
+ * `company.name` is flattened to a `company_name` every workspace accepts.
+ * And a flattened name is a RENAME, which is a decision that belongs
+ * beside the trait it renames rather than buried in the code that applies
+ * it.
+ *
+ * What is deliberately NOT here is anything Braze reserves. `first_name`,
+ * `dob`, `home_city` and the rest are STANDARD profile fields, written
+ * from the same trait snapshot by `applyStandardAttributes` — a trait
+ * reaching them through this path would write a documented slot with an
+ * undocumented value. `BRAZE_RESERVED_ATTRIBUTE_KEYS` enforces that
+ * independently of this table, so a mistake here cannot become a profile
+ * mistake.
  */
-export const BRAZE_TRAIT_ATTRIBUTES: readonly string[] = Object.freeze([
-  "tier",
-  "plan",
-  "lifecycle_stage",
-  "lifetime_value",
-  "first_purchase_at",
-  "last_purchase_at",
-  "total_orders",
-]);
+export const BRAZE_TRAIT_ATTRIBUTES: Readonly<Record<string, string>> = Object.freeze({
+  // Project-defined lifecycle traits, here since MVKUP64R.
+  tier: "tier",
+  plan: "plan",
+  lifecycle_stage: "lifecycle_stage",
+  lifetime_value: "lifetime_value",
+  first_purchase_at: "first_purchase_at",
+  last_purchase_at: "last_purchase_at",
+  total_orders: "total_orders",
+  // `user.identified` v1's pinned slots that Braze does not reserve
+  // (STHB0). `name` is the unsplit full name, which Braze has no standard
+  // field for — it keys personalization on `first_name` / `last_name`.
+  name: "name",
+  title: "title",
+  username: "username",
+  website: "website",
+  created_at: "created_at",
+  "company.id": "company_id",
+  "company.name": "company_name",
+  "company.industry": "company_industry",
+  "company.employee_count": "company_employee_count",
+  "company.plan": "company_plan",
+});
 
-/** Braze slots this mapper owns; a trait may never write one. */
+/**
+ * Braze's own attribute names: the identifier and control slots, plus every
+ * standard user-profile field the vendor documents.
+ *
+ * The whole published set rather than the subset this mapper happens to
+ * write, and that widening is the point. A curated custom attribute that
+ * collides with a Braze standard field does not fail loudly — it writes the
+ * standard field, with whatever the profile store happened to hold. So the
+ * guard answers "is this name Braze's?" rather than "does this mapper use
+ * it?", and a slot this connector does not fill today is still one a trait
+ * may never reach around it to fill.
+ *
+ * @see https://www.braze.com/docs/api/objects_filters/user_attributes_object
+ */
 const BRAZE_RESERVED_ATTRIBUTE_KEYS: readonly string[] = Object.freeze([
+  // Identifier + control slots.
   "external_id",
   "user_alias",
+  "braze_id",
   "device_id",
-  "email",
-  "phone",
-  "country",
-  "language",
   "_update_existing_only",
+  // Standard profile fields.
+  "country",
+  "current_location",
+  "date_of_first_session",
+  "date_of_last_session",
+  "dob",
+  "email",
+  "email_click_tracking_disabled",
+  "email_open_tracking_disabled",
+  "email_subscribe",
+  "facebook",
+  "first_name",
+  "gender",
+  "home_city",
+  "image_url",
+  "language",
+  "last_name",
+  "marked_email_as_spam_at",
+  "phone",
+  "push_subscribe",
+  "push_tokens",
+  "subscription_groups",
+  "time_zone",
+  "twitter",
 ]);
 
 /**
- * Copy allowlisted traits onto the attribute object.
+ * Per-instance switch: fill `country` and `home_city` from the geo
+ * enrichment when the profile's own address does not carry them.
+ *
+ * OFF unless an instance asks for it, and the default is the honest one.
+ * Geo is derived from the request IP, so it says where the DEVICE was, not
+ * where the person lives — someone on holiday is `PT` for a week, and a
+ * Braze segment written on `home_city` would move them out of a campaign
+ * and back again next month. A brand that prefers approximate location to
+ * none opts in per destination; nobody acquires it by upgrading.
+ *
+ * Read from `destinations.config` rather than `project_config`, on both
+ * counts that matter: the `MapperContext` carries the instance and not the
+ * project slice, and the choice belongs to one destination anyway — a
+ * marketing instance may want it where the data-engineering one beside it
+ * must not.
+ */
+export const BRAZE_LOCATION_FROM_GEO_KEY = "location_from_geo" as const;
+
+/** Whether this instance opted in. Strictly `true`; anything else is off. */
+function locationFromGeo(instance: DestinationInstance): boolean {
+  return instance.config[BRAZE_LOCATION_FROM_GEO_KEY] === true;
+}
+
+/**
+ * Braze's `gender` vocabulary, keyed by the canonical token normalize
+ * produces.
+ *
+ * Braze accepts `M`, `F`, `O` (other), `N` (not applicable) and `P` (prefer
+ * not to say). Only two of the five are reachable, and that is the shared
+ * canonical form's decision rather than this mapper's: `person.ts` maps a
+ * producer's gender onto `m` or `f` and refuses everything else, because
+ * Meta's `ge` takes those two and a wrong match key is worse than a missing
+ * one.
+ *
+ * The cost of that lands here, on the one vendor with somewhere to put the
+ * rest: a profile whose gender is non-binary or withheld reaches Braze with
+ * the slot omitted, where `O` or `P` would have been true. Widening it
+ * means widening a vocabulary every destination reads, so it is not this
+ * connector's to make.
+ */
+const BRAZE_GENDER_TOKENS: Readonly<Record<string, string>> = Object.freeze({
+  m: "M",
+  f: "F",
+});
+
+/**
+ * Write Braze's standard profile fields from the trait snapshot.
+ *
+ * Two sources, on one distinction. NAMES and URLs are read from the trait
+ * bag, which keeps the producer's spelling; CODES are read from the
+ * canonical identity block, which is where the shared normalizer put the
+ * one agreed form. Reading a name from the identity block would greet
+ * `"O'Brien"` as `"obrien"` — that value is canonicalized for hashing, not
+ * for display — and reading a code from the trait bag would make Braze the
+ * one vendor that receives `"Brazil"` where the others receive `"BR"`.
+ *
+ * Both halves come from the same snapshot either way: `matchKeysFromTraits`
+ * is what fills the identity slots this reads, so a profile with no traits
+ * writes none of these fields and the attribute is exactly what it was
+ * before this landed.
+ */
+function applyStandardAttributes(
+  attribute: Record<string, unknown>,
+  normalized: NormalizedEvent,
+  geoFallback: boolean,
+): void {
+  const traits = normalized.traits;
+  const firstName = readTraitString(traits, "first_name");
+  if (firstName !== null) attribute["first_name"] = firstName;
+  const lastName = readTraitString(traits, "last_name");
+  if (lastName !== null) attribute["last_name"] = lastName;
+  const avatar = readTraitString(traits, "avatar");
+  if (avatar !== null) attribute["image_url"] = avatar;
+
+  const dob = brazeDob(normalized.identity.birthday ?? null);
+  if (dob !== null) attribute["dob"] = dob;
+  const gender = BRAZE_GENDER_TOKENS[normalized.identity.gender ?? ""];
+  if (gender !== undefined) attribute["gender"] = gender;
+
+  const country = brazeCountry(normalized, geoFallback);
+  if (country !== null) attribute["country"] = country;
+  const homeCity = brazeHomeCity(normalized, geoFallback);
+  if (homeCity !== null) attribute["home_city"] = homeCity;
+}
+
+/**
+ * Braze's `dob` is `YYYY-MM-DD`; the canonical birthday is `YYYYMMDD`.
+ *
+ * Reformatted from the canonical value rather than re-read off
+ * `traits.birthday`, so the day Braze stores is the day Meta matched on.
+ * `person.ts` has already refused a date that is not one — `"1990-02-30"`
+ * has the shape and is not a day — which is what makes the slicing safe.
+ * The pattern check is for the hand-built identity literals in tests, where
+ * the type permits a value the normalizer would never produce.
+ */
+function brazeDob(birthday: string | null): string | null {
+  if (birthday === null || !/^\d{8}$/.test(birthday)) return null;
+  return `${birthday.slice(0, 4)}-${birthday.slice(4, 6)}-${birthday.slice(6, 8)}`;
+}
+
+/**
+ * Braze's `country`: ISO-3166-1 alpha-2, upper case.
+ *
+ * The profile's own address first, the request's geo second, which is the
+ * ordering the switch exists to make safe — a person who told the brand
+ * where they live outranks the network they happened to be on. Upper-cased
+ * whichever answered, so a segment on `country = "BR"` matches one
+ * population rather than two.
+ *
+ * A geo value that is not two letters is dropped rather than sent. The
+ * envelope's geo block caps the field at eight characters and the enricher
+ * writes MaxMind's alpha-2 into it, but a country is the field where a
+ * confident guess puts a person in another country's audience, so the
+ * schema's slack is not treated as permission.
+ */
+function brazeCountry(normalized: NormalizedEvent, geoFallback: boolean): string | null {
+  const fromTraits = normalized.identity.country ?? null;
+  if (fromTraits !== null) return fromTraits.toUpperCase();
+  if (!geoFallback) return null;
+  const fromGeo = geoValue(normalized.enrichment.geo?.country);
+  if (fromGeo === null || !/^[A-Za-z]{2}$/.test(fromGeo)) return null;
+  return fromGeo.toUpperCase();
+}
+
+/**
+ * Braze's `home_city` — a city NAME, which is why this one reads the trait
+ * bag where `country` reads the identity block beside it. `identity.city`
+ * is `"menlopark"`: correct as a hash input, and wrong as the string a
+ * campaign renders and a marketer segments on.
+ */
+function brazeHomeCity(normalized: NormalizedEvent, geoFallback: boolean): string | null {
+  const fromTraits = readTraitString(readTraitRecord(normalized.traits, "address"), "city");
+  if (fromTraits !== null) return fromTraits;
+  if (!geoFallback) return null;
+  return geoValue(normalized.enrichment.geo?.city);
+}
+
+/**
+ * Copy allowlisted traits onto the attribute object as custom attributes.
  *
  * `null` traits — no snapshot, or one over the size guard — leave the
  * attribute exactly as it was, which is what makes this safe to run on an
  * envelope that has not been enriched.
+ *
+ * Runs after `applyStandardAttributes`, and the reserved check is what
+ * makes the order irrelevant: no allowlisted name is one Braze owns, so a
+ * custom attribute cannot land on a standard slot whichever ran first.
  */
 function applyTraitAttributes(
   attribute: Record<string, unknown>,
   traits: Readonly<Record<string, unknown>> | null,
 ): void {
   if (traits === null) return;
-  for (const key of BRAZE_TRAIT_ATTRIBUTES) {
-    if (BRAZE_RESERVED_ATTRIBUTE_KEYS.includes(key)) continue;
-    const value = traits[key];
+  for (const [path, name] of Object.entries(BRAZE_TRAIT_ATTRIBUTES)) {
+    if (BRAZE_RESERVED_ATTRIBUTE_KEYS.includes(name)) continue;
+    const value = readTraitPath(traits, path);
     if (value === undefined || value === null) continue;
-    attribute[key] = value;
+    attribute[name] = value;
   }
+}
+
+/**
+ * Read `total_orders` or `company.name` out of a trait snapshot.
+ *
+ * One level of nesting is all the catalog pins — `address` and `company` —
+ * so this walks one dot and no further. A deeper path is a trait shape
+ * nobody has agreed on, and refusing it here is cheaper than finding it in
+ * a Braze account later.
+ */
+function readTraitPath(traits: Readonly<Record<string, unknown>>, path: string): unknown {
+  const dot = path.indexOf(".");
+  if (dot === -1) return traits[path];
+  const bag = readTraitRecord(traits, path.slice(0, dot));
+  return bag === null ? undefined : bag[path.slice(dot + 1)];
+}
+
+/** `readString` over a bag that may be absent entirely. */
+function readTraitString(
+  bag: Readonly<Record<string, unknown>> | null,
+  key: string,
+): string | null {
+  return bag === null ? null : readString(bag, key);
+}
+
+/** A nested trait bag (`address`, `company`); `null` when it is not one. */
+function readTraitRecord(
+  bag: Readonly<Record<string, unknown>> | null,
+  key: string,
+): Readonly<Record<string, unknown>> | null {
+  if (bag === null) return null;
+  const value = bag[key];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Readonly<Record<string, unknown>>;
+}
+
+/** A geo slot, trimmed. `null` when absent or blank. */
+function geoValue(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }
 
 /**
  * `user.identified` → `attributes[]` entry.
  *
  * First-touch identification: Braze creates the user profile when one
- * doesn't already exist (`_update_existing_only=false`), then writes
- * the documented identifier slots (email, phone) and locale-related
- * passthrough fields. Custom-attribute slots beyond the well-known set
- * are NOT mapped in v1 — a future minor may surface a hook on the
- * descriptor for per-receiver attribute synthesis.
+ * doesn't already exist (`_update_existing_only=false`), then writes the
+ * identifier slots (email, phone), the locale, the standard profile fields
+ * the trait snapshot carries, and the curated custom attributes.
+ *
+ * The trait halves are two decisions rather than one, and
+ * `applyStandardAttributes` is where the split is argued: names and URLs
+ * keep the producer's spelling, codes come from the canonical identity
+ * slots the shared normalizer built, and everything else rides the
+ * allowlist under the name that table gives it.
  *
  * Emits a `skip` when no `external_id` can be derived; Braze's
  * `attributes[]` entries require either `external_id`, `braze_id`, or
@@ -369,6 +622,7 @@ export const userIdentifiedMapper: Mapper<BrazePayload> = (
   if (ctx.normalized.context.locale !== null) {
     attribute.language = ctx.normalized.context.locale;
   }
+  applyStandardAttributes(attribute, ctx.normalized, locationFromGeo(ctx.instance));
   applyTraitAttributes(attribute, ctx.normalized.traits);
 
   attachDeviceIdIfApp(attribute, identifier, ctx.normalized);

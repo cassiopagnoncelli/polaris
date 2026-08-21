@@ -163,7 +163,7 @@ describe("braze v1 integration (handleEvent driven)", () => {
 
     expect(record?.status).toBe("accepted");
     expect(record?.consumer_version).toBe("v1");
-    expect(record?.mapper_version).toBe("v1");
+    expect(record?.mapper_version).toBe("v2");
     expect(record?.deliverer_version).toBe("v1");
     expect(record?.normalize_version).toBe("v3");
     // Audit-only — Braze ignores the field, but the runtime stamps the
@@ -249,6 +249,64 @@ describe("braze v1 integration (handleEvent driven)", () => {
     // Raw email — NOT hashed.
     expect(body.attributes[0].email).toBe("buyer@storefront.example");
     expect(body.attributes[0].phone).toBe("+15555550199");
+  });
+
+  it("takes email and the profile fields from the trait snapshot when properties carry neither (1VEL3, STHB0)", async () => {
+    // The production path for a known person, and the one the S0 repairs
+    // turned on. `properties` has no email, so the descriptor's
+    // `identityFromProperties` hook returns nothing and the only source
+    // left is `profile.traits` — which the shared normalizer now reads.
+    // Braze declares `identityHashing: { email: false }`, so the value
+    // arrives raw, which is what its REST API consumes.
+    const { fetch, calls } = makeFetch(
+      () => new Response('{"message":"success"}', { status: 200 }),
+    );
+
+    const instance = fixtureDestinationInstance(SECRET);
+    const instances = new InMemoryDestinationInstanceReader();
+    instances.set(instance);
+    const records = new InMemoryDeliveryRecordRepository();
+
+    const descriptor = createBrazeDescriptor({ fetch, requestTimeoutMs: 5000 });
+    const runtime = createDestinationConsumer({
+      descriptor,
+      consumer: {} as never,
+      producer: NOOP_PRODUCER,
+      instances,
+      records,
+      logger,
+    });
+
+    const record = await runtime.handleEvent({
+      envelope: fixtureEnvelope({
+        event: "user.identified",
+        properties: { tier: "gold" },
+        profile: {
+          profile_id: "8f1d6c2e-3b4a-4d5e-9f01-2a3b4c5d6e7f",
+          canonical_customer_id: "cust_int_braze",
+          traits_version: 7,
+          traits: {
+            email: "traits@storefront.example",
+            phone: "+15555550123",
+            first_name: "José",
+            gender: "female",
+            birthday: "1990-03-20",
+            address: { city: "Menlo Park", country: "Brazil" },
+          },
+        },
+      }),
+      destination_id: instance.destination_id,
+    });
+
+    expect(record?.status).toBe("accepted");
+    const attribute = JSON.parse(calls[0]?.body ?? "").attributes[0];
+    expect(attribute.email).toBe("traits@storefront.example");
+    expect(attribute.phone).toBe("+15555550123");
+    expect(attribute.first_name).toBe("José");
+    expect(attribute.dob).toBe("1990-03-20");
+    expect(attribute.gender).toBe("F");
+    expect(attribute.country).toBe("BR");
+    expect(attribute.home_city).toBe("Menlo Park");
   });
 
   it("drops events when required marketing consent is denied", async () => {
