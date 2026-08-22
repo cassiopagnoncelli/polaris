@@ -13,6 +13,10 @@
  * where that is reconciled — and where it is REFUSED when it cannot be,
  * because a country is the one field in the set where a confident guess
  * puts a person in the wrong audience rather than in none.
+ *
+ * Exposed from the package root and from
+ * `@polaris/delivery-normalize/address`, the root being the surface a
+ * consumer should take; `person.ts` carries the reasoning for the pair.
  */
 
 /**

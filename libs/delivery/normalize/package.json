@@ -23,6 +23,14 @@
       "types": "./dist/external-id.d.ts",
       "import": "./dist/external-id.js"
     },
+    "./person": {
+      "types": "./dist/person.d.ts",
+      "import": "./dist/person.js"
+    },
+    "./address": {
+      "types": "./dist/address.d.ts",
+      "import": "./dist/address.js"
+    },
     "./currency": {
       "types": "./dist/currency.d.ts",
       "import": "./dist/currency.js"

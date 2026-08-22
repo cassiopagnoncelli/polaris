@@ -22,6 +22,17 @@
  *   - refuses rather than guesses. A value this module cannot normalize
  *     returns `null`, and the caller drops it. A wrong value is worse
  *     than an absent one: it is matched against somebody else.
+ *
+ * Reachable both ways, like every other module here: from the package
+ * root and from `@polaris/delivery-normalize/person`. Consumers should
+ * take the ROOT. `RawIdentityInput` extends the raw type below and
+ * leaves through `index.ts`, so a consumer that took the base from the
+ * subpath would be naming one type across two surfaces; the root is the
+ * one `index.ts` keeps auditable, and `test/export-closure.test.ts`
+ * holds it closed. The subpath earns its place anyway, and not for
+ * symmetry: the `exports` map is the only list the injected-copy check
+ * reads, so a module declared on neither surface can go missing from a
+ * copy while the check reports it in sync.
  */
 
 /**

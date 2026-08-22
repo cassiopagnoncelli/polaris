@@ -21,6 +21,12 @@ describe("public surface (`import * as pkg`)", () => {
       // identity.ts
       "pickBestIdentity",
       "prepareIdentity",
+      // person.ts
+      "PERSON_MATCH_KEYS",
+      "normalizePerson",
+      // address.ts
+      "ADDRESS_MATCH_KEYS",
+      "normalizeAddress",
       // context.ts
       "flattenContext",
       "hasAppContext",

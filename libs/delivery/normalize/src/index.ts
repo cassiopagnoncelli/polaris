@@ -20,6 +20,10 @@
  *                                                       policy second-pass
  *   - `pickBestIdentity(identity)`             best-available identity
  *   - `prepareIdentity(input, hashing?)`       hash + canonicalize identity
+ *   - `normalizePerson(raw)`                   canonical person match keys
+ *   - `normalizeAddress(raw)`                  canonical address match keys
+ *   - `PERSON_MATCH_KEYS` / `ADDRESS_MATCH_KEYS`
+ *                                              the extended match set, named
  *   - `flattenContext(envelopeContext)`        nested → flat context
  *   - `hashEmailLower(email)`                  canonical email hash
  *   - `hashPhoneE164(phone)`                   canonical phone hash
@@ -38,6 +42,14 @@
  * tooling enumerate the helpers programmatically.
  */
 
+// ---- Address match keys --------------------------------------------------
+export {
+  ADDRESS_MATCH_KEYS,
+  type AddressMatchKey,
+  type NormalizedAddressMatchKeys,
+  normalizeAddress,
+  type RawAddressMatchKeys,
+} from "./address.js";
 // ---- Consent -------------------------------------------------------------
 export {
   CONSENT_DIMENSIONS,
@@ -98,6 +110,14 @@ export {
   normalizeForDestination,
   type SecondPassRedactionOutcome,
 } from "./normalize.js";
+// ---- Person match keys ---------------------------------------------------
+export {
+  type NormalizedPersonMatchKeys,
+  normalizePerson,
+  PERSON_MATCH_KEYS,
+  type PersonMatchKey,
+  type RawPersonMatchKeys,
+} from "./person.js";
 export { hashPhoneE164, requireE164 } from "./phone.js";
 
 // ---- Timestamp conversion ------------------------------------------------
